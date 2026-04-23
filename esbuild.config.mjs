@@ -23,7 +23,7 @@ const copyAssets = {
 				copyFileSync("styles.css", "build/styles.css");
 
 				// Uncomment and adjust to copy build output to your test vault:
-				// const VAULT_PLUGIN_DIR = "test/MyVault/.obsidian/plugins/miyo-hashi";
+				// const VAULT_PLUGIN_DIR = "test/MyVault/.obsidian/plugins/miyo-tomo-hashi";
 				// if (existsSync(VAULT_PLUGIN_DIR)) {
 				// 	copyFileSync(`${outdir}/main.js`, `${VAULT_PLUGIN_DIR}/main.js`);
 				// 	copyFileSync("manifest.json", `${VAULT_PLUGIN_DIR}/manifest.json`);
