@@ -1,0 +1,43 @@
+# IDE
+.vscode
+*.code-workspace
+*.iml
+.idea
+
+# npm
+node_modules
+
+# Build output — uploaded to GitHub releases, not committed
+main.js
+build/
+# Exception: hot-reload plugin ships with the test vault
+!test/*/.obsidian/plugins/hot-reload/main.js
+
+# Test coverage
+coverage/
+
+# Sourcemaps
+*.map
+
+# Obsidian
+data.json
+
+# macOS
+.DS_Store
+
+# Workspace scratch / inter-project message channels
+temp/
+_inbox/
+_outbox/
+
+# MCP config (may contain API keys)
+.mcp.json
+
+# Claude Code
+.claude/
+
+# Docker-based dev environment (deployed by ~/Kouzou/scripts/)
+claude-docker/
+claude-docker-home/
+begin-code.sh
+generated-images/

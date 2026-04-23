@@ -1,0 +1,6 @@
+/* Plugin styles — rename selectors to match your plugin ID */
+
+.my-plugin-settings .setting-item-description {
+	color: var(--text-muted);
+	font-size: var(--font-small);
+}
