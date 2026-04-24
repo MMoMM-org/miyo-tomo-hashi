@@ -84,6 +84,7 @@ Explicitly NOT in 001:
 | 2026-04-24 | SDD ADR-3..ADR-10 **all confirmed** in two batched rounds (plain TS UI; `Store<T>` helper; ports & adapters; `getLeavesOfType` singleton; cancellable reconnect loop; `removeCommand`+`addCommand` dynamic label; Obsidian `Menu` popover; unit + live test split) | User selected each recommended option in two AskUserQuestion rounds. SDD phase complete pending final validation pass. |
 | 2026-04-24 | Plan phase complete — 5 phases, 29 tasks, full PRD AC → task traceability; 4 parallel tasks in Phase 4 (UI surfaces); live-Docker e2e test in Phase 5 | Phase structure: Foundation → Docker Boundary → Connection Service → UI Surfaces → Wire-up/Integration/Release Gate. TDD Prime/Test/Implement/Validate per task. Outbound handoffs (Tomo instance-name label, spec 002 README decoupling) captured as Phase 5 tasks T5.7/T5.8. |
 | 2026-04-24 | Spec 001 readiness = HIGH. Ready for implementation. | All nine spec files present (README, requirements, solution, plan/README, plan/phase-1..5). Zero open questions. All ADRs confirmed. Full PRD→SDD→PLAN traceability. |
+| 2026-04-24 | Tomo handoff (T5.7) created ahead of implementation: `_outbox/for-tomo/2026-04-24_hashi-to-tomo_instance-name-label.md` | Tomo needs lead time to ship the `miyo.tomo.instance-name` label; creating the handoff at plan-time (rather than waiting until Phase 5 of implementation) maximizes parallel work. Phase 5 T5.7 marked completed in `plan/phase-5.md`. |
 
 ## Context
 

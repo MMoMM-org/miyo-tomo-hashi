@@ -118,20 +118,14 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
      - [ ] Bundle ≤ 500 KB `[ref: SDD/Quality Requirements]`
      - [ ] Manifest desktop-only confirmed `[ref: PRD/Constraints; SDD/CON-3]`
 
-- [ ] **T5.7 Tomo outbound handoff — instance-name label** `[activity: handoff]`
+- [x] **T5.7 Tomo outbound handoff — instance-name label** `[activity: handoff]` — **completed 2026-04-24 ahead of implementation** so Tomo has maximum lead time to ship the label change in parallel.
 
-  1. Prime: Read PRD "Constraints and Assumptions / Tomo containers are started externally" and README Decisions Log 2026-04-24 entry on the Tomo handoff `[ref: PRD/Assumptions; README/Decisions Log]`.
-  2. Test: N/A (documentation task).
-  3. Implement: Create `_outbox/for-tomo/2026-04-24_hashi-to-tomo_instance-name-label.md` with:
-     - Title: "Add `miyo.tomo.instance-name` Docker label to Tomo container startup"
-     - Context: Hashi v0.1 Session View (spec 001) discovers Tomo containers by `miyo.component=tomo` and displays them in a picker by instance name + uptime. Uptime comes from Docker `inspect.State.StartedAt`; instance name must be exposed as a Docker label because the Docker API doesn't otherwise expose a human-friendly name.
-     - Required label key: `miyo.tomo.instance-name=<name>`; value should be user-meaningful (e.g., derived from a `--name` flag, the vault name, or a user-set env var).
-     - Degradation path: Hashi falls back to the short container ID + a warning icon; picker remains usable. Command palette Reconnect command falls back to the static label "Tomo Hashi: Reconnect to Tomo" in the absence of the label.
-     - Deadline: before Hashi v0.1 release (Tomo can ship this independently; Hashi's code is already compatible).
-     - Reference: `docs/XDD/specs/001-session-view/requirements.md` Assumptions + `solution.md` ADR-1 context.
-  4. Validate: File exists at expected path; follows MiYo handoff-protocol format `[ref: ~/Kouzou/projects/miyo/miyo-handoff-protocol.md]`.
-  5. Success:
-     - [ ] Handoff committed and visible in `_outbox/for-tomo/` `[ref: README/Decisions Log; Tomo handoff entry]`
+  - File: `_outbox/for-tomo/2026-04-24_hashi-to-tomo_instance-name-label.md` (created via `outbox-create.sh`; format conforms to `~/Kouzou/projects/miyo/miyo-handoff-protocol.md`).
+  - Request: add `--label miyo.tomo.instance-name=<value>` wherever Tomo starts containers.
+  - Graceful fallback already spec'd into Hashi (short container ID + warning icon in picker; static "Reconnect to Tomo" palette label).
+  - Status tracking: Tomo will set `status: done` when shipped. When that happens, `/miyo-outbox` surfaces the done item for archival.
+  - Success (already met):
+    - [x] Handoff committed and visible in `_outbox/for-tomo/` `[ref: README/Decisions Log; Tomo handoff entry]`
 
 - [ ] **T5.8 Spec 002 README decoupling note (outbound to claude/meta)** `[activity: handoff]`
 

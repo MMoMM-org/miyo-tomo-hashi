@@ -27,8 +27,11 @@ data.json
 
 # Workspace scratch / inter-project message channels
 temp/
+# _inbox/ — symlinks into another repo's _outbox (never committed from this side)
 _inbox/
-_outbox/
+# _outbox/ is TRACKED — handoffs sent from this repo are committed here per the
+# MiYo handoff protocol (~/Kouzou/projects/miyo/miyo-handoff-protocol.md).
+# Do not add _outbox/ back to the ignore list.
 
 # MCP config (may contain API keys)
 .mcp.json
