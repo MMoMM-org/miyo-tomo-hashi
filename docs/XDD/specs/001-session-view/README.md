@@ -5,58 +5,99 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-04-24 |
-| **Current Phase** | Planning — no PRD or SDD written yet |
+| **Current Phase** | Ready for implementation — PRD, SDD, and 5-phase Plan complete; readiness HIGH |
 | **Last Updated** | 2026-04-24 |
 
 ## Documents
 
 | Document | Status | Notes |
 |----------|--------|-------|
-| requirements.md | not started | PRD — trigger UX, lifecycle contract, error channel |
-| solution.md | not started | SDD — Docker client shape, Session Manager state machine, unified chat view |
-| plan/ | not started | Implementation phases |
+| requirements.md | draft | PRD v2.1 — brainstorm pivot + refinement round; 0 open questions |
+| solution.md | draft | SDD v1.1 — all 10 ADRs confirmed |
+| plan/ | draft | 5-phase TDD plan (29 tasks); phase-1..phase-5.md + README.md |
 
-## Scope (from ADR-009 + architecture-06)
+## Scope (post-brainstorm pivot, 2026-04-24)
 
-Unified chat-style Obsidian view driving a running Tomo Docker container.
+Hashi v0.1 delivers **two independent features**; this spec covers feature 1 only.
 
-Covers:
-- **Docker discovery** via labels (`miyo.component=tomo`, `miyo.plugin-enabled=true`); `plugin-enabled=false` is an opt-out
+**Feature 1 (this spec): Tomo Connection & Chat Window.** The plugin-managed connection to a local Tomo container and the chat surface that exposes it. Connection is a plugin-level state (not per-file, not per-view). Chat is a singleton Obsidian view placeable in sidebar or main pane.
+
+**Feature 2 (spec 002): Instruction Executor.** Standalone execution of `_instructions.json` files — does NOT require an active Tomo connection and does NOT share state with feature 1.
+
+Feature 1 covers:
+- **Docker discovery by label `miyo.component=tomo`** — picker-based, explicit user action only (no ambient scanning)
 - **Connection transport:** Docker API only in v0.1 — no HTTP/WS stub, no settings toggle hinting at transport mode
-- **Lifecycle controls:** attach, detach, stop, resume, reconnect-on-transient-disconnect
-- **Unified chat view** (no split panes — `AskUserQuestion` doesn't render cleanly against split input/output)
-- **Container-absent UX:** clear surfacing when no Tomo container is reachable (do not silently fail)
-- **Error channel:** one surface for connection errors, session errors, lifecycle errors
+- **Settings pane:** Connect button (with picker) + Disconnect button
+- **Picker content:** Tomo instance name + uptime per candidate (requires Tomo-side label; graceful fallback to short container ID)
+- **Status bar icon** (Tomo kanji 友 preferred): state via icon/indicator, hover tooltip shows instance name, click opens popover with three actions (Force Reconnect, Open Chat Window, Go to Settings)
+- **Chat window view:** singleton, placeable in any Obsidian pane; status indicator + Force Reconnect inside the view
+- **Command palette (three commands total for 001):**
+  1. "Show Tomo chat window" (focus or open)
+  2. "Tomo Hashi: Reconnect to `<instance-name>`" (or "… Reconnect to Tomo" when name unknown) — reconnect-only; never opens picker
+  3. "Execute instructions document" — *belongs to spec 002; listed here only so the complete palette surface is visible*
+- **File explorer right-click:** "Open Tomo chat with `@file` reference" — any file; inserts `@vault/relative/path.ext ` at cursor or opens+prefills
+- **Automatic reconnect on transient disconnect:** 5 attempts, exponential backoff from 500 ms (~15.5 s total)
+- **FS2 Remember last instance across Obsidian sessions:** auto-reconnect on launch by container ID
+- **Error surfacing:** in-view sticky indicator in chat window; inline Settings error; `Notice` for palette-invoked failures when chat is closed
 
 Explicitly NOT in 001:
-- Multi-container orchestration (one session at a time)
-- Remote Tomo (same-host only)
-- Mobile (desktop-only)
-- HTTP/WS transport or any placeholder UI for it
+- Stopping the Tomo container from the plugin (container lifecycle is external)
+- Multiple simultaneous Tomo connections (one at a time)
+- Remote Tomo — v0.1 uses the local Docker socket (cannot reach remote anyway); a future API-capable transport may reconsider
+- Mobile (desktop-only; manifest drift flagged)
+- HTTP/WS transport or any placeholder UI
+- Split-pane chat (unified view only)
+- External inbound surface of any kind (no ports, no webhooks, no MCP)
+- Message replay across reconnect boundaries (continuity gap disclosed, not repaired)
+- Conversation history persisted to disk (Tomo owns its own history)
+- Picker outside Settings — Force Reconnect, auto-reconnect, palette reconnect command, and status bar popover never open the picker
 
 ## Decisions Log
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| — | — | — |
-
-## Open Questions (from Kokoro onboarding handoff 2026-04-23)
-
-1. **Trigger mechanism.** Three candidates (Kokoro leans #1):
-   1. Command palette while `_instructions.md` is active → derive `.json` via `md_peer` field (simplest; Kokoro-recommended for v0.1)
-   2. Sidebar/ribbon listing vault files tagged `#MiYo-Tomo/instructions` not yet `/applied` (nicer for many pending sets; v0.2)
-   3. Right-click context menu on `_instructions.md` (complementary, cheap to add)
-2. **Discovery policy.** If user triggers Hashi with no `_instructions.md` active, scan inbox folder and offer picker, or refuse with "open an instructions file first"?
-3. **Error reporting channel.** Toast / notice / sticky banner / sidebar log — pick one simple channel for v0.1.
+| 2026-04-24 | Begin xdd workflow with PRD phase | Three open questions (trigger UX, discovery policy, error channel) were WHAT-level decisions; needed settling before design |
+| 2026-04-24 | Run xdd in Agent Team mode | Three document phases planned; Obsidian + Docker + UX trade-offs benefit from persistent research perspectives |
+| 2026-04-24 | **PIVOT after PRD v1 review:** Hashi v0.1 has two independent features — Tomo Connection & Chat (001) and Instruction Executor (002). They do NOT share state, session identity, or error channels. | Original PRD v1 coupled 002 to 001's session identity and error channel; user's brainstorm notes clarified 002 is standalone and runs against `_instructions.json` without needing a live Tomo connection. PRD rewritten to v2. |
+| 2026-04-24 | Connection lives in plugin Settings (Connect button + picker, Disconnect button) | Explicit user-controlled connection surface beats implicit file-based trigger. Connection is plugin-level, not per-file. |
+| 2026-04-24 | Connection state visible in three places: Settings, Obsidian status bar, chat window indicator | Persistent visibility wherever the user is working; user should never have to hunt for connection state |
+| 2026-04-24 | Chat window is a singleton Obsidian view (sidebar or main pane, user choice) | One connection → one view. Re-invoking "Show chat window" focuses existing; prevents divergent stream consumers. |
+| 2026-04-24 | Command palette exposes exactly three Hashi commands | "Show Tomo chat window", "Reconnect to Tomo", and — via spec 002 — "Execute instructions document". Minimal surface; every verb maps to a single explicit user intent. |
+| 2026-04-24 | File right-click → `@file` prefill works on any vault file (not restricted to `_instructions.md`) | Leverages Tomo's existing `@vault-path` mention support; high-value across the whole vault, not just the inbox |
+| 2026-04-24 | Force Reconnect = re-attach Docker stream to the currently chosen instance; re-open picker only if that instance is gone | Fast path for transient stream breakage; picker reopens only when the user really needs to re-choose |
+| 2026-04-24 | Discovery filter = `miyo.component=tomo` label; no secondary `plugin-enabled=false` opt-out in v0.1 | Single label is enough when the picker is explicit user action. Simpler contract for Tomo to implement. |
+| 2026-04-24 | Picker rows show instance name + uptime; graceful fallback to short container ID when the instance-name label is missing | User said this was the minimum to identify the right Tomo. Graceful fallback prevents the picker from becoming unusable before Tomo ships the label change. |
+| 2026-04-24 | Reconnect policy = 5 attempts, exponential backoff starting at 500 ms (~15.5 s) | Absorbs typical Docker Desktop hiccups without hanging the UI for long |
+| 2026-04-24 | Error channel inside chat window = sticky in-view indicator (not one-shot Notices) | Indicator can evolve across states (Reconnecting → Connected); notices retained for pre-view errors (palette-invoked failures when chat is closed) |
+| 2026-04-24 | `manifest.json` `isDesktopOnly: false` drift flagged as PRD-level constraint; SDD/plan owns the fix | Current manifest contradicts v0.1 desktop-only scope; Obsidian enforces at install time |
+| 2026-04-24 | Outbound handoff required to Tomo: expose instance name as a Docker label (suggested: `miyo.tomo.instance-name=<name>`) | Picker UX and command-palette reconnect label both depend on it; Hashi falls back to short container ID / static "Tomo" when missing. Handoff to be created in `_outbox/for-tomo/` during plan phase. |
+| 2026-04-24 | Spec 002 README has legacy language about depending on 001 for lifecycle contracts / error channel — flagged as drift; NOT edited in this PRD pass | 002 is now standalone; 002 README update is a follow-up task, not part of 001's PRD |
+| 2026-04-24 | **Refinement round after PRD v2 review:** status bar = icon-only; hover tooltip shows instance name; click opens popover with three actions (Force Reconnect, Open Chat Window, Go to Settings). Preferred glyph: Tomo kanji 友 with state-indicating color/indicator. | User's feedback: text label "Tomo: `<name>`" was too loud for the status bar; icon + on-demand detail is the Obsidian-idiomatic pattern. Popover consolidates three actions previously scattered across other surfaces. |
+| 2026-04-24 | **Picker opens ONLY from Settings → Connect.** Force Reconnect, automatic reconnect, palette "Reconnect to Tomo", and the status bar popover all re-attach to the currently chosen instance or stay Disconnected with an error — never open the picker. | Prevents hidden state changes where the "reconnect" verb silently lets the user land on a different container than they chose. Changing instances is an intentional act that belongs in Settings. |
+| 2026-04-24 | Drop "refuse non-local Docker endpoint" acceptance criterion | Moot under the local-socket approach used in v0.1 (we connect to the daemon socket directly, remote endpoints aren't reachable). A future API-capable transport may legitimately support remote Tomo; categorical refusal would block that. v0.1 "Won't Have" softened from "refuse" to "not in v0.1". |
+| 2026-04-24 | Command palette Reconnect label = "Tomo Hashi: Reconnect to `<instance-name>`" when known; else "Tomo Hashi: Reconnect to Tomo". Reconnect command is reconnect-only — never opens picker. | Dynamic label gives the user the critical identity at a glance. Reconnect-only semantics align with the picker-in-Settings-only rule. |
+| 2026-04-24 | F1 empty-state message reworded to plain English ("No Tomo instance seems to be running — start one and try again") — no label names surfaced to the user | Label names are implementation detail; user-facing text stays in user language. |
+| 2026-04-24 | **SDD brainstorm:** Docker client = `dockerode`; Attach mechanism = `docker attach` to PID 1 with xterm.js rendering | dockerode is battle-tested for stream hijack/demux; xterm.js gives full-fidelity TUI rendering required by Claude Code's interactive mode. Both confirmed in SDD brainstorm. |
+| 2026-04-24 | **SDD ADR-3 revised:** UI approach = plain TypeScript + DOM via Obsidian primitives (was: Svelte) | After pros/cons review, the framework runtime is not justified for 4 reactive UI surfaces + xterm-dominated chat view. Plain TS keeps bundle small, debugging transparent, and tests simple (no `@testing-library/svelte` integration needed). CSS isolation via `hashi-` class prefix convention. |
+| 2026-04-24 | **SDD ADR-4 revised:** State store = custom typed `Store<T>` helper (was: Svelte writable store) | Consistent with ADR-3. ~30 LOC helper with `subscribe` returning unsubscribe matches Obsidian's `plugin.register` teardown pattern. Read/write split via `connectionStore: Readable<T>` + `connectionStoreWrite` naming convention. |
+| 2026-04-24 | SDD ADR-5 through ADR-10 proposed (ports-and-adapters for Docker edge; singleton view via `getLeavesOfType`; cancellable reconnect loop; `removeCommand`+`addCommand` for dynamic labels; Obsidian `Menu` for status bar popover; vitest unit + vitest live split) | All pending user confirmation; detailed rationale and trade-offs captured in `solution.md`. |
+| 2026-04-24 | SDD ADR-3..ADR-10 **all confirmed** in two batched rounds (plain TS UI; `Store<T>` helper; ports & adapters; `getLeavesOfType` singleton; cancellable reconnect loop; `removeCommand`+`addCommand` dynamic label; Obsidian `Menu` popover; unit + live test split) | User selected each recommended option in two AskUserQuestion rounds. SDD phase complete pending final validation pass. |
+| 2026-04-24 | Plan phase complete — 5 phases, 29 tasks, full PRD AC → task traceability; 4 parallel tasks in Phase 4 (UI surfaces); live-Docker e2e test in Phase 5 | Phase structure: Foundation → Docker Boundary → Connection Service → UI Surfaces → Wire-up/Integration/Release Gate. TDD Prime/Test/Implement/Validate per task. Outbound handoffs (Tomo instance-name label, spec 002 README decoupling) captured as Phase 5 tasks T5.7/T5.8. |
+| 2026-04-24 | Spec 001 readiness = HIGH. Ready for implementation. | All nine spec files present (README, requirements, solution, plan/README, plan/phase-1..5). Zero open questions. All ADRs confirmed. Full PRD→SDD→PLAN traceability. |
 
 ## Context
 
-Spec-001 ships Session View; spec-002 ships Instruction Executor. The executor depends on lifecycle contracts (attach state, container identity, error propagation) defined here, so 001 lands first.
+Spec 001 ships Tomo Connection & Chat Window. Spec 002 ships the Instruction Executor. After the brainstorm pivot on 2026-04-24, the two features are **independent** — 002 does not require an active Tomo connection, and 001 does not carry session-identity or error-channel contracts for 002. Both must land for v0.1 but can be developed in parallel.
 
-v0.1 release target: Session View + Docker connection + instruction-set execution of at least one base operation type working end-to-end against a live Tomo container (per architecture-06 §10).
+v0.1 release target: live Tomo Docker connection + chat working end-to-end + at least one base instruction-execution operation working against a live Tomo-produced `_instructions.json` (per architecture-06 §10).
+
+## Open Questions
+
+None remaining at PRD level. Questions from Kokoro's 2026-04-23 onboarding handoff have all been addressed (trigger mechanism was dissolved by the pivot; discovery policy became "picker on explicit user action"; error channel became the in-view indicator).
 
 ## References
 
-- ADR-009 §2 Connection Strategy
-- Architecture 06 §4 Layers, §5 Connection Strategy, §9 Repository Structure
-- Onboarding handoff: `_inbox/from-kokoro/2026-04-23_kokoro-to-hashi_onboarding-charter-contract-and-v01-scope.md`
+- ADR-009 §2 Connection Strategy (external)
+- Architecture 06 §4 Layers, §5 Connection Strategy, §9 Repository Structure, §10 v0.1 Release Gate (external)
+- Onboarding handoff: `_inbox/from-kokoro/2026-04-23_kokoro-to-hashi_onboarding-charter-contract-and-v01-scope.md` (external; not in sandbox — summaries above are authoritative for this spec)
+- Brainstorm pivot 2026-04-24 — inline notes on requirements.md v1
