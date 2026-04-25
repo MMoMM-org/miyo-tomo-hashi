@@ -5,16 +5,17 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-04-24 |
-| **Current Phase** | Planning — blocked by 001 lifecycle contracts |
+| **Current Phase** | Ready for implementation — readiness HIGH |
 | **Last Updated** | 2026-04-24 |
 
 ## Documents
 
 | Document | Status | Notes |
 |----------|--------|-------|
-| requirements.md | not started | PRD — preview modal, hook API, partial-resume UX, error reporting |
-| solution.md | not started | SDD — JSON schema validation, 8 action handlers, hook loader, checkbox sync |
-| plan/ | not started | Implementation phases |
+| research.md | draft | Agent-team research synthesis — 5 perspectives (Requirements, Technical, Security, Integration, UX) |
+| requirements.md | draft | PRD v2.0 — 11 Must features; 95 acceptance criteria; 0 open questions; pivots `.json` to source-of-truth + adds inbox-batch + run-log file |
+| solution.md | draft | SDD v1.0 — 10 ADRs confirmed (2026-04-25); ports-and-adapters at vault edge; ajv standalone codegen; state-machine modal; reuses 001's `Store<T>` and plain-TS-DOM patterns |
+| plan/ | draft | 6-phase TDD plan (31 tasks); `plan/README.md` + `plan/phase-1..6.md`; ~891 lines total; full PRD AC → task traceability deferred to phase-6 task T6.5 |
 
 ## Scope (from ADR-009 + architecture-06 + Tomo consumer contract)
 
@@ -34,7 +35,7 @@ Covers:
 - **Execution order:** create_moc → move_note → link_to_moc → daily updates (tracker, log_entry, log_link) → delete_source → skip. Within block, monotonic `I01` … `INN`. `link_to_moc` MUST NOT run before its `create_moc`.
 - **Sync contract:** after each successful action, tick matching `- [ ] Applied` checkbox in `.md` peer (`I##` ↔ third-level heading `### I## — …`). On failure, leave unchecked and surface error. Respect pre-ticked boxes (user may have applied manually) — skip those.
 - **Hooks:** Node scripts in `.tomo-hashi/hooks/` (user-configurable). Pre/post per operation. Full plugin privilege — same trust model as Templater. Motivating case: `after-move.js` rewriting aliases across linking notes.
-- **Tri-state preview modal:** `Preview on` (default, user confirms) / `Preview off` (informational) / `No confirmation` (run immediately). UX affordance, not an approval gate — approval is upstream in Tomo's review step.
+- **Tri-state execution mode:** `Confirm before run` (default, user clicks Execute) / `Auto-run with preview` (modal opens, execution starts immediately, user can Cancel) / `Silent` (no modal, Notice on completion). UX affordance, not an approval gate — approval is upstream in Tomo's review step.
 - **Idempotency:** per-action rules documented in Tomo consumer contract §Action kinds — re-apply = no-op where states match; inconsistent state (both source and destination present) surfaces error rather than overwriting.
 - **Partial-resume:** if N of M actions already ticked, skip them; re-run continues from first unticked.
 
@@ -48,7 +49,18 @@ Explicitly NOT in 002:
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| — | — | — |
+| 2026-04-24 | Reset stale "blocked by 001" status + "Depends on 001" context | 2026-04-24 brainstorm pivot (logged in 001 decisions) made 002 standalone — no shared session identity or error channel with 001. README now reflects the pivot. |
+| 2026-04-24 | Begin xdd workflow with PRD phase | Scope is outlined but acceptance criteria, hook API surface, partial-resume UX, and error reporting channel are still open questions from Kokoro's 2026-04-23 onboarding handoff — WHAT-level questions that need settling before design. |
+| 2026-04-24 | Run xdd in Agent Team mode | Multiple design axes with potential tension (JSON schema strictness vs error UX; hook trust model vs simplicity; idempotency vs partial-resume progress reporting; Obsidian API surface for file moves and section editing). Persistent researcher perspectives outperform fire-and-forget agents here. |
+| 2026-04-24 | Research phase complete — see `research.md` | 5 perspectives returned with strong alignment on core execution model (ports-and-adapters, ajv standalone, `app.fileManager.renameFile` for link preservation, `vault.process` for atomic writes). Conflicts narrowed to UX details (error channel location, popover extension) and integration policy (Periodic Notes fallback, peer-missing behaviour) — all surfaced for PRD. |
+| 2026-04-24 | PRD v1.0 drafted with 0 clarification markers; all 8 research-level open questions pre-settled to recommended defaults | Defaults adopted: halt-on-dependency (yes), peer `## Errors` block (in-peer, not separate file), no status-bar popover extension in 002, palette command name "Execute instructions document", Periodic Notes as Should-Have fallback, example hook shipped, first-run disclosure modal + kill-switch for hooks, virtualization deferred to SDD. Any of these can still be redirected during review. |
+| 2026-04-25 | **PRD v2.0 — major revision after user comments on v1.0.** Pivots `.json` to sole source of truth for applied-state (Tomo adds optional `applied: false` per action; Hashi flips to `true` on success). Adds inbox-batch invocation (one merged preview when no instruction file is active). Replaces in-peer `## Errors` block with per-run `tomo-hashi-run-log_<ts>.md` files (retention setting: always-keep / only-after-failed). Renames tri-state to *Confirm before run / Auto-run with preview / Silent*. Modal buttons standardised to **Execute / Cancel / Close**. Adds 橋 status-bar indicator as MUST. Drops sha256 hook disclosure (kept *enabled / disabled / ask* + kill-switch). Drops Periodic Notes / daily-notes resolution (Tomo emits absolute paths). Drops example hook on first run. Strengthens "never" markers on cross-vault, remote sources, hook sandboxing. Hooks dir now configurable. Adds debug-logging setting (per-hook detail behind it). | User revisions on requirements.md v1.0 inline; full revision answer round in conversation 2026-04-25. |
+| 2026-04-25 | Outbound handoff to Tomo created at PRD exit (HIGH PRIORITY) | `_outbox/for-tomo/2026-04-25_hashi-to-tomo_applied-field.md` — request Tomo emit `applied: false` per action in `_instructions.json`. Schema stays v1 (additive optional field). Hashi v0.1 release gate requires the round-trip working. |
+| 2026-04-25 | Tomo handoff returned **done** — `applied:false` shipped in Tomo v0.7.0 | `build_actions()` in `tomo/scripts/instruction-render.py` now stamps `applied:false` on every action; shared `$defs/applied_field` added to `tomo/schemas/instructions.schema.json` across all 8 variants; round-trip test asserts it; branch `feat/applied-field-instructions`, commit `f3ad49d`. Hashi can vendor the updated schema directly during Phase 1 of the plan; CON-9 in the SDD is no longer a blocker. |
+| 2026-04-25 | SDD v1.0 — 10 ADRs confirmed in one batched round | 9 ADRs confirmed as proposed (ajv standalone codegen, vendored schema, createRequire+cache-evict hooks, pure handler functions, state-machine modal, vault.process for JSON applied-flag, Markdown per-run log file, vitest split, hook context with runState). ADR-6 revised: 橋 status bar uses idle/green/red color states only — no pulse animation. ADR-9 augmented: manual QA against `../temp/Privat-Test` documented as a release-gate checklist item. |
+| 2026-04-25 | Plan v1.0 — 6 phases, 31 tasks, 4 parallel opportunities (T3.1, T5.1, T5.2, T5.3) | Phase 1 Foundation (vendor schema, types, settings UI, path safety, mock) → Phase 2 Vault Boundary & Schema (port + 3 adapters + validator) → Phase 3 Action Handlers (8 pure handlers + 2 helpers; T3.1 parallelizable) → Phase 4 Orchestrator/Hooks/Run Log (planner, applied-writer, peer-sync, run log, hook runner, executor) → Phase 5 UI Surfaces (modal, status bar, hook disclosure; 3 parallel) → Phase 6 Wire-up + live e2e + manual QA + traceability. Inherits `Store<T>` from 001 with on-demand extraction fallback. |
+| 2026-04-25 | 4-perspective validation pass (Completeness / Consistency / Alignment / Coverage) — assessment **Critical** at first pass; **Excellent** after fixes | Findings: (HIGH) PRD F10 still described pulse animation in 5 places after ADR-6 was revised; (HIGH) PRD claimed 73 ACs but actual count is 95. (MEDIUM) Spec README scope blurb used old execution-mode names; SDD `minAppVersion` cited 1.5.7 but manifest is 1.5.0; SDD missed type definitions for `Diagnostic`, `ValidationFailure`, `ResolvedSource`, `Clock`, `Readable<T>`; PRD F5 edge-case self-contradicted F5 AC; PRD F11 missed rollback ACs for radio/toggle settings; F7 missed run-log-write-failure AC; 3 plan tasks missed test rows (F6 disabled-Execute, F10 ARIA live region, F11 per-hook ask non-persistence); plan parallelTasks counted 6 vs literal 4. (LOW) hooksDir trailing slash drift; broken `[ref: SDD/...]` strings; F10 tooltip lacked third "error" variant; outbound-handoff prose described handoff as pending though it returned done. **All findings fixed in this pass.** |
+| 2026-04-25 | Spec 002 readiness = HIGH. Ready for implementation. | All 11 spec files present (README, research, requirements, solution, plan/README, plan/phase-1..6). 0 open questions. All 10 ADRs confirmed. Tomo `applied:false` handoff returned done in v0.7.0. PRD F1–F11 traceable to SDD components and plan tasks. Validation findings closed. |
 
 ## Open Questions (from Kokoro onboarding handoff 2026-04-23)
 
@@ -58,14 +70,12 @@ Explicitly NOT in 002:
 
 ## Context
 
-Depends on 001 for:
-- Container identity (Hashi needs to know which Tomo session produced the instructions, if ever used for traceability)
-- Error channel (shared surface for executor failures and session-lifecycle failures)
+After the 2026-04-24 brainstorm pivot (logged in spec 001 decisions), 002 is **standalone**:
+- No dependency on 001 for container identity — the executor runs against `_instructions.json` files in the vault, regardless of whether a Tomo container is currently attached.
+- No dependency on 001 for an error channel — 002 surfaces its own per-action errors (channel TBD in PRD/SDD).
+- No shared session state with 001.
 
-Independent of 001 for:
-- JSON parsing, schema validation, action handlers, checkbox sync, hook loader, preview modal
-
-Could start SDD drafting in parallel with 001's SDD, but implementation (plan/) should land after 001 so the executor writes into a live plugin skeleton.
+Both features must land for v0.1; they can proceed in parallel. Implementation (plan/) should land into the same plugin skeleton 001 builds, but 002 has no runtime coupling to 001's connection service.
 
 ## References
 

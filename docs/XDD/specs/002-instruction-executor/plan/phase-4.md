@@ -1,0 +1,134 @@
+---
+title: "Phase 4: Orchestrator, Hooks, Run Log"
+status: pending
+version: "1.0"
+phase: 4
+---
+
+# Phase 4: Orchestrator, Hooks, Run Log
+
+## Phase Context
+
+**GATE**: Read all referenced files before starting this phase.
+
+**Specification References**:
+- PRD: F1 (invocation), F5 (applied state), F6 (partial-resume), F7 (run log), F8 (hooks) — `[ref: PRD/F1, F5, F6, F7, F8]`
+- SDD: InstructionExecutor Service Surface; Planner; jsonAppliedWriter; peerCheckboxSync; runLog; HookRunner; ADRs 3, 4, 7, 8, 10 — `[ref: SDD/Interface Specifications; InstructionExecutor]` `[ref: SDD/Implementation Examples; Atomic JSON Write; Hook Loader]`
+
+**Key Decisions** (affecting this phase):
+- ADR-3: hooks fresh-loaded per run via `delete require.cache[resolved]`
+- ADR-7: applied-flag write through `vault.process` with stable formatting
+- ADR-8: per-run log file with YAML frontmatter + per-source-file headings
+- ADR-10: hook context shape with `runState: Record<string, unknown>` reset per run
+- Single-run lock at the orchestrator; halt-on-dependency rule lives here
+
+**Dependencies**: Phases 1–3 (settings, types, path safety, VaultFS adapters, schema validator, all 8 handlers).
+
+---
+
+## Tasks
+
+This phase wires the orchestrator that drives a run: source resolution, schema validation, action dispatch, JSON applied-flag write, peer best-effort tick, run log, hook invocation. The orchestrator owns the single-run lock, the cancellation flag, halt-on-dependency, and `executionStore` state transitions.
+
+- [ ] **T4.1 Planner — source resolution + canonical order + applied filter** `[activity: domain-modeling]`
+
+  1. Prime: Read PRD F1 (invocation rules), F6 (partial-resume) `[ref: PRD/F1, F6]`. Read SDD "Planner" directory entry `[ref: SDD/Directory Map]` and Primary Flow `[ref: SDD/Runtime View; Primary Flow]`.
+  2. Test: `test/unit/executor/planner.test.ts`:
+     - `resolveSingle(activeFilePath)` — given an `.md` peer, returns the sibling `_instructions.json`. Given a `_instructions.json`, returns it directly. Given an unrelated file, returns null.
+     - `resolveBatch(inboxFolder)` — returns all `_instructions.json` in folder, alphabetical order. Empty folder → empty array. Missing folder → throws typed error.
+     - `computeRemaining(sets)` — applies canonical order across kinds; preserves monotonic `I##` within each kind; filters out actions with `applied: true`; returns `ActionRecord[]` with `fileId` and `summary` populated.
+     - Halt-on-dependency *graph* construction: when a `link_to_moc` references a MOC created by an in-set `create_moc`, the planner records the dependency edge for the orchestrator to honor on failure.
+  3. Implement: `src/executor/planner.ts`.
+  4. Validate: Test suite green; types clean.
+  5. Success:
+     - [ ] PRD F1 resolution matrix covered `[ref: PRD/F1]`
+     - [ ] PRD F6 partial-resume drives off `applied` field `[ref: PRD/F6]`
+     - [ ] Dependency graph available for halt-on-dependency in T4.4 `[ref: PRD/F4; SDD/Acceptance Criteria; F4 Action kinds]`
+
+- [ ] **T4.2 JsonAppliedWriter + PeerCheckboxSync** `[activity: domain-modeling]`
+
+  1. Prime: Read PRD F5 (full AC list) `[ref: PRD/F5]`. Read SDD "Atomic JSON Applied-Flag Write" example `[ref: SDD/Implementation Examples; Example: Atomic JSON Applied-Flag Write]`.
+  2. Test:
+     - `test/unit/executor/jsonAppliedWriter.test.ts`:
+       - Setting `applied: true` on `I03` does NOT change other actions
+       - JSON is reformatted with 2-space indent + trailing newline
+       - Writer is atomic (concurrent writes serialize via `vault.process`)
+       - Writer never sets `applied: false`
+     - `test/unit/executor/peerCheckboxSync.test.ts`:
+       - Peer present + heading `### I03 — …` + unticked checkbox → ticks the checkbox; the result is `outcome: "ticked"`
+       - Peer present + heading missing for `I03` → outcome: `"heading-missing"` (no error, no write)
+       - Peer absent → outcome: `"peer-missing"` (no error, no write)
+       - Peer present + checkbox already `- [x]` (pre-ticked) → outcome: `"already-ticked"` (no write)
+       - Soft-warn semantics: a tick failure NEVER throws
+  3. Implement: `src/executor/jsonAppliedWriter.ts` and `src/executor/peerCheckboxSync.ts` per SDD examples.
+  4. Validate: Both test suites pass; lint clean.
+  5. Success:
+     - [ ] Applied-flag writes are atomic + monotonic `[ref: PRD/F5; SDD/ADR-7]`
+     - [ ] Peer tick is best-effort with all four outcome paths covered `[ref: PRD/F5]`
+
+- [ ] **T4.3 RunLogWriter** `[activity: domain-modeling]`
+
+  1. Prime: Read PRD F7 (run log file format + retention) `[ref: PRD/F7]`. Read SDD ADR-8 (Markdown + frontmatter + table) `[ref: SDD/Architecture Decisions; ADR-8]`. Read `src/util/filenames.ts` from T1 plan (or create here if not yet).
+  2. Test: `test/unit/executor/runLog.test.ts`:
+     - Filename builder: `tomo-hashi-run-log_YYYY-MM-DDTHHMM.md` with `_2`, `_3` suffix on collision
+     - Header includes start/end timestamps, mode, source filenames, totals (applied / skipped-already / skipped-dependency / skipped-cancelled / failed)
+     - Body groups records by source file with `## <filename>` sub-heading
+     - Each row includes `I##`, kind, payload summary, outcome, error message (if failed)
+     - Retention `always` → log file kept regardless of failures
+     - Retention `only-after-failed` + 0 failures → log file deleted at finalize
+     - Retention `only-after-failed` + ≥1 failure → log file kept
+     - Validation-only failures (file rejected at schema step) appear as the only entry for that file
+  3. Implement: `src/executor/runLog.ts` — `RunLogWriter` class with `start(meta)`, `appendRecord(record)`, `finalize(retention)` API. Writes through `VaultFS` only.
+  4. Validate: All run-log tests pass.
+  5. Success:
+     - [ ] All PRD F7 ACs covered `[ref: PRD/F7]`
+     - [ ] Retention rule applied at finalize `[ref: PRD/F7]`
+
+- [ ] **T4.4 HookRunner + HookContext + HookDisclosureModal hookup point** `[activity: integration]`
+
+  1. Prime: Read PRD F8 (full AC list) `[ref: PRD/F8]`. Read SDD "Hook Loader with Per-Run Cache Eviction" example + ADR-3, ADR-10 `[ref: SDD/Implementation Examples; Hook Loader]` `[ref: SDD/Architecture Decisions; ADR-3, ADR-10]`.
+  2. Test: `test/unit/hooks/HookRunner.test.ts`:
+     - Discovery: hook files matching `{before,after}-<kind>.js` are found in the configured directory
+     - Loading: hooks are loaded fresh per run (cache evicted; second run sees an edit made between runs)
+     - Multiple hook files for the same `(kind, phase)` key → only the first alphabetical is loaded; the duplication is logged
+     - Invocation context shape: `{ action, vault: HookVault, app, runState, logger }` — assert each property
+     - `runState` is shared across hooks within a run, reset across runs
+     - Return-shape semantics: `undefined` → ok; `{ info: [...] }` → logged; `{ warnings: [...] }` → logged; `{ errors: [...] }` → action fails
+     - Throw semantics: pre-hook throws → action fails (skip the action); post-hook throws → action's vault state already committed; failure recorded separately
+     - Timeout: 30s timeout fires; treated as throw
+     - Kill-switch (`disableAllHooks`) → no hook loaded or invoked
+     - Per-hook *ask*-mode decisions live in an in-memory map, not persisted
+  3. Implement: `src/hooks/HookRunner.ts` + `src/hooks/HookContext.ts`. The `HookDisclosureModal` is referenced by `HookRunner` via a callback (Modal class itself is built in Phase 5 T5.3 — Phase 4 stubs the callback signature).
+  4. Validate: All hook tests pass; types clean.
+  5. Success:
+     - [ ] All PRD F8 ACs except UI ones (F5: disclosure modal — Phase 5) `[ref: PRD/F8]`
+     - [ ] Hook context matches ADR-10 exactly `[ref: SDD/ADR-10]`
+     - [ ] Cache-evict mechanism verified by edit-between-runs test `[ref: SDD/ADR-3]`
+
+- [ ] **T4.5 InstructionExecutor + executionStore** `[activity: domain-modeling]`
+
+  1. Prime: Read SDD "InstructionExecutor Service Surface" `[ref: SDD/Interface Specifications; InstructionExecutor]`. Read Runtime View Primary Flow + Complex Logic `[ref: SDD/Runtime View]`.
+  2. Test: `test/unit/executor/InstructionExecutor.test.ts`. Each test injects `FakeVaultFS` + scripted hook runner + scripted validator:
+     - Single-file invocation runs the right action set and writes `applied:true` per success
+     - Batch invocation merges across files in alphabetical order
+     - Single-run lock: second invocation while running → second `execute()` rejects fast with the right message; no second run starts
+     - Halt-on-dependency: `create_moc I03` fails → all `link_to_moc` actions whose graph parent is `I03` are recorded as `skipped-dependency`; non-dependent actions still run
+     - Halt-on-independent-failure does NOT propagate (a `delete_source` failure on a different file does not affect later actions)
+     - Cancellation: `cancel()` between actions → in-flight action commits; remaining recorded as `skipped-cancelled`
+     - Validation-only failure for a file in batch: that file's actions don't run; other files in batch proceed
+     - Run log written before lock release
+     - Pre-hook throw → action skipped, `applied` stays false
+     - Post-hook throw → action committed (`applied:true`), hook failure logged separately
+     - Mode `silent` → no modal subscription required; `executionStore` still updates
+     - `executionStore` transitions traced: idle → preparing → previewing/running → summary → idle. Plus a separate sub-test for the `validation-failed` branch: idle → preparing → validation-failed → idle (covers the 6th state from SDD `RunState` line 530).
+  3. Implement:
+     - `src/executor/executionStore.ts` — `Store<RunState>` instance + derived slices (e.g., `kind`, `currentProgress`)
+     - `src/executor/InstructionExecutor.ts` — orchestrator class implementing the full lifecycle from §Complex Logic of the SDD
+  4. Validate: Full executor test suite passes; lint clean.
+  5. Success:
+     - [ ] Single-run lock prevents concurrent runs `[ref: PRD/F1; SDD/CON-6]`
+     - [ ] Halt-on-dependency rule honored across batch `[ref: PRD/F4]`
+     - [ ] Cancellation safe between actions `[ref: PRD/F3]`
+     - [ ] All PRD F-feature behaviors covered at the executor layer `[ref: PRD/F1, F4, F5, F6, F7, F8]`
+
+  - **Phase 4 Validation**: After T4.5, run `npm test && npm run test:live && npm run lint && npm run build`. Confirm orchestrator + planner + applied-writer + peer-sync + run log + hook runner all pass; live tests still green; build clean.
