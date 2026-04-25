@@ -3,7 +3,8 @@ from: hashi
 to: tomo
 date: 2026-04-24
 topic: instance-name-label
-status: pending
+status: done
+status_note: Added --label miyo.tomo.instance-name=$INSTANCE_NAME to docker run in scripts/lib/begin-tomo.sh.template (template v0.11.0). Only start path in Tomo. Users regenerate begin-tomo.sh via install-tomo.sh.
 priority: normal
 requires_action: true
 ---
