@@ -111,29 +111,28 @@ When implementation requires changes from the specification:
 - `src/util/store.ts` — created by 001's plan Phase 1 T1.3. **002 depends on this file existing.** If 002 starts before 001 completes Phase 1, T1.5 of 002 must extract the helper as a shared util on demand (deviation gets logged).
 
 **Key Design Decisions** (full rationale in SDD):
-- **ADR-1** Schema validation = ajv 8.x in standalone-codegen mode at build time — generated `validator.gen.js` committed.
+- **ADR-1** (revised 2026-04-25) Schema validation = ajv 8.x **at runtime** (was: standalone codegen). Schema JSON is bundled and compiled at module load. ~35 KB bundle cost for ~50 lines of build-script + committed-artifact complexity saved.
 - **ADR-2** Schema source = vendored copy in `src/schema/instructions.schema.json` from Tomo v0.7.0+; drift signaled by Tomo CHANGELOG handoff.
 - **ADR-3** Hook loader = `createRequire(import.meta.url)` + per-run `delete require.cache[resolved]` for fresh load.
-- **ADR-4** Action handlers = 8 pure async functions with shared `HandlerContext` (vault, clock, runState).
+- **ADR-4** Action handlers = 8 pure async functions with shared `HandlerContext` (vault, clock). (Revised 2026-04-25: `runState` dropped — was shared with hooks, but hooks no longer use runState.)
 - **ADR-5** Modal = single `ExecutionModal` class with state-machine UI (preview / progress / summary subviews).
 - **ADR-6** Status bar 橋 = color states (idle / green=running / red=error); no animation.
 - **ADR-7** JSON applied-flag write = `vault.process` for atomic edit; `JSON.stringify(v, null, 2) + "\n"` formatting.
 - **ADR-8** Run log = per-run Markdown file with YAML frontmatter + per-source-file headings + per-action table.
-- **ADR-9** Test split = vitest unit (`FakeVaultFS`) + vitest live (`FsPromisesVaultFS` against tmpdir) + manual QA against `../temp/Privat-Test`.
-- **ADR-10** Hook context = `{ action, vault: HookVault, app: App, runState: Record<string, unknown>, logger }`; runState reset per run.
+- **ADR-9** (revised 2026-04-25) Test split = vitest unit (`FakeVaultFS`) + manual QA against `../temp/Privat-Test`. The previously-planned `FsPromisesVaultFS` adapter + `vitest live` run was dropped — node `fs/promises` cannot exercise the Obsidian-specific semantics that matter (`fileManager.renameFile` link preservation, `vault.process`, `MetadataCache`).
+- **ADR-10** (revised 2026-04-25) Hook context = `{ action, app, logger }` only. No `runState` (speculative cross-hook state — add later if a real hook needs it). No `HookVault` narrowed facade (hooks have full plugin privilege per F8 trust model — narrowing decorates a permission the policy already grants).
 
 **Implementation Context**:
 ```bash
-# Build & schema codegen
-npm run schema:build        # NEW: ajv standalone codegen → src/schema/validator.gen.js
-npm run dev                 # esbuild watch mode (re-runs schema:build on schema change via prebuild hook)
-npm run build               # tsc --noEmit && schema:build && esbuild production
+# Build (no prebuild step — ajv compiles at runtime per ADR-1 v2)
+npm run dev                 # esbuild watch mode
+npm run build               # tsc --noEmit && esbuild production
 
-# Testing
+# Testing (no test:live for FsPromisesVaultFS per ADR-9 v2 — that adapter was dropped)
 npm test                    # vitest unit — jsdom + obsidian mock + FakeVaultFS
 npm run test:watch          # vitest unit in watch mode
 npm run test:coverage       # vitest unit with v8 coverage
-npm run test:live           # vitest live — node env, FsPromisesVaultFS against os.tmpdir(), no Obsidian, no Docker
+# 001 retains npm run test:live for its real-Docker e2e — 002 has no live-test contribution
 
 # Quality
 npm run lint                # ESLint with obsidianmd rules
@@ -143,11 +142,30 @@ npm run lint                # ESLint with obsidianmd rules
 
 ---
 
-## Implementation Phases
+## Canonical Task Shape (RED → GREEN → REFACTOR)
 
-Each phase is defined in a separate file. Tasks follow red-green-refactor: **Prime** (understand context), **Test** (red), **Implement** (green), **Validate** (refactor + verify).
+Every task in every phase file follows this exact gate. The `Test:` step is NOT documentation — it is a *failing test must exist and be observed to fail* gate before any production code is written.
+
+```
+1. Prime   — Read referenced PRD/SDD sections; understand the contract.
+2. RED     — Write the failing test. Run `npm test -- <path>`. CAPTURE the failure
+              output (the actual stderr / "Cannot find module" / assertion text)
+              and PASTE IT into the commit body. If the test passes on first run,
+              the test is wrong — strengthen it until red.
+3. GREEN   — Write the minimum production code to pass. Re-run; tests green.
+4. REFACTOR — With tests green, simplify. Re-run; tests stay green. Run lint.
+5. Validate — Final command run for the task (typically `npm test && npm run lint`).
+```
+
+The TDD-Guardian skill (`tcs-workflow:xdd-tdd`) enforces this gate. A commit with no captured red-output in the message body is treated as missing the gate.
+
+Phase intros may abbreviate the steps as "Prime → RED → GREEN → REFACTOR → Validate" but the discipline is the one defined here.
 
 > **Tracking Principle**: Track logical units that produce verifiable outcomes. The TDD cycle is the method, not separate tracked items.
+
+## Implementation Phases
+
+Each phase is defined in a separate file.
 
 - [ ] [Phase 1: Foundation](phase-1.md)
 - [ ] [Phase 2: Vault Boundary & Schema](phase-2.md)
@@ -157,6 +175,30 @@ Each phase is defined in a separate file. Tasks follow red-green-refactor: **Pri
 - [ ] [Phase 6: Wire-up, Integration & Release Gate](phase-6.md)
 
 ---
+
+## Edge Cases → Tests
+
+Every PRD edge-case bullet (PRD §F1–F11 *Edge Cases*) must trace to a test artifact OR be marked manual-QA-only with explicit justification. Update this matrix whenever an edge-case bullet is added/changed in the PRD.
+
+| PRD edge case (F# / wording fragment) | Coverage | Where |
+|---|---|---|
+| F1: Inbox folder misconfigured / empty | unit | `test/unit/executor/planner.test.ts` (resolveBatch) |
+| F2: Malformed `.json` in batch | unit | `test/unit/schema/validator.test.ts` |
+| F3: Mid-run cancellation in Auto-run mode | unit | `test/unit/executor/InstructionExecutor.test.ts` (cancel-between-actions) |
+| F4: `.md` peer missing | unit | `test/unit/executor/peerCheckboxSync.test.ts` (peer-missing case) |
+| F4: `.md` peer present, heading missing | unit | `test/unit/executor/peerCheckboxSync.test.ts` (heading-missing case) |
+| F4: Peer open in another editor pane during write | manual QA | T6.4 — open peer in second pane, run executor, observe vault.process reconciles |
+| F4: Tomo emits `.json` without `applied` field | unit | `test/unit/schema/validator.test.ts` (graceful tolerance) |
+| F4: Hook file is valid JS but exports nothing | unit | `test/unit/hooks/HookRunner.test.ts` (uses `before-update_tracker-malformed.js` fixture from T4.4.0) |
+| F4: Hook infinite loop | unit | `test/unit/hooks/HookRunner.test.ts` (uses `before-update_tracker-infinite-loop.js` fixture; 30 s timeout) |
+| F8: Schema v2 instruction set ships before Hashi upgrade | unit | `test/unit/schema/validator.test.ts` (version-mismatch returns single-message failure) |
+| F8: User toggles hooks → disabled mid-run | unit | `test/unit/executor/InstructionExecutor.test.ts` (assert in-flight run unaffected; new run honors new policy) |
+| F7: Two runs scheduled in same minute | unit | `test/unit/executor/runLog.test.ts` (filename `_2` suffix) |
+| F1/F4: `.json` with 0 actions | unit | `test/unit/executor/InstructionExecutor.test.ts` (empty-actions branch) |
+| F4: Single `skip` action | unit | `test/unit/actions/skipHandler.test.ts` |
+| F1: Inbox contains 50 `_instructions.json` at once | unit + manual QA | unit asserts merged plan size; manual QA in T6.4 timing observation |
+| F7: Obsidian closes mid-run | manual QA | T6.4 — kill Obsidian during a run; reopen; verify next invocation sees correct partial-applied state from `.json` |
+| F9: Vault-internal symlink to outside vault | unit | `test/unit/util/paths.test.ts` (realpath rejection) |
 
 ## Plan Verification
 
@@ -169,5 +211,5 @@ Each phase is defined in a separate file. Tasks follow red-green-refactor: **Pri
 | Dependencies are explicit with no circular references | ✅ (Phase 1 → 2 → 3 → 4 → 5 → 6; Phase 3 helpers parallel; Phase 5 UI surfaces parallel) |
 | Parallel opportunities are marked with `[parallel: true]` | ✅ (T3.1 helpers; T5.1 / T5.2 / T5.3 UI surfaces — 4 parallel tasks total) |
 | Each task has specification references `[ref: ...]` | ✅ |
-| Project commands in Context Priming are accurate | ✅ (verified from `package.json` + new `schema:build` script) |
+| Project commands in Context Priming are accurate | ✅ (verified from `package.json`; no `schema:build` script after ADR-1 v2 revision) |
 | All phase files exist and are linked from this manifest as `[Phase N: Title](phase-N.md)` | ✅ |

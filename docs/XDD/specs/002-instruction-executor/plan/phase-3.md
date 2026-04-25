@@ -16,7 +16,7 @@ phase: 3
 - SDD: Action Handler Contract; sectionLocator example; ADR-4 (pure handler functions); Implementation Examples — `[ref: SDD/Interface Specifications; Action Handler Contract]` `[ref: SDD/Implementation Examples; Section Locator for link_to_moc]` `[ref: SDD/Architecture Decisions; ADR-4]`
 
 **Key Decisions** (affecting this phase):
-- ADR-4: 8 pure async functions, each `(action, ctx) => Promise<HandlerOutcome>`
+- ADR-4: 8 pure async functions, each `(action, ctx) => Promise<ActionOutcome>` (single end-to-end outcome type — `HandlerOutcome` was collapsed into `ActionOutcome` on 2026-04-25)
 - ADR-7: every vault edit goes through `vault.process` (atomic)
 - Handlers depend ONLY on `VaultFS` + `Clock` — zero `import 'obsidian'` lines
 - Halt-on-dependency is the orchestrator's job (Phase 4), NOT the handler's. Handlers are stateless.

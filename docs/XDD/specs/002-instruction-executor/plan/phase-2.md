@@ -16,10 +16,10 @@ phase: 2
 - SDD: VaultFS Port; ObsidianVaultFS adapter; Schema Validator wrapper; ADR-1 (ajv standalone); ADR-7 (vault.process atomic write) — `[ref: SDD/Interface Specifications; VaultFS Port]` `[ref: SDD/Architecture Decisions; ADR-1, ADR-7]`
 
 **Key Decisions** (affecting this phase):
-- ADR-1: validator is generated; this phase wraps it with diagnostics
-- ADR-2: schema is vendored — validator wrapper imports the generated `validator.gen.js`
-- ADR-7: every JSON edit goes through `vault.process` with `JSON.stringify(v, null, 2) + "\n"` formatting
-- ADR-9: tests use `FakeVaultFS` (unit) + `FsPromisesVaultFS` (live)
+- ADR-1 (revised 2026-04-25): ajv 8.x compiles at module load; this phase wraps it with a thin `validate()` returning `{ ok, data } | { ok, message }` (single human string — no `Diagnostic[]` array).
+- ADR-2: schema is vendored — validator imports the schema JSON and compiles it via ajv at module load.
+- ADR-7: every JSON edit goes through `vault.process` with `JSON.stringify(v, null, 2) + "\n"` formatting.
+- ADR-9 (revised 2026-04-25): tests use `FakeVaultFS` (unit) only — manual QA in `../temp/Privat-Test` is the integration gate. `FsPromisesVaultFS` was dropped (cannot exercise Obsidian-specific semantics).
 
 **Dependencies**: Phase 1 (vendored schema, types, path-safety utility, mock).
 
@@ -27,7 +27,7 @@ phase: 2
 
 ## Tasks
 
-This phase implements the vault edge — the `VaultFS` port + the three adapters (Obsidian, in-memory fake, fs/promises live) — plus the schema validator wrapper that converts ajv diagnostics into our typed failure shape.
+This phase implements the vault edge — the `VaultFS` port + two adapters (Obsidian for production, in-memory fake for unit tests) — plus the schema validator wrapper that compiles ajv against the bundled schema and flattens any error array to a human string.
 
 - [ ] **T2.1 VaultFS port** `[activity: domain-modeling]`
 
@@ -64,24 +64,21 @@ This phase implements the vault edge — the `VaultFS` port + the three adapters
      - [ ] `fileManager.renameFile` (not `vault.rename`) used for moves `[ref: PRD/F4; SDD/Implementation Gotchas]`
      - [ ] `vault.trash` with system flag used for delete `[ref: PRD/F4]`
 
-- [ ] **T2.3 FakeVaultFS + FsPromisesVaultFS** `[activity: testing]`
+- [ ] **T2.3 FakeVaultFS** `[activity: testing]` (FsPromisesVaultFS dropped 2026-04-25 per ADR-9 revision)
 
-  1. Prime: Read SDD test split `[ref: SDD/ADR-9]` and the `test/fixtures/instructions/` layout in SDD Directory Map `[ref: SDD/Directory Map]`.
-  2. Test: For each adapter, run the T2.1 contract test:
+  1. Prime: Read SDD test split `[ref: SDD/ADR-9 (revised 2026-04-25)]` and the `test/fixtures/instructions/` layout in SDD Directory Map `[ref: SDD/Directory Map]`.
+  2. Test:
      - `test/unit/vault/FakeVaultFS.test.ts` — FakeVaultFS contract pass
-     - `test/live/vault/FsPromisesVaultFS.live.test.ts` — FsPromisesVaultFS contract pass against a fresh `os.tmpdir()` directory; cleans up after each test
   3. Implement:
      - Create `src/vault/FakeVaultFS.ts` — in-memory `Map<path, string>` impl. `process` uses a per-path Promise queue for atomicity simulation. `metadata` returns a constructor-injected fake `FileMetadata` per path or `null`.
-     - Create `test/live/helpers/FsPromisesVaultFS.ts` (live-only) — `fs/promises` impl against a tmpdir. `metadata` returns `null` (live tests don't exercise metadata-dependent handlers; those go through Fake).
-     - Live test config: `vitest.live.config.ts` already exists; ensure it includes `test/live/**`.
-  4. Validate: Both adapters pass the contract test. `npm test` (unit) green; `npm run test:live` green.
+  4. Validate: FakeVaultFS passes the contract test. `npm test` (unit) green.
   5. Success:
-     - [ ] Both adapters pass the same contract `[ref: SDD/ADR-9]`
-     - [ ] Live tests run against real `fs/promises` semantics `[ref: SDD/ADR-9]`
+     - [ ] FakeVaultFS passes the contract `[ref: SDD/ADR-9 (revised 2026-04-25)]`
+     - [ ] Production confidence comes from manual QA in `../temp/Privat-Test` (Phase 6 T6.4), not from a node-fs adapter `[ref: SDD/ADR-9 (revised 2026-04-25)]`
 
 - [ ] **T2.4 SchemaValidator wrapper** `[activity: domain-modeling]`
 
-  1. Prime: Read PRD F2 (full AC list) `[ref: PRD/F2]`; read SDD "Schema Validator" — the wrapper around `validator.gen.js` that converts ajv errors into typed diagnostics `[ref: SDD/Architecture Decisions; ADR-1]`.
+  1. Prime: Read PRD F2 (full AC list) `[ref: PRD/F2]`; read SDD "Schema Validator" — `src/schema/validator.ts` imports ajv 8.x and the schema JSON, compiles a validator at module load, flattens ajv's error array to a single human string at the boundary `[ref: SDD/Architecture Decisions; ADR-1 (revised 2026-04-25)]`.
   2. Test: Write `test/unit/schema/validator.test.ts`. Use fixture files from `test/fixtures/instructions/` (created in T2.3 fixture layout):
      - Valid v1 → `{ ok: true; data }`
      - `schema_version: 0` / `2` / missing → `{ ok: false; failure: { kind: "version-mismatch", got } }`
@@ -96,14 +93,10 @@ This phase implements the vault edge — the `VaultFS` port + the three adapters
      ```ts
      export type ValidationOutcome =
        | { ok: true; data: InstructionSet }
-       | { ok: false; failure: ValidationFailure };
-     export type ValidationFailure =
-       | { kind: "parse-error"; detail: string }
-       | { kind: "version-mismatch"; got: unknown }
-       | { kind: "schema-diagnostics"; diagnostics: Diagnostic[] };
+       | { ok: false; message: string };
      export function validate(raw: unknown): ValidationOutcome;
      ```
-     The wrapper imports `validator.gen.js`, runs it, and translates `ajv`'s error array into our `Diagnostic[]` shape (each with path, message, params).
+     The module imports ajv + the schema JSON, compiles a validator at module load (~once), and flattens any ajv error array to a single human string at the boundary. No `Diagnostic[]`, no `ValidationFailure` discriminated union — both collapsed in the 2026-04-25 simplification.
   4. Validate: All validator tests pass; benchmark with 100-action fixture confirms < 200 ms; lint clean.
   5. Success:
      - [ ] All PRD F2 ACs satisfied `[ref: PRD/F2]`
@@ -112,9 +105,8 @@ This phase implements the vault edge — the `VaultFS` port + the three adapters
 
 - [ ] **T2.5 Phase 2 Validation** `[activity: validate]`
 
-  - Run `npm run schema:build && npm run build && npm test && npm run test:live && npm run lint`. All green.
+  - Run `npm run build && npm test && npm run lint`. All green. (Per ADR-1 v2 / ADR-9 v2: no `schema:build` prebuild, no `test:live` for FsPromisesVaultFS — manual QA in `../temp/Privat-Test` is the Phase 6 integration gate.)
   - Confirm:
-    - All three VaultFS adapters pass the same contract test
-    - Schema validator handles all six failure varieties (parse, version mismatch, structure diagnostics, unknown kind, duplicate I##, missing required)
+    - Both VaultFS adapters (ObsidianVaultFS, FakeVaultFS) pass the same contract test
+    - Schema validator collapses all failure modes (parse, version mismatch, structure diagnostics, unknown kind, duplicate I##, missing required) to one human-readable string per file
     - The applied-field round-trip works (validator accepts `applied: true` from a previously-run JSON)
-    - Live tests pass against real fs/promises

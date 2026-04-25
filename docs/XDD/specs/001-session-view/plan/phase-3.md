@@ -13,13 +13,13 @@ phase: 3
 
 **Specification References**:
 - PRD: F1 Connect, F2 Disconnect, F5 Force Reconnect semantics, F8 Automatic reconnect, FS2 Remember last instance
-- SDD: "TomoConnection Service Surface", "Runtime View" (all flows), "Implementation Examples / Reconnect Backoff", "Svelte/Store" subsections
+- SDD: "TomoConnection Service Surface", "Runtime View" (all flows), "Implementation Examples / Reconnect Backoff", "State Store — typed Store<T> helper" subsection
 - ADRs: ADR-4 (Store), ADR-7 (reconnect backoff)
 
 **Key Decisions** (affecting this phase):
-- ADR-4: `connectionStore: Readable<ConnectionState>` + `connectionStoreWrite` handle
+- ADR-4 (revised 2026-04-25): `connectionStore: Store<ConnectionState>` — single export with `subscribe` + `set`. No read/write split (`connectionStoreWrite` dropped); no `derived<T,U>` helper (subscribers compute slices inline).
 - ADR-7: cancellable promise chain, delays `[500, 1000, 2000, 4000, 8000]` ms
-- All Docker I/O flows through `DockerClient` port (unit tests use `FakeDockerClient`)
+- ADR-5 (revised 2026-04-25): All Docker I/O is direct dockerode use via `src/connection/docker.ts` (no `DockerClient` port, no `FakeDockerClient`). Unit tests use `vi.mock('dockerode')`.
 
 **Dependencies**: Phase 1 (types, Store, mock), Phase 2 (DockerClient port).
 
@@ -31,14 +31,14 @@ This phase produces the full state machine that the UI subscribes to in Phase 4.
 
 - [ ] **T3.1 `connectionStore` + derived slices** `[activity: domain-modeling]`
 
-  1. Prime: Read SDD "Svelte/Store" subsection (now titled "State Store — typed Store<T> helper") `[ref: SDD/Interface Specifications; State Store]`.
+  1. Prime: Read SDD "State Store — typed Store<T> helper" subsection `[ref: SDD/Interface Specifications; State Store]`.
   2. Test: Write `test/unit/connection/connectionStore.test.ts`:
      - `connectionStore` initial value is `{ kind: "disconnected" }`
      - `displayInstanceName` is `null` when disconnected
      - `displayInstanceName` is `instance.name` when connected; `instance.shortId` when name is null; `target.name ?? target.shortId` when attaching/reconnecting
-     - `kind` derived store updates to the current kind on each state change
-     - `connectionStoreWrite.set(...)` is the only way to change the store (import from same module; verify write discipline by naming)
-  3. Implement: Create `src/connection/connectionStore.ts` per SDD code sketch — export `connectionStore: Readable<ConnectionState>`, `connectionStoreWrite: { set }`, `kind`, `displayInstanceName`.
+     - `displayInstanceName(state)` (plain function) computes the right value across all states — no separate derived store.
+     - `connectionStore.set(...)` updates the store and fires subscribers; the "only TomoConnection writes" rule is enforced by code review (per ADR-4 v3 — `connectionStoreWrite` was dropped).
+  3. Implement: Create `src/connection/connectionStore.ts` per SDD code sketch — export the singleton `connectionStore: Store<ConnectionState>` and the `displayInstanceName(state)` plain function. No `derived`, no `connectionStoreWrite`, no `kind` derived store.
   4. Validate: All unit tests pass; types strict.
   5. Success:
      - [ ] Derived slices match SDD contract exactly `[ref: SDD/State Store]`
@@ -61,7 +61,7 @@ This phase produces the full state machine that the UI subscribes to in Phase 4.
 - [ ] **T3.3 `TomoConnection` service** `[activity: backend-api]`
 
   1. Prime: Read SDD "TomoConnection Service Surface" + all four "Runtime View" sequence diagrams `[ref: SDD/TomoConnection Service Surface; SDD/Runtime View]`.
-  2. Test: Write `test/unit/connection/TomoConnection.test.ts` using `FakeDockerClient`:
+  2. Test: Write `test/unit/connection/TomoConnection.test.ts` using `vi.mock('dockerode')` (per ADR-5 v2 — no `FakeDockerClient`):
      - `openPicker()` returns instances from the fake
      - `connect(instance)` transitions Disconnected → Attaching → Connected; persists `chosenInstanceId`
      - `connect(instance)` on daemon error transitions to Disconnected with `daemon-unreachable`
@@ -74,7 +74,7 @@ This phase produces the full state machine that the UI subscribes to in Phase 4.
      - `write()` while Connected: writes to stdin; `onData()` receives stdout chunks
      - `write()` while not Connected: throws
      - `dispose()` unsubscribes and closes any active stream
-  3. Implement: Create `src/connection/TomoConnection.ts` with the full state machine; every transition writes via `connectionStoreWrite.set(...)`.
+  3. Implement: Create `src/connection/TomoConnection.ts` with the full state machine; every transition writes via `connectionStore.set(...)`. The class imports dockerode helpers from `./docker` directly.
   4. Validate: All TomoConnection tests pass; ESLint clean; types strict.
   5. Success:
      - [ ] Every lifecycle transition in SDD Runtime View verified `[ref: SDD/Runtime View]`

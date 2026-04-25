@@ -6,57 +6,7 @@ version: "2.0"
 
 # Product Requirements Document
 
-## Validation Checklist
-
-### CRITICAL GATES (Must Pass)
-
-- [x] All required sections are complete
-- [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Problem statement is specific and measurable
-- [x] Every feature has testable acceptance criteria (Gherkin format)
-- [x] No contradictions between sections
-
-### QUALITY CHECKS (Should Pass)
-
-- [x] Problem is validated by evidence (architecture-06 §6, §10; ADR-009 §3, §6.1, §6.2, §6.3; 5-perspective research synthesis 2026-04-24 captured in research.md; user revision round 2026-04-25)
-- [x] Context → Problem → Solution flow makes sense
-- [x] Every persona has at least one user journey
-- [x] All MoSCoW categories addressed (Must/Should/Could/Won't)
-- [x] Every metric has corresponding tracking/verification path
-- [x] No feature redundancy
-- [x] No technical implementation details included
-- [x] A new team member could understand this PRD
-
----
-
-## Output Schema
-
-### PRD Status Report
-
-| Field | Value |
-|-------|-------|
-| specId | 002-instruction-executor |
-| title | Instruction Executor — apply Tomo's _instructions.json to the vault |
-| status | DRAFT |
-| clarificationsRemaining | 0 |
-| acceptanceCriteria | 95 |
-
-### Section Status
-
-| Section | Status | Detail |
-|---------|--------|--------|
-| Product Overview | COMPLETE | Vision adjusted for inbox-batch invocation and `.json` as source of truth |
-| User Personas | COMPLETE | Single v0.1 persona (PKM Author), shared with 001 |
-| User Journey Maps | COMPLETE | Inbox batch primary; partial-resume secondary; failure investigation via run log tertiary |
-| Feature Requirements | COMPLETE | 11 Must-Have, 0 Should-Have, 0 Could-Have for executor |
-| Detailed Feature Specifications | COMPLETE | Execution lifecycle (orchestrator + 8 kinds + applied-flag write-back + run log + hooks) |
-| Success Metrics | COMPLETE | Acceptance-test coverage + v0.1 release gate participation |
-| Constraints and Assumptions | COMPLETE | Schema v1 with new `applied` field; Tomo handoff is a hard prerequisite |
-| Risks and Mitigations | COMPLETE | 5 risks centered on schema field rollout, hook trust, deny-list completeness |
-| Open Questions | COMPLETE | Empty — settled in user revision round 2026-04-25 |
-| Supporting Research | COMPLETE | 5-perspective synthesis in research.md; revision delta documented in spec README decisions log |
-
----
+> **AC count gate**: `grep -c '^  - \[ \]' requirements.md` is the canonical AC total. Plan T6.5 reads it at run time. Last counted: 98 ACs (2026-04-25).
 
 ## Product Overview
 
@@ -199,7 +149,7 @@ None in v0.1. Multi-user, cross-vault, and remote-instruction-source scenarios a
   - [ ] Every executor run, regardless of execution mode, produces a Markdown log file at `<tomo-inbox>/tomo-hashi-run-log_YYYY-MM-DDTHHMM.md`. Filename uses the run's start timestamp in local time, minute-precision.
   - [ ] If two runs start in the same minute (rare), a numeric suffix `_N` is appended to disambiguate.
   - [ ] The log file header records: run start timestamp, run end timestamp, execution mode (Confirm / Auto-run / Silent), source(s) (filename(s) of the `_instructions.json`(s) processed), and totals (applied / skipped-already / skipped-dependency / skipped-cancelled / failed).
-  - [ ] The log file body lists every action attempted, in execution order, with `I##`, kind, a one-line payload summary, outcome, and (on failure) the error message.
+  - [ ] The log file body lists every action attempted, in execution order, with `I##`, kind, a one-line payload summary, outcome, and (on failure) the error message. The payload summary includes target paths and action kinds verbatim, but free-text content fields (e.g., `update_tracker.value`, `update_log_entry.line`) are recorded as a content fingerprint (8-char sha256 prefix) — not the literal value. Rationale: the run-log file lives in the vault inbox and travels with vault sync; literal tracker values or note prose may be sensitive while the path/kind metadata is what the user needs to debug.
   - [ ] In a batch run, the body is grouped by source file with `## <filename>` sub-headings.
   - [ ] A plugin setting *Run log retention* with two values controls cleanup: **Always keep** (executor never deletes log files; user manages cleanup) and **Only after failed runs** (executor deletes the log file at run end if the run had zero failures). Default: *Always keep*.
   - [ ] Given retention is *Only after failed runs* and a run completes with zero failures, When the run ends, Then the log file is deleted.
@@ -215,23 +165,21 @@ None in v0.1. Multi-user, cross-vault, and remote-instruction-source scenarios a
   - [ ] A plugin setting *Hooks directory* holds the vault-relative path where hook files live. Default: `.tomo-hashi/hooks/`. The setting accepts any vault-relative path; absolute paths and traversal are rejected and revert to default.
   - [ ] Hook files matching `{before,after}-<action-kind>.js` (e.g., `after-move_note.js`, `before-create_moc.js`) in the configured directory are discovered at run time. There is exactly one hook per `(action-kind, phase)` pair — multiple files for the same key are an error logged in the run log; only the first alphabetical match is loaded for that run.
   - [ ] Hooks are loaded fresh at the start of every run (no in-memory caching across runs). Editing a hook file between runs takes effect on the next run with no manual reload.
-  - [ ] A plugin setting *Hooks: enabled | disabled | ask* (default *ask*) governs hook execution.
+  - [ ] A plugin setting *Hooks: enabled | disabled | ask* (default *ask*) is the single hook control. There is NO separate kill-switch — `disabled` IS the kill-switch.
     - *enabled*: discovered hooks run without prompting.
-    - *disabled*: discovered hooks are silently skipped (action runs without them).
-    - *ask*: on first detection of a hook in a session, a disclosure modal opens showing the hook path, file size, and three choices: **Enable**, **Enable once**, **Disable**. The choice is remembered for the session; the next session re-prompts.
-  - [ ] A separate plugin setting *Disable all hooks* (independent kill-switch) overrides everything: when on, no hook runs regardless of per-hook decisions or the *Hooks* setting.
+    - *disabled*: discovered hooks are silently skipped (action runs without them). This is the kill-switch.
+    - *ask*: on first detection of a hook in a session, a disclosure modal opens showing the hook path and three choices: **Enable**, **Enable once**, **Disable**. The choice is remembered for the session; the next session re-prompts.
   - [ ] Hash-based change detection (sha256 disclosure re-prompt) is NOT implemented in v0.1. The user opts in at the directory level via the setting; per-file granularity is in the *ask* mode only.
-  - [ ] Hook invocation context: each hook receives `{ action, vault: { read, write, exists, getAbstractFileByPath }, app, runState, logger }` where:
+  - [ ] Hook invocation context: each hook receives `{ action, app, logger }` where:
     - `action` is the current action payload (read-only).
-    - `vault` is the executor's narrowed facade.
-    - `app` is the full Obsidian `App` instance — documented escape hatch.
-    - `runState` is a `Record<string, unknown>` shared across all hooks in the same run; reset on each new run; readable and writable.
+    - `app` is the full Obsidian `App` instance — hooks have full plugin privilege per the trust model; there is no narrowed vault facade because narrowing decorates a policy that already permits full access.
     - `logger` is `{ info, warn, error }` writing into the run log.
+    - There is NO `runState` shared across hooks in v0.1 — no acceptance criterion exercises cross-hook state, and no example hook is shipped. If a real hook surfaces the need post-v0.1, the field will be added then.
   - [ ] Hook return value: a hook may return `undefined` (silent OK) or an object `{ info?: string[], warnings?: string[], errors?: string[] }`. `errors[]` causes the action to fail with reason *"hook returned errors: <messages>"*. `warnings[]` and `info[]` are recorded in the run log without affecting outcome. Throwing is the hard-failure path (see below).
   - [ ] Hook failure semantics: a `before-…` hook that throws (or returns `errors[]`) causes the action to be skipped with reason *"before-hook threw: <message>"*; the action's `applied` stays `false`. An `after-…` hook that throws (or returns `errors[]`) — the vault write has already committed and `applied: true` is still written, but a separate failure entry *"after-hook threw: <message>"* appears in the run log so the user can investigate.
   - [ ] Hook invocation is wrapped in a 30-second timeout per hook; a hook that exceeds it is killed and treated as a hook failure per the semantics above.
   - [ ] At normal log level: log only run start, run end, totals, and per-action outcomes. Per-hook detail is at debug level only — gated by a plugin setting *Debug logging* (default off).
-  - [ ] README and the settings pane both display, in plain language: *"Hooks are Node scripts with full access to your vault, files, network, and shell. Only enable hooks from sources you trust, the same way you would treat a Templater template."*
+  - [ ] README and the settings pane both display, in plain language, an honest capability enumeration: *"Hooks are Node scripts. They run with the same privileges as the plugin itself: full Obsidian `app` access (vault, plugins, internalPlugins), Node filesystem access anywhere your Obsidian process can reach (including outside the vault, via `fs`), arbitrary network (`net`/`http`/`fetch`), shell execution (`child_process`), and environment variables (`process.env`). Treat hooks the way you would treat a Templater template — only enable hooks from sources you trust."*
   - [ ] The plugin never passes any instruction-set field or user-supplied string to `eval`, `Function`, `exec`, or a shell.
 
 #### F9: Path Safety and Deny-List
@@ -241,7 +189,7 @@ None in v0.1. Multi-user, cross-vault, and remote-instruction-source scenarios a
   - [ ] Every path in every action payload is normalized via Obsidian's `normalizePath` and resolved via `Vault.getAbstractFileByPath`. Absolute paths, `..` segments after normalization, empty segments, and Windows drive letters are rejected with *"Path escapes vault root"*.
   - [ ] The following deny-list patterns, matched after normalization, cause any action targeting them to fail with *"Path is on deny-list"*: `^\.obsidian(/|$)`, `^\.git(/|$)`, `^\.trash(/|$)`. The deny-list also includes the configured Hooks directory (whatever the user set it to). Deny-list is fixed for v0.1 in all other respects (not user-configurable).
   - [ ] The deny-list applies equally to source paths, destination paths, and any other path field in any action.
-  - [ ] Symbolic links that escape the vault root resolve to outside-vault targets and are rejected by the containment check.
+  - [ ] **Symbolic-link containment via realpath.** Before any vault write, every target path SHALL be resolved via `fs.realpath` (or the platform equivalent), and SHALL be rejected with the named error `path-symlink-escape` if the realpath is not a descendant of the vault root. (Obsidian's `normalizePath` and `Vault.getAbstractFileByPath` operate on path strings only — they do not follow symlinks. A vault-internal symlink pointing outside the vault would otherwise pass containment and cause an external write.) This is a bug-defense (Tomo emits a path; the realpath check ensures Tomo bugs cannot become filesystem escapes), not an adversarial control.
   - [ ] Deny-list and containment checks run in all three execution modes — they are not tied to the UI.
 
 #### F10: Status-Bar 橋 Indicator
@@ -253,7 +201,7 @@ None in v0.1. Multi-user, cross-vault, and remote-instruction-source scenarios a
   - [ ] Given a run ends with at least one failure, When the run ends, Then the 橋 icon is rendered red (the *error* state) for ~10 seconds, then returns to the idle color.
   - [ ] Given a run ends with zero failures, When the run ends, Then the 橋 icon returns directly to the idle color.
   - [ ] Given I hover the icon, When the tooltip appears, Then it shows *"Hashi: idle"* (idle), *"Hashi: running — N of M actions"* (running), or *"Hashi: last run had F failures — see <log filename>"* (error).
-  - [ ] Given I click the icon while a run is active, When the click is handled, Then the active run's modal (if any) is focused. Click while idle or error is a no-op.
+  - [ ] Given I click the icon while a run is active (the dominant-attention state where the user has reason to click), When the click is handled, Then the active run's modal (if any) is focused — this is the click-handler's load-bearing function: a one-click "where's my modal" shortcut while a run is in progress. Click while idle is a deliberate no-op (no menu, no popover — there is nothing actionable when nothing is running). Click while showing the post-failure error color is also a no-op (the failure log filename is already in the tooltip).
   - [ ] The 橋 icon SHALL NOT animate (no pulse, no opacity transition); state changes are immediate class swaps. No `prefers-reduced-motion` handling is needed.
   - [ ] Screen readers announce run-state changes via an ARIA live region (`polite`).
 
@@ -265,8 +213,7 @@ None in v0.1. Multi-user, cross-vault, and remote-instruction-source scenarios a
     - **Execution mode** (radio: Confirm before run / Auto-run with preview / Silent). Default: *Confirm before run*.
     - **Run log retention** (radio: Always keep / Only after failed runs). Default: *Always keep*.
     - **Hooks directory** (text) — vault-relative path. Default: `.tomo-hashi/hooks` (no trailing slash).
-    - **Hooks** (radio: enabled / disabled / ask). Default: *ask*.
-    - **Disable all hooks** (toggle, kill-switch). Default: off.
+    - **Hooks** (radio: enabled / disabled / ask). Default: *ask*. The *disabled* value IS the kill-switch — no separate toggle.
     - **Debug logging** (toggle). Default: off.
   - [ ] All settings persist via Obsidian's `data.json`; no other state is stored outside the vault.
   - [ ] Given the *Tomo inbox folder* is empty or points at a non-existent path, When I attempt a batch invocation, Then a `Notice` *"Tomo inbox folder is not configured — set it in settings"* is shown and no run starts.
@@ -290,6 +237,10 @@ None in v0.1.
 - **Remote instruction sources** (URL-loaded JSON, etc.) — never. Hashi only consumes Tomo-emitted vault files.
 - **Hook sandboxing** — never. v0.1 is full-privilege, Templater-equivalent. The trust model is "user enables, user owns".
 - **Hook signing or sha256 change detection** — never. The *enabled / disabled / ask* setting plus the kill-switch are sufficient. Per-file integrity tracking is overkill for a single-user vault.
+- **Hook content disclosure** (sha256, first-seen-at, file-size, last-modified shown in the *ask*-mode disclosure modal) — never. The user has no out-of-band reference value to compare a hash against, and Hashi cannot synthesize one. Showing it creates a click-through prompt that defends nothing. The honest disclosure is the natural-language enumeration of capabilities (see F8 README/settings text).
+- **Vault-clone hook re-trust gate** (forcing `disableAllHooks: true` when an `app.appId` differs from a persisted `lastTrustedAppId`, prompting on first launch in a different Obsidian vault) — never. Each Obsidian vault is its own trust domain by design (different plugin sets, different configurations); the user already opted into hooks for that vault by enabling them. The standing rule is "don't open untrusted vaults" — the same trust model Templater uses. Adding a re-prompt creates ceremony without a defended adversary.
+- **Tomo identity attestation in the instruction set** (top-level `producer: { container_id, image_digest }` field, run-end Notice flagging "unattested" sources) — never. Hashi has no way to verify the producer claim and the user has no reference to compare against; the field is informational at best and security theater at worst.
+- **TOCTOU defense** between preview render and execute (re-reading and hash-comparing source `_instructions.json` between modal display and run start) — never. The preview modal is a UX affordance per ADR-009 / charter, not an approval gate; defending the window between two non-gates is theater.
 - **Daily-note plugin path resolution** (core Daily Notes / Periodic Notes / etc.) — never. Tomo emits absolute vault-relative paths; Hashi is path-agnostic about what those targets represent.
 - **First-run example hook file** — out of scope. Hooks require documentation to be useful; an undocumented example helps no one. Users copy from the README when they need to write one.
 - **Per-invocation execution-mode override** — never. The setting is the setting; one-shot overrides multiply surface area without value.
@@ -382,9 +333,13 @@ No telemetry in v0.1. "Tracking" means verification points for the automated tes
 
 ### Constraints
 - **Schema:** `_instructions.json` `schema_version === 1` exactly. Schema v1 includes the new optional per-action `applied: boolean` field. Tomo's renderer must emit this field before Hashi's v0.1 release — captured as an outbound handoff in `_outbox/for-tomo/`.
+- **Schema forward-compatibility policy.** Tomo is the schema's source of truth; Hashi vendors a copy. The version-bump rule is:
+  - **Additive changes** (new optional field, new action `kind`, new enum value) → `schema_version` stays at the current value. Existing Hashi readers continue to validate emitted instruction sets that use only fields they recognize. Tomo logs a CHANGELOG entry; Hashi vendors on its own cadence.
+  - **Breaking changes** (new required field, removed/renamed field, type or shape change, canonical-order change) → `schema_version` is bumped. Hashi readers fail-closed with the named error `version-mismatch` when they encounter a higher schema_version than they ship; the user sees a clear "upgrade Hashi" message rather than corrupt vault writes.
+  - Cross-repo coordination for breaking changes is captured in the outbound handoff `_outbox/for-tomo/2026-04-25_hashi-to-tomo_schema-changelog-discipline.md`. Tomo opens an inbound `_outbox/for-hashi/` handoff before merging any breaking change.
 - **Platform:** Desktop Obsidian only. `manifest.json` currently has `"isDesktopOnly": false` — known drift (shared with spec 001) that MUST be corrected to `true` before any release. Spec 001's plan phase owns the fix.
 - **Single-vault scope:** The executor operates only on files inside the invoking vault root.
-- **Obsidian API version:** Relies on `Vault.process` (Obsidian ≥ 1.4). `manifest.json` declares `minAppVersion: 1.5.7`, sufficient.
+- **Obsidian API version:** Relies on `Vault.process` (Obsidian ≥ 1.4). `manifest.json` declares `minAppVersion: 1.5.0` — sufficient (matches `package.json` peerDependency).
 - **No external inbound surface:** No ports, no webhooks, no MCP. Inviolable for v0.1 — shared with spec 001's architectural commitment.
 - **Trust model:** The executor trusts the user absolutely (single-user private system). It does NOT trust the instruction set — it validates schema and path safety for defense-in-depth even though Tomo's review step is the authorization gate.
 - **Hook trust model:** Templater-equivalent — full plugin privilege. The compensating control is the *enabled / disabled / ask* setting + the kill-switch. No sandboxing, no signing, no per-file integrity tracking.

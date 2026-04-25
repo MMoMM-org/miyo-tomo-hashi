@@ -108,18 +108,18 @@ When implementation requires changes from the specification:
 - **ADR-1** Docker client = `dockerode` — battle-tested stream hijack + demux
 - **ADR-2** Attach = `docker attach` PID 1 + xterm.js — full-fidelity Claude Code TUI
 - **ADR-3** UI = plain TypeScript + Obsidian primitives — no framework runtime
-- **ADR-4** State = custom `Store<T>` helper (`src/util/store.ts`) — subscribe returns unsubscribe
-- **ADR-5** Docker edge = ports & adapters (`DockerClient` interface + `DockerodeAdapter`)
+- **ADR-4** (revised 2026-04-25 v3) State = single `Store<T>` helper (`src/util/store.ts`) — subscribe returns unsubscribe; no `derived<T,U>`; no read/write split
+- **ADR-5** (revised 2026-04-25 v2) Docker edge = use dockerode directly (no port); unit tests use `vi.mock('dockerode')`
 - **ADR-6** Chat view = `getLeavesOfType` + `setViewState` singleton
 - **ADR-7** Reconnect = cancellable promise chain, delays `[500, 1000, 2000, 4000, 8000]` ms
 - **ADR-8** Dynamic command label = `removeCommand` + `addCommand` on state change
 - **ADR-9** Status bar popover = Obsidian `Menu` API (3 actions)
-- **ADR-10** Tests = vitest unit (mocked `DockerClient`) + vitest live (real Docker)
+- **ADR-10** Tests = vitest unit (with `vi.mock('dockerode')`) + vitest live (real Docker) + manual QA in test vault per Phase 5 T5.5b
 
 **Implementation Context**:
 ```bash
 # Testing
-npm test                    # vitest unit — jsdom + obsidian mock + fake DockerClient
+npm test                    # vitest unit — jsdom + obsidian mock + vi.mock('dockerode')
 npm run test:watch          # vitest unit in watch mode
 npm run test:coverage       # vitest unit with v8 coverage
 npm run test:live           # vitest live — node env, REAL Docker, 90s timeout
@@ -136,11 +136,30 @@ npm run dev                 # esbuild watch mode with inline sourcemaps
 
 ---
 
-## Implementation Phases
+## Canonical Task Shape (RED → GREEN → REFACTOR)
 
-Each phase is defined in a separate file. Tasks follow red-green-refactor: **Prime** (understand context), **Test** (red), **Implement** (green), **Validate** (refactor + verify).
+Every task in every phase file follows this exact gate. The `Test:` step is NOT documentation — it is a *failing test must exist and be observed to fail* gate before any production code is written.
+
+```
+1. Prime   — Read referenced PRD/SDD sections; understand the contract.
+2. RED     — Write the failing test. Run `npm test -- <path>`. CAPTURE the failure
+              output (the actual stderr / "Cannot find module" / assertion text)
+              and PASTE IT into the commit body. If the test passes on first run,
+              the test is wrong — strengthen it until red.
+3. GREEN   — Write the minimum production code to pass. Re-run; tests green.
+4. REFACTOR — With tests green, simplify. Re-run; tests stay green. Run lint.
+5. Validate — Final command run for the task (typically `npm test && npm run lint`).
+```
+
+The TDD-Guardian skill (`tcs-workflow:xdd-tdd`) enforces this gate. A commit with no captured red-output in the message body is treated as missing the gate.
+
+Phase intros may abbreviate the steps as "Prime → RED → GREEN → REFACTOR → Validate" but the discipline is the one defined here.
 
 > **Tracking Principle**: Track logical units that produce verifiable outcomes. The TDD cycle is the method, not separate tracked items.
+
+## Implementation Phases
+
+Each phase is defined in a separate file.
 
 - [ ] [Phase 1: Foundation](phase-1.md)
 - [ ] [Phase 2: Docker Boundary](phase-2.md)
@@ -149,6 +168,27 @@ Each phase is defined in a separate file. Tasks follow red-green-refactor: **Pri
 - [ ] [Phase 5: Wire-up, Integration & Release Gate](phase-5.md)
 
 ---
+
+## Edge Cases → Tests
+
+Every PRD edge-case bullet (PRD §F1–F9 / FS1 / FS2 *Edge Cases*) must trace to a test artifact OR be marked manual-QA-only with explicit justification. Update this matrix whenever an edge-case bullet is added/changed in the PRD.
+
+| PRD edge case (F# / wording fragment) | Coverage | Where |
+|---|---|---|
+| F1: Docker daemon not running at Connect | unit | `test/unit/connection/docker.test.ts` (vi.mock rejects) |
+| F1: Docker socket permission denied | unit | `test/unit/connection/docker.test.ts` (vi.mock with EACCES) |
+| F1: No Tomo containers found | unit | `test/unit/ui/settings/InstancePickerModal.test.ts` (empty-state) |
+| F1: Chosen instance vanishes mid-session | unit + live | `test/unit/connection/TomoConnection.test.ts` + `test/live/docker-attach.live.test.ts` |
+| F1: Detach while message in flight | unit | `test/unit/connection/TomoConnection.test.ts` (write→close interleave) |
+| F1: Chat window closed while Connected | unit | `test/unit/ui/chat-view/TomoChatView.test.ts` (onClose / lifecycle) |
+| F1: `@file` invoked while not connected | unit | `test/unit/commands/fileMenu.test.ts` |
+| F1: Instance-name label absent | unit | `test/unit/connection/docker.test.ts` (mapping) + UI label in `InstancePickerModal.test.ts` |
+| F1: Multi-Tomo duplicate names / >20 / vanish-mid-pick | unit | `test/unit/ui/settings/InstancePickerModal.test.ts` (3 dedicated cases per the new F1 ACs) |
+| F1: Obsidian launched offline | unit | `test/unit/connection/TomoConnection.test.ts` (autoReconnectIfRemembered fail-clean) |
+| F1: Tomo output contains ANSI escapes / Obsidian URIs | unit + manual QA | xterm.js OSC 8/52 disabled assertion (`TomoChatView.test.ts`) + visual check in T5.5b |
+| F4: Bidirectional stream | live | `test/live/docker-attach.live.test.ts` happy path |
+| F8: Daemon restarts mid-session | manual QA | T5.5b checklist — `docker restart` and observe reconnect |
+| F8: Reconnect bound exhausted | unit | `test/unit/connection/reconnectLoop.test.ts` (exhaustion case) |
 
 ## Plan Verification
 

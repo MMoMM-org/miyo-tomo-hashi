@@ -17,7 +17,7 @@ phase: 1
 - Project: `CLAUDE.md`, `src/CLAUDE.md` (TDD gate), `test/CLAUDE.md`, `tsconfig.json`, `package.json`, `esbuild.config.mjs`, `manifest.json`
 
 **Key Decisions** (affecting this phase):
-- ADR-1: ajv 8.x standalone codegen — adds `prebuild` step + devDeps
+- ADR-1 (revised 2026-04-25): ajv 8.x at runtime — no prebuild, no committed generated artifact, no `json-schema-to-ts` dep
 - ADR-2: vendored schema from Tomo v0.7.0+ at `src/schema/instructions.schema.json`
 - 002 reuses 001's `Store<T>` from `src/util/store.ts` — file must exist (created by 001 Phase 1 T1.3) or be extracted on demand here
 
@@ -38,19 +38,16 @@ This phase vendors the Tomo schema, wires up the prebuild ajv-codegen pipeline, 
      - Asserts every action variant under `oneOf` references `$defs/applied_field`
   3. Implement:
      - Copy `tomo/schemas/instructions.schema.json` into `src/schema/instructions.schema.json`
-     - `package.json` devDependencies: add `"ajv": "^8.17.1"`, `"json-schema-to-ts": "^3.1.1"`
-     - `package.json` scripts: add `"schema:build": "ajv compile --strict=true --spec=draft2020 -s src/schema/instructions.schema.json -o src/schema/validator.gen.js"`
-     - `package.json` scripts: chain `"prebuild": "npm run schema:build"` so `npm run build` regenerates the validator
+     - `package.json` dependencies: add `"ajv": "^8.17.1"` (runtime). No build-script changes; ajv compiles the schema at module load.
      - `npm install`
-  4. Validate: `npm run schema:build` produces `src/schema/validator.gen.js` (committed); `npm test` regression passes; `npm run lint` clean.
+  4. Validate: `npm test` regression passes (validator.ts compiles ajv against bundled schema at module load); `npm run lint` clean.
   5. Success:
      - [ ] Vendored schema file present and asserted by regression test `[ref: SDD/ADR-2]`
-     - [ ] `validator.gen.js` generated and committed `[ref: SDD/ADR-1]`
-     - [ ] Build pipeline regenerates validator on every build `[ref: SDD/CON-2]`
+     - [ ] `src/schema/validator.ts` compiles ajv against bundled schema at module load `[ref: SDD/ADR-1 (revised 2026-04-25)]`
 
 - [ ] **T1.2 Define core types** `[activity: domain-modeling]`
 
-  1. Prime: Read SDD "Application Data Models" — `Action`, `InstructionSet`, `RunState`, `ActionOutcome`, `HandlerOutcome`, `ExecutionMode` `[ref: SDD/Interface Specifications; Application Data Models]`.
+  1. Prime: Read SDD "Application Data Models" — `Action`, `InstructionSet`, `RunState`, `ActionOutcome` (single end-to-end outcome type — `HandlerOutcome` was collapsed into it on 2026-04-25), `ExecutionMode` `[ref: SDD/Interface Specifications; Application Data Models]`.
   2. Test: Write `test/unit/schema/types.test.ts` and `test/unit/executor/state.test.ts`:
      - `ActionKind` is the exact 8-element string-literal union expected
      - `Action` discriminated union narrows correctly on `kind`
@@ -117,7 +114,7 @@ This phase vendors the Tomo schema, wires up the prebuild ajv-codegen pipeline, 
      - Asserts `MetadataCache.getFileCache` (vi.fn returning `{ headings: [], sections: [] }` by default)
      - Asserts `Plugin.registerEvent` and `Plugin.addStatusBarItem`
   3. Implement:
-     - **If `src/util/store.ts` does not yet exist** (001 Phase 1 hasn't shipped): extract the `Store<T>` + `derived<T,U>` helper here per 001's SDD code sketch. Document in spec README that this was extracted on demand for 002.
+     - **If `src/util/store.ts` does not yet exist** (001 Phase 1 hasn't shipped): extract the `Store<T>` helper here per 001's SDD code sketch (no `derived<T,U>` — that was dropped in 001's 2026-04-25 simplification). Document in spec README that this was extracted on demand for 002.
      - Extend `test/__mocks__/obsidian.ts`: add `Modal`, `vault.process`, `vault.trash`, `vault.createFolder`, `fileManager.renameFile`, `metadataCache.getFileCache`, `addStatusBarItem`. The mock should let tests inject return values per call.
   4. Validate: Mock-shape tests pass; existing 001 tests (if any) still pass.
   5. Success:
@@ -126,5 +123,5 @@ This phase vendors the Tomo schema, wires up the prebuild ajv-codegen pipeline, 
 
 - [ ] **T1.6 Phase 1 Validation** `[activity: validate]`
 
-  - Run `npm run schema:build && npm run build && npm test && npm run lint`. All green. Confirm: vendored schema present + asserted; types compile across the new modules; settings render and persist; path-safety utility passes its full table; obsidian mock covers the Phase 2+ API surface.
+  - Run `npm run build && npm test && npm run lint`. All green. Confirm: vendored schema present + asserted; types compile across the new modules; settings render and persist; path-safety utility passes its full table; obsidian mock covers the Phase 2+ API surface.
   - If `src/util/store.ts` was extracted on-demand here, append a deviation record to the plan README's Deviations section noting the extraction.

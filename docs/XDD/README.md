@@ -18,8 +18,8 @@
 
 | ID | Name | Phase | Status |
 |----|------|-------|--------|
-| 001 | [Session View](specs/001-session-view/) | Planning | Not started |
-| 002 | [Instruction Executor](specs/002-instruction-executor/) | Planning | Not started — blocked by 001 lifecycle decisions |
+| 001 | [Session View](specs/001-session-view/) | Planning | Approved — ready for implementation |
+| 002 | [Instruction Executor](specs/002-instruction-executor/) | Planning | Approved — ready for implementation |
 
 ## Status Legend
 

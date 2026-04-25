@@ -19,7 +19,7 @@ phase: 4
 - ADR-3: hooks fresh-loaded per run via `delete require.cache[resolved]`
 - ADR-7: applied-flag write through `vault.process` with stable formatting
 - ADR-8: per-run log file with YAML frontmatter + per-source-file headings
-- ADR-10: hook context shape with `runState: Record<string, unknown>` reset per run
+- ADR-10 (revised 2026-04-25): hook context = `{ action, app, logger }` — no `runState`, no narrowed `HookVault` facade
 - Single-run lock at the orchestrator; halt-on-dependency rule lives here
 
 **Dependencies**: Phases 1–3 (settings, types, path safety, VaultFS adapters, schema validator, all 8 handlers).
@@ -84,19 +84,38 @@ This phase wires the orchestrator that drives a run: source resolution, schema v
      - [ ] All PRD F7 ACs covered `[ref: PRD/F7]`
      - [ ] Retention rule applied at finalize `[ref: PRD/F7]`
 
+- [ ] **T4.4.0 Hook fixture set** `[activity: testing]` (added 2026-04-25 — gives T4.4 a concrete file-loaded surface so the production loader's `require.cache` eviction path is actually exercised, not faked)
+
+  1. Prime: Read PRD F8 hook semantics (return shape, throw vs errors[], pre/post commit, timeout, kill-switch, cache-eviction). Hooks are loaded from disk via `createRequire(import.meta.url)`; mocking the loader at the test boundary defeats the point.
+  2. Test: This task IS the test surface — there is no production code to write here. The fixtures land under `test/fixtures/hooks/` and are imported by HookRunner tests in T4.4 via the production loader, not via `vi.mock`.
+  3. Implement — author the following fixture files (each tiny, single-purpose):
+     - `test/fixtures/hooks/before-create_moc-throws.js` — exports a function that throws synchronously
+     - `test/fixtures/hooks/before-create_moc-returns-errors.js` — returns `{ errors: ["nope"] }`
+     - `test/fixtures/hooks/after-move_note-returns-warnings.js` — returns `{ warnings: ["ok with caveat"] }`
+     - `test/fixtures/hooks/after-move_note-returns-info.js` — returns `{ info: ["fyi"] }`
+     - `test/fixtures/hooks/before-update_tracker-infinite-loop.js` — `while(true) {}` to exercise the 30 s timeout
+     - `test/fixtures/hooks/before-update_tracker-malformed.js` — `module.exports = "not a function"` (loader must reject gracefully)
+     - `test/fixtures/hooks/after-link_to_moc-async-resolves.js` — async function that awaits then returns undefined
+     - `test/fixtures/hooks/before-skip-uses-app.js` — exercises `ctx.app.vault` to prove `app` is reachable from a hook
+     - `test/fixtures/hooks/before-create_moc-transitive-import.js` — `require("./_helper.js")` to prove the cache-eviction caveat in ADR-3 is observable (the entry file is evicted but `_helper.js` is not — assertion in T4.4)
+     - `test/fixtures/hooks/_helper.js` — single-line module imported by the transitive-import fixture above
+  4. Validate: All fixture files exist; each runs without import errors when required directly with Node.
+  5. Success:
+     - [ ] Eight hook scenarios + one helper module land under `test/fixtures/hooks/` `[ref: PRD/F8]`
+     - [ ] T4.4's HookRunner test suite consumes these fixtures via the production loader, not via inline mocks `[ref: SDD/ADR-3]`
+
 - [ ] **T4.4 HookRunner + HookContext + HookDisclosureModal hookup point** `[activity: integration]`
 
-  1. Prime: Read PRD F8 (full AC list) `[ref: PRD/F8]`. Read SDD "Hook Loader with Per-Run Cache Eviction" example + ADR-3, ADR-10 `[ref: SDD/Implementation Examples; Hook Loader]` `[ref: SDD/Architecture Decisions; ADR-3, ADR-10]`.
+  1. Prime: Read PRD F8 (full AC list) `[ref: PRD/F8]`. Read SDD "Hook Loader with Per-Run Cache Eviction" example + ADR-3, ADR-10 `[ref: SDD/Implementation Examples; Hook Loader]` `[ref: SDD/Architecture Decisions; ADR-3, ADR-10]`. Read T4.4.0 fixture set above — every test in this task loads fixtures via the production loader.
   2. Test: `test/unit/hooks/HookRunner.test.ts`:
      - Discovery: hook files matching `{before,after}-<kind>.js` are found in the configured directory
      - Loading: hooks are loaded fresh per run (cache evicted; second run sees an edit made between runs)
      - Multiple hook files for the same `(kind, phase)` key → only the first alphabetical is loaded; the duplication is logged
-     - Invocation context shape: `{ action, vault: HookVault, app, runState, logger }` — assert each property
-     - `runState` is shared across hooks within a run, reset across runs
+     - Invocation context shape: `{ action, app, logger }` — assert each property (per ADR-10 v2; no `vault` facade, no `runState`)
      - Return-shape semantics: `undefined` → ok; `{ info: [...] }` → logged; `{ warnings: [...] }` → logged; `{ errors: [...] }` → action fails
      - Throw semantics: pre-hook throws → action fails (skip the action); post-hook throws → action's vault state already committed; failure recorded separately
      - Timeout: 30s timeout fires; treated as throw
-     - Kill-switch (`disableAllHooks`) → no hook loaded or invoked
+     - Kill-switch (`hooksPolicy === "disabled"`) → no hook loaded or invoked (per F8 v2 — no separate `disableAllHooks` toggle)
      - Per-hook *ask*-mode decisions live in an in-memory map, not persisted
   3. Implement: `src/hooks/HookRunner.ts` + `src/hooks/HookContext.ts`. The `HookDisclosureModal` is referenced by `HookRunner` via a callback (Modal class itself is built in Phase 5 T5.3 — Phase 4 stubs the callback signature).
   4. Validate: All hook tests pass; types clean.

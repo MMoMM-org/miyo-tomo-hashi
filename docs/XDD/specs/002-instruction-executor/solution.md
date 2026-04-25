@@ -6,72 +6,17 @@ version: "1.0"
 
 # Solution Design Document
 
-## Validation Checklist
-
-### CRITICAL GATES (Must Pass)
-
-- [x] All required sections are complete
-- [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Architecture pattern is clearly stated with rationale
-- [x] **All architecture decisions confirmed by user** — 10/10 confirmed (2026-04-25; ADR-6 revised to color states)
-- [x] Every interface has specification
-
-### QUALITY CHECKS (Should Pass)
-
-- [x] All context sources listed with relevance ratings
-- [x] Project commands discovered from actual project files
-- [x] Constraints → Strategy → Design → Implementation path is logical
-- [x] Every component in diagram has directory mapping
-- [x] Error handling covers all error types
-- [x] Quality requirements are specific and measurable
-- [x] Component names consistent across diagrams
-- [x] A developer could implement from this design
-- [x] Examples use real TypeScript types (not pseudocode)
-- [x] Complex flows include traced walkthroughs
-
----
-
-## Output Schema
-
-### SDD Status Report
-
-| Field | Value |
-|-------|-------|
-| specId | 002-instruction-executor |
-| architecture.pattern | Layered plugin with stateless action handlers, ports-and-adapters at the vault edge, and a single execution-store reactive UI |
-| architecture.keyComponents | InstructionExecutor (orchestrator), Planner, ActionHandler dispatcher (8 pure handlers), VaultFS port + ObsidianVaultFS adapter, SchemaValidator (ajv standalone), HookRunner, RunLogWriter, ExecutionModal, StatusBar 橋, SettingsTab, executionStore |
-| architecture.externalIntegrations | Obsidian Plugin API (Vault, MetadataCache, FileManager, Modal, addStatusBarItem, addCommand) |
-| adrs | 10 (all confirmed 2026-04-25) |
-
-### Section Status
-
-| Section | Status | Detail |
-|---------|--------|--------|
-| Constraints | COMPLETE | |
-| Implementation Context | COMPLETE | |
-| Solution Strategy | COMPLETE | Inherits 001's plain-TS-DOM and Store-helper decisions; novel ADRs limited to 002 surface |
-| Building Block View | COMPLETE | |
-| Interface Specifications | COMPLETE | |
-| Runtime View | COMPLETE | |
-| Deployment View | COMPLETE | No change vs 001 |
-| Cross-Cutting Concepts | COMPLETE | |
-| Architecture Decisions | COMPLETE | 10 ADRs confirmed (2026-04-25); ADR-6 revised to color states (no pulse); ADR-9 augmented with manual test vault |
-| Quality Requirements | COMPLETE | |
-| Acceptance Criteria | COMPLETE | EARS-format mapping of PRD F1–F11 |
-| Risks and Technical Debt | COMPLETE | |
-| Glossary | COMPLETE | |
-
----
+> **Architecture pattern**: Layered plugin with stateless action handlers, ports-and-adapters at the vault edge, single execution-store reactive UI. Key components: InstructionExecutor (orchestrator), Planner, ActionHandler dispatcher (8 pure handlers), VaultFS port + ObsidianVaultFS + FakeVaultFS, SchemaValidator (ajv 8.x at runtime), HookRunner, RunLogWriter, ExecutionModal, StatusBar 橋, SettingsTab, executionStore. External integrations: Obsidian Plugin API. 10 ADRs (6 revised in 2026-04-25 simplification — see §Architecture Decisions).
 
 ## Constraints
 
 CON-1 **Platform & language**: Obsidian Desktop (Electron). TypeScript `strict: true`, `noUncheckedIndexedAccess: true`, `useUnknownInCatchVariables: true`. Target ES6 (per `tsconfig.json`). `lib: ["DOM", "ES5", "ES6", "ES7"]`. Inherits CON-1 from spec 001.
-CON-2 **Build**: esbuild CommonJS bundle to `main.js`. Externals exclude `obsidian` and node builtins. **NEW vs 001**: a *prebuild* script generates a standalone JSON Schema validator from `src/schema/instructions.schema.json` (ajv standalone codegen) before esbuild runs. The generated file is committed (deterministic build).
+CON-2 **Build**: esbuild CommonJS bundle to `main.js`. Externals exclude `obsidian` and node builtins. ajv 8.x runs at runtime — no prebuild step, no committed generated artifact. The schema is bundled as JSON and compiled to a validator function at plugin load (~once). Adds ~35 KB to the bundle, well within the 500 KB budget.
 CON-3 **Desktop-only**: same drift as 001 (`manifest.json` `isDesktopOnly: false → true`). Spec 001's plan owns the fix; 002 inherits it.
 CON-4 **Testing**: vitest unit (jsdom + obsidian mock) + vitest live (node, real `fs/promises` against a temp vault). Inherits 001's split. **NEW vs 001**: live tests for 002 do NOT need Docker — they exercise an `InMemoryVaultFS`-or-`fs/promises`-backed adapter against a temp directory.
 CON-5 **No external inbound surface**: inherits CON-5 from 001. No ports, no MCP, no webhooks.
 CON-6 **One run at a time**: enforced by a single-run lock at the orchestrator. No queue.
-CON-7 **Bundle budget**: informal target ≤ 500 KB total `main.js`. ajv-standalone-generated validator adds < 20 KB. Comfortable.
+CON-7 **Bundle budget**: informal target ≤ 500 KB total `main.js`. ajv 8.x runtime adds ~35 KB; comfortable.
 CON-8 **Trust boundary**: instruction-set fields are NEVER passed to `eval`, `Function`, `exec`, or shell. Hooks are user-owned Node scripts and run with full plugin privilege (PRD F8) — compensating control is the *enabled / disabled / ask* setting plus the kill-switch.
 CON-9 **Tomo handoff — already integrated**: PRD F5 requires Tomo to emit `applied: false` per action. Tomo shipped this on 2026-04-25 in v0.7.0 (`build_actions()` in `tomo/scripts/instruction-render.py`; shared `$defs/applied_field` in `tomo/schemas/instructions.schema.json` across all 8 variants; round-trip test in `tests/test-008-phase1.py`; consumer doc updated; branch `feat/applied-field-instructions`, commit `f3ad49d`). The graceful-fallback path (treat missing as `false`) is retained as defensive code but is no longer the v0.1 path.
 CON-10 **No cross-spec coupling with 001**: post-pivot, 002 shares only the plugin shell (`main.ts`) and the `Store<T>` helper from `util/store.ts`. No shared services, no shared state, no shared error channel.
@@ -110,11 +55,11 @@ CON-10 **No cross-spec coupling with 001**: post-pivot, 002 shares only the plug
 
 - url: https://ajv.js.org/standalone.html
   relevance: HIGH
-  why: "ajv standalone codegen — emit a pure validator function at build time, eliminating ajv from the runtime bundle"
+  why: "ajv 8.x at runtime — schema imported as JSON, compiled to a validator at plugin load (~once); ~35 KB bundled (revised 2026-04-25)"
 
 - url: https://docs.obsidian.md/Plugins/
   relevance: HIGH
-  why: "Plugin API surfaces used: Modal, ItemView (NOT used), PluginSettingTab, addStatusBarItem, addCommand, registerEvent('file-menu'), Vault.process, FileManager.renameFile, Vault.trash, MetadataCache.getFileCache"
+  why: "Plugin API surfaces used by 002: Modal, PluginSettingTab, addStatusBarItem, addCommand, registerEvent('file-menu'), Vault.process, FileManager.renameFile, Vault.trash, MetadataCache.getFileCache. Note: ItemView is NOT used by 002, but IS used by 001 (TomoChatView). The shared `test/__mocks__/obsidian.ts` must therefore retain ItemView support — 002 SHALL NOT narrow the mock to remove it."
 
 - url: https://github.com/Microsoft/TypeScript/wiki/Performance#enums-and-const-enums
   relevance: LOW
@@ -141,11 +86,11 @@ CON-10 **No cross-spec coupling with 001**: post-pivot, 002 shares only the plug
 
 - file: esbuild.config.mjs
   relevance: HIGH
-  why: "Add a `prebuild` script for ajv standalone codegen; the build itself does not change"
+  why: "No build changes — ajv 8.x runs at runtime; the schema is imported as JSON and compiled at plugin load"
 
 - file: package.json
   relevance: HIGH
-  why: "DevDeps to add: ajv (8.x), ajv-formats (3.x — only if Tomo's schema uses formats), json-schema-to-ts (for inferred TS types). Runtime deps unchanged: standalone codegen output is plain JS with no dependencies"
+  why: "Runtime dep to add: ajv (8.x). DevDep optional: json-schema-to-ts (for inferred TS types — alternatively, hand-align a discriminated union in src/schema/types.ts). ajv-formats only if Tomo's schema uses formats. No prebuild artifact, no committed generated JS."
 
 - file: tsconfig.json
   relevance: HIGH
@@ -170,18 +115,13 @@ CON-10 **No cross-spec coupling with 001**: post-pivot, 002 shares only the plug
 - service: ajv (JSON Schema validator)
   doc: https://ajv.js.org/
   relevance: HIGH
-  why: "Schema-v1 validation. Standalone codegen at build time emits a pure JS function — no ajv in the runtime bundle"
+  why: "Schema-v1 validation at runtime; ~35 KB bundled, compiled once at plugin load"
 
 - service: Tomo consumer contract
   doc: /Volumes/Moon/Coding/MiYo/Tomo/docs/instructions-json.md (out-of-sandbox; updated 2026-04-25 with `applied` field doc)
   relevance: HIGH
   why: "Action payload shapes. Hashi vendors `tomo/schemas/instructions.schema.json` from Tomo v0.7.0+ — schema includes shared `$defs/applied_field` referenced by all 8 action variants. Initial vendoring step is part of Phase 1 of the plan."
 ```
-
-### Implementation Boundaries
-- **Must Preserve**: `main.ts` plugin class default export; ESLint config; esbuild output layout; the unit-vs-live test split (002 mirrors 001).
-- **Can Modify**: Everything under `src/` (current state is a 001-targeted skeleton); `package.json` devDeps for ajv tooling; `esbuild.config.mjs` for the prebuild step; `styles.css` for modal + 橋 status bar styling.
-- **Must Not Touch**: `_outbox/`, `_inbox/`, `.githooks/`, the `miyo-kouzou` repo (read-only from Hashi sessions per `~/Kouzou/standards/general.md`), `manifest.json` `isDesktopOnly` (owned by 001's plan).
 
 ### External Interfaces
 
@@ -283,7 +223,7 @@ outbound:
 data:
   - name: "Vendored JSON Schema"
     type: File at src/schema/instructions.schema.json
-    connection: Read-only at build time by ajv standalone codegen; not loaded at runtime
+    connection: Bundled as JSON; read at plugin load and compiled to a validator function by ajv 8.x
     data_flow: "Source of truth for v1 schema validation logic; updated when Tomo bumps via the CHANGELOG handoff signal"
 
   - name: ".tomo-hashi/hooks/*.js (or configured equivalent)"
@@ -294,7 +234,7 @@ data:
 
 ### Cross-Component Boundaries
 
-- **001 ↔ 002**: only `util/store.ts` (`Store<T>`, `derived<T>`) is shared. No services, no events, no error channels. The plugin shell (`main.ts`) registers both 001's and 002's surfaces side-by-side.
+- **001 ↔ 002**: only `util/store.ts` (`Store<T>`) is shared. No services, no events, no error channels. The plugin shell (`main.ts`) registers both 001's and 002's surfaces side-by-side.
 - **Tomo ↔ 002**: a one-way file-based contract. Tomo writes `_instructions.json` + `.md` peer; Hashi reads both, writes `applied: true` back into the `.json`, optionally ticks the `.md` peer best-effort, writes a per-run log file. Schema-version mismatch fails closed (PRD F2). The vendored schema is the source of truth for Hashi's parser; the Tomo CHANGELOG handoff is the drift signal.
 - **Hooks ↔ 002**: hooks are user-owned Node scripts. The contract is `(ctx: HookContext) => Promise<void> | void` returning `undefined` or `{ info?, warnings?, errors? }`. Throwing fails the hook. Full plugin privilege; no sandbox.
 - **Breaking Change Policy**: 002's internal modules are not public. Schema-v1 is the only stable contract — bumping it requires a coordinated v2 handoff with Tomo.
@@ -304,13 +244,12 @@ data:
 ```bash
 # Discovered from package.json + new prebuild step
 Install:    npm install
-Prebuild:   npm run schema:build       # NEW: regenerates src/schema/validator.gen.js from instructions.schema.json (ajv standalone)
-Dev:        npm run dev                # esbuild watch mode (re-runs schema:build on schema change)
-Build:      npm run build              # tsc --noEmit + schema:build + esbuild production
+Dev:        npm run dev                # esbuild watch mode
+Build:      npm run build              # tsc --noEmit + esbuild production (no prebuild step)
 Test:       npm test                   # vitest unit (jsdom, obsidian mock)
 Test-watch: npm run test:watch
 Coverage:   npm run test:coverage
-Test-live:  npm run test:live          # vitest live (node env, fs/promises against tmpdir vault)
+Test-live:  npm run test:live          # 001-only (real Docker e2e). 002 has no test:live per ADR-9 v2 — manual QA in `../temp/Privat-Test` is the integration gate.
 Lint:       npm run lint
 ```
 
@@ -320,7 +259,7 @@ Lint:       npm run lint
 - **Integration Approach**: Every vault read/write goes through the `VaultFS` port. The Obsidian-backed `ObsidianVaultFS` adapter is the only module that imports from `obsidian`. Action handlers, the planner, the schema validator, the hook runner, the run-log writer — all are framework-free pure modules testable against an in-memory `FakeVaultFS`. The hook runner additionally exposes `app` to hooks as a documented escape hatch (PRD F8) — that is the one place where Obsidian leaks past the boundary, intentionally.
 - **Justification**: PRD F4 demands deterministic per-action behavior with idempotency and dependency-aware halting. Pure handlers + pure planner + injectable VaultFS make every PRD AC unit-testable. The Obsidian boundary is narrow enough that integration tests against a real Obsidian instance are not required for v0.1 — `fs/promises`-backed live tests cover the realistic edge cases (filesystem race, atomic write semantics, real path resolution).
 - **Key Decisions** (full rationale in Architecture Decisions section):
-  - ADR-1 Schema validation = **ajv 8.x in standalone-codegen mode** (confirmed)
+  - ADR-1 Schema validation = **ajv 8.x at runtime** (revised 2026-04-25 per simplification review — was: standalone codegen)
   - ADR-2 Schema source = **vendored copy in `src/schema/`, drift-signaled by Tomo CHANGELOG handoff** (confirmed)
   - ADR-3 Hook loader = **Node `createRequire` + per-run cache eviction** (confirmed)
   - ADR-4 Action handlers = **8 pure functions sharing a `HandlerContext`** (confirmed)
@@ -329,7 +268,7 @@ Lint:       npm run lint
   - ADR-7 JSON applied-flag write = **`vault.process` for atomic read-mutate-write with stable 2-space JSON formatting** (confirmed)
   - ADR-8 Run log file = **Markdown with frontmatter + per-action table; per-run file in inbox** (confirmed)
   - ADR-9 Test split = **vitest unit (FakeVaultFS) + vitest live (`fs/promises` against tmpdir) + manual QA against `../temp/Privat-Test`** (confirmed)
-  - ADR-10 Hook context shape = **`{ action, vault, app, runState, logger }` with `runState` as `Record<string, unknown>` reset per run** (confirmed)
+  - ADR-10 Hook context shape = **`{ action, app, logger }`** — no `runState`, no narrowed `vault` facade (revised 2026-04-25 per simplification review)
 
 ## Building Block View
 
@@ -352,7 +291,7 @@ graph TB
         Executor[InstructionExecutor<br/>orchestrator]
         Planner[Planner<br/>resolve + order + filter applied]
         Handlers[ActionHandler dispatch<br/>create_moc / move_note / link_to_moc /<br/>update_tracker / update_log_entry /<br/>update_log_link / delete_source / skip]
-        Validator[SchemaValidator<br/>ajv-standalone-generated]
+        Validator[SchemaValidator<br/>ajv 8.x compiled at plugin load]
         AppliedWriter[JsonAppliedWriter<br/>atomic .json edit]
         PeerSync[PeerCheckboxSync<br/>best-effort .md tick]
         RunLog[RunLogWriter]
@@ -435,16 +374,15 @@ graph TB
 │   │   └── logPosition.ts                           # NEW: after_last_line / before_first_line / at_time HH:MM placement
 │   ├── schema/                                      # NEW: schema + generated validator
 │   │   ├── instructions.schema.json                 # NEW: vendored from Tomo (drift-signaled by handoff)
-│   │   ├── validator.gen.js                         # GENERATED: ajv standalone output (committed; regenerated by `npm run schema:build`)
-│   │   ├── validator.ts                             # NEW: thin wrapper around validator.gen.js exporting a typed `validate(...)` and producing diagnostics
-│   │   └── types.ts                                 # NEW: TS types via json-schema-to-ts (or hand-aligned discriminated union)
+│   │   ├── validator.ts                             # NEW: imports ajv + the schema JSON; compiles a validator at module load; exports `validate(input): ValidationOutcome`
+│   │   └── types.ts                                 # NEW: hand-aligned TS discriminated union types matching the schema (no codegen)
 │   ├── vault/                                       # NEW: vault edge (port + adapter)
 │   │   ├── VaultFS.ts                               # NEW: port interface
 │   │   ├── ObsidianVaultFS.ts                       # NEW: real impl using app.vault, app.fileManager, app.metadataCache
 │   │   └── FakeVaultFS.ts                           # NEW: test-only in-memory impl (also used in live tests via fs/promises wrapper)
 │   ├── hooks/                                       # NEW
 │   │   ├── HookRunner.ts                            # NEW: load (createRequire + cache evict), invoke (timeout), context build
-│   │   ├── HookContext.ts                           # NEW: type definition (action, vault facade, app, runState, logger)
+│   │   ├── HookContext.ts                           # NEW: type definition (action, app, logger)
 │   │   └── HookDisclosureModal.ts                   # NEW: ask-mode disclosure modal (Enable / Enable once / Disable)
 │   ├── ui/
 │   │   ├── ExecutionModal.ts                        # NEW: state-machine modal (preview / progress / summary)
@@ -457,7 +395,7 @@ graph TB
 │   │   └── registerCommands.ts                      # NEW: addCommand("Execute instructions document"); registerEvent('file-menu', ...) for .md peers
 │   └── util/
 │       ├── store.ts                                 # SHARED with 001: NO modification
-│       ├── paths.ts                                 # NEW: normalizePath wrapper, vault-root containment, deny-list match
+│       ├── paths.ts                                 # NEW: normalizePath wrapper, vault-root containment, deny-list match, fs.realpath symlink-escape check (named error `path-symlink-escape`)
 │       ├── filenames.ts                             # NEW: build per-run log filename + collision-suffix
 │       └── debugLog.ts                              # NEW: debug-level logger gated by Settings.debugLogging
 ├── test/
@@ -481,7 +419,7 @@ graph TB
 │   │   ├── schema/
 │   │   │   └── validator.test.ts                    # NEW (valid v1; version mismatch; malformed JSON; schema diagnostics; applied-field tolerance)
 │   │   ├── hooks/
-│   │   │   └── HookRunner.test.ts                   # NEW (load/cache-evict, runState sharing, timeout, return-shape, throw)
+│   │   │   └── HookRunner.test.ts                   # NEW (load/cache-evict, timeout, return-shape, throw)
 │   │   ├── vault/
 │   │   │   └── FakeVaultFS.test.ts                  # NEW (sanity for the test fake itself)
 │   │   └── util/
@@ -501,8 +439,8 @@ graph TB
 │   │       └── peer-missing/
 │   └── __mocks__/
 │       └── obsidian.ts                              # MODIFY: extend with Modal, fileManager.renameFile, vault.process, vault.trash, vault.createFolder, metadataCache.getFileCache, registerEvent
-├── package.json                                     # MODIFY: devDeps += ajv, json-schema-to-ts; scripts += `schema:build`
-├── esbuild.config.mjs                               # MODIFY: add prebuild trigger for schema:build (or chain in build script)
+├── package.json                                     # MODIFY: deps += ajv (runtime); scripts unchanged
+├── esbuild.config.mjs                               # UNCHANGED (no prebuild step)
 └── styles.css                                       # MODIFY: add .hashi-execution-modal, .hashi-row-glyph-*, .hashi-status-bar-bridge.is-idle / .is-running { color: green } / .is-error { color: red }
 ```
 
@@ -512,6 +450,9 @@ graph TB
 
 ```typescript
 // src/executor/state.ts
+// Single end-to-end outcome type. Handlers return `applied | skipped-already | failed`;
+// the orchestrator additionally synthesises `skipped-dependency` (dependent on a failed action)
+// and `skipped-cancelled` (user cancelled mid-run). RunCounts is derived via groupBy at summary time.
 export type ActionOutcome =
   | { kind: "applied" }
   | { kind: "skipped-already" }
@@ -533,16 +474,13 @@ export type RunState =
   | { kind: "previewing"; mode: ExecutionMode; records: readonly ActionRecord[]; remaining: number; total: number }
   | { kind: "running"; mode: ExecutionMode; records: readonly ActionRecord[]; currentIndex: number }
   | { kind: "summary"; mode: ExecutionMode; records: readonly ActionRecord[]; counts: RunCounts; logFilePath: string | null }
-  | { kind: "validation-failed"; mode: ExecutionMode; perFileFailures: ReadonlyMap<string, ValidationFailure> };
+  | { kind: "validation-failed"; mode: ExecutionMode; perFileFailures: ReadonlyMap<string, string> };  // value is the human message
 
-export interface RunCounts {
-  applied: number;
-  skippedAlready: number;
-  skippedDependency: number;
-  skippedCancelled: number;
-  failed: number;
-  durationMs: number;
-}
+// RunCounts is computed at summary time:
+//   const counts = groupBy(records, r => r.outcome?.kind ?? "pending");
+// kept as a type alias for the summary-state payload only; no separate counter struct
+// is maintained during the run.
+export type RunCounts = Record<ActionOutcome["kind"] | "pending", number> & { durationMs: number };
 
 export type ExecutionMode = "confirm" | "auto-run" | "silent";
 
@@ -553,20 +491,13 @@ export interface ResolvedSource {
   readonly instructionSet: InstructionSet;  // validated payload
 }
 
+// One-line validation result. ajv's error array is flattened to a single human string at the
+// boundary (`schemaValidator.validate()`). The orchestrator never branches on a sub-kind — the
+// modal header and run log just show the message. Parse errors, version-mismatch, and schema
+// diagnostics all collapse to "this file is invalid: <message>".
 export type ValidationOutcome =
   | { ok: true; data: InstructionSet }
-  | { ok: false; failure: ValidationFailure };
-
-export type ValidationFailure =
-  | { kind: "parse-error"; detail: string }
-  | { kind: "version-mismatch"; got: unknown }
-  | { kind: "schema-diagnostics"; diagnostics: readonly Diagnostic[] };
-
-export interface Diagnostic {
-  readonly path: string;        // JSON Pointer to the offending field (e.g., /actions/3/payload/section)
-  readonly message: string;     // ajv error message
-  readonly params?: Record<string, unknown>;
-}
+  | { ok: false; message: string };
 
 // Clock injected for at_time HH:MM resolution; trivially mockable
 export interface Clock {
@@ -634,7 +565,7 @@ export interface FileMetadata {
 }
 ```
 
-**Why a port**: action handlers, the JSON applied-writer, the peer checkbox syncer, the run-log writer, and the planner all consume `VaultFS` only — they have zero `import 'obsidian'` lines. Unit tests inject `FakeVaultFS` (in-memory `Map<path, string>`); live tests inject `FsPromisesVaultFS` (a wrapper around node's `fs/promises` against a tmpdir). The real `ObsidianVaultFS` is exercised manually in development; an automated end-to-end against real Obsidian is post-v0.1.
+**Why a port**: action handlers, the JSON applied-writer, the peer checkbox syncer, the run-log writer, and the planner all consume `VaultFS` only — they have zero `import 'obsidian'` lines. Unit tests inject `FakeVaultFS` (in-memory `Map<path, string>`). The real `ObsidianVaultFS` is exercised manually in the test vault (`../temp/Privat-Test`) — an automated end-to-end against real Obsidian is post-v0.1. **There is no `FsPromisesVaultFS` adapter**: a node `fs/promises` adapter cannot exercise the actually-risky parts of the Obsidian API (`fileManager.renameFile` link preservation, `vault.process` semantics, `MetadataCache`), so a "live test" through it would prove nothing. Two adapters (`ObsidianVaultFS` for production, `FakeVaultFS` for unit tests) is the v0.1 set; the manual-QA pass closes the loop.
 
 #### Action Handler Contract
 
@@ -643,15 +574,14 @@ export interface FileMetadata {
 export interface HandlerContext {
   readonly vault: VaultFS;
   readonly clock: Clock;                 // injected for at_time HH:MM resolution
-  readonly runState: Map<string, unknown>;  // shared across hooks (NOT handlers); see hooks
+  // No runState — dropped from v0.1; handlers don't share state with hooks.
 }
 
-export type Handler<A extends Action> = (action: A, ctx: HandlerContext) => Promise<HandlerOutcome>;
-
-export type HandlerOutcome =
-  | { kind: "applied" }
-  | { kind: "skipped-already" }
-  | { kind: "failed"; reason: string };
+// Handlers return ActionOutcome directly (the `applied | skipped-already | failed` subset).
+// The orchestrator never translates between handler-shape and outcome-shape — there is one type.
+export type Handler<A extends Action> = (action: A, ctx: HandlerContext) => Promise<
+  Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>
+>;
 
 export const HANDLERS: { readonly [K in ActionKind]: Handler<Extract<Action, { kind: K }>> } = {
   create_moc: createMocHandler,
@@ -699,17 +629,8 @@ export type Invocation =
 // src/hooks/HookContext.ts
 export interface HookContext {
   readonly action: Readonly<Action>;       // current action payload
-  readonly vault: HookVault;                // narrowed facade (subset of VaultFS)
-  readonly app: App;                        // Obsidian App — full escape hatch
-  readonly runState: Record<string, unknown>;  // shared across all hooks in the same run
+  readonly app: App;                        // Obsidian App — hooks have full plugin privilege; no narrowed facade
   readonly logger: HookLogger;              // routes to run log
-}
-
-export interface HookVault {
-  read(path: string): Promise<string>;
-  write(path: string, content: string): Promise<void>;
-  exists(path: string): Promise<boolean>;
-  getAbstractFileByPath(path: string): TFile | TFolder | null;
 }
 
 export interface HookLogger {
@@ -720,6 +641,12 @@ export interface HookLogger {
 
 export type Hook = (ctx: HookContext) => Promise<HookReturn> | HookReturn;
 export type HookReturn = void | { info?: string[]; warnings?: string[]; errors?: string[] };
+
+// Note: a `runState: Record<string, unknown>` shared across hooks in a run was considered and dropped
+// from v0.1 — no AC exercises it and no example hook ships. Add it later if a real hook needs it.
+// A `HookVault` narrowed facade was also dropped: hooks have full `app` access by policy (Templater-equivalent),
+// so a narrowed read/write/exists facade decorates a permission the policy already grants. The honest API
+// surface is `app`.
 ```
 
 #### Plugin Settings
@@ -736,7 +663,7 @@ export interface PluginSettings {
   runLogRetention: "always" | "only-after-failed";   // default "always"
   hooksDir: string;                 // vault-relative; default ".tomo-hashi/hooks"
   hooksPolicy: "enabled" | "disabled" | "ask";       // default "ask"
-  disableAllHooks: boolean;         // kill-switch; default false
+  // No `disableAllHooks` — `hooksPolicy: "disabled"` IS the kill-switch.
   debugLogging: boolean;            // default false
 }
 
@@ -747,7 +674,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   runLogRetention: "always",
   hooksDir: ".tomo-hashi/hooks",
   hooksPolicy: "ask",
-  disableAllHooks: false,
   debugLogging: false,
 };
 ```
@@ -929,7 +855,7 @@ sequenceDiagram
         Hook-->>Exec: ok / errors / threw
         Exec->>Hand: HANDLERS[kind](action, ctx)
         Hand->>Vault: read / process / rename / trash
-        Hand-->>Exec: HandlerOutcome
+        Hand-->>Exec: ActionOutcome
         Exec->>Hook: run(afterKey, ctx)
         Hook-->>Exec: ok / errors / threw
         Exec->>Vault: markActionApplied (on success)
@@ -1006,7 +932,7 @@ No change vs spec 001. Single Obsidian plugin bundle (`main.js` + `manifest.json
 
 - **Environment**: client-side (Obsidian Desktop, Electron renderer).
 - **Configuration**: 7 PluginSettings fields stored in `data.json`. Tomo inbox folder MUST be configured before batch invocation works.
-- **Dependencies**: none external at runtime (ajv standalone codegen produces a pure-JS validator). DevDeps: ajv, json-schema-to-ts.
+- **Dependencies**: ajv (8.x) as a runtime dep (~35 KB bundled). No `json-schema-to-ts` — TS types are hand-aligned in `src/schema/types.ts` per ADR-1 v2 simplification.
 - **Performance**: Schema validation < 200 ms per file (CON-7). End-to-end run for 25 actions < 5 s on typical desktop hardware.
 
 ## Cross-Cutting Concepts
@@ -1025,7 +951,7 @@ No change vs spec 001. Single Obsidian plugin bundle (`main.js` + `manifest.json
 
 - pattern: "Ports & adapters at the boundary" (001 ADR-5)
   relevance: CRITICAL
-  why: "VaultFS port + ObsidianVaultFS adapter; mirrors DockerClient/DockerodeAdapter."
+  why: "VaultFS port + ObsidianVaultFS production adapter + FakeVaultFS for unit tests. (No `FsPromisesVaultFS` in v0.1 — node fs cannot exercise the Obsidian-specific semantics that matter; manual QA closes that gap.)"
 
 - pattern: "vitest unit + vitest live split" (001 ADR-10)
   relevance: HIGH
@@ -1076,14 +1002,15 @@ stateDiagram-v2
 - **Error handling**: every action is failure-isolated. Halt-on-dependency is the only cross-action coupling. Run never aborts globally on a single action failure.
 - **Performance**: actions execute serially (CON-6). Per-action handler runtime targets ≤ 100 ms typical, ≤ 1 s worst (large file edits). Schema validation is the only bulk-parallel step.
 - **Logging**: two levels gated by `Settings.debugLogging`. Normal: run start/end + per-action outcomes. Debug: per-hook detail + per-vault-call timings.
-- **Security**: PRD F9 (path safety + deny-list) runs before every vault write. Hook trust per PRD F8 (Templater-equivalent). No instruction field reaches `eval` / `exec` / shell.
-- **Persistence**: Tomo's `.json` is durable applied-state; Obsidian's `data.json` holds plugin settings; everything else is ephemeral (modal state, run state, hook decisions).
+- **Security**: PRD F9 (path safety + deny-list + `fs.realpath` symlink containment) runs before every vault write — bug-defense against Tomo emitting a path that resolves outside the vault. Hook trust per PRD F8 (Templater-equivalent), with the disclosure modal enumerating the full Node capability surface (`fs`, network, `child_process`, `process.env`, full `app`) in plain language. No instruction field reaches `eval` / `exec` / shell. Cryptographic identity controls (hook content sha256 disclosure, vault-clone re-trust gates, Tomo identity attestation, preview-to-execute hash-pinning) are explicitly out of scope per PRD Won't Have — each Obsidian vault is its own trust domain by design, and the user has no reference value to verify a hash against.
+- **Persistence**: Tomo's `.json` is durable applied-state; Obsidian's `data.json` holds plugin settings (no cryptographic fingerprints, no `lastTrustedAppId`, no Docker daemon credentials); everything else is ephemeral (modal state, run state, hook decisions).
 
 ## Architecture Decisions
 
-- [x] **ADR-1 Schema validation**: ajv 8.x in **standalone-codegen mode** at build time. **Confirmed 2026-04-25.**
-  - Rationale: Tomo owns the schema; Hashi consumes it as the single source of truth. Standalone codegen emits a pure JS validator function — no ajv dependency in the runtime bundle (~35 KB saved). `json-schema-to-ts` provides static types from the same schema. Tomo's shipped schema (v0.7.0) uses `$defs/applied_field` referenced via `$ref` from each of the 8 action variants — ajv 8.x supports this natively (draft-07 / 2020-12). Alternatives evaluated: zod (would hand-port schema, violates SSOT), valibot (same), runtime ajv (~35 KB bundle cost), hand-rolled (loses error-message quality).
-  - Trade-offs: Adds a `prebuild` step (`npm run schema:build`) before esbuild; requires checking the generated `validator.gen.js` into git so dev-time sourcing is deterministic; schema drift requires re-running the prebuild.
+- [x] **ADR-1 Schema validation**: ajv 8.x at **runtime**. **Revised 2026-04-25** (was: standalone codegen).
+  - Rationale: Tomo owns the schema; Hashi consumes it as the single source of truth. ajv 8.x at runtime adds ~35 KB to a 500 KB bundle budget — comfortably within budget for a desktop-only Electron plugin. Standalone codegen would save the ~35 KB at the cost of a `npm run schema:build` step, a committed generated artifact in git, a `json-schema-to-ts` dependency, and an esbuild prebuild integration — about 50 lines of build complexity for ~35 KB on a desktop plugin. Not worth it. Schema-v1 has 8 action variants and an integer version field; runtime compilation cost is one-shot at plugin load. TS types via a hand-aligned discriminated union in `src/schema/types.ts` (no `json-schema-to-ts` dep).
+  - Trade-offs: ~35 KB additional bundle; one runtime dep (`ajv`). Compilation happens at plugin load (~once, milliseconds). Hand-aligned types must be kept in step with schema versions — the same discipline as the vendored schema itself.
+  - Supersedes: prior ADR-1 (ajv standalone codegen + committed `validator.gen.js` + `npm run schema:build` prebuild + `json-schema-to-ts` dep). Reversed 2026-04-25 after simplification review judged the build complexity disproportionate to the bundle savings.
   - User confirmed: **2026-04-25**
 
 - [x] **ADR-2 Schema source**: vendored copy in `src/schema/instructions.schema.json`, drift-signaled by Tomo's CHANGELOG handoff. **Confirmed 2026-04-25.**
@@ -1096,7 +1023,7 @@ stateDiagram-v2
   - Trade-offs: A hook that imports other modules will have those modules cached too — only the hook entry file is evicted. Documented in F8 acceptance criteria as a known v0.1 limitation; user-mitigatable by structuring hooks as single-file modules.
   - User confirmed: **2026-04-25**
 
-- [x] **ADR-4 Action handlers**: 8 pure async functions sharing a `HandlerContext` (vault, clock, runState). **Confirmed 2026-04-25.**
+- [x] **ADR-4 Action handlers**: 8 pure async functions sharing a `HandlerContext` (vault, clock). **Confirmed 2026-04-25; revised 2026-04-25 to drop `runState` (was shared with hooks, but hooks no longer use runState either).**
   - Rationale: Aligns with 001 ADR-5 (ports-and-adapters) — handlers have zero `import 'obsidian'` lines and are unit-tested against `FakeVaultFS`. Keeps each handler ≤ 100 LOC; tests are table-driven. Alternatives evaluated: class-based handler hierarchy (more ceremony, no real polymorphism gain), inline switch in orchestrator (mixes concerns).
   - Trade-offs: Function dispatch is a `const HANDLERS: { [K in ActionKind]: Handler<...> }` map — losing some type narrowing without explicit `Extract<>`-typed handlers. Mitigated by the `Handler<A>` generic.
   - User confirmed: **2026-04-25**
@@ -1121,14 +1048,19 @@ stateDiagram-v2
   - Trade-offs: A failed run produces a small file; a 100-action run produces a longer file. Retention setting handles cleanup. Filename collision (two runs in the same minute) handled by `_N` suffix.
   - User confirmed: **2026-04-25**
 
-- [x] **ADR-9 Test split**: vitest unit (`FakeVaultFS`) + vitest live (`FsPromisesVaultFS` against `os.tmpdir()`) + **manual QA against the local test vault at `../temp/Privat-Test`** (highly manual, used pre-release). **Confirmed + augmented 2026-04-25.**
+- [x] **ADR-9 Test split** (revised 2026-04-25): vitest unit (`FakeVaultFS`) + **manual QA against the local test vault at `../temp/Privat-Test`** as the integration gate before each release. The previously-planned `FsPromisesVaultFS` adapter + `vitest live` run was dropped: a node `fs/promises` adapter cannot exercise `fileManager.renameFile` link preservation, `vault.process` semantics, or `MetadataCache`, which is what makes the executor risky. Live tests against it would prove little while doubling the adapter surface area. The manual QA pass is the load-bearing integration check for v0.1.
   - Rationale: Mirrors 001 ADR-10 for the automated split. Unit tests cover handlers, planner, applied-writer, hook runner, schema validator. Live tests cover end-to-end with realistic fs semantics (atomic write, concurrent open, real path resolution). The manual test vault at `../temp/Privat-Test` is the user's pre-release sanity-check path: copy the built plugin into the vault's `.obsidian/plugins/miyo-tomo-hashi/`, exercise real Tomo-emitted instruction sets, observe modal + status bar + log behavior in actual Obsidian.
   - Trade-offs: Manual QA is the only path that exercises the real `ObsidianVaultFS` adapter and the actual UI. It is documented as a release-gate checklist item, not an automated test target — the build provides a `--copy-to-test-vault` flag (commented sample already in `esbuild.config.mjs`) the user can enable.
   - User confirmed: **2026-04-25** — *"normal testing as described, but we also have a test vault for this ../temp/Privat-Test but using this is a highly manual task."*
 
-- [x] **ADR-10 Hook context shape**: `{ action, vault: HookVault, app: App, runState: Record<string, unknown>, logger }` with `runState` reset per run. **Confirmed 2026-04-25.**
-  - Rationale: Minimum surface (per F8 user feedback) plus an `app` escape hatch. `runState` satisfies the `before-hook sets X; after-hook reads X` use case the user raised, scoped to one run. `HookVault` is a narrowed facade — read/write/exists/getAbstractFileByPath only — to discourage hooks from reaching deep Obsidian APIs except via `app`. Alternatives evaluated: full VaultFS (too much surface), no app escape (too restrictive), runState as Map (less ergonomic for hooks).
-  - Trade-offs: `app` is the documented escape hatch — power users get full Obsidian access; review of user-authored hooks is on the user. `runState` is `Record<string, unknown>` (not type-narrow) by design; future schema-aware runState types are a post-v0.1 idea.
+- [x] **ADR-10 Hook context shape** (revised 2026-04-25): `{ action, app, logger }`. Three fields, no `runState`, no narrowed `HookVault`.
+  - Rationale: Hooks have full plugin privilege per the F8 trust model (Templater-equivalent) — narrowing the API to a `read/write/exists/getAbstractFileByPath` facade decorates a permission the policy already grants. The honest surface is `app`. `runState` was added speculatively for a "before-hook sets X; after-hook reads X" pattern that no v0.1 acceptance criterion exercises and no example hook ships; it's added later if a real hook needs it.
+  - Trade-offs: `app` is the full Obsidian surface — power users get full access; hook review is on the user (consistent with the F8 disclosure capability enumeration).
+  - **HookContext stability policy**: `HookContext` is a stable contract with user-authored hooks living in the vault. From v0.1 onward:
+    - **Additive changes** (new field on `HookContext`, new method on `logger`, new optional property on `action`) are backward-compatible. Hooks written against v0.1 continue to work without modification. Hashi MAY add fields without a major version bump.
+    - **Removals or renames** (dropping `app`, narrowing `app` to a subset, renaming `logger`, etc.) are breaking changes and require a Hashi MAJOR version bump (e.g., 0.x → 1.x), a one-version deprecation period where the old surface co-exists, a migration note in the README, and an entry in the README Decisions Log.
+    - There is no `ctx.hashiApiVersion` field in v0.1 — hooks have no need to branch on Hashi version because additions never break them. Add the field if/when a deprecation period needs runtime detection.
+  - Supersedes: prior ADR-10 with `vault: HookVault` + `runState: Record<string, unknown>` (confirmed 2026-04-25 morning, dropped same day after simplification review).
   - User confirmed: **2026-04-25**
 
 ## Quality Requirements
@@ -1144,73 +1076,26 @@ stateDiagram-v2
 
 ## Acceptance Criteria
 
-EARS-format mapping of PRD requirements F1–F11. Each EARS statement traces to one or more PRD ACs.
+> **Note**: The PRD (`requirements.md`) carries the canonical Gherkin-format ACs (98 of them, see PRD AC count gate). The previous EARS-format duplicate that lived here was stripped in the 2026-04-25 simplification — every EARS statement was a paraphrase of an existing PRD AC, and maintaining two formats invited drift. The few EARS statements that carried *additional* implementation constraints (Docker socket pinning, `fs.realpath` symlink containment, run-log content hashing, hook capability disclosure, six-settings count) have been retained below as **System-Level Constraints**.
 
-**F1 Invocation:**
-- WHEN the user invokes the "Execute instructions document" command with no instruction file active, THE SYSTEM SHALL resolve all `*.json` files in the configured Tomo inbox folder, validate each, and process the valid ones in alphabetical filename order with one merged preview.
-- WHEN the user invokes the command with an `.md` peer or `_instructions.json` active, THE SYSTEM SHALL resolve only that one source.
-- WHEN the user invokes the command and a run is already in progress, THE SYSTEM SHALL fire a `Notice` and decline the new invocation.
-- WHEN the user right-clicks an `.md` peer in the file explorer, THE SYSTEM SHALL inject an "Execute instructions…" entry that runs the executor on that file.
-- THE SYSTEM SHALL NOT auto-trigger the executor on file creation, file change, or vault load.
+### System-Level Constraints
 
-**F2 Schema validation:**
-- WHEN any source `_instructions.json` fails JSON parsing, schema-version equality, or schema v1 structural validation, THE SYSTEM SHALL skip that file and record the failure in the run log; THE SYSTEM SHALL NOT write to that file's vault state.
-- IF all sources in a batch fail validation, THEN THE SYSTEM SHALL transition `executionStore` to `validation-failed` and present per-file errors in the modal.
+These constraints bind the implementation beyond what the PRD ACs already specify. Each one was carried over from the prior EARS-AC table because it adds a testable detail not visible in the PRD wording.
 
-**F3 Tri-state mode + modal:**
-- WHILE `executionMode === confirm`, THE SYSTEM SHALL open the modal in `previewing` state and require an Execute click before any vault write.
-- WHILE `executionMode === auto-run`, THE SYSTEM SHALL open the modal in `running` state and start execution immediately.
-- WHILE `executionMode === silent`, THE SYSTEM SHALL NOT open a modal and SHALL execute immediately.
-- WHEN the user clicks Cancel during a run, THE SYSTEM SHALL halt execution after the current action commits and record remaining actions as `skipped-cancelled`.
-- THE SYSTEM SHALL use the labels Execute / Cancel / Close on modal buttons; THE SYSTEM SHALL NOT use "Dismiss" anywhere.
+**F7 Run log payload hashing**:
+- THE SYSTEM SHALL record action paths and kinds verbatim in the per-action payload summary; for free-text content fields (e.g., `update_tracker.value`, `update_log_entry.line`) THE SYSTEM SHALL record an 8-character sha256 fingerprint of the value, NOT the literal value. Rationale: the run-log file lives in the vault inbox and travels with vault sync; literal tracker values or note prose may be sensitive while path/kind metadata is what the user needs to debug.
 
-**F4 Action kinds:**
-- THE SYSTEM SHALL execute actions in canonical order: `create_moc → move_note → link_to_moc → update_tracker → update_log_entry → update_log_link → delete_source → skip`.
-- IF a `create_moc I0X` action fails, THEN THE SYSTEM SHALL skip every dependent `link_to_moc` action with reason `dependency I0X failed`.
-- IF a non-dependency action fails, THEN THE SYSTEM SHALL continue with the next action.
-- THE SYSTEM SHALL use `app.fileManager.renameFile` for `create_moc` and `move_note` (for incoming-link preservation).
-- THE SYSTEM SHALL use `app.vault.trash(file, /* system */ true)` for `delete_source`.
+**F8 Hook context shape and capability disclosure**:
+- THE SYSTEM SHALL pass `{ action, app, logger }` only as `HookContext` (per ADR-10 v2) — no `runState`, no narrowed `vault` facade.
+- THE README and the settings pane SHALL display, in plain language, the full capability enumeration reachable from a hook: full Obsidian `app` access (vault, plugins, internalPlugins), Node filesystem access anywhere the Obsidian process can reach (`fs`), arbitrary network (`net`/`http`/`fetch`), shell execution (`child_process`), environment variables (`process.env`). The disclosure SHALL NOT include sha256 / first-seen-at / file-size of the hook file (per PRD Won't Have).
+- THE SYSTEM SHALL fresh-load every hook at run start via `require.cache` eviction (per ADR-3).
 
-**F5 Applied-state in JSON:**
-- WHEN an action succeeds, THE SYSTEM SHALL write `applied: true` for that action's id in the source `_instructions.json` atomically.
-- THE SYSTEM SHALL NEVER unset `applied: true` to `false`.
-- THE SYSTEM SHALL treat absent `applied` field as `false`.
-- WHERE the `.md` peer exists with the matching `### I## — …` heading, THE SYSTEM SHALL best-effort tick its `- [ ] Applied` checkbox; failure of this best-effort tick SHALL NOT fail the action.
-
-**F6 Partial-resume:**
-- WHILE source files contain actions with `applied: true`, THE SYSTEM SHALL display a banner "N of M remaining (X already applied — re-run safe)".
-- THE SYSTEM SHALL skip every action with `applied: true` without re-execution and without error.
-
-**F7 Run log:**
-- WHEN any run starts, THE SYSTEM SHALL create a run log file at `<tomoInboxFolder>/tomo-hashi-run-log_YYYY-MM-DDTHHMM.md` (with `_N` suffix on collision).
-- WHEN a run ends, THE SYSTEM SHALL finalize the run log with totals and per-action outcomes.
-- WHERE `runLogRetention === only-after-failed` AND the run had zero failures, THE SYSTEM SHALL delete the log file at end.
-- THE SYSTEM SHALL fire a run-end `Notice` containing the log filename in all three execution modes.
-
-**F8 Hooks:**
-- WHILE `disableAllHooks === true`, THE SYSTEM SHALL NOT load or invoke any hook.
-- WHILE `hooksPolicy === ask`, WHEN a hook is detected for the first time in the current session, THE SYSTEM SHALL open the disclosure modal before invoking the hook.
-- THE SYSTEM SHALL fresh-load every hook at run start (`require.cache` eviction).
-- WHEN a `before-` hook throws or returns errors, THE SYSTEM SHALL skip the action and record the hook failure.
-- WHEN an `after-` hook throws or returns errors AFTER the vault write committed, THE SYSTEM SHALL leave `applied: true` AND record the hook failure separately.
-- THE SYSTEM SHALL apply a 30-second timeout per hook invocation.
-- THE SYSTEM SHALL pass `runState: Record<string, unknown>` shared across all hooks in the same run; SHALL reset `runState` at run start.
-
-**F9 Path safety:**
-- THE SYSTEM SHALL reject every path that resolves outside the vault root with reason `Path escapes vault root`.
-- THE SYSTEM SHALL reject every path matching `^\.obsidian(/|$)`, `^\.git(/|$)`, `^\.trash(/|$)`, OR the configured `hooksDir` with reason `Path is on deny-list`.
+**F9 Path safety realpath check**:
+- BEFORE any vault write, THE SYSTEM SHALL resolve the target path's real path via `fs.realpath` (or platform equivalent) and SHALL reject any path whose realpath is not a descendant of the vault root, with named error `path-symlink-escape`. Rationale: Obsidian's `normalizePath` and `Vault.getAbstractFileByPath` operate on path strings only — they do not follow symlinks. This is a bug-defense (Tomo emits a path; the realpath check ensures Tomo bugs cannot become filesystem escapes), not an adversarial control.
 - THE SYSTEM SHALL apply path safety in all three execution modes.
 
-**F10 Status bar 橋:**
-- WHILE no run is active AND the previous run had no failures, THE SYSTEM SHALL render the 橋 icon in idle color (default theme color).
-- WHILE a run is active, THE SYSTEM SHALL render the 橋 icon in green.
-- WHEN a run ends with at least one failure, THE SYSTEM SHALL render the 橋 icon in red for ~10 seconds, then return to idle color.
-- WHEN the user hovers the icon, THE SYSTEM SHALL display a tooltip showing idle, running-with-progress, or last-run-failure-summary.
-- THE SYSTEM SHALL NOT animate the icon (no pulse, no transition); state changes are immediate class swaps.
-
-**F11 Plugin settings:**
-- THE SYSTEM SHALL provide seven settings (Tomo inbox folder, Execution mode, Run log retention, Hooks dir, Hooks policy, Disable all hooks, Debug logging) and persist them via `data.json`.
-- THE SYSTEM SHALL NOT persist per-hook ask-mode decisions across Obsidian sessions.
+**F11 Six settings (kill-switch is hooksPolicy=disabled)**:
+- THE SYSTEM SHALL provide six settings (Tomo inbox folder, Execution mode, Run log retention, Hooks dir, Hooks policy, Debug logging) — there is no separate `Disable all hooks` toggle (collapsed in 2026-04-25 simplification; `hooksPolicy === "disabled"` IS the kill-switch).
 
 ## Risks and Technical Debt
 
@@ -1219,9 +1104,8 @@ EARS-format mapping of PRD requirements F1–F11. Each EARS statement traces to 
 - `src/util/store.ts` does not yet exist (it will be created by 001's plan; 002 depends on it). Sequencing: 001 ships first, OR the `Store<T>` helper is extracted to a shared util on demand.
 
 ### Technical Debt
-- ajv generated validator (`validator.gen.js`) committed to git is technically a generated artifact in source control. Acceptable v0.1 trade-off (deterministic builds without Tomo-side dep coordination); revisit when CI runs the prebuild.
-- `runState: Record<string, unknown>` is intentionally untyped. Power hooks may want stricter contracts; v0.1 keeps it pragmatic.
-- The `ObsidianVaultFS` adapter is exercised manually in development — no automated end-to-end against a real Obsidian instance. Integration confidence relies on `FsPromisesVaultFS` covering realistic semantics.
+- (Resolved 2026-04-25 — formerly: "ajv generated validator committed to git" — dropped entirely with ADR-1 v2; ajv runs at runtime, no committed artifact.)
+- The `ObsidianVaultFS` adapter is exercised only via manual QA in `../temp/Privat-Test` — no automated end-to-end against a real Obsidian instance. The previously-planned `FsPromisesVaultFS` was dropped as low-value (cannot exercise the Obsidian-specific semantics that matter); this is acceptable v0.1 debt.
 
 ### Implementation Gotchas
 - **`vault.process` was added in Obsidian 1.4** — `manifest.json` declares `minAppVersion: 1.5.0` so this is safe. Don't fall back to `read + modify` on older versions.
@@ -1229,44 +1113,11 @@ EARS-format mapping of PRD requirements F1–F11. Each EARS statement traces to 
 - **MetadataCache lag**: `app.metadataCache.getFileCache(file)` may return stale data immediately after a rename. For `link_to_moc`'s in-set fallback (target MOC was created earlier in this run), wait for `metadataCache.on('changed', ...)` or simply re-read the file content (more reliable for v0.1).
 - **JSON formatting**: any whitespace mismatch between Tomo's emission and Hashi's write will produce a diff every round-trip. Lock to `JSON.stringify(v, null, 2) + "\n"` on both sides.
 - **Hook `require.cache` eviction**: only evicts the entry file, not its transitive imports. Document in F8.
-- **Status-bar item count**: Obsidian places status-bar items left-to-right in plugin-load order. 001's 友 and 002's 橋 may sit in either order depending on registration order in `main.ts`.
+- **Status-bar item count**: Obsidian places status-bar items left-to-right in plugin-load order. **Pinned order: 友 (001) first, then 橋 (002)** — `main.ts` MUST register the connection status-bar item before the executor status-bar item, so the connect-then-execute mental model is mirrored visually. T5.3 in 001's plan owns the registration order.
 - **MetadataCache + callouts**: callout sections appear as generic `sections` entries with `type: "callout"`; the section's first line must be re-parsed to extract the callout title. Test fixtures should cover both Obsidian-recognized and edge-case callout syntaxes.
 
 ## Glossary
 
-### Domain Terms
+The canonical domain term is **Instruction set** (a `_instructions.json` file plus its companion `.md` peer, produced by Tomo; the `.json` is the executable plan, the `.md` is for human reading). The user-visible command label "Execute instructions document" is intentionally different — a UX label, not a domain term.
 
-| Term | Definition | Context |
-|------|------------|---------|
-| **Instruction set** | A `_instructions.json` file plus its companion `.md` peer, produced by Tomo. The `.json` is the executable plan; the `.md` is for human reading. | Hashi reads both; `.json` is source of truth for applied-state. |
-| **Action** | A single deterministic operation in an instruction set, identified by `I##` and a `kind`. | One of 8 kinds (PRD F4). |
-| **Applied state** | Boolean per action indicating whether Hashi has successfully executed it. Stored in the `.json`'s `applied` field. | Source of truth for partial-resume (F6). |
-| **Run** | One invocation of the executor, processing one or more instruction sets to completion or cancellation. | Single-run lock guarantees only one at a time. |
-| **Run log** | Markdown file in the Tomo inbox recording one run's outcome. | Replaces in-peer `## Errors` block (PRD revision 2026-04-25). |
-| **MOC** | Map of Content — a curated index note in `Atlas/200 Maps/`. | Created by `create_moc`, linked into by `link_to_moc`. |
-| **Tomo inbox** | Vault folder where Tomo writes instruction sets. Configurable via `tomoInboxFolder` setting. | Used for batch invocation (F1). |
-| **Hook** | User-authored Node script in the configured hooks directory, invoked before/after specific action kinds. | Templater-equivalent trust model (F8). |
-
-### Technical Terms
-
-| Term | Definition | Context |
-|------|------------|---------|
-| **Port (ports-and-adapters)** | An interface defining what the core needs from the outside world. | `VaultFS`, `Hook`, `SchemaValidator`. |
-| **Adapter** | Concrete implementation of a port. | `ObsidianVaultFS`, `FakeVaultFS`, `FsPromisesVaultFS`. |
-| **Standalone codegen (ajv)** | ajv mode that emits a self-contained JS validator function at build time, with no ajv runtime dependency. | Used to keep the runtime bundle lean (ADR-1). |
-| **Discriminated union** | TypeScript pattern where a `kind` field narrows the type. | `Action`, `RunState`, `ActionOutcome`. |
-| **`vault.process`** | Obsidian Plugin API method for atomic read-mutate-write on a single file. | Used everywhere we edit content in place. |
-| **`fileManager.renameFile`** | Obsidian Plugin API method that renames or moves a file AND updates incoming `[[wikilinks]]` across the vault. | Required for `create_moc` and `move_note` (vs `vault.rename` which orphans links). |
-| **MetadataCache** | Obsidian's parsed view of every Markdown file (headings, sections, links, frontmatter). | Used for section/heading detection in `link_to_moc`, `update_log_entry`, etc. |
-| **EARS** | Easy Approach to Requirements Syntax. | Format used in §Acceptance Criteria. |
-
-### API/Interface Terms
-
-| Term | Definition | Context |
-|------|------------|---------|
-| **`schema_version`** | Top-level integer field in `_instructions.json`. v0.1 supports `1` only. | Fail-closed on mismatch (F2). |
-| **`applied`** | Boolean per-action field added to schema v1. Default `false`. | Hashi flips to `true` on success (F5). |
-| **`md_peer`** | Optional top-level string field in `_instructions.json` naming the companion `.md` peer. Falls back to same-stem sibling. | F1, F5. |
-| **`I##`** | Action ID, a string like `I01` … `INN`, monotonic within a file. | Unique identifier for matching peer headings + tracking applied state. |
-| **`HookContext`** | Object passed to user-authored hook functions: `{ action, vault, app, runState, logger }`. | F8 / ADR-10. |
-| **`ExecutionMode`** | One of `confirm` / `auto-run` / `silent`. | F3 / F11. |
+Other terms (`Action`, `Applied state`, `Run`, `Run log`, `MOC`, `Tomo inbox`, `Hook`, `HookContext`, `VaultFS`, `schema_version`, `applied`, `md_peer`, `I##`, `ExecutionMode`) are defined inline at first use throughout this document. The PRD glossary at `requirements.md` covers the same terms in user-facing language.

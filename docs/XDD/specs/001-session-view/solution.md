@@ -1,77 +1,22 @@
 ---
 title: "Tomo Connection & Chat Window — Solution Design"
 status: draft
-version: "1.0"
+version: "1.1"
 ---
 
 # Solution Design Document
 
-## Validation Checklist
-
-### CRITICAL GATES (Must Pass)
-
-- [x] All required sections are complete
-- [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Architecture pattern is clearly stated with rationale
-- [x] **All architecture decisions confirmed by user** — 10/10 confirmed (ADR-1, ADR-2 in brainstorm; ADR-3..ADR-10 in ADR batch round)
-- [x] Every interface has specification
-
-### QUALITY CHECKS (Should Pass)
-
-- [x] All context sources listed with relevance ratings
-- [x] Project commands discovered from actual project files
-- [x] Constraints → Strategy → Design → Implementation path is logical
-- [x] Every component in diagram has directory mapping
-- [x] Error handling covers all error types
-- [x] Quality requirements are specific and measurable
-- [x] Component names consistent across diagrams
-- [x] A developer could implement from this design
-- [x] Examples use real TypeScript types (not pseudocode)
-- [x] Complex flows include traced walkthroughs
-
----
-
-## Output Schema
-
-### SDD Status Report
-
-| Field | Value |
-|-------|-------|
-| specId | 001-session-view |
-| architecture.pattern | Layered plugin with singleton connection service and event-subscribed UI |
-| architecture.keyComponents | TomoConnection service, DockerClient, TomoChatView (ItemView), StatusBarIcon, SettingsTab, InstancePickerModal, FileMenuHandler, CommandRegistry, Store helper |
-| architecture.externalIntegrations | Docker Engine API (local socket), Obsidian Plugin API |
-| adrs | 10 (all confirmed) |
-
-### Section Status
-
-| Section | Status | Detail |
-|---------|--------|--------|
-| Constraints | COMPLETE | |
-| Implementation Context | COMPLETE | |
-| Solution Strategy | COMPLETE | |
-| Building Block View | COMPLETE | |
-| Interface Specifications | COMPLETE | |
-| Runtime View | COMPLETE | |
-| Deployment View | COMPLETE | |
-| Cross-Cutting Concepts | COMPLETE | |
-| Architecture Decisions | COMPLETE | All 10 ADRs confirmed |
-| Quality Requirements | COMPLETE | |
-| Acceptance Criteria | COMPLETE | |
-| Risks and Technical Debt | COMPLETE | |
-| Glossary | COMPLETE | |
-
----
+> **Architecture pattern**: Layered plugin with singleton connection service + event-subscribed UI. Key components: TomoConnection (uses dockerode directly), TomoChatView (ItemView), StatusBarIcon, SettingsTab, InstancePickerModal, FileMenuHandler, CommandRegistry, Store helper. External integrations: Docker Engine API (local socket), Obsidian Plugin API. 10 ADRs (5 revised in 2026-04-25 simplification — see §Architecture Decisions).
 
 ## Constraints
 
-CON-1 **Platform**: Obsidian Desktop (Electron). TypeScript `strict: true`, `noUncheckedIndexedAccess: true`. Target ES2018 (per `esbuild.config.mjs`). `lib: ["DOM", "ES5", "ES6", "ES7"]` (per `tsconfig.json`). Runtime has full Node.js built-ins plus DOM — we can use `net`, `http`, `stream`, and `process`.
+CON-1 **Platform**: Obsidian Desktop (Electron). TypeScript `strict: true`, `noUncheckedIndexedAccess: true`. Target ES6 (per `tsconfig.json`); `lib: ["DOM", "ES5", "ES6", "ES7"]`. esbuild emits CommonJS to `main.js`. Runtime has full Node.js built-ins plus DOM — we can use `net`, `http`, `stream`, and `process`.
 CON-2 **Build**: esbuild with CommonJS output bundled to `main.js`. Externals list excludes `obsidian` and node builtins. xterm.js requires a CSS loader (for `@xterm/xterm/css/xterm.css`). No template/component preprocessor needed — plain TS compiles directly.
 CON-3 **Desktop-only enforcement**: `manifest.json` must flip `isDesktopOnly: false → true`. Currently drift (PRD constraint); SDD allocates it to the plan's initial phase.
 CON-4 **Testing**: vitest with two configs — unit (`vitest.config.ts`, jsdom, obsidian mock) and live (`vitest.live.config.ts`, node, real Docker). Team feedback memory: **no mocks for the Docker boundary in integration tests** — live tests must hit a real daemon.
 CON-5 **No external inbound surface**: no ports, no webhooks, no MCP server. All code runs in-process with the Obsidian plugin.
 CON-6 **One connection, one chat view**: enforced at the service layer (connection) and workspace layer (singleton Leaf lookup).
-CON-7 **Bundle budget**: informal target ≤ 500 KB minified for `main.js`. xterm.js (~150 KB) + dockerode (~80 KB) + Svelte runtime (~10 KB) + app code fits comfortably.
+CON-7 **Bundle budget**: informal target ≤ 500 KB minified for `main.js`. xterm.js (~150 KB) + dockerode (~80 KB) + app code fits comfortably (no UI framework runtime per ADR-3 plain TS).
 CON-8 **Trust boundary**: all bytes from the container are untrusted text. xterm.js handles them as terminal text — no HTML rendering, no URI handling from stream output.
 CON-9 **Tomo handoff dependency**: picker labels and reconnect-command label benefit from Tomo exposing an instance-name Docker label (`miyo.tomo.instance-name=<name>`). PRD mandates graceful fallback if missing; SDD must implement fallback as first-class behavior, not an error path.
 
@@ -169,11 +114,6 @@ CON-9 **Tomo handoff dependency**: picker labels and reconnect-command label ben
   why: "WorkspaceLeaf, ItemView, PluginSettingTab, addStatusBarItem, addCommand (incl. removeCommand for dynamic relabeling), Menu, Notice, registerEvent('file-menu')"
 ```
 
-### Implementation Boundaries
-- **Must Preserve**: `main.ts` plugin class default export; ESLint config; esbuild output layout (`main.js` + `manifest.json` + `styles.css`); the fact that integration tests hit real Docker, no mocks at that boundary.
-- **Can Modify**: Everything under `src/` (scaffold placeholders); `manifest.json` `isDesktopOnly` flag; `esbuild.config.mjs` (add Svelte plugin + CSS loader); `package.json` deps.
-- **Must Not Touch**: `_outbox/`, `_inbox/`, `.githooks/`, `claude-docker/`, Obsidian's own plugins in `test/Hashi/.obsidian/plugins/hot-reload/`. The `miyo-kouzou` repo is never modified from a Hashi session (see Kouzou git-ops rule in `~/Kouzou/standards/general.md`).
-
 ### External Interfaces
 
 #### System Context Diagram
@@ -240,11 +180,12 @@ inbound:
 
 outbound:
   - name: "Docker Engine API"
-    type: Unix domain socket (macOS: Docker Desktop socket; Linux: /var/run/docker.sock; Windows: \\.\pipe\docker_engine)
+    type: Unix domain socket / Windows named pipe (macOS: Docker Desktop socket; Linux: /var/run/docker.sock; Windows: \\.\pipe\docker_engine)
     format: HTTP over socket (dockerode handles protocol + stream hijack)
     authentication: OS file permissions (user must have socket access)
     criticality: HIGH
     data_flow: "List containers with label filter; attach to container stdio; inspect for metadata"
+    transport_pinning: "TomoConnection MUST construct dockerode with an explicit `socketPath` and SHALL NOT honor `DOCKER_HOST`, `DOCKER_CONTEXT`, or `~/.docker/config.json` context files. Rationale: a stale `DOCKER_HOST=tcp://…` in the user's shell profile would otherwise silently route Hashi to a remote daemon, contradicting the PRD constraint 'local Docker daemon socket only in v0.1'. If the platform-default socket is unreachable, the named error is `daemon-unreachable` — there is no fallback to TCP."
 
   - name: "Obsidian Persistence"
     type: Plugin loadData/saveData
@@ -284,7 +225,7 @@ Lint:    npm run lint         # ESLint with obsidianmd rules
 
 - **Architecture Pattern**: **Layered plugin with singleton connection service and event-subscribed UI**. One `TomoConnection` singleton owns all Docker I/O and state; every UI surface (Settings, status bar, chat view, commands) subscribes to a typed `Store<ConnectionState>` helper that mirrors the service state; the file menu handler and command registry are thin shims over the service.
 - **Integration Approach**: All Docker work happens in the connection service. UI layers are pure state consumers — they do not call dockerode directly and do not hold connection state themselves. This keeps reconnect logic, backoff, and state transitions in one place.
-- **Justification**: One connection → one source of truth. Multi-surface UI (Settings + status bar + chat view + palette command label) demands a shared reactive state. A small typed `Store<T>` helper (~30 LOC) is sufficient for the few reactive surfaces involved — no framework runtime needed. Keeping Docker I/O isolated makes the code testable (service unit-tested with a mockable `DockerClient` port; real Docker reached only in `test:live`).
+- **Justification**: One connection → one source of truth. Multi-surface UI (Settings + status bar + chat view + palette command label) demands a shared reactive state. A small typed `Store<T>` helper (~30 LOC) is sufficient for the few reactive surfaces involved — no framework runtime needed. Keeping Docker I/O confined to `src/connection/docker.ts` makes the unit-test surface small (`vi.mock('dockerode')` at the test boundary); real Docker is reached only in `test:live`.
 - **Key Decisions** (full rationale in Architecture Decisions section):
   - ADR-1 Docker client = **dockerode** (confirmed)
   - ADR-2 Attach mechanism = **`docker attach` to PID 1 + xterm.js** (confirmed)
@@ -316,7 +257,7 @@ graph TB
     subgraph Core[Core services]
         Store["connectionStore :<br/>Store&lt;ConnectionState&gt;"]
         Service[TomoConnection<br/>service]
-        Client[DockerClient<br/>port + dockerode adapter]
+        Client[dockerode<br/>used directly via src/connection/docker.ts]
     end
 
     Main -->|wires| StatusBar
@@ -355,8 +296,7 @@ graph TB
 │   │   ├── reconnectLoop.ts                 # NEW: cancellable backoff loop (extracted from service for testability)
 │   │   └── types.ts                         # NEW: TomoInstance, ConnectionError
 │   ├── docker/                              # NEW: Docker boundary (port + adapter)
-│   │   ├── DockerClient.ts                  # NEW: port interface (for test substitution); AttachSession contract
-│   │   └── DockerodeAdapter.ts              # NEW: real impl using dockerode; TTY demux detection
+│   │   └── docker.ts                        # NEW: thin dockerode wrapper used by TomoConnection (no port); exports listTomoInstances, attach, inspect helpers and the AttachSession type. Unit tests use vi.mock('dockerode').
 │   ├── ui/
 │   │   ├── chat-view/
 │   │   │   ├── TomoChatView.ts              # NEW: Obsidian ItemView subclass; builds DOM in onOpen; owns xterm.js instance; subscribes to connectionStore
@@ -365,14 +305,14 @@ graph TB
 │   │   ├── status-bar/
 │   │   │   ├── StatusBarIcon.ts             # NEW: registers status bar item; renders Tomo-kanji icon + hover tooltip; opens popover on click; subscribes to connectionStore
 │   │   │   └── openPopover.ts               # NEW: builds Obsidian `Menu` with 3 actions
-│   │   └── settings/
-│   │       ├── SettingsTab.ts               # MODIFY: Connect/Disconnect UI built directly in display() with Obsidian `Setting` API; subscribes to connectionStore for live state
-│   │       └── InstancePickerModal.ts       # NEW: Obsidian `Modal` subclass listing candidates (name + uptime rows); resolves on selection
+│   ├── settings/                              # NOTE: outside src/ui/ — matches the existing repo path src/settings/ used by spec 002
+│   │   ├── SettingsTab.ts                   # MODIFY: Connect/Disconnect UI built directly in display() with Obsidian `Setting` API; subscribes to connectionStore for live state
+│   │   └── InstancePickerModal.ts           # NEW: Obsidian `Modal` subclass listing candidates (name + uptime rows); resolves on selection
 │   ├── commands/
 │   │   ├── registerCommands.ts              # NEW: addCommand() for 3 Hashi commands + dynamic relabel of Reconnect (removeCommand/addCommand on state change)
 │   │   └── fileMenu.ts                      # NEW: registerEvent('file-menu') → inject @file action
 │   └── util/
-│       ├── store.ts                         # NEW: `Store<T>` and `derived<T,U>` — ~30 LOC typed observable helper
+│       ├── store.ts                         # NEW: `Store<T>` — ~20 LOC typed observable helper (no `derived` — dropped from v0.1)
 │       ├── time.ts                          # NEW: formatUptime(startedAt) → "3 min ago"
 │       └── logger.ts                        # NEW: thin console.debug wrapper tagged with [miyo-tomo-hashi]
 ├── test/
@@ -426,10 +366,9 @@ export type ConnectionError =
   | { code: "daemon-unreachable"; detail: string }
   | { code: "socket-permission-denied"; detail: string }
   | { code: "no-instances"; detail: "No Tomo instance seems to be running — start one and try again." }
-  | { code: "chosen-instance-gone"; containerId: string; detail: string }
-  | { code: "stream-error"; detail: string }
-  | { code: "picker-cancelled" }                        // user dismissed picker
-  | { code: "reconnect-exhausted"; attempts: number };
+  | { code: "attach-failed"; detail: string };  // covers chosen-instance-gone, stream-error, reconnect-exhausted
+
+// Note: picker cancel is NOT an error — `openPicker()` resolves to `null` instead.
 
 // src/types/index.ts (extended)
 export interface PluginSettings {
@@ -438,32 +377,30 @@ export interface PluginSettings {
 export const DEFAULT_SETTINGS: PluginSettings = { chosenInstanceId: null };
 ```
 
-#### Docker Client Port (port/adapter pattern)
+#### Docker Helpers (no port — use dockerode directly)
 
 ```typescript
-// src/docker/DockerClient.ts (port)
-export interface DockerClient {
-  listTomoInstances(): Promise<TomoInstance[]>;
-  attach(containerId: string): Promise<AttachSession>;
-  inspect(containerId: string): Promise<TomoInstance | null>;  // null if not found
-}
-
+// src/connection/docker.ts
+// Thin wrapper around dockerode used directly by TomoConnection.
+// No interface, no adapter, no fake — unit tests use vi.mock('dockerode')
+// to script the small handful of methods we touch (listContainers, getContainer,
+// container.inspect, container.attach). Live tests exercise the real daemon
+// (team standard: no Docker mocks in integration tests; the small mocked surface
+// for unit tests is acceptable per ADR-5 v2 trade-off).
 export interface AttachSession {
-  readonly stdout: NodeJS.ReadableStream;   // demuxed text stream (dockerode handles TTY frame demux when TTY=true)
+  readonly stdout: NodeJS.ReadableStream;
   readonly stdin: NodeJS.WritableStream;
-  close(): Promise<void>;                   // graceful half-close
+  close(): Promise<void>;
   onClose(cb: (reason: "user" | "remote" | "error") => void): void;
 }
 ```
-
-**Why a port**: unit tests inject a `FakeDockerClient` that returns scripted results; live tests exercise the real `DockerodeAdapter` against a real daemon (team standard: no Docker mocks in integration tests). Keeps the state machine testable without spinning up containers.
 
 #### TomoConnection Service Surface
 
 ```typescript
 // src/connection/TomoConnection.ts
 export class TomoConnection {
-  constructor(private client: DockerClient, private settings: PluginSettings);
+  constructor(private settings: PluginSettings);  // imports dockerode helpers directly from "./docker"
 
   // State access
   get state(): ConnectionState;                // current snapshot
@@ -516,38 +453,27 @@ export class Store<T> implements Readable<T> {
   }
 }
 
-export function derived<T, U>(source: Readable<T>, fn: (value: T) => U): Readable<U> {
-  const d = new Store(fn(source.get()));
-  source.subscribe((v) => d.set(fn(v)));
-  return d;
-}
 ```
 
 ```typescript
 // src/connection/connectionStore.ts
-import { Store, derived, type Readable } from "util/store";
+import { Store } from "util/store";
 import type { ConnectionState } from "./state";
 
-// Singleton, created once at module load; written to only by TomoConnection.
-// Re-export as Readable<ConnectionState> to signal intended read-only consumption.
-const internalStore = new Store<ConnectionState>({ kind: "disconnected" });
-export const connectionStore: Readable<ConnectionState> = internalStore;
+// Singleton store. TomoConnection (the only writer) imports this directly and
+// calls .set(); UI surfaces import it and call .subscribe(). No read/write split,
+// no derived helper — derived values are computed inline by subscribers when needed.
+export const connectionStore = new Store<ConnectionState>({ kind: "disconnected" });
 
-// TomoConnection imports this write handle directly; no other module should.
-export const connectionStoreWrite: { set: (state: ConnectionState) => void } = {
-  set: (s) => internalStore.set(s),
-};
-
-// Derived slices — each UI surface reads the narrowest one it needs
-export const kind: Readable<ConnectionState["kind"]> = derived(connectionStore, (s) => s.kind);
-export const displayInstanceName: Readable<string | null> = derived(connectionStore, (s) => {
-  if (s.kind === "connected") return s.instance.name ?? s.instance.shortId;
-  if (s.kind === "reconnecting" || s.kind === "attaching") return s.target.name ?? s.target.shortId;
+// Inline helpers (plain functions, no store wrapping):
+export function displayInstanceName(state: ConnectionState): string | null {
+  if (state.kind === "connected") return state.instance.name ?? state.instance.shortId;
+  if (state.kind === "reconnecting" || state.kind === "attaching") return state.target.name ?? state.target.shortId;
   return null;
-});
+}
 ```
 
-**Write discipline**: `connectionStore` is exported as `Readable<T>` (no `set`). The write handle (`connectionStoreWrite`) is a separate named export intended only for `TomoConnection`. This is still a convention (anyone can import the write handle) but the naming makes misuse obvious in code review. The alternative of a fully-sealed store with a closure-scoped writer adds ceremony without meaningful safety gain at this project size.
+**Write discipline**: `connectionStore` exposes `set` directly. The "only `TomoConnection` writes" rule is enforced by code review, not type-level ceremony — the project is small enough that a `Store<T>` + naming convention beats a sealed-writer abstraction. `derived<T,U>` was considered and dropped: the two derived slices (`kind`, `displayInstanceName`) are plain functions called inside subscribers, no need for a second-order observable.
 
 **Subscribe-fires-immediately** matches how Obsidian consumers expect state: a subscriber that registers mid-session should render the current state instantly, not wait for the next change. It also aligns with `plugin.register(unsubscribe)` — the unsubscribe is returned directly and teardown is automatic on plugin unload.
 
@@ -563,7 +489,7 @@ No vault file writes. No new Obsidian settings beyond `chosenInstanceId`.
 
 #### Internal API Changes
 
-Not applicable — no HTTP/RPC endpoints; all integration is in-process function calls through `TomoConnection` and Svelte stores.
+Not applicable — no HTTP/RPC endpoints; all integration is in-process function calls through `TomoConnection` and the typed `Store<T>` helper (per ADR-3 plain TS + ADR-4 custom store).
 
 #### Integration Points
 
@@ -639,30 +565,7 @@ export class ReconnectLoop {
 }
 ```
 
-**Traced walkthrough** (reconnect succeeds on attempt 3):
-- t=0 ms: `run()` called. `onAttempt(1, 500)` fires. `wait(500)`.
-- t=500 ms: `attempt(1)` → Docker rejects (stream not yet up). Returns `false`. Loop continues.
-- t=500 ms: `onAttempt(2, 1000)`. `wait(1000)`.
-- t=1500 ms: `attempt(2)` → `false`.
-- t=1500 ms: `onAttempt(3, 2000)`. `wait(2000)`.
-- t=3500 ms: `attempt(3)` → `true`. Return `"success"`. No further attempts.
-
-**Traced walkthrough** (user cancels during backoff):
-- t=0 ms: `run()` called. `onAttempt(1, 500)`. `wait(500)`.
-- t=200 ms: user clicks Disconnect. `cancel()` fires. `clearTimeout`. `cancelled = true`.
-- t=200 ms: the `wait(500)` promise never resolves (we cleared the timer before it fired). Wait — that's a resource leak. Fix: `cancel()` must also resolve the pending `wait()`. Adjusted implementation:
-
-```typescript
-private wait(ms: number): Promise<void> {
-  return new Promise(resolve => {
-    this.currentTimer = setTimeout(() => { this.currentTimer = null; resolve(); }, ms);
-    // cancel() sets cancelled=true and the next check at loop head bails out.
-    // To resolve the pending wait immediately on cancel, store `resolve` and call it in cancel().
-  });
-}
-```
-
-This trace caught a real bug in the first sketch. The final implementation stores `resolve` and calls it from `cancel()` so the loop head check runs immediately. Tests must cover this explicitly.
+**Implementation gotcha**: `cancel()` must also resolve the pending `wait()` so the loop head's cancellation check runs immediately — store the `resolve` function and call it from `cancel()`. Without this, a Disconnect during backoff leaves the wait promise unresolved (resource leak). Tests must cover the cancel-during-wait case explicitly.
 
 **Edge cases**:
 - Cancel fires after `attempt()` resolves but before the loop iterates — the `cancelled` check at loop head covers this.
@@ -707,9 +610,9 @@ export function registerReconnectCommand(plugin: Plugin, onInvoke: () => Promise
 ```mermaid
 sequenceDiagram
     actor User
-    participant S as SettingsPane.svelte
+    participant S as SettingsTab
     participant C as TomoConnection
-    participant D as DockerClient (dockerode)
+    participant D as dockerode
     participant Docker
 
     User->>S: Click Connect
@@ -736,8 +639,8 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor User
-    participant V as ChatView.svelte
-    participant T as Terminal.svelte (xterm)
+    participant V as TomoChatView
+    participant T as terminalHost (xterm)
     participant C as TomoConnection
     participant Docker
 
@@ -756,7 +659,7 @@ sequenceDiagram
 sequenceDiagram
     participant C as TomoConnection
     participant R as ReconnectLoop
-    participant D as DockerClient
+    participant D as dockerode
     participant Store as connectionStore
 
     Note over C: state=connected; stream error event
@@ -777,9 +680,9 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor User
-    participant V as ChatView.svelte
+    participant V as TomoChatView
     participant C as TomoConnection
-    participant D as DockerClient
+    participant D as dockerode
 
     Note over C: state=disconnected (after exhausted reconnect)
     User->>V: Click Force Reconnect
@@ -840,7 +743,7 @@ Plugin disable via Obsidian Settings → Community Plugins is sufficient. No mig
 ```yaml
 - pattern: "Ports & Adapters (Hexagonal)"
   relevance: HIGH
-  why: "DockerClient port + DockerodeAdapter adapter; keeps the state machine testable without Docker"
+  why: "Thin dockerode helpers in src/connection/docker.ts — no port; vi.mock('dockerode') at the test boundary keeps the state machine unit-testable without spinning up containers"
 
 - pattern: "Single source of truth with subscribe/teardown"
   relevance: HIGH
@@ -918,20 +821,17 @@ stateDiagram-v2
 
 ### System-Wide Patterns
 
-- **Security**: Docker socket access relies on OS-level file permissions. No credentials stored. Container output rendered as terminal text — no HTML, no URI activation. Chat input is opaque bytes from the user — sent to stdin as-is (claude interprets it).
+- **Security**: Hashi v0.1 is local-only and outbound-only — no inbound surface, no remote endpoint resolution. Trust derives from (a) OS file permissions on the Docker socket, (b) the user explicitly choosing the container in the Settings picker, and (c) `DockerodeAdapter` pinning the connection to the platform-default local socket (no `DOCKER_HOST`/`DOCKER_CONTEXT` follow). No credentials are stored. Container output is rendered through xterm.js as terminal text; the renderer is configured with `allowProposedApi: false`, hyperlink handling disabled (no OSC 8 link activation), and OSC 52 clipboard writes ignored — bytes from the container can never trigger a clipboard write or open a URI without explicit user copy/paste. Chat input is opaque bytes from the user — sent to stdin as-is (claude interprets it). Cryptographic identity controls (image-digest pinning, vault↔container fingerprinting, preview-to-execute hash-pinning) are explicitly out of scope per PRD Won't Have — the user has no out-of-band reference value to verify against, so such controls would be ceremony, not protection.
 - **Error Handling**: One `ConnectionError` discriminated union normalizes all error sources. Surface selection (banner vs Notice vs Settings inline) is the UI layer's job; `TomoConnection` just publishes state.
 - **Performance**: Discovery is on-demand only. No polling. Stream reads flow through xterm.js directly — no per-byte allocation in our code. Reconnect backoff bounded at ~15.5 s; cancellable.
-- **Logging**: `logger.ts` wraps `console.debug` tagged `[miyo-tomo-hashi]`. Logs state transitions and connection-error categories. No chat content is logged. Log level is compile-time fixed to `debug` in v0.1 (no setting).
-
-### Multi-Component Patterns
-Not applicable — single-component plugin. No RPC, no message queues, no inter-process coordination.
+- **Logging**: `logger.ts` wraps `console.debug` tagged `[miyo-tomo-hashi]`. Logs state transitions and connection-error categories. **No chat content is logged.** Enforced by a grep-based assertion in tests: no `logger.*(chunk|data|stdout|stderr` call is permitted in `src/connection/**` or `src/ui/chat-view/**`. Log level is compile-time fixed to `debug` in v0.1 (no setting).
 
 ## Architecture Decisions
 
 - [x] **ADR-1 Docker client library — dockerode**
   - Choice: Use [`dockerode`](https://github.com/apocas/dockerode) as the Docker client.
   - Rationale: Battle-tested, MIT, handles Unix socket on macOS/Linux and named pipe on Windows, correct attach stream hijack + demuxing.
-  - Trade-offs: +~80 KB bundled; one runtime dep; tightly bound to its API shape (wrapped behind the `DockerClient` port to keep the rest of the code substitutable).
+  - Trade-offs: +~80 KB bundled; one runtime dep; tightly bound to its API shape. Unit tests are coupled to dockerode's call shape via `vi.mock('dockerode')` (per ADR-5 v2), which is acceptable for a stable-API library where we touch ~5 methods.
   - User confirmed: **YES** (brainstorm 2026-04-24).
 
 - [x] **ADR-2 Attach mechanism — `docker attach` to PID 1 with xterm.js**
@@ -947,18 +847,17 @@ Not applicable — single-component plugin. No RPC, no message queues, no inter-
   - Supersedes: ADR-3 prior revision (Svelte), recorded in brainstorm round 2026-04-24; revised same day after pros/cons review.
   - User confirmed: **YES** (2026-04-24, ADR batch round).
 
-- [x] **ADR-4 State store — Custom typed `Store<T>` helper** (revised 2026-04-24)
-  - Choice: A ~30-LOC `Store<T>` helper in `src/util/store.ts`, with `get()`, `set()`, `subscribe()` returning unsubscribe, plus a `derived<T,U>` function for computed slices. `connectionStore` exported as `Readable<ConnectionState>` (no `set`); a separate `connectionStoreWrite` handle is imported only by `TomoConnection`.
-  - Rationale: Identical consumption ergonomics as Svelte stores (`subscribe` returns unsubscribe; fires immediately). Zero deps. Consistent with ADR-3's no-framework stance. Typed, testable in isolation, inspectable in the debugger.
-  - Trade-offs: Write-discipline enforced by naming (`connectionStoreWrite`), not type-system. Alternative of a closure-sealed writer adds ceremony. RxJS would be more expressive for time-based pipelines but we don't need them.
-  - Supersedes: ADR-4 prior revision (Svelte writable store), recorded in brainstorm round 2026-04-24; revised same day.
-  - User confirmed: **YES** (2026-04-24, ADR batch round).
+- [x] **ADR-4 State store — Custom typed `Store<T>` helper** (revised 2026-04-25)
+  - Choice: A ~20-LOC `Store<T>` class in `src/util/store.ts` with `get()`, `set()`, `subscribe()` returning unsubscribe. No `derived<T,U>` helper, no read/write split, no `connectionStoreWrite`. The two derived slices (`kind`, `displayInstanceName`) are plain functions called by subscribers when they need them.
+  - Rationale: Identical consumption ergonomics as Svelte stores (`subscribe` returns unsubscribe; fires immediately). Zero deps. Consistent with ADR-3's no-framework stance. The "only TomoConnection writes" rule is enforced by code review, not type-level ceremony — the project is too small to warrant a sealed-writer abstraction. `derived` would be ~10 LOC for two call sites that are clearer as plain functions.
+  - Trade-offs: A misuse (UI surface calling `connectionStore.set`) would compile; caught by code review and the focused unit-test contract for `TomoConnection`.
+  - Supersedes: ADR-4 prior revisions (Svelte writable store on 2026-04-24; typed Store<T> + derived + connectionStoreWrite on 2026-04-24). Both reduced to a single `Store<T>` on 2026-04-25 after simplification review.
 
-- [x] **ADR-5 Layer boundary — Ports & adapters at the Docker edge**
-  - Choice: Define `DockerClient` as a TypeScript interface (port). `DockerodeAdapter` implements it. Unit tests inject a fake; live tests use the real adapter.
-  - Rationale: Keeps `TomoConnection` state machine testable without spinning up containers. Honors the "no mocks for the Docker boundary in integration tests" feedback memory by ensuring the *port* never leaks to integration tests — live tests use the adapter directly.
-  - Trade-offs: Extra file (interface + adapter). Slight boilerplate around each Docker call. Saves significant test-runtime when exercising state transitions.
-  - User confirmed: **YES** (2026-04-24, ADR batch round).
+- [x] **ADR-5 Docker boundary — Use dockerode directly; no port** (revised 2026-04-25)
+  - Choice: `TomoConnection` imports and calls `dockerode` directly (`new Dockerode({socketPath})`, `docker.listContainers`, `container.attach`, etc.). No `DockerClient` interface, no `DockerodeAdapter`, no `FakeDockerClient`. Unit tests use `vi.mock('dockerode')` to script the small handful of methods we touch; live tests exercise the real daemon (team standard preserved — no Docker mocks in integration tests).
+  - Rationale: dockerode has exactly one production implementation; a port adds files and indirection for a substitution that never happens. The state machine is just as testable with a Vitest module mock as with a hand-rolled fake. Unit tests target ~5 dockerode methods.
+  - Trade-offs: `vi.mock('dockerode')` couples unit tests to dockerode's call shape — refactors to dockerode's API would touch tests. Acceptable: dockerode's API is stable and we touch a tiny slice of it. The original port-and-adapter version (committed earlier) was reversed before any code shipped.
+  - Supersedes: prior ADR-5 (DockerClient port + DockerodeAdapter + FakeDockerClient).
 
 - [x] **ADR-6 Singleton view management — `getLeavesOfType` + `setViewState`**
   - Choice: The chat view registers a view type (`VIEW_TYPE_TOMO_CHAT`). When invoking "Show chat window", first check `app.workspace.getLeavesOfType(VIEW_TYPE)`; if present, `app.workspace.setActiveLeaf(existing)`; if absent, `app.workspace.getRightLeaf(false).setViewState({ type: VIEW_TYPE, active: true })`. On plugin unload, detach leaves of this type.
@@ -985,7 +884,7 @@ Not applicable — single-component plugin. No RPC, no message queues, no inter-
   - User confirmed: **YES** (2026-04-24, ADR batch round).
 
 - [x] **ADR-10 Test split — vitest unit + vitest live**
-  - Choice: Unit tests (`test/unit/**/*.test.ts`) use the default `vitest.config.ts` (jsdom, obsidian mock, `FakeDockerClient`). Live tests (`test/live/**/*.live.test.ts`) use `vitest.live.config.ts` (node env, real Docker, 90 s timeouts). `npm test` runs unit only; `npm run test:live` runs live. CI runs both on PR.
+  - Choice: Unit tests (`test/unit/**/*.test.ts`) use the default `vitest.config.ts` (jsdom, obsidian mock, `vi.mock('dockerode')` per ADR-5 v2). Live tests (`test/live/**/*.live.test.ts`) use `vitest.live.config.ts` (node env, real Docker, 90 s timeouts). `npm test` runs unit only; `npm run test:live` runs live. CI runs both on PR.
   - Rationale: Fast feedback loop for logic; real-integration signal where it matters (Docker). Honors team feedback memory on real-Docker integration testing.
   - Trade-offs: Live tests require Docker on the CI runner. Developers without Docker run `npm test` only and rely on CI for live coverage. Live tests may flake if a container takes >90 s to start — we use `alpine:latest cat` as a lightweight stand-in that starts instantly.
   - User confirmed: **YES** (2026-04-24, ADR batch round).
@@ -1013,73 +912,6 @@ Not applicable — single-component plugin. No RPC, no message queues, no inter-
   - Unsubscribe hygiene: every `subscribe()` call registered via `plugin.register()` so teardown is automatic on unload.
   - Idempotent lifecycle: calling `connect()` while already connected is a no-op; calling `disconnect()` while disconnected is a no-op.
 
-## Acceptance Criteria
-
-Traces each PRD acceptance criterion to an EARS-format system-level requirement. IDs prefix with spec ID for traceability.
-
-**F1 Settings Connect (PRD/F1):**
-- [ ] WHEN the user clicks Connect in Settings AND one or more containers match label `miyo.component=tomo`, THE SYSTEM SHALL open a picker populated with `TomoInstance[]` sorted by `startedAt` descending.
-- [ ] WHEN the user clicks Connect AND no containers match, THE SYSTEM SHALL show an empty-state picker message "No Tomo instance seems to be running — start one and try again".
-- [ ] WHEN the user clicks Connect AND the Docker daemon is unreachable, THE SYSTEM SHALL display error code `daemon-unreachable` with message "Docker daemon not reachable" inline in Settings.
-- [ ] WHEN the user clicks Connect AND the Docker socket returns EACCES, THE SYSTEM SHALL display error code `socket-permission-denied` with a Linux-aware remediation message.
-- [ ] WHILE Settings is the trigger surface, THE SYSTEM SHALL be the only surface that opens the picker.
-
-**F2 Settings Disconnect (PRD/F2):**
-- [ ] WHEN the user clicks Disconnect AND the state is `connected` or `reconnecting`, THE SYSTEM SHALL close the Docker attach stream and transition to `disconnected`.
-- [ ] WHILE the state is `disconnected`, THE SYSTEM SHALL NOT display the Disconnect control.
-
-**F3 Status bar icon (PRD/F3):**
-- [ ] THE SYSTEM SHALL render exactly one status bar icon (Tomo kanji 友 preferred; fallback to a generic glyph).
-- [ ] THE SYSTEM SHALL distinguish Connected / Reconnecting / Disconnected via icon shape or indicator element, never color alone.
-- [ ] WHEN the user hovers the icon, THE SYSTEM SHALL display instance name (Connected), "Reconnecting…" (Reconnecting), or "Tomo: disconnected" (Disconnected).
-- [ ] WHEN the user clicks the icon, THE SYSTEM SHALL open a Menu popover with three actions: Force Reconnect, Open Chat Window, Go to Settings.
-- [ ] IF `chosenInstanceId` is null, THEN THE SYSTEM SHALL disable the Force Reconnect action in the popover with an explanatory tooltip.
-
-**F4 Chat view (PRD/F4):**
-- [ ] THE SYSTEM SHALL register exactly one view type (`VIEW_TYPE_TOMO_CHAT`).
-- [ ] WHEN "Show chat window" is invoked AND a view of that type exists, THE SYSTEM SHALL focus the existing leaf.
-- [ ] WHEN the chat view opens AND state is `connected`, THE SYSTEM SHALL enable and focus the chat input.
-- [ ] WHILE state is not `connected`, THE SYSTEM SHALL disable the chat input.
-- [ ] WHEN the user submits a message AND state is `connected`, THE SYSTEM SHALL write the message to the container's stdin.
-- [ ] THE SYSTEM SHALL render container stdout/stderr through xterm.js only — no HTML rendering, no URI activation.
-
-**F5 Chat view status + Force Reconnect (PRD/F5):**
-- [ ] WHEN the connection state changes, THE SYSTEM SHALL update the in-view status indicator within one frame of the store update.
-- [ ] WHEN the user clicks Force Reconnect AND the chosen instance exists, THE SYSTEM SHALL close any existing stream and re-attach.
-- [ ] IF the chosen instance does not exist at Force Reconnect time, THEN THE SYSTEM SHALL stay in `disconnected` with error code `chosen-instance-gone` and SHALL NOT open the picker.
-
-**F6 Reconnect command (PRD/F6):**
-- [ ] WHEN an instance name is known, THE SYSTEM SHALL list the command as "Tomo Hashi: Reconnect to `<instance-name>`".
-- [ ] WHEN no instance name is known, THE SYSTEM SHALL list the command as "Tomo Hashi: Reconnect to Tomo".
-- [ ] WHEN the command is invoked AND state is `connected` or `reconnecting`, THE SYSTEM SHALL perform a Force Reconnect (identical semantics to F5).
-- [ ] WHEN invoked AND state is `disconnected` AND `chosenInstanceId` is non-null, THE SYSTEM SHALL attempt reconnection to that instance.
-- [ ] WHEN invoked AND `chosenInstanceId` is null, THE SYSTEM SHALL surface a Notice "No Tomo instance chosen — open Settings → Connect." and SHALL NOT open the picker.
-
-**F7 Show chat window command (PRD/F7):**
-- [ ] THE SYSTEM SHALL list "Tomo Hashi: Show chat window" at all times.
-- [ ] WHEN invoked AND no leaf of type `VIEW_TYPE_TOMO_CHAT` exists, THE SYSTEM SHALL create one in the right sidebar.
-- [ ] WHEN invoked AND a leaf exists, THE SYSTEM SHALL focus that leaf.
-
-**F8 Automatic reconnect (PRD/F8):**
-- [ ] WHEN the stream emits an error or closes unexpectedly WHILE state is `connected`, THE SYSTEM SHALL transition to `reconnecting(attempt=1)` and begin the backoff schedule `[500, 1000, 2000, 4000, 8000]` ms.
-- [ ] WHEN a reconnect attempt succeeds, THE SYSTEM SHALL transition back to `connected` and clear any banner.
-- [ ] WHEN all 5 attempts fail, THE SYSTEM SHALL transition to `disconnected` with error code `reconnect-exhausted` and SHALL NOT retry automatically.
-
-**F9 Error surfacing (PRD/F9):**
-- [ ] WHEN an error fires AND the chat view is open, THE SYSTEM SHALL surface it in the in-view banner.
-- [ ] WHEN an error fires AND the invocation came from Settings, THE SYSTEM SHALL surface it inline in Settings AND update the status bar icon.
-- [ ] WHEN an error fires AND the chat view is closed AND the source is palette, THE SYSTEM SHALL surface it via `Notice`.
-- [ ] THE SYSTEM SHALL distinguish error codes: `daemon-unreachable`, `socket-permission-denied`, `no-instances`, `chosen-instance-gone`, `stream-error`, `reconnect-exhausted`.
-
-**FS1 File right-click (PRD/FS1):**
-- [ ] WHEN the user right-clicks any file in the file explorer, THE SYSTEM SHALL add a "Open Tomo chat with @file reference" menu item.
-- [ ] WHEN the user invokes the item AND the chat view is open, THE SYSTEM SHALL insert `@<vault-relative-path> ` at the current chat input caret position and focus the input.
-- [ ] WHEN the user invokes the item AND the chat view is closed, THE SYSTEM SHALL open the chat view and set the chat input value to `@<vault-relative-path> ` before focusing it.
-
-**FS2 Remember last instance (PRD/FS2):**
-- [ ] WHEN a connect succeeds, THE SYSTEM SHALL persist the container ID to `PluginSettings.chosenInstanceId` via `saveData`.
-- [ ] WHEN the plugin loads AND `chosenInstanceId` is non-null, THE SYSTEM SHALL attempt to `inspect` that container; if present, auto-reconnect via the normal backoff; if absent, stay `disconnected` with error code `chosen-instance-gone` and SHALL NOT open the picker.
-
 ## Risks and Technical Debt
 
 ### Known Technical Issues
@@ -1088,7 +920,7 @@ Traces each PRD acceptance criterion to an EARS-format system-level requirement.
 - xterm.js deps + CSS loader addition to `esbuild.config.mjs` need validation — first phase of the plan should validate the build with a tiny xterm-hosting DOM element before building the full chat view. (No framework preprocessor to integrate — the plain-TS approach keeps this cheap.)
 
 ### Technical Debt
-- `Store<T>` write-discipline is enforced by naming (`connectionStoreWrite` separate export), not by the type system. If the plugin grows, consider a fully-sealed store where the writer lives inside a closure and only the `TomoConnection` constructor receives it. Tolerable at current size.
+- `Store<T>` write-discipline is enforced by code review, not by the type system (per ADR-4 v3 — the previous `connectionStoreWrite` separate export was dropped because at this project size, naming + review beats sealed-writer ceremony). If the plugin grows, consider revisiting.
 - CSS class names use a `hashi-` prefix convention to prevent leakage (no scoped CSS in plain-TS approach). This is a code review discipline; a regression would only show up as visual theming issues, not functional failures.
 - xterm.js theme is populated once from Obsidian CSS variables at view creation; if the user switches Obsidian theme while the chat is open, colors will be stale until the view is reopened. Noted; fix is post-v0.1.
 
@@ -1103,33 +935,4 @@ Traces each PRD acceptance criterion to an EARS-format system-level requirement.
 
 ## Glossary
 
-### Domain Terms
-
-| Term | Definition | Context |
-|------|------------|---------|
-| Tomo | The Claude Code CLI running in a Docker container. The "live AI" endpoint Hashi talks to. | Spec 001 connects to a Tomo container; spec 002 consumes its file output offline. |
-| Tomo instance | A single running Docker container labeled `miyo.component=tomo`. | Discovery returns a list of these; the user picks one. |
-| Hashi | miyo-tomo-hashi, the Obsidian plugin. | This repo. |
-| Chosen instance | The Tomo instance the user most recently connected to (persisted as `chosenInstanceId`). | Used by Force Reconnect and auto-reconnect on launch. |
-| Instance name | Human-readable name exposed as label `miyo.tomo.instance-name`. | Shown in picker rows, status bar tooltip, command palette label. |
-| Session | In Tomo, the Claude Code process state inside one container. Hashi does not create, identify, or persist session IDs — it attaches to whatever stdio the container exposes. | v0.1: one session per container, container-life-bound. |
-
-### Technical Terms
-
-| Term | Definition | Context |
-|------|------------|---------|
-| Attach stream hijack | Docker's attach endpoint upgrades the HTTP connection to a raw bidirectional byte stream. | dockerode handles this transparently. |
-| TTY demuxing | When a container was not started with `-t`, Docker interleaves stdout and stderr as framed packets with an 8-byte header. | Our adapter detects TTY mode via `inspect` and uses `modem.demuxStream()` when needed. |
-| Port & adapter | Architectural pattern where the core (`TomoConnection`) depends on an interface (`DockerClient`) rather than a concrete implementation. | Enables testing without Docker. |
-| Writable store | Svelte primitive that holds a value and notifies subscribers on change. | `connectionStore` is the one such store in 001. |
-| Singleton view | An Obsidian view for which at most one leaf exists at any time. | `VIEW_TYPE_TOMO_CHAT` is enforced singleton via `getLeavesOfType`. |
-
-### API/Interface Terms
-
-| Term | Definition | Context |
-|------|------------|---------|
-| `VIEW_TYPE_TOMO_CHAT` | String constant identifying the chat view. | Used in `registerView()`, `getLeavesOfType()`, `setViewState()`. |
-| `EACCES` | POSIX error: permission denied when opening a file or socket. | Mapped to error code `socket-permission-denied`. |
-| `ECONNREFUSED` / `ENOENT` | POSIX errors when no process is listening on the socket path. | Both mapped to error code `daemon-unreachable`. |
-| `ItemView` | Obsidian base class for pane-placeable custom views. | `TomoChatView extends ItemView`. |
-| `Menu` | Obsidian utility class for context/popover menus. | Used for the status bar popover. |
+Terms used throughout this SDD are defined inline at first mention. The PRD glossary at `requirements.md` covers user-facing domain terms (`Tomo`, `instance name`, `chosen instance`).

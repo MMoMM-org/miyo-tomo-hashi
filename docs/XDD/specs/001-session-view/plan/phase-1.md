@@ -64,8 +64,7 @@ This phase establishes build foundations, shared types, the state-store primitiv
      - `subscribe(fn)` fires on every `set(next)` where `!Object.is(prev, next)`
      - `subscribe(fn)` does NOT fire when `Object.is(prev, next)` is true (identity-dedup)
      - `subscribe` return value unsubscribes; subsequent sets don't call the disposed listener
-     - `derived(source, fn)` produces a read-only store whose value is `fn(source.get())` and updates on source changes
-  3. Implement: Create `src/util/store.ts` with `Readable<T>`, `Store<T>` class, and `derived<T,U>` function per SDD code sketch.
+  3. Implement: Create `src/util/store.ts` with the `Store<T>` class only (no `derived<T,U>`, no separate `Readable<T>` interface — both dropped in 2026-04-25 simplification per ADR-4 v3). Subscribers compute derived values inline.
   4. Validate: All store.test.ts cases pass; types compile; no `any`.
   5. Success:
      - [ ] All store behaviors verified via unit tests `[ref: SDD/ADR-4]`

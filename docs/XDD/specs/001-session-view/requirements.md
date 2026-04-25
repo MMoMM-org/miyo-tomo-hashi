@@ -6,57 +6,7 @@ version: "2.1"
 
 # Product Requirements Document
 
-## Validation Checklist
-
-### CRITICAL GATES (Must Pass)
-
-- [x] All required sections are complete
-- [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Problem statement is specific and measurable
-- [x] Every feature has testable acceptance criteria (Gherkin format)
-- [x] No contradictions between sections
-
-### QUALITY CHECKS (Should Pass)
-
-- [x] Problem is validated by evidence (architecture-06 v0.1 scope; ADR-009 charter; brainstorm pivot 2026-04-24 captured in README Decisions Log)
-- [x] Context → Problem → Solution flow makes sense
-- [x] Every persona has at least one user journey
-- [x] All MoSCoW categories addressed (Must/Should/Could/Won't)
-- [x] Every metric has corresponding tracking/verification path
-- [x] No feature redundancy
-- [x] No technical implementation details included
-- [x] A new team member could understand this PRD
-
----
-
-## Output Schema
-
-### PRD Status Report
-
-| Field | Value |
-|-------|-------|
-| specId | 001-session-view |
-| title | Tomo Connection & Chat Window — Hashi's live-Tomo surface |
-| status | DRAFT |
-| clarificationsRemaining | 0 |
-| acceptanceCriteria | 35 |
-
-### Section Status
-
-| Section | Status | Detail |
-|---------|--------|--------|
-| Product Overview | COMPLETE | Rewritten after brainstorm pivot — chat is one of Hashi's two features, not the integration hub |
-| User Personas | COMPLETE | Single v0.1 persona unchanged |
-| User Journey Maps | COMPLETE | Connect → Chat primary; Reconnect after disconnect secondary; `@file` reference tertiary |
-| Feature Requirements | COMPLETE | 9 Must-Have, 2 Should-Have, 0 Could-Have for chat surface |
-| Detailed Feature Specifications | COMPLETE | Connection lifecycle as the core complex feature |
-| Success Metrics | COMPLETE | Acceptance-test coverage + v0.1 release gate |
-| Constraints and Assumptions | COMPLETE | Manifest `isDesktopOnly: false` drift flagged; Tomo handoff (instance-name label) noted |
-| Risks and Mitigations | COMPLETE | 4 risks centered on Docker environment and connection lifecycle |
-| Open Questions | COMPLETE | Empty — all prior questions resolved in brainstorm rounds |
-| Supporting Research | COMPLETE | Three-perspective briefs referenced; brainstorm pivot documented |
-
----
+> **AC count gate**: `grep -c '^  - \[ \]' requirements.md` is the canonical AC total. Plan T5.4 reads it at run time. Last counted: 61 ACs (2026-04-25).
 
 ## Product Overview
 
@@ -122,13 +72,17 @@ None in v0.1. Multi-user, remote Tomo, and mobile users are out of scope for v0.
   - [ ] Given the Docker socket returns permission denied (Linux, user not in `docker` group), When I click Connect, Then the Settings pane shows a named error "Docker socket permission denied" distinct from "Docker daemon not reachable".
   - [ ] Given a container labeled `miyo.component=tomo` is missing an instance-name label, When listed in the picker, Then the row shows the short container ID as a fallback label and uptime, and a small warning icon noting the instance name is not set.
   - [ ] **Settings is the only surface that opens the picker.** Force Reconnect and automatic reconnect never open the picker; they re-attach to the currently chosen instance or stay Disconnected with an error.
+  - [ ] **Docker connection target is pinned to the platform-default local socket / named pipe.** The plugin SHALL NOT honor `DOCKER_HOST`, `DOCKER_CONTEXT`, or Docker config context files (`~/.docker/config.json`); if the platform-default socket is unreachable, the named error is "Docker daemon not reachable" — there is no fallback to TCP. Rationale: env-driven redirection of "local" connections is a real bug-defense (a stale `DOCKER_HOST=tcp://…` in a shell profile would otherwise silently route Hashi to a remote daemon).
+  - [ ] **Multi-Tomo edge case — duplicate instance-name labels.** Given two or more containers share the same `miyo.tomo.instance-name`, When the picker opens, Then both rows are rendered, disambiguated by appending the short container ID in parentheses to the displayed name (e.g., `my-tomo (a1b2c3d4)` / `my-tomo (e5f6g7h8)`).
+  - [ ] **Multi-Tomo edge case — many containers.** Given more than twenty matching containers (rare but possible on dev machines), When the picker opens, Then it remains keyboard-navigable (scroll within the modal, Enter selects the focused row); no hard cap is enforced and no truncation is applied — the user sees the full list in `startedAt` desc order.
+  - [ ] **Multi-Tomo edge case — chosen instance gone between list and select.** Given the picker is open and the user selects an instance whose container has been stopped or removed since `listTomoInstances()` ran, When the connect attempt runs, Then it fails with the named error `attach-failed` and the picker stays open showing only still-running candidates after a refresh. (No silent fallback to a different instance — the user must reselect.)
 
 #### F2: Settings — Disconnect
 - **User Story:** As the PKM Author, I want a Disconnect button in plugin settings, so that I can release the plugin's attachment without stopping the Tomo container.
 - **Acceptance Criteria:**
   - [ ] Given the plugin is connected, When I click Disconnect, Then the plugin closes its Docker stream and transitions to disconnected state; the Tomo container remains running (verifiable with `docker ps`).
   - [ ] Given the plugin is disconnected, When I view the Connect/Disconnect area, Then only Connect is visible (no Disconnect for a non-existent session).
-  - [ ] Given the plugin is connected, When I click Disconnect, Then the chat window's status indicator and status-bar icon both reflect disconnected state within a visible interval.
+  - [ ] Given the plugin is connected, When I click Disconnect, Then the chat window's status indicator and status-bar icon both reflect disconnected state within one frame of the `connectionStore.set(...)` call (≤16 ms p95 in jsdom; verified by an assertion that the indicator's state class is updated synchronously after the store transition returns).
 
 #### F3: Obsidian Status Bar Icon (icon-only with popover)
 - **User Story:** As the PKM Author, I want a compact Tomo icon in Obsidian's status bar that shows connection state at a glance, reveals the instance name on hover, and opens a quick-action popover on click, so that I manage the connection without leaving my current pane.
@@ -153,6 +107,7 @@ None in v0.1. Multi-user, remote Tomo, and mobile users are out of scope for v0.
   - [ ] Given the chat window is Connected, When I type a message and submit, Then the message is delivered to the Tomo container's stdin and echoed in the message history.
   - [ ] Given the chat window is Connected, When the container emits stdout/stderr, Then the output appears in the message history as rendered text only — no auto-execution, no URI activation, no command routing.
   - [ ] Given the chat window is not Connected, When I attempt to send a message, Then the input is disabled and no message is queued or sent.
+  - [ ] **Terminal renderer trust boundary.** The xterm.js instance rendering container output SHALL be configured with hyperlink handling disabled (no OSC 8 link activation), OSC 52 clipboard writes ignored, and `allowProposedApi: false`. The renderer presents bytes as text only — bytes from the container can never trigger a clipboard write or open a URI without explicit user copy/paste action.
 
 #### F5: Chat Window — Status Indicator and Force Reconnect
 - **User Story:** As the PKM Author, I want the chat window to show the current connection status and give me a Force Reconnect button, so that I can recover from a stuck connection without leaving the chat view.
@@ -198,6 +153,7 @@ None in v0.1. Multi-user, remote Tomo, and mobile users are out of scope for v0.
   - [ ] Given an error occurs while the chat window is not open (e.g., a palette-invoked Reconnect), When it fires, Then Obsidian's `Notice` channel surfaces it.
   - [ ] All error messages distinguish among: Docker daemon not reachable / Docker socket permission denied / no Tomo instances found / chosen instance no longer exists / stream error.
   - [ ] Error severity is conveyed via icon + text, never color alone; reduced-motion is respected; screen readers announce new errors via ARIA live regions.
+  - [ ] **No chat content is logged.** No log statement in connection or chat-view code SHALL receive a chunk, frame, or buffer originating from the container's stdio stream. The plugin's logger only records state transitions, error categories, and reconnect attempts. Verified by a grep-based assertion in tests (forbidden patterns: `logger.*(chunk`, `logger.*(data`, `logger.*(stdout`, `logger.*(stderr` in `src/connection/**` and `src/ui/chat-view/**`).
 
 ### Should Have Features
 
@@ -230,6 +186,9 @@ None in v0.1 for the chat surface. Sidebar-of-pending-instruction-sets and error
 - HTTP/WebSocket transport, or any settings toggle hinting at a future transport in the v0.1 UI.
 - Split-pane chat (separate input and output panes) — unified view only; `AskUserQuestion` prompts from Tomo render cleanly only in a unified chat.
 - External inbound surface — no ports, no webhooks, no MCP server. Kado remains the sole external inbound surface for MiYo. Any change requires a new ADR.
+- **Tomo container identity pinning** (image digest / Cmd[0] / container ID fingerprint persisted across sessions, refusal-to-attach on drift) — never. Hashi is local-only and outbound-only; the realistic "wrong container" scenario is user-error (e.g., another Tomo install side-by-side), not adversarial impersonation. Pinning would force re-pair on every Tomo version bump for zero defended attack. Trust derives from the user choosing the container in the Settings picker.
+- **Vault↔Tomo pairing fingerprint** persisted to `data.json` (e.g., `pairedTomoFingerprint`, `lastTrustedAppId`) — never. Each Obsidian vault is its own trust domain by design (architecture: vaults live in independent directories with independent plugin sets); cross-vault hook/instruction reuse is not part of the workflow. Adding a pairing prompt creates one click-through with no defended adversary.
+- **TOCTOU defense** between preview render and execute (hash-pinning the source `_instructions.json`) — never. Charter declares the preview modal a UX affordance, not an approval gate; defending the gap between two non-gates is theater.
 - Message replay across reconnect boundaries — the continuity gap is disclosed, not repaired.
 - Background/passive Docker polling at plugin load beyond the single auto-reconnect to the remembered instance — no ambient scanning.
 - Conversation history beyond what the chat view has locally observed — Tomo's own process owns its history; Hashi does not persist chat history to disk in v0.1.
@@ -319,7 +278,7 @@ No telemetry in v0.1. "Tracking" means verification points for integration tests
   - Exposing a human-readable instance name as a Docker label (e.g., `miyo.tomo.instance-name=<name>`), so the picker and the command-palette reconnect command can display it. **Tomo-side change required — captured as a handoff in README Decisions Log; outbound handoff to be created in `_outbox/for-tomo/` during plan phase.**
 - The Tomo container's stdout/stderr stream is the authoritative chat channel; Tomo's own process owns conversation history.
 - The user is the project owner and is trusted unconditionally; no access-control layer mediates user input within the plugin.
-- Spec 002 (Instruction Executor) runs standalone and does NOT depend on an active Tomo connection. This PRD assumes 002 has its own error surface and state model. (Spec 002's README still carries legacy "depends on 001 for lifecycle contracts" language that predates the brainstorm pivot; flagging the drift here — spec 002's README will be updated as a follow-up, not in this PRD pass.)
+- Spec 002 (Instruction Executor) runs standalone and does NOT depend on an active Tomo connection. This PRD assumes 002 has its own error surface and state model. (002's README was decoupled from 001 directly on 2026-04-24 — see that README's Decisions Log row "Reset stale 'blocked by 001' status + 'Depends on 001' context".)
 
 ## Risks and Mitigations
 

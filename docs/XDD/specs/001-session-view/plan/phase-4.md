@@ -31,7 +31,7 @@ Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `
 
 - [ ] **T4.1 Settings pane — Connect/Disconnect + open picker** `[activity: frontend-ui] [parallel: true]`
 
-  1. Prime: Read PRD F1, F2 acceptance criteria and SDD "Directory Map" entry for `src/ui/settings/` `[ref: PRD/F1; PRD/F2; SDD/Directory Map]`.
+  1. Prime: Read PRD F1, F2 acceptance criteria and SDD "Directory Map" entry for `src/settings/` `[ref: PRD/F1; PRD/F2; SDD/Directory Map]`.
   2. Test: Write `test/unit/ui/settings/SettingsTab.test.ts`:
      - `display()` renders a Connect button when state is Disconnected
      - `display()` renders a Disconnect button when state is Connected, showing the instance name
@@ -40,8 +40,8 @@ Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `
      - On state change while tab is open, the DOM updates (subscribe is live)
      - On `hide()` / `display()` re-entry, subscriptions don't leak (count active listeners before and after)
   3. Implement:
-     - Modify `src/ui/settings/SettingsTab.ts` — constructor takes `(app, plugin, connection: TomoConnection)`; `display()` builds DOM via Obsidian's `Setting` API; subscribes to `connectionStore` for live updates; stores unsubscribe handle; calls it in `hide()`.
-     - Create `src/ui/settings/InstancePickerModal.ts` — extends Obsidian `Modal`; `onOpen()` triggers `connection.openPicker()`, renders each `TomoInstance` as a row showing instance name (or short ID fallback) + formatted uptime via `formatUptime`; on selection calls `connection.connect(instance)` and closes modal; Cancel closes without effect.
+     - Modify `src/settings/SettingsTab.ts` — constructor takes `(app, plugin, connection: TomoConnection)`; `display()` builds DOM via Obsidian's `Setting` API; subscribes to `connectionStore` for live updates; stores unsubscribe handle; calls it in `hide()`.
+     - Create `src/settings/InstancePickerModal.ts` — extends Obsidian `Modal`; `onOpen()` triggers `connection.openPicker()`, renders each `TomoInstance` as a row showing instance name (or short ID fallback) + formatted uptime via `formatUptime`; on selection calls `connection.connect(instance)` and closes modal; Cancel closes without effect.
      - Error rendering: if `openPicker()` rejects with a `ConnectionError`, render the error inline in the modal with the specific cause message.
   4. Validate: Unit tests pass; `npm run lint` clean.
   5. Success:
@@ -118,6 +118,6 @@ Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `
 
   - Run `npm test && npm run lint && npm run build`. All UI unit tests green. Bundle builds cleanly. Optionally do a manual smoke-test by copying `main.js` + `manifest.json` + `styles.css` into `test/Hashi/.obsidian/plugins/miyo-tomo-hashi/` and launching Obsidian on `test/Hashi` vault; hot-reload will pick up changes.
   - Success:
-    - [ ] Every UI surface tested against a driven `connectionStore` + `FakeDockerClient` stack `[ref: SDD/ADR-3; ADR-10]`
+    - [ ] Every UI surface tested against a driven `connectionStore` (per ADR-4 v3) — Docker is mocked at the dockerode boundary via `vi.mock('dockerode')` in the connection-layer tests, not at this UI layer `[ref: SDD/ADR-3; ADR-5 v2; ADR-10]`
     - [ ] `hashi-` CSS prefix applied consistently `[ref: SDD/Technical Debt]`
     - [ ] No subscription leaks across open/close cycles (verified in T4.1–T4.3 tests) `[ref: SDD/Quality Requirements; Reliability]`
