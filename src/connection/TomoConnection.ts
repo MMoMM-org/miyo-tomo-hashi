@@ -117,6 +117,14 @@ export class TomoConnection {
 	private reconnectLoop: ReconnectLoop | null = null;
 	private epoch = 0;
 	private disposed = false;
+	// Last xterm geometry observed by the view. Cached so that any new
+	// AttachSession (initial connect, force-reconnect, auto-reconnect after
+	// remote close) can be resynced to the user's actual viewport without
+	// the view layer having to remember and replay the size itself.
+	// `docker run -it` creates a container PTY at a fixed default 80x24,
+	// so without this re-sync the post-reconnect terminal would silently
+	// drift back to the wrong geometry.
+	private lastTerminalSize: { rows: number; cols: number } | null = null;
 
 	constructor(
 		private settings: PluginSettings,
@@ -277,6 +285,19 @@ export class TomoConnection {
 		this.session.stdin.write(data);
 	}
 
+	async resize(rows: number, cols: number): Promise<void> {
+		this.lastTerminalSize = { rows, cols };
+		if (this.session === null) return;
+		try {
+			await this.session.resize(rows, cols);
+		} catch {
+			// Best-effort: a transient docker error here is recoverable on the
+			// next xterm-resize event, and there's nothing the user can act on
+			// in the moment. installSession() also reapplies on every new
+			// session, so a brief failure doesn't strand the geometry.
+		}
+	}
+
 	onData(cb: DataListener): Disposable {
 		this.dataListeners.add(cb);
 		return {
@@ -335,6 +356,14 @@ export class TomoConnection {
 		session.onClose((reason) => {
 			void this.handleSessionClose(reason, session, target);
 		});
+		// Re-apply the cached xterm geometry so a fresh container PTY (which
+		// always starts at the docker-run -it default) immediately matches
+		// the actual viewport. Fire-and-forget: errors are swallowed for the
+		// same reason as resize() above.
+		if (this.lastTerminalSize !== null) {
+			const { rows, cols } = this.lastTerminalSize;
+			void session.resize(rows, cols).catch(() => {});
+		}
 	}
 
 	private bindStreamData(session: AttachSession): void {

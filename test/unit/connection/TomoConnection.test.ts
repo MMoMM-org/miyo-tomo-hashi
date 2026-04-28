@@ -104,13 +104,20 @@ interface FakeSession {
 	closeCalls: () => number;
 }
 
-function makeFakeSession(): FakeSession {
+interface FakeSessionExtras {
+	resizeCalls: () => Array<{ rows: number; cols: number }>;
+	resizeRejection: (err: Error) => void;
+}
+
+function makeFakeSession(): FakeSession & FakeSessionExtras {
 	const stdout = new PassThrough();
 	const stdin = new PassThrough();
 	const emitter = new EventEmitter();
 	let closed = false;
 	let closeByUser = false;
 	let closeCalls = 0;
+	const resizeCalls: Array<{ rows: number; cols: number }> = [];
+	let resizeReject: Error | null = null;
 
 	const session: docker.AttachSession = {
 		stdout,
@@ -124,6 +131,11 @@ function makeFakeSession(): FakeSession {
 		},
 		onClose(cb): void {
 			emitter.on("close", cb);
+		},
+		async resize(rows: number, cols: number): Promise<void> {
+			if (closed) return;
+			resizeCalls.push({ rows, cols });
+			if (resizeReject !== null) throw resizeReject;
 		},
 	};
 
@@ -143,6 +155,10 @@ function makeFakeSession(): FakeSession {
 		},
 		closedByUser: (): boolean => closeByUser,
 		closeCalls: (): number => closeCalls,
+		resizeCalls: (): Array<{ rows: number; cols: number }> => resizeCalls,
+		resizeRejection: (err: Error): void => {
+			resizeReject = err;
+		},
 	};
 }
 
@@ -541,5 +557,80 @@ describe("TomoConnection.write() / onData() / dispose()", () => {
 		expect(conn.state.kind).toBe("disconnected");
 		// write() after dispose throws (no longer connected).
 		expect(() => conn.write("x")).toThrow();
+	});
+});
+
+describe("TomoConnection.resize()", () => {
+	// PTY-resize bug context: docker run -it gives the container a fixed
+	// default TTY size (80x24). xterm renders at the actual viewport size,
+	// so any TUI animation in the container draws frames for the wrong
+	// geometry — cursor backsteps and line-clears miss, animation frames
+	// stack visibly. resize() forwards xterm's geometry to the container.
+
+	it("forwards rows/cols to the active session while Connected", async () => {
+		const target = inst();
+		const fake = makeFakeSession();
+		mockedAttach.mockResolvedValueOnce(fake.session);
+
+		const conn = new TomoConnection(settings());
+		await conn.connect(target);
+
+		await conn.resize(40, 160);
+
+		expect(fake.resizeCalls()).toEqual([{ rows: 40, cols: 160 }]);
+		await conn.dispose();
+	});
+
+	it("is a silent no-op when not Connected (xterm fits before attach completes)", async () => {
+		const conn = new TomoConnection(settings());
+		// Disconnected — must not throw and must not require a session.
+		await expect(conn.resize(24, 80)).resolves.toBeUndefined();
+	});
+
+	it("re-applies the last known size on the next attach (auto-reconnect path)", async () => {
+		// xterm fires onResize once when the view layout settles. After a
+		// reconnect, the new container PTY would otherwise be back to its
+		// 80x24 default — the cached size means TomoConnection re-syncs the
+		// new session without the view layer having to remember anything.
+		vi.useFakeTimers();
+		const target = inst();
+		const first = makeFakeSession();
+		const second = makeFakeSession();
+		mockedAttach.mockResolvedValueOnce(first.session);
+		mockedInspect.mockResolvedValue(makeInspectInfo(target.containerId));
+		mockedAttach.mockResolvedValueOnce(second.session);
+
+		const conn = new TomoConnection(settings());
+		await conn.connect(target);
+		await conn.resize(50, 200);
+		expect(first.resizeCalls()).toEqual([{ rows: 50, cols: 200 }]);
+
+		first.fireRemoteClose();
+		await Promise.resolve();
+		await vi.advanceTimersByTimeAsync(500);
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(conn.state.kind).toBe("connected");
+		// New session got resized automatically with the cached geometry.
+		expect(second.resizeCalls()).toEqual([{ rows: 50, cols: 200 }]);
+
+		await conn.dispose();
+	});
+
+	it("swallows resize errors so a transient docker hiccup does not propagate", async () => {
+		// Best-effort semantics: if a resize fails (e.g. container in the
+		// middle of stop), the next xterm-resize event will retry. Exposing
+		// the error to the view layer would be noise — there's nothing the
+		// user can act on.
+		const target = inst();
+		const fake = makeFakeSession();
+		mockedAttach.mockResolvedValueOnce(fake.session);
+		fake.resizeRejection(new Error("HTTP 500"));
+
+		const conn = new TomoConnection(settings());
+		await conn.connect(target);
+
+		await expect(conn.resize(24, 80)).resolves.toBeUndefined();
+		await conn.dispose();
 	});
 });

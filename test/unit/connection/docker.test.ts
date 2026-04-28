@@ -23,6 +23,7 @@ interface DockerodeMockHandles {
 	listContainers: Mock;
 	inspect: Mock;
 	attach: Mock;
+	resize: Mock;
 	demuxStream: Mock;
 	getContainer: Mock;
 	dockerodeCtor: Mock;
@@ -32,6 +33,7 @@ const handles: DockerodeMockHandles = {
 	listContainers: vi.fn(),
 	inspect: vi.fn(),
 	attach: vi.fn(),
+	resize: vi.fn(),
 	demuxStream: vi.fn(),
 	getContainer: vi.fn(),
 	dockerodeCtor: vi.fn(),
@@ -53,12 +55,14 @@ beforeEach(() => {
 	handles.listContainers.mockReset();
 	handles.inspect.mockReset();
 	handles.attach.mockReset();
+	handles.resize.mockReset();
 	handles.demuxStream.mockReset();
 	handles.getContainer.mockReset();
 	handles.dockerodeCtor.mockReset();
 	handles.getContainer.mockImplementation(() => ({
 		inspect: handles.inspect,
 		attach: handles.attach,
+		resize: handles.resize,
 	}));
 });
 
@@ -297,10 +301,55 @@ describe("attach()", () => {
 		// Typecheck-flavoured runtime assertions
 		expect(typeof session.close).toBe("function");
 		expect(typeof session.onClose).toBe("function");
+		expect(typeof session.resize).toBe("function");
 		expect(session.stdout).toBeDefined();
 		expect(session.stdin).toBeDefined();
 
 		await session.close();
+	});
+
+	it("resize(rows, cols) calls dockerode container.resize({h, w}) with rows→h, cols→w", async () => {
+		// PTY-resize bug: Tomo runs with `docker run -it`, so the container's
+		// pty has a fixed default size. Without forwarding xterm's actual size,
+		// Claude Code in the container draws TUI frames (spinner, status bar,
+		// input box) for 80x24 while xterm renders at the real viewport size,
+		// leaving cursor backsteps and line-clears on the wrong cells. The
+		// AttachSession.resize() pass-through is what closes that gap.
+		handles.inspect.mockResolvedValue(inspectStub(true));
+		handles.attach.mockResolvedValue(new PassThrough());
+		handles.resize.mockResolvedValue(undefined);
+
+		const session = await attach(VALID_ID);
+		await session.resize(45, 173);
+
+		expect(handles.resize).toHaveBeenCalledTimes(1);
+		expect(handles.resize).toHaveBeenCalledWith({ h: 45, w: 173 });
+
+		await session.close();
+	});
+
+	it("resize() rejection propagates so callers can decide retry policy", async () => {
+		handles.inspect.mockResolvedValue(inspectStub(true));
+		handles.attach.mockResolvedValue(new PassThrough());
+		const boom = new Error("container gone");
+		handles.resize.mockRejectedValue(boom);
+
+		const session = await attach(VALID_ID);
+		await expect(session.resize(24, 80)).rejects.toBe(boom);
+
+		await session.close();
+	});
+
+	it("resize() after close() is a no-op (does not call dockerode)", async () => {
+		handles.inspect.mockResolvedValue(inspectStub(true));
+		handles.attach.mockResolvedValue(new PassThrough());
+		handles.resize.mockResolvedValue(undefined);
+
+		const session = await attach(VALID_ID);
+		await session.close();
+		await expect(session.resize(24, 80)).resolves.toBeUndefined();
+
+		expect(handles.resize).not.toHaveBeenCalled();
 	});
 });
 

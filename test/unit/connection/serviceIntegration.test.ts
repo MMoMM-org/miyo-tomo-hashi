@@ -100,6 +100,9 @@ function makeFakeSession(): FakeSession {
 		onClose(cb): void {
 			emitter.on("close", cb);
 		},
+		async resize(_rows: number, _cols: number): Promise<void> {
+			// no-op stub — this integration test does not exercise PTY resize
+		},
 	};
 
 	return {

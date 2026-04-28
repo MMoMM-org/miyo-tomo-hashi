@@ -26,6 +26,23 @@ import { VIEW_TYPE_TOMO_CHAT } from "../../../../src/ui/chat-view/index";
 import * as terminalHost from "../../../../src/ui/chat-view/terminalHost";
 import { TomoChatView } from "../../../../src/ui/chat-view/TomoChatView";
 
+// Per-test mutable hooks so individual tests can assert against the same
+// terminal instance the view holds. Captured at createTerminal-time so the
+// view code can call onData / onResize without indirection.
+interface TerminalHooks {
+	onDataCb: ((data: string) => void) | null;
+	onResizeCb: ((dims: { rows: number; cols: number }) => void) | null;
+	rows: number;
+	cols: number;
+}
+
+const terminalHooks: TerminalHooks = {
+	onDataCb: null,
+	onResizeCb: null,
+	rows: 24,
+	cols: 80,
+};
+
 vi.mock("../../../../src/ui/chat-view/terminalHost", () => ({
 	createTerminal: vi.fn(() => ({
 		terminal: {
@@ -34,7 +51,22 @@ vi.mock("../../../../src/ui/chat-view/terminalHost", () => ({
 			// xterm-onData wiring (T7 fix): TomoChatView subscribes via
 			// terminal.onData to forward keystrokes typed inside the xterm
 			// area to the container's stdin. Mock returns a disposable.
-			onData: vi.fn(() => ({ dispose: vi.fn() })),
+			onData: vi.fn((cb: (data: string) => void) => {
+				terminalHooks.onDataCb = cb;
+				return { dispose: vi.fn() };
+			}),
+			onResize: vi.fn(
+				(cb: (dims: { rows: number; cols: number }) => void) => {
+					terminalHooks.onResizeCb = cb;
+					return { dispose: vi.fn() };
+				},
+			),
+			get rows() {
+				return terminalHooks.rows;
+			},
+			get cols() {
+				return terminalHooks.cols;
+			},
 		},
 		fitAddon: { fit: vi.fn() },
 	})),
@@ -64,6 +96,7 @@ interface FakeConnection {
 	forceReconnect: ReturnType<typeof vi.fn>;
 	write: ReturnType<typeof vi.fn>;
 	onData: ReturnType<typeof vi.fn>;
+	resize: ReturnType<typeof vi.fn>;
 	disposeListener: ReturnType<typeof vi.fn>;
 	fireData: (chunk: Uint8Array) => void;
 }
@@ -81,6 +114,7 @@ function makeConnection(): FakeConnection {
 			dataListeners.push(cb);
 			return { dispose: disposeListener };
 		}),
+		resize: vi.fn(async (_rows: number, _cols: number) => {}),
 		disposeListener,
 		fireData: (chunk: Uint8Array) => {
 			for (const cb of dataListeners) cb(chunk);
@@ -413,6 +447,47 @@ describe("TomoChatView — indicator", () => {
 		const ind = h.root.querySelector(".hashi-chat-view-indicator");
 		expect(ind!.textContent).toBe("Disconnected");
 		expect(ind!.classList.contains("is-disconnected")).toBe(true);
+	});
+});
+
+describe("TomoChatView — pty resize wiring", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		connectionStore.set({ kind: "disconnected" });
+		terminalHooks.onResizeCb = null;
+		terminalHooks.onDataCb = null;
+		terminalHooks.rows = 24;
+		terminalHooks.cols = 80;
+	});
+
+	afterEach(() => {
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	it("subscribes terminal.onResize and forwards rows/cols to connection.resize", async () => {
+		// Without this, the container PTY stays at the docker-run -it default
+		// (80x24) regardless of xterm's actual size. Claude Code in the
+		// container draws TUI frames for the wrong geometry, leaving stale
+		// animation frames as ghost lines in the chat view.
+		const h = await mountView();
+		expect(terminalHooks.onResizeCb).not.toBeNull();
+		terminalHooks.onResizeCb!({ rows: 42, cols: 173 });
+		expect(h.connection.resize).toHaveBeenCalledTimes(1);
+		expect(h.connection.resize).toHaveBeenCalledWith(42, 173);
+	});
+
+	it("on transition to connected, fits and pushes current geometry to connection.resize", async () => {
+		// Auto-reconnect / first-connect path: the container's new PTY starts
+		// at 80x24. Pushing the cached xterm size right after Connected
+		// resyncs the geometry without waiting for a layout change to fire
+		// xterm's onResize.
+		const h = await mountView();
+		terminalHooks.rows = 50;
+		terminalHooks.cols = 200;
+		connectionStore.set({ kind: "connected", instance: inst() });
+		// Allow the post-state hook to run (it may be async).
+		await Promise.resolve();
+		expect(h.connection.resize).toHaveBeenCalledWith(50, 200);
 	});
 });
 

@@ -104,8 +104,14 @@ export class TomoChatView extends ItemView {
 	private unsubscribe: (() => void) | null = null;
 	private dataDisposable: { dispose: () => void } | null = null;
 	private terminalInputDisposable: { dispose: () => void } | null = null;
+	private terminalResizeDisposable: { dispose: () => void } | null = null;
 	private terminal: TerminalSession | null = null;
 	private resizeObserver: ResizeObserver | null = null;
+	// Drives the post-Connected resize push. Tracking the previous state
+	// kind avoids resyncing on every store transition (e.g. indicator-only
+	// updates) — only the disconnected→connected edge needs the explicit
+	// fit + resize.
+	private lastStateKind: ConnectionState["kind"] | null = null;
 
 	// DOM refs — captured during onOpen() so render() can update them on
 	// every store transition.
@@ -204,6 +210,17 @@ export class TomoChatView extends ItemView {
 			}
 		});
 
+		// Forward xterm geometry to the container PTY. `docker run -it`
+		// creates a TTY at a fixed default size (80x24); without this, every
+		// dimension Claude Code computes for its TUI is wrong, and cursor
+		// backsteps / line-clears land on stale cells, leaving previous
+		// animation frames as visible ghost lines in xterm.
+		this.terminalResizeDisposable = this.terminal.terminal.onResize(
+			({ rows, cols }) => {
+				void this.connection.resize(rows, cols).catch(() => {});
+			},
+		);
+
 		// Keep the terminal sized to its container. ResizeObserver is missing
 		// under jsdom (test runtime) — guard the wiring so unit tests don't
 		// blow up; the production runtime (Electron) provides it.
@@ -250,6 +267,10 @@ export class TomoChatView extends ItemView {
 			this.terminalInputDisposable.dispose();
 			this.terminalInputDisposable = null;
 		}
+		if (this.terminalResizeDisposable !== null) {
+			this.terminalResizeDisposable.dispose();
+			this.terminalResizeDisposable = null;
+		}
 		if (this.resizeObserver !== null) {
 			this.resizeObserver.disconnect();
 			this.resizeObserver = null;
@@ -285,5 +306,22 @@ export class TomoChatView extends ItemView {
 		btn.title = noInstance
 			? "Force reconnect (no instance chosen)"
 			: "Force reconnect";
+
+		// Edge-trigger pty resize push on the disconnected-or-attaching →
+		// connected transition. The new container PTY always starts at the
+		// docker-run -it default 80x24; xterm's onResize only fires when its
+		// own dimensions change, which doesn't happen on attach. So we fit()
+		// to ensure the addon has measured the host element, then push the
+		// resulting geometry through to the container ourselves. Once the
+		// stream is live, subsequent ResizeObserver-triggered fits will
+		// drive xterm's onResize and keep the two in sync.
+		const becameConnected =
+			state.kind === "connected" && this.lastStateKind !== "connected";
+		this.lastStateKind = state.kind;
+		if (becameConnected && this.terminal !== null) {
+			fit(this.terminal);
+			const { rows, cols } = this.terminal.terminal;
+			void this.connection.resize(rows, cols).catch(() => {});
+		}
 	}
 }

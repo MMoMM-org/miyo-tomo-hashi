@@ -46,12 +46,21 @@ import type { ConnectionError, TomoInstance } from "./types";
  * Stable surface returned from `attach()`. The view layer reads from `stdout`,
  * writes to `stdin`, registers a single `onClose` listener, and calls `close()`
  * to tear down. `close()` is idempotent; `onClose` fires exactly once.
+ *
+ * `resize(rows, cols)` forwards xterm's current geometry to the container's
+ * PTY via Docker's resize endpoint. Required because `docker run -it` creates
+ * a TTY with a fixed default size (80×24); without resize calls, every
+ * dimension Claude Code (or any TUI) thinks it's drawing into is wrong, so
+ * cursor backsteps and line-clears land on stale cells and animation frames
+ * stack visibly in xterm. After `close()` resize is a silent no-op so view
+ * code doesn't have to track session lifecycle.
  */
 export interface AttachSession {
 	readonly stdout: Readable;
 	readonly stdin: Writable;
 	close(): Promise<void>;
 	onClose(cb: (reason: "user" | "remote" | "error") => void): void;
+	resize(rows: number, cols: number): Promise<void>;
 }
 
 // --- internals ---------------------------------------------------------------
@@ -234,6 +243,15 @@ export async function attach(id: string): Promise<AttachSession> {
 		},
 		onClose(cb): void {
 			listener = cb;
+		},
+		async resize(rows, cols): Promise<void> {
+			// Closed-session no-op: late resize events from a torn-down xterm
+			// (ResizeObserver flushing during view dispose) must not hit
+			// dockerode against a container reference that may already be
+			// stale. Silent return keeps the caller — TomoConnection — from
+			// having to wrap every call in a state check.
+			if (closed) return;
+			await container.resize({ h: rows, w: cols });
 		},
 	};
 }
