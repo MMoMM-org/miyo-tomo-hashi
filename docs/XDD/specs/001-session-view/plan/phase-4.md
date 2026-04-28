@@ -1,6 +1,6 @@
 ---
 title: "Phase 4: UI Surfaces"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 4
 ---
@@ -49,7 +49,7 @@ Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `
      - [x] Error surfaces in Settings inline `[ref: PRD/F9/AC2]`
      - [x] Picker shows name + uptime per row `[ref: PRD/F1/AC1; Decisions Log 2026-04-24]`
 
-- [ ] **T4.2 Status bar icon + popover** `[activity: frontend-ui] [parallel: true]`
+- [x] **T4.2 Status bar icon + popover** `[activity: frontend-ui] [parallel: true]`
 
   1. Prime: Read PRD F3 all ACs; SDD ADR-9 and "UI Visualization / Status bar icon" `[ref: PRD/F3; SDD/ADR-9; SDD/UI Visualization]`.
   2. Test: Write `test/unit/ui/status-bar/StatusBarIcon.test.ts` and `openPopover.test.ts`:
@@ -70,7 +70,7 @@ Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `
      - [ ] Three-action popover `[ref: PRD/F3/AC4]`
      - [ ] Force Reconnect disabled when no instance chosen `[ref: PRD/F3/AC5]`
 
-- [ ] **T4.3 Chat view — `TomoChatView` + xterm terminal host** `[activity: frontend-ui] [parallel: true]`
+- [x] **T4.3 Chat view — `TomoChatView` + xterm terminal host** `[activity: frontend-ui] [parallel: true]`
 
   1. Prime: Read PRD F4, F5; SDD ADR-2, ADR-6, "Directory Map / src/ui/chat-view/", and xterm.js docs for `Terminal`, `FitAddon`, `onData`, `write` `[ref: PRD/F4; PRD/F5; SDD/ADR-2; SDD/ADR-6]`.
   2. Test: Write `test/unit/ui/chat-view/TomoChatView.test.ts`:
@@ -95,7 +95,7 @@ Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `
      - [ ] Force Reconnect never opens picker `[ref: PRD/F5/AC4]`
      - [ ] xterm lifecycle clean on view close `[ref: SDD/Quality Requirements; Reliability]`
 
-- [ ] **T4.4 File menu handler (`@file` prefill)** `[activity: frontend-ui] [parallel: true]`
+- [x] **T4.4 File menu handler (`@file` prefill)** `[activity: frontend-ui] [parallel: true]`
 
   1. Prime: Read PRD FS1 all ACs; SDD "Directory Map / src/commands/fileMenu.ts" `[ref: PRD/FS1; SDD/Directory Map]`.
   2. Test: Write `test/unit/commands/fileMenu.test.ts`:
@@ -114,7 +114,7 @@ Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `
      - [ ] Entry appears for any file `[ref: PRD/FS1/AC5]`
      - [ ] Insert-at-caret + open-and-prefill both work `[ref: PRD/FS1/AC2; FS1/AC3]`
 
-- [ ] **T4.5 Phase 4 Validation** `[activity: validate]`
+- [x] **T4.5 Phase 4 Validation** `[activity: validate]`
 
   - Run `npm test && npm run lint && npm run build`. All UI unit tests green. Bundle builds cleanly. Optionally do a manual smoke-test by copying `main.js` + `manifest.json` + `styles.css` into `test/Hashi/.obsidian/plugins/miyo-tomo-hashi/` and launching Obsidian on `test/Hashi` vault; hot-reload will pick up changes.
   - Success:
