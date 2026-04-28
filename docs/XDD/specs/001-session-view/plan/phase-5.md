@@ -1,6 +1,6 @@
 ---
 title: "Phase 5: Wire-up, Integration & Release Gate"
-status: pending
+status: in_progress
 version: "1.0"
 phase: 5
 ---

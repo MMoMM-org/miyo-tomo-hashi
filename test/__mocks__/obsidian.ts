@@ -183,12 +183,21 @@ export class Plugin extends Component {
 
 // --- UI Components ---
 
-export class Notice {
-	constructor(
-		public message: string,
-		public timeout?: number,
-	) {}
-}
+// `Notice` is exposed as a `vi.fn()` constructor (not a `class`) so tests can
+// assert `vi.mocked(Notice).toHaveBeenCalledWith(...)` without spying.
+// Production code uses it as `new Notice(message, timeout?)`; vi.fn supports
+// `new`-construction and records the same call list as a function call.
+export const Notice = vi.fn(function Notice(
+	this: { message: string; timeout?: number },
+	message: string,
+	timeout?: number,
+) {
+	this.message = message;
+	this.timeout = timeout;
+}) as unknown as new (message: string, timeout?: number) => {
+	message: string;
+	timeout?: number;
+};
 
 export class Setting {
 	settingEl = document.createElement("div");

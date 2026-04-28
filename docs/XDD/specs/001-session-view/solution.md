@@ -575,7 +575,7 @@ export class ReconnectLoop {
 ```typescript
 // src/commands/registerCommands.ts
 import type { Plugin } from "obsidian";
-import { displayInstanceName } from "connection/connectionStore";
+import { connectionStore, displayInstanceName } from "connection/connectionStore";
 
 export function registerReconnectCommand(plugin: Plugin, onInvoke: () => Promise<void>): void {
   const RECONNECT_ID = "reconnect-to-tomo";
@@ -591,7 +591,11 @@ export function registerReconnectCommand(plugin: Plugin, onInvoke: () => Promise
 
   // subscribe() fires immediately with the current value AND on every change.
   // It returns the unsubscribe; plugin.register() calls it on plugin unload.
-  plugin.register(displayInstanceName.subscribe((name) => install(name)));
+  // `displayInstanceName` is a plain function (ADR-4 v3, 2026-04-25), NOT a
+  // derived store — subscribe to `connectionStore` and compute inline.
+  plugin.register(
+    connectionStore.subscribe((state) => install(displayInstanceName(state))),
+  );
 }
 ```
 
