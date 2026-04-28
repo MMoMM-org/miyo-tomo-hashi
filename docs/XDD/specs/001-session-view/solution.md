@@ -428,13 +428,10 @@ export class TomoConnection {
 #### State Store (typed Store<T> helper)
 
 ```typescript
-// src/util/store.ts  — ~30 LOC, zero deps
-export interface Readable<T> {
-  get(): T;
-  subscribe(listener: (value: T) => void): () => void;   // returns unsubscribe
-}
-
-export class Store<T> implements Readable<T> {
+// src/util/store.ts  — ~25 LOC, zero deps
+// No `Readable<T>` interface, no `derived<T,U>` — both dropped per ADR-4 v3
+// (2026-04-25 simplification). Subscribers compute derived values inline.
+export class Store<T> {
   private listeners = new Set<(value: T) => void>();
   constructor(private value: T) {}
 
@@ -452,7 +449,6 @@ export class Store<T> implements Readable<T> {
     return () => { this.listeners.delete(listener); };
   }
 }
-
 ```
 
 ```typescript

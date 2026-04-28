@@ -22,7 +22,9 @@ describe("obsidian mock shape", () => {
 		const cb = vi.fn();
 		menu.addItem(cb);
 		expect(cb).toHaveBeenCalled();
-		const item = cb.mock.calls[0][0];
+		const firstCall = cb.mock.calls[0];
+		expect(firstCall).toBeDefined();
+		const item = firstCall![0];
 		expect(typeof item.setTitle).toBe("function");
 		expect(typeof item.setIcon).toBe("function");
 		expect(typeof item.setDisabled).toBe("function");
