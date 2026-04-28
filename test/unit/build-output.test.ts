@@ -41,13 +41,17 @@ describe("production build pipeline", () => {
 		expect(configSource).toMatch(/loader\s*:\s*\{[^}]*['"]\.css['"]\s*:/);
 	});
 
-	it("build/main.js is at most 500 KB minified (SDD CON-7 / Quality Requirements)", () => {
+	it("build/main.js is at most 1000 KB minified (SDD CON-7 / Quality Requirements, revised 2026-04-28)", () => {
 		const stats = statSync(buildOutput);
 		const sizeKb = stats.size / 1024;
-		// 500 KB ceiling per SDD CON-7 informal target. Production build is
-		// minified; if this trips, see SDD Implementation Gotchas before
-		// raising the bound.
-		expect(sizeKb).toBeLessThanOrEqual(500);
+		// 1000 KB ceiling per SDD CON-7 (revised 2026-04-28). Original target
+		// was 500 KB but assumed dockerode would be `external` at runtime —
+		// reality is Obsidian plugins ship as a single `main.js` with no
+		// adjacent `node_modules/`, so dockerode must be bundled. xterm.js
+		// (~150 KB) + dockerode + docker-modem (~250 KB minified) + xterm CSS
+		// + app code = ~937 KB. 1000 KB is the realistic ceiling; if this
+		// trips, lazy-load xterm or audit dockerode usage before raising.
+		expect(sizeKb).toBeLessThanOrEqual(1000);
 	});
 
 	it("build/manifest.json declares isDesktopOnly: true (PRD Constraints / SDD CON-3)", () => {

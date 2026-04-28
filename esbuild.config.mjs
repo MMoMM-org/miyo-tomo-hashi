@@ -27,6 +27,30 @@ function bundleStylesCss(targetDir) {
 	writeFileSync(`${targetDir}/styles.css`, out, "utf8");
 }
 
+// Stub modules that dockerode pulls transitively but never executes under our
+// configuration: `ssh2` and `cpu-features` are only loaded by docker-modem
+// when `protocol === "ssh"`. We construct dockerode with an explicit
+// `socketPath` (per ADR-1), never an SSH host, so the SSH branch is dead.
+//
+// Both modules ship `.node` native binaries that esbuild cannot bundle — and
+// Obsidian plugins ship as a single `main.js` with no adjacent `node_modules/`,
+// so externalizing them at runtime fails to resolve. Stubbing them out at
+// build time bundles dockerode itself into main.js (the only path that
+// actually works) while keeping the bundle free of native code.
+const stubMissingNativeDeps = {
+	name: "stub-missing-native-deps",
+	setup(build) {
+		build.onResolve({ filter: /^(ssh2|cpu-features)$/ }, (args) => ({
+			path: args.path,
+			namespace: "stub-empty",
+		}));
+		build.onLoad({ filter: /.*/, namespace: "stub-empty" }, () => ({
+			contents: "module.exports = {};",
+			loader: "js",
+		}));
+	},
+};
+
 const copyAssets = {
 	name: "copy-assets",
 	setup(build) {
@@ -78,14 +102,12 @@ const context = await esbuild.context({
 		"@lezer/common",
 		"@lezer/highlight",
 		"@lezer/lr",
-		// dockerode pulls in optional native deps (ssh2 → cpu-features, both
-		// shipping `.node` binaries) that esbuild can't bundle. The plugin
-		// is `isDesktopOnly: true` (Electron + Node `require` available at
-		// runtime), so leaving dockerode + its transitive native modules
-		// external lets Node resolve them from `node_modules` at load time.
-		"dockerode",
-		"ssh2",
-		"cpu-features",
+		// NOTE: dockerode used to be external, but Obsidian plugins ship as a
+		// single `main.js` with no `node_modules/` next to it, so external
+		// require()s fail at runtime. dockerode is now bundled; its native
+		// transitive deps (`ssh2`, `cpu-features`) are stubbed via the
+		// `stubMissingNativeDeps` plugin (only used in the SSH transport
+		// branch we never hit — we always construct with `socketPath`).
 		...builtinModules,
 		...builtinModules.map((m) => `node:${m}`),
 	],
@@ -101,7 +123,7 @@ const context = await esbuild.context({
 	// in the single `main.js` artifact (Obsidian plugin packaging model). The
 	// xterm CSS will be appended to <head> at view-mount time in phase 4.
 	loader: { ".css": "text" },
-	plugins: [copyAssets],
+	plugins: [stubMissingNativeDeps, copyAssets],
 });
 
 if (prod) {
