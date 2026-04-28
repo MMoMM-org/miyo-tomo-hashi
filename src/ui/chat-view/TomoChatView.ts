@@ -14,7 +14,10 @@
  * 1. `chosenInstanceId` is dependency-injected as a `() => string | null`
  *    callback rather than reading the settings object directly. Mirrors
  *    `StatusBarIcon` (T4.2) and keeps the view decoupled from the plugin
- *    settings shape; Phase 5 wires it to `() => plugin.settings.chosenInstanceId`.
+ *    settings shape; main.ts wires it to the persisted instance NAME (label
+ *    `miyo.tomo.instance-name`), which survives container stop+start.
+ *    Receivers treat the value as an opaque "anything chosen?" check, so
+ *    the historical parameter name is preserved.
  *
  * 2. The store subscription is established AFTER the DOM skeleton is built
  *    so the initial `render(state)` callback (Store fires immediately on
@@ -42,6 +45,7 @@ import {
 } from "../../connection/connectionStore";
 import type { ConnectionState } from "../../connection/state";
 import type { TomoConnection } from "../../connection/TomoConnection";
+import { ZOOM_LEVELS, type ZoomLevel } from "../../types/index";
 
 import { VIEW_TYPE_TOMO_CHAT } from "./index";
 import {
@@ -51,6 +55,11 @@ import {
 	writeChunk,
 	type TerminalSession,
 } from "./terminalHost";
+
+// Anchors xterm font sizing to a fixed base so the zoom multipliers map to
+// concrete pixel sizes (0.5×→7px, 1×→14px, 1.5×→21px). 14px matches the
+// xterm.js default and keeps cells legible on standard Obsidian themes.
+const BASE_FONT_SIZE = 14;
 
 const STATE_CLASSES = [
 	"is-connected",
@@ -103,21 +112,33 @@ function viewFor(state: ConnectionState): IndicatorView {
 export class TomoChatView extends ItemView {
 	private unsubscribe: (() => void) | null = null;
 	private dataDisposable: { dispose: () => void } | null = null;
+	private terminalInputDisposable: { dispose: () => void } | null = null;
+	private terminalResizeDisposable: { dispose: () => void } | null = null;
 	private terminal: TerminalSession | null = null;
 	private resizeObserver: ResizeObserver | null = null;
+	// Drives the post-Connected resize push. Tracking the previous state
+	// kind avoids resyncing on every store transition (e.g. indicator-only
+	// updates) — only the disconnected→connected edge needs the explicit
+	// fit + resize.
+	private lastStateKind: ConnectionState["kind"] | null = null;
+	private currentZoom: ZoomLevel;
 
 	// DOM refs — captured during onOpen() so render() can update them on
 	// every store transition.
 	private indicatorEl: HTMLElement | null = null;
 	private forceReconnectBtn: HTMLButtonElement | null = null;
 	private inputEl: HTMLInputElement | null = null;
+	private zoomButtons: Map<ZoomLevel, HTMLButtonElement> = new Map();
 
 	constructor(
 		leaf: WorkspaceLeaf,
 		private readonly connection: TomoConnection,
 		private readonly chosenInstanceId: () => string | null,
+		initialZoom: ZoomLevel,
+		private readonly onZoomChange: (level: ZoomLevel) => Promise<void>,
 	) {
 		super(leaf);
+		this.currentZoom = initialZoom;
 	}
 
 	override getViewType(): string {
@@ -164,7 +185,7 @@ export class TomoChatView extends ItemView {
 		root.empty();
 		root.addClass("hashi-chat-view");
 
-		// --- Header (indicator + force-reconnect action) ---------------------
+		// --- Header (indicator + zoom controls + force-reconnect action) ----
 		const header = root.createDiv({ cls: "hashi-chat-view-header" });
 		this.indicatorEl = header.createDiv({
 			cls: "hashi-chat-view-indicator",
@@ -172,6 +193,27 @@ export class TomoChatView extends ItemView {
 		const headerActions = header.createDiv({
 			cls: "hashi-chat-view-header-actions",
 		});
+
+		// Zoom buttons — fixed-arity selector (see ZOOM_LEVELS). Continuous
+		// slider was rejected because xterm's cell grid rounds to integer
+		// pixel cells, and a slider would drift between integer fontSizes,
+		// constantly fighting the fit-addon for a stable layout.
+		const zoomGroup = headerActions.createDiv({
+			cls: "hashi-chat-view-zoom-group",
+		});
+		this.zoomButtons.clear();
+		for (const level of ZOOM_LEVELS) {
+			const btn = zoomGroup.createEl("button", {
+				cls: "hashi-chat-view-zoom-btn",
+				text: this.formatZoomLabel(level),
+			});
+			btn.setAttr("aria-label", `Zoom ${this.formatZoomLabel(level)}`);
+			btn.addEventListener("click", () => {
+				void this.handleZoomClick(level);
+			});
+			this.zoomButtons.set(level, btn);
+		}
+
 		this.forceReconnectBtn = headerActions.createEl("button", {
 			cls: "hashi-chat-view-force-reconnect",
 			text: "Force reconnect",
@@ -183,10 +225,38 @@ export class TomoChatView extends ItemView {
 		// --- Terminal host ---------------------------------------------------
 		const termHost = root.createDiv({ cls: "hashi-chat-view-terminal-host" });
 		this.terminal = createTerminal(termHost);
+		this.applyZoomToTerminal(this.currentZoom);
+		this.refreshZoomButtons();
 
 		this.dataDisposable = this.connection.onData((chunk: Uint8Array) => {
 			if (this.terminal !== null) writeChunk(this.terminal, chunk);
 		});
+
+		// Forward keystrokes typed inside the xterm area to the container's
+		// stdin. This is what makes the chat view behave like a normal terminal
+		// emulator — without this, xterm captures key events but does nothing
+		// with them, so typing into the visible Tomo TUI silently drops bytes.
+		// The PRD-style separate input field below is still wired (for chat-
+		// style line submit on Enter); both entry points coexist.
+		this.terminalInputDisposable = this.terminal.terminal.onData((data) => {
+			try {
+				this.connection.write(data);
+			} catch {
+				// not connected — drop silently; render() shows the disconnected
+				// state and the user can re-Connect / Force Reconnect.
+			}
+		});
+
+		// Forward xterm geometry to the container PTY. `docker run -it`
+		// creates a TTY at a fixed default size (80x24); without this, every
+		// dimension Claude Code computes for its TUI is wrong, and cursor
+		// backsteps / line-clears land on stale cells, leaving previous
+		// animation frames as visible ghost lines in xterm.
+		this.terminalResizeDisposable = this.terminal.terminal.onResize(
+			({ rows, cols }) => {
+				void this.connection.resize(rows, cols).catch(() => {});
+			},
+		);
 
 		// Keep the terminal sized to its container. ResizeObserver is missing
 		// under jsdom (test runtime) — guard the wiring so unit tests don't
@@ -230,6 +300,14 @@ export class TomoChatView extends ItemView {
 			this.dataDisposable.dispose();
 			this.dataDisposable = null;
 		}
+		if (this.terminalInputDisposable !== null) {
+			this.terminalInputDisposable.dispose();
+			this.terminalInputDisposable = null;
+		}
+		if (this.terminalResizeDisposable !== null) {
+			this.terminalResizeDisposable.dispose();
+			this.terminalResizeDisposable = null;
+		}
 		if (this.resizeObserver !== null) {
 			this.resizeObserver.disconnect();
 			this.resizeObserver = null;
@@ -238,6 +316,43 @@ export class TomoChatView extends ItemView {
 			dispose(this.terminal);
 			this.terminal = null;
 		}
+	}
+
+	private formatZoomLabel(level: ZoomLevel): string {
+		// "0.5×" / "1×" / "1.5×" — strip any trailing ".0" so 1 reads as "1×"
+		// rather than "1.0×". Number.toString() already does this for integer
+		// values; explicit branches keep the formatting deterministic.
+		if (level === 1) return "1×";
+		return `${level}×`;
+	}
+
+	private applyZoomToTerminal(level: ZoomLevel): void {
+		if (this.terminal === null) return;
+		this.terminal.terminal.options.fontSize = BASE_FONT_SIZE * level;
+		// Re-fit so xterm's cell grid is recomputed against the new font;
+		// fit() triggers terminal.onResize, which we already wire to
+		// connection.resize so the container PTY follows. Without this the
+		// PTY would stay at the old geometry and ghost-line artifacts would
+		// reappear immediately after a zoom change.
+		fit(this.terminal);
+	}
+
+	private refreshZoomButtons(): void {
+		for (const [level, btn] of this.zoomButtons) {
+			if (level === this.currentZoom) btn.addClass("is-active");
+			else btn.removeClass("is-active");
+		}
+	}
+
+	private async handleZoomClick(level: ZoomLevel): Promise<void> {
+		// No-op when the user clicks the already-active level — saves a
+		// saveData round-trip on a fast-clicker and avoids a needless
+		// fit/resize churn on the container PTY.
+		if (level === this.currentZoom) return;
+		this.currentZoom = level;
+		this.applyZoomToTerminal(level);
+		this.refreshZoomButtons();
+		await this.onZoomChange(level);
 	}
 
 	private render(state: ConnectionState): void {
@@ -265,5 +380,22 @@ export class TomoChatView extends ItemView {
 		btn.title = noInstance
 			? "Force reconnect (no instance chosen)"
 			: "Force reconnect";
+
+		// Edge-trigger pty resize push on the disconnected-or-attaching →
+		// connected transition. The new container PTY always starts at the
+		// docker-run -it default 80x24; xterm's onResize only fires when its
+		// own dimensions change, which doesn't happen on attach. So we fit()
+		// to ensure the addon has measured the host element, then push the
+		// resulting geometry through to the container ourselves. Once the
+		// stream is live, subsequent ResizeObserver-triggered fits will
+		// drive xterm's onResize and keep the two in sync.
+		const becameConnected =
+			state.kind === "connected" && this.lastStateKind !== "connected";
+		this.lastStateKind = state.kind;
+		if (becameConnected && this.terminal !== null) {
+			fit(this.terminal);
+			const { rows, cols } = this.terminal.terminal;
+			void this.connection.resize(rows, cols).catch(() => {});
+		}
 	}
 }

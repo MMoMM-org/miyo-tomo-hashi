@@ -27,16 +27,48 @@ function bundleStylesCss(targetDir) {
 	writeFileSync(`${targetDir}/styles.css`, out, "utf8");
 }
 
+/**
+ * Stamp the source manifest with a dev-suffixed version for the test vault
+ * so every build looks like a fresh version to Obsidian's plugin loader —
+ * defeats stale-module caching during manual QA. Source manifest.json is
+ * NEVER modified; the canonical version stays the GitHub release version.
+ *
+ * Format mirrors miyo-archivist (`obsidian-archivist/esbuild.config.mjs`):
+ * `${baseVersion}-dev.${YYYYMMDD-HHmm}`, e.g. "0.0.0-dev.20260428-1620".
+ * The `-dev.` is a semver pre-release identifier so it sorts BELOW the
+ * canonical version — Obsidian and the Community Plugins manifest both
+ * stay clean.
+ *
+ * Returns the stamped manifest object so the caller can log the version.
+ */
+function stampManifestForVault() {
+	const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
+	const baseVersion = manifest.version;
+	const stamp = new Date()
+		.toISOString()
+		.slice(0, 16)
+		.replace(/[-:]/g, "")
+		.replace("T", "-");
+	manifest.version = `${baseVersion}-dev.${stamp}`;
+	return manifest;
+}
+
 // Stub modules that dockerode pulls transitively but never executes under our
 // configuration: `ssh2` and `cpu-features` are only loaded by docker-modem
 // when `protocol === "ssh"`. We construct dockerode with an explicit
 // `socketPath` (per ADR-1), never an SSH host, so the SSH branch is dead.
 //
-// Both modules ship `.node` native binaries that esbuild cannot bundle — and
-// Obsidian plugins ship as a single `main.js` with no adjacent `node_modules/`,
-// so externalizing them at runtime fails to resolve. Stubbing them out at
-// build time bundles dockerode itself into main.js (the only path that
-// actually works) while keeping the bundle free of native code.
+// `./buildkit` is loaded lazily inside Docker.prototype.followProgress, which
+// is the image-build progress streamer. Hashi never builds images — we only
+// list/inspect/attach/resize containers — so the buildkit path is unreachable
+// in production. Bundling it would pull in protobuf and a large transitive
+// graph for code that's literally dead in our use case.
+//
+// All three ship code (or `.node` native binaries) that esbuild cannot bundle
+// usefully — and Obsidian plugins ship as a single `main.js` with no adjacent
+// `node_modules/`, so externalizing them at runtime fails to resolve. Stubbing
+// them at build time bundles dockerode itself into main.js (the only path
+// that actually works) while keeping the bundle free of native code.
 const stubMissingNativeDeps = {
 	name: "stub-missing-native-deps",
 	setup(build) {
@@ -44,8 +76,18 @@ const stubMissingNativeDeps = {
 			path: args.path,
 			namespace: "stub-empty",
 		}));
+		// dockerode 4.0.12+: Docker.prototype.followProgress lazy-requires
+		// `./buildkit`. Match only when imported FROM dockerode/lib/docker.js
+		// so we don't accidentally stub a same-named module elsewhere.
+		build.onResolve({ filter: /^\.\/buildkit$/ }, (args) => {
+			if (!/dockerode[\\/]lib[\\/]docker\.js$/.test(args.importer)) {
+				return null;
+			}
+			return { path: args.path, namespace: "stub-empty" };
+		});
 		build.onLoad({ filter: /.*/, namespace: "stub-empty" }, () => ({
-			contents: "module.exports = {};",
+			contents:
+				"module.exports = { followProgress: () => { throw new Error('buildkit stubbed — image-build APIs are not used by Hashi'); } };",
 			loader: "js",
 		}));
 	},
@@ -68,9 +110,16 @@ const copyAssets = {
 					if (existsSync("test/Hashi/.obsidian")) {
 						mkdirSync(VAULT_PLUGIN_DIR, { recursive: true });
 						copyFileSync(`${outdir}/main.js`, `${VAULT_PLUGIN_DIR}/main.js`);
-						copyFileSync("manifest.json", `${VAULT_PLUGIN_DIR}/manifest.json`);
+						const stampedManifest = stampManifestForVault();
+						writeFileSync(
+							`${VAULT_PLUGIN_DIR}/manifest.json`,
+							JSON.stringify(stampedManifest, null, "\t") + "\n",
+							"utf8",
+						);
 						bundleStylesCss(VAULT_PLUGIN_DIR);
-						console.log(`[deploy] Plugin copied to ${VAULT_PLUGIN_DIR}`);
+						console.log(
+							`[deploy] Plugin copied to ${VAULT_PLUGIN_DIR} (version: ${stampedManifest.version})`,
+						);
 					} else {
 						console.warn(
 							"[deploy] HASHI_DEPLOY_VAULT set but test/Hashi/.obsidian missing — skipped",

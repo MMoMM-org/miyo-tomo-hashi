@@ -26,7 +26,6 @@ import {
 	expect,
 	it,
 	vi,
-	type MockInstance,
 } from "vitest";
 
 import * as docker from "../../../src/connection/docker";
@@ -45,6 +44,9 @@ vi.mock("../../../src/connection/docker", async (importActual) => {
 	return {
 		...actual,
 		listTomoInstances: vi.fn<() => Promise<TomoInstance[]>>(),
+		findInstanceByName: vi.fn<
+			(name: string) => Promise<TomoInstance | null>
+		>(),
 		inspectContainer: vi.fn<(id: string) => Promise<InspectStub | null>>(),
 		attach: vi.fn<(id: string) => Promise<docker.AttachSession>>(),
 	};
@@ -54,9 +56,7 @@ vi.mock("../../../src/connection/docker", async (importActual) => {
 import { TomoConnection } from "../../../src/connection/TomoConnection";
 
 const mockedAttach = vi.mocked(docker.attach);
-const mockedInspect = vi.mocked(docker.inspectContainer) as MockInstance<
-	(id: string) => Promise<InspectStub | null>
->;
+const mockedFindByName = vi.mocked(docker.findInstanceByName);
 
 // --- helpers (mirrors TomoConnection.test.ts patterns) -----------------------
 
@@ -71,10 +71,6 @@ const inst = (overrides: Partial<TomoInstance> = {}): TomoInstance => {
 		...overrides,
 	};
 };
-
-function makeInspectInfo(id: string): InspectStub {
-	return { Id: id, Image: "miyo/tomo:0.7.0" };
-}
 
 interface FakeSession {
 	session: docker.AttachSession;
@@ -100,6 +96,9 @@ function makeFakeSession(): FakeSession {
 		onClose(cb): void {
 			emitter.on("close", cb);
 		},
+		async resize(_rows: number, _cols: number): Promise<void> {
+			// no-op stub — this integration test does not exercise PTY resize
+		},
 	};
 
 	return {
@@ -115,7 +114,7 @@ function makeFakeSession(): FakeSession {
 }
 
 function settings(initial: Partial<PluginSettings> = {}): PluginSettings {
-	return { chosenInstanceId: null, ...initial };
+	return { chosenInstanceName: null, zoomLevel: 1, ...initial };
 }
 
 // --- suite -------------------------------------------------------------------
@@ -140,12 +139,13 @@ describe("Phase 3 service integration — observable state flow", () => {
 		const target = inst();
 
 		// Script: attach #1 succeeds (initial connect),
-		//         inspect resolves OK (auto-reconnect presence check),
+		//         findInstanceByName resolves to the same target (auto-reconnect
+		//         presence check via stable instance-name label, FS2 v2),
 		//         attach #2 succeeds (reconnect after stream close).
 		const session1 = makeFakeSession();
 		const session2 = makeFakeSession();
 		mockedAttach.mockResolvedValueOnce(session1.session);
-		mockedInspect.mockResolvedValueOnce(makeInspectInfo(target.containerId));
+		mockedFindByName.mockResolvedValueOnce(target);
 		mockedAttach.mockResolvedValueOnce(session2.session);
 
 		const conn = new TomoConnection(settings());

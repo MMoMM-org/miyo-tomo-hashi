@@ -53,6 +53,7 @@ import {
 	type AttachSession,
 	ConnectionFailure,
 	attach,
+	findInstanceByName,
 	inspectContainer,
 	listTomoInstances,
 } from "./docker";
@@ -117,6 +118,14 @@ export class TomoConnection {
 	private reconnectLoop: ReconnectLoop | null = null;
 	private epoch = 0;
 	private disposed = false;
+	// Last xterm geometry observed by the view. Cached so that any new
+	// AttachSession (initial connect, force-reconnect, auto-reconnect after
+	// remote close) can be resynced to the user's actual viewport without
+	// the view layer having to remember and replay the size itself.
+	// `docker run -it` creates a container PTY at a fixed default 80x24,
+	// so without this re-sync the post-reconnect terminal would silently
+	// drift back to the wrong geometry.
+	private lastTerminalSize: { rows: number; cols: number } | null = null;
 
 	constructor(
 		private settings: PluginSettings,
@@ -157,7 +166,11 @@ export class TomoConnection {
 				return;
 			}
 			this.installSession(session, target);
-			this.settings.chosenInstanceId = target.containerId;
+			// FS2: persist by stable instance name so we survive container
+			// stop+start (the ID changes, the name label doesn't). Falls back
+			// to leaving chosenInstanceName null when the target has no name —
+			// rare; production Tomo always sets the label.
+			this.settings.chosenInstanceName = target.name;
 			await this.persist(this.settings);
 			this.setState({ kind: "connected", instance: target });
 		} catch (err: unknown) {
@@ -188,24 +201,27 @@ export class TomoConnection {
 		this.setState({ kind: "attaching", target });
 
 		try {
-			const info = await inspectContainer(target.containerId);
+			// Resolve by name first if we have one — that's what survives a
+			// container restart (new ID, same instance-name label). Fall back
+			// to the cached containerId for nameless instances.
+			const live = await this.resolveLiveInstance(target);
 			if (epoch !== this.epoch) return;
-			if (info === null) {
+			if (live === null) {
 				this.setState({
 					kind: "disconnected",
 					reason: { code: "attach-failed", detail: DETAIL_GONE },
 				});
 				return;
 			}
-			const session = await attach(target.containerId);
+			const session = await attach(live.containerId);
 			if (epoch !== this.epoch) {
 				await session.close();
 				return;
 			}
-			this.installSession(session, target);
-			this.settings.chosenInstanceId = target.containerId;
+			this.installSession(session, live);
+			this.settings.chosenInstanceName = live.name;
 			await this.persist(this.settings);
-			this.setState({ kind: "connected", instance: target });
+			this.setState({ kind: "connected", instance: live });
 		} catch (err: unknown) {
 			if (epoch !== this.epoch) return;
 			this.setState({ kind: "disconnected", reason: toConnectionError(err) });
@@ -216,39 +232,35 @@ export class TomoConnection {
 		if (this.disposed) return;
 		// Idempotent on second call — no-op when not Disconnected.
 		if (this.currentState.kind !== "disconnected") return;
-		const id = this.settings.chosenInstanceId;
-		if (id === null) return;
+		const name = this.settings.chosenInstanceName;
+		if (name === null) return;
 
 		this.bumpEpoch();
 		const epoch = this.epoch;
 
 		try {
-			const info = await inspectContainer(id);
+			// Resolve the persisted name to whatever container ID is currently
+			// running. Survives docker stop+start (new ID, same name label) —
+			// the original FS2 path inspected by container ID and broke on
+			// every restart, forcing the user back into the picker.
+			const target = await findInstanceByName(name);
 			if (epoch !== this.epoch) return;
-			if (info === null) {
+			if (target === null) {
 				this.setState({
 					kind: "disconnected",
 					reason: { code: "attach-failed", detail: DETAIL_GONE },
 				});
 				return;
 			}
-			// We need a TomoInstance descriptor for state.attaching.target. Pull
-			// the matching one from listTomoInstances; if not present, build a
-			// minimal one from the inspect payload. (`info` is intentionally
-			// only used as a presence check here — we re-resolve the full
-			// descriptor below.)
-			void info;
-			const target = await this.resolveInstanceForId(id);
-			if (epoch !== this.epoch) return;
 
 			this.setState({ kind: "attaching", target });
-			const session = await attach(id);
+			const session = await attach(target.containerId);
 			if (epoch !== this.epoch) {
 				await session.close();
 				return;
 			}
 			this.installSession(session, target);
-			this.settings.chosenInstanceId = target.containerId;
+			this.settings.chosenInstanceName = target.name;
 			await this.persist(this.settings);
 			this.setState({ kind: "connected", instance: target });
 		} catch (err: unknown) {
@@ -275,6 +287,19 @@ export class TomoConnection {
 			});
 		}
 		this.session.stdin.write(data);
+	}
+
+	async resize(rows: number, cols: number): Promise<void> {
+		this.lastTerminalSize = { rows, cols };
+		if (this.session === null) return;
+		try {
+			await this.session.resize(rows, cols);
+		} catch {
+			// Best-effort: a transient docker error here is recoverable on the
+			// next xterm-resize event, and there's nothing the user can act on
+			// in the moment. installSession() also reapplies on every new
+			// session, so a brief failure doesn't strand the geometry.
+		}
 	}
 
 	onData(cb: DataListener): Disposable {
@@ -305,27 +330,24 @@ export class TomoConnection {
 		return null;
 	}
 
-	private async resolveInstanceForId(id: string): Promise<TomoInstance> {
-		// Best-effort: try to find the full descriptor via discovery so we
-		// pick up labels and accurate startedAt. If list fails, synthesize
-		// a minimal descriptor from id alone — image string is unknown at
-		// this fallback path; we use a sentinel that the picker UI will
-		// override on the next discovery pass.
-		try {
-			const all = await listTomoInstances();
-			const hit = all.find((x) => x.containerId === id);
-			if (hit !== undefined) return hit;
-		} catch {
-			// Swallow — fall through to synthesis. The connect attempt below
-			// will surface any real daemon error.
+	private async resolveLiveInstance(
+		target: TomoInstance,
+	): Promise<TomoInstance | null> {
+		// Prefer name resolution: that's what survives docker stop+start.
+		// The cached `target.containerId` may be stale if the container was
+		// restarted between the original connect and now (force-reconnect /
+		// auto-reconnect-after-remote-close).
+		if (target.name !== null) {
+			const byName = await findInstanceByName(target.name);
+			if (byName !== null) return byName;
+			// Name no longer matches anything running — caller treats as gone.
+			return null;
 		}
-		return {
-			containerId: id,
-			shortId: id.slice(0, 12),
-			name: null,
-			startedAt: new Date(),
-			image: "unknown",
-		};
+		// No name label — fall back to inspect-by-ID for legacy/unlabeled
+		// instances. inspectContainer returns null on 404 (gone).
+		const info = await inspectContainer(target.containerId);
+		if (info === null) return null;
+		return target;
 	}
 
 	private installSession(session: AttachSession, target: TomoInstance): void {
@@ -335,6 +357,14 @@ export class TomoConnection {
 		session.onClose((reason) => {
 			void this.handleSessionClose(reason, session, target);
 		});
+		// Re-apply the cached xterm geometry so a fresh container PTY (which
+		// always starts at the docker-run -it default) immediately matches
+		// the actual viewport. Fire-and-forget: errors are swallowed for the
+		// same reason as resize() above.
+		if (this.lastTerminalSize !== null) {
+			const { rows, cols } = this.lastTerminalSize;
+			void session.resize(rows, cols).catch(() => {});
+		}
 	}
 
 	private bindStreamData(session: AttachSession): void {
@@ -415,9 +445,9 @@ export class TomoConnection {
 			async () => {
 				if (epoch !== this.epoch) return false;
 				try {
-					const info = await inspectContainer(target.containerId);
+					const live = await this.resolveLiveInstance(target);
 					if (epoch !== this.epoch) return false;
-					if (info === null) {
+					if (live === null) {
 						this.setState({
 							kind: "disconnected",
 							reason: { code: "attach-failed", detail: DETAIL_GONE },
@@ -425,15 +455,15 @@ export class TomoConnection {
 						loop.cancel();
 						return false;
 					}
-					const session = await attach(target.containerId);
+					const session = await attach(live.containerId);
 					if (epoch !== this.epoch) {
 						await session.close();
 						return false;
 					}
-					this.installSession(session, target);
-					this.settings.chosenInstanceId = target.containerId;
+					this.installSession(session, live);
+					this.settings.chosenInstanceName = live.name;
 					await this.persist(this.settings);
-					this.setState({ kind: "connected", instance: target });
+					this.setState({ kind: "connected", instance: live });
 					return true;
 				} catch {
 					return false;

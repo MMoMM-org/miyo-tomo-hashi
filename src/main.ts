@@ -45,7 +45,11 @@ import { registerFileMenu } from "./commands/fileMenu";
 import { TomoConnection } from "./connection/TomoConnection";
 import { loadSettings, saveSettings } from "./connection/settingsPersistence";
 import { SettingsTab } from "./settings/SettingsTab";
-import { DEFAULT_SETTINGS, type PluginSettings } from "./types/index";
+import {
+	DEFAULT_SETTINGS,
+	type PluginSettings,
+	type ZoomLevel,
+} from "./types/index";
 import { TomoChatView, VIEW_TYPE_TOMO_CHAT } from "./ui/chat-view/index";
 import { showChatWindow } from "./ui/chat-view/showChatWindow";
 import { StatusBarIcon } from "./ui/status-bar/StatusBarIcon";
@@ -84,12 +88,23 @@ export default class TomoHashiPlugin extends Plugin {
 		this.connection = new TomoConnection(this.settings, persist);
 		const conn = this.connection;
 
-		const chosenInstanceId = (): string | null => this.settings.chosenInstanceId;
+		const chosenInstanceId = (): string | null =>
+			this.settings.chosenInstanceName;
 
 		// 1. Chat view registration (T4.3).
+		const onZoomChange = async (level: ZoomLevel): Promise<void> => {
+			await persist({ ...this.settings, zoomLevel: level });
+		};
 		this.registerView(
 			VIEW_TYPE_TOMO_CHAT,
-			(leaf: WorkspaceLeaf) => new TomoChatView(leaf, conn, chosenInstanceId),
+			(leaf: WorkspaceLeaf) =>
+				new TomoChatView(
+					leaf,
+					conn,
+					chosenInstanceId,
+					this.settings.zoomLevel,
+					onZoomChange,
+				),
 		);
 
 		// 2. Settings tab (T4.1 — already wired; kept here for SDD ordering).

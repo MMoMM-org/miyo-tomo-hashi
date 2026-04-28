@@ -51,20 +51,20 @@ describe("openPopover", () => {
 		expect(menu.items).toHaveLength(3);
 	});
 
-	it("first item is 'Force reconnect' with refresh-ccw icon", () => {
+	it("first item is 'Open chat window' with message-square icon", () => {
 		const menu = openPopover(new MouseEvent("click"), enabledActions()) as MenuWithItems;
 		const item = menu.items[0];
 		expect(item).toBeDefined();
-		expect(item!.setTitle).toHaveBeenCalledWith("Force reconnect");
-		expect(item!.setIcon).toHaveBeenCalledWith("refresh-ccw");
+		expect(item!.setTitle).toHaveBeenCalledWith("Open chat window");
+		expect(item!.setIcon).toHaveBeenCalledWith("message-square");
 	});
 
-	it("second item is 'Open chat window' with message-square icon", () => {
+	it("second item is 'Force reconnect' with refresh-ccw icon", () => {
 		const menu = openPopover(new MouseEvent("click"), enabledActions()) as MenuWithItems;
 		const item = menu.items[1];
 		expect(item).toBeDefined();
-		expect(item!.setTitle).toHaveBeenCalledWith("Open chat window");
-		expect(item!.setIcon).toHaveBeenCalledWith("message-square");
+		expect(item!.setTitle).toHaveBeenCalledWith("Force reconnect");
+		expect(item!.setIcon).toHaveBeenCalledWith("refresh-ccw");
 	});
 
 	it("third item is 'Go to settings' with settings icon", () => {
@@ -75,7 +75,7 @@ describe("openPopover", () => {
 		expect(item!.setIcon).toHaveBeenCalledWith("settings");
 	});
 
-	it("'Force reconnect' click invokes onForceReconnect", () => {
+	it("'Open chat window' click invokes onOpenChat", () => {
 		const actions = enabledActions();
 		const menu = openPopover(new MouseEvent("click"), actions) as MenuWithItems;
 		const item = menu.items[0];
@@ -83,12 +83,12 @@ describe("openPopover", () => {
 		const handler = item!.onClick.mock.calls[0]?.[0] as (() => void) | undefined;
 		expect(handler).toBeTypeOf("function");
 		handler!();
-		expect(actions.onForceReconnect).toHaveBeenCalledTimes(1);
-		expect(actions.onOpenChat).not.toHaveBeenCalled();
+		expect(actions.onOpenChat).toHaveBeenCalledTimes(1);
+		expect(actions.onForceReconnect).not.toHaveBeenCalled();
 		expect(actions.onOpenSettings).not.toHaveBeenCalled();
 	});
 
-	it("'Open chat window' click invokes onOpenChat", () => {
+	it("'Force reconnect' click invokes onForceReconnect", () => {
 		const actions = enabledActions();
 		const menu = openPopover(new MouseEvent("click"), actions) as MenuWithItems;
 		const item = menu.items[1];
@@ -96,8 +96,8 @@ describe("openPopover", () => {
 		const handler = item!.onClick.mock.calls[0]?.[0] as (() => void) | undefined;
 		expect(handler).toBeTypeOf("function");
 		handler!();
-		expect(actions.onOpenChat).toHaveBeenCalledTimes(1);
-		expect(actions.onForceReconnect).not.toHaveBeenCalled();
+		expect(actions.onForceReconnect).toHaveBeenCalledTimes(1);
+		expect(actions.onOpenChat).not.toHaveBeenCalled();
 		expect(actions.onOpenSettings).not.toHaveBeenCalled();
 	});
 
@@ -116,14 +116,14 @@ describe("openPopover", () => {
 
 	it("disables 'Force reconnect' when forceReconnectEnabled is false", () => {
 		const menu = openPopover(new MouseEvent("click"), disabledActions()) as MenuWithItems;
-		const item = menu.items[0];
+		const item = menu.items[1];
 		expect(item).toBeDefined();
 		expect(item!.setDisabled).toHaveBeenCalledWith(true);
 	});
 
 	it("disabled 'Force reconnect' carries an explanatory title (no instance chosen)", () => {
 		const menu = openPopover(new MouseEvent("click"), disabledActions()) as MenuWithItems;
-		const item = menu.items[0];
+		const item = menu.items[1];
 		expect(item).toBeDefined();
 		const titles = item!.setTitle.mock.calls.map((args) => args[0] as string);
 		expect(titles.some((t) => t.toLowerCase().includes("no instance"))).toBe(true);
@@ -131,7 +131,7 @@ describe("openPopover", () => {
 
 	it("does not disable 'Force reconnect' when forceReconnectEnabled is true", () => {
 		const menu = openPopover(new MouseEvent("click"), enabledActions()) as MenuWithItems;
-		const item = menu.items[0];
+		const item = menu.items[1];
 		expect(item).toBeDefined();
 		const calledWithTrue = item!.setDisabled.mock.calls.some(
 			(args) => args[0] === true,

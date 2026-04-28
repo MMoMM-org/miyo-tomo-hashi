@@ -26,9 +26,51 @@ import { VIEW_TYPE_TOMO_CHAT } from "../../../../src/ui/chat-view/index";
 import * as terminalHost from "../../../../src/ui/chat-view/terminalHost";
 import { TomoChatView } from "../../../../src/ui/chat-view/TomoChatView";
 
+// Per-test mutable hooks so individual tests can assert against the same
+// terminal instance the view holds. Captured at createTerminal-time so the
+// view code can call onData / onResize without indirection.
+interface TerminalHooks {
+	onDataCb: ((data: string) => void) | null;
+	onResizeCb: ((dims: { rows: number; cols: number }) => void) | null;
+	rows: number;
+	cols: number;
+	options: { fontSize: number };
+}
+
+const terminalHooks: TerminalHooks = {
+	onDataCb: null,
+	onResizeCb: null,
+	rows: 24,
+	cols: 80,
+	options: { fontSize: 14 },
+};
+
 vi.mock("../../../../src/ui/chat-view/terminalHost", () => ({
 	createTerminal: vi.fn(() => ({
-		terminal: { write: vi.fn(), dispose: vi.fn() },
+		terminal: {
+			write: vi.fn(),
+			dispose: vi.fn(),
+			// xterm-onData wiring (T7 fix): TomoChatView subscribes via
+			// terminal.onData to forward keystrokes typed inside the xterm
+			// area to the container's stdin. Mock returns a disposable.
+			onData: vi.fn((cb: (data: string) => void) => {
+				terminalHooks.onDataCb = cb;
+				return { dispose: vi.fn() };
+			}),
+			onResize: vi.fn(
+				(cb: (dims: { rows: number; cols: number }) => void) => {
+					terminalHooks.onResizeCb = cb;
+					return { dispose: vi.fn() };
+				},
+			),
+			get rows() {
+				return terminalHooks.rows;
+			},
+			get cols() {
+				return terminalHooks.cols;
+			},
+			options: terminalHooks.options,
+		},
 		fitAddon: { fit: vi.fn() },
 	})),
 	writeChunk: vi.fn(),
@@ -57,6 +99,7 @@ interface FakeConnection {
 	forceReconnect: ReturnType<typeof vi.fn>;
 	write: ReturnType<typeof vi.fn>;
 	onData: ReturnType<typeof vi.fn>;
+	resize: ReturnType<typeof vi.fn>;
 	disposeListener: ReturnType<typeof vi.fn>;
 	fireData: (chunk: Uint8Array) => void;
 }
@@ -74,6 +117,7 @@ function makeConnection(): FakeConnection {
 			dataListeners.push(cb);
 			return { dispose: disposeListener };
 		}),
+		resize: vi.fn(async (_rows: number, _cols: number) => {}),
 		disposeListener,
 		fireData: (chunk: Uint8Array) => {
 			for (const cb of dataListeners) cb(chunk);
@@ -89,16 +133,33 @@ interface Harness {
 	view: TomoChatView;
 	connection: FakeConnection;
 	chosenInstanceId: ReturnType<typeof vi.fn>;
+	onZoomChange: ReturnType<typeof vi.fn>;
 	root: HTMLElement;
 }
 
-const mountView = async (chosenId: string | null = null): Promise<Harness> => {
+interface MountOptions {
+	chosenId?: string | null;
+	initialZoom?: import("../../../../src/types/index").ZoomLevel;
+}
+
+const mountView = async (opts: MountOptions = {}): Promise<Harness> => {
 	const leaf = new WorkspaceLeaf();
 	const connection = makeConnection();
-	const chosenInstanceId = vi.fn(() => chosenId);
-	const view = new TomoChatView(leaf, asConnection(connection), chosenInstanceId);
+	const chosenInstanceId = vi.fn(() => opts.chosenId ?? null);
+	const onZoomChange = vi.fn(
+		async (
+			_level: import("../../../../src/types/index").ZoomLevel,
+		): Promise<void> => {},
+	);
+	const view = new TomoChatView(
+		leaf,
+		asConnection(connection),
+		chosenInstanceId,
+		opts.initialZoom ?? 1,
+		onZoomChange,
+	);
 	await view.onOpen();
-	return { view, connection, chosenInstanceId, root: view.contentEl };
+	return { view, connection, chosenInstanceId, onZoomChange, root: view.contentEl };
 };
 
 describe("TomoChatView — view-type metadata", () => {
@@ -330,7 +391,7 @@ describe("TomoChatView — force reconnect button", () => {
 	});
 
 	it("click calls connection.forceReconnect()", async () => {
-		const h = await mountView("instance-id-123");
+		const h = await mountView({ chosenId: "instance-id-123" });
 		const btn = h.root.querySelector<HTMLButtonElement>(
 			".hashi-chat-view-force-reconnect",
 		);
@@ -339,7 +400,7 @@ describe("TomoChatView — force reconnect button", () => {
 	});
 
 	it("is disabled when chosenInstanceId() returns null", async () => {
-		const h = await mountView(null);
+		const h = await mountView();
 		const btn = h.root.querySelector<HTMLButtonElement>(
 			".hashi-chat-view-force-reconnect",
 		);
@@ -347,7 +408,7 @@ describe("TomoChatView — force reconnect button", () => {
 	});
 
 	it("is enabled when chosenInstanceId() returns a string", async () => {
-		const h = await mountView("instance-id-123");
+		const h = await mountView({ chosenId: "instance-id-123" });
 		const btn = h.root.querySelector<HTMLButtonElement>(
 			".hashi-chat-view-force-reconnect",
 		);
@@ -406,6 +467,133 @@ describe("TomoChatView — indicator", () => {
 		const ind = h.root.querySelector(".hashi-chat-view-indicator");
 		expect(ind!.textContent).toBe("Disconnected");
 		expect(ind!.classList.contains("is-disconnected")).toBe(true);
+	});
+});
+
+describe("TomoChatView — zoom (magnify) controls", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		connectionStore.set({ kind: "disconnected" });
+		terminalHooks.options.fontSize = 14;
+	});
+
+	afterEach(() => {
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	it("renders three zoom buttons (0.5×, 1×, 1.5×) in the header", async () => {
+		const h = await mountView();
+		const buttons = h.root.querySelectorAll<HTMLButtonElement>(
+			".hashi-chat-view-zoom-btn",
+		);
+		expect(buttons.length).toBe(3);
+		const labels = Array.from(buttons).map((b) => b.textContent?.trim());
+		expect(labels).toEqual(["0.5×", "1×", "1.5×"]);
+	});
+
+	it("marks the button matching initialZoom as active", async () => {
+		const h = await mountView({ initialZoom: 1.5 });
+		const active = h.root.querySelector(".hashi-chat-view-zoom-btn.is-active");
+		expect(active?.textContent?.trim()).toBe("1.5×");
+	});
+
+	it("applies fontSize = base × initialZoom on mount", async () => {
+		// Base font size of 14px is the xterm default we anchor on. 0.5x → 7px.
+		await mountView({ initialZoom: 0.5 });
+		expect(terminalHooks.options.fontSize).toBe(7);
+	});
+
+	it("clicking a zoom button updates fontSize and calls onZoomChange", async () => {
+		const h = await mountView({ initialZoom: 1 });
+		const buttons = h.root.querySelectorAll<HTMLButtonElement>(
+			".hashi-chat-view-zoom-btn",
+		);
+		// Click 1.5× (third button)
+		buttons[2]!.dispatchEvent(new MouseEvent("click"));
+
+		expect(terminalHooks.options.fontSize).toBe(21);
+		expect(h.onZoomChange).toHaveBeenCalledTimes(1);
+		expect(h.onZoomChange).toHaveBeenCalledWith(1.5);
+	});
+
+	it("zoom button click triggers fit() so the PTY gets a fresh resize", async () => {
+		// Without fit() after fontSize change, xterm's cell grid stays at the
+		// old geometry — the container PTY would then mismatch xterm again,
+		// reintroducing the ghost-line problem we just fixed.
+		const h = await mountView({ initialZoom: 1 });
+		const buttons = h.root.querySelectorAll<HTMLButtonElement>(
+			".hashi-chat-view-zoom-btn",
+		);
+		const fitMock = vi.mocked(
+			(await import("../../../../src/ui/chat-view/terminalHost")).fit,
+		);
+		fitMock.mockClear();
+		buttons[0]!.dispatchEvent(new MouseEvent("click"));
+		expect(fitMock).toHaveBeenCalled();
+	});
+
+	it("active class moves to the newly clicked button", async () => {
+		const h = await mountView({ initialZoom: 1 });
+		const buttons = h.root.querySelectorAll<HTMLButtonElement>(
+			".hashi-chat-view-zoom-btn",
+		);
+		buttons[0]!.dispatchEvent(new MouseEvent("click"));
+
+		expect(buttons[0]!.classList.contains("is-active")).toBe(true);
+		expect(buttons[1]!.classList.contains("is-active")).toBe(false);
+		expect(buttons[2]!.classList.contains("is-active")).toBe(false);
+	});
+
+	it("clicking the already-active level is a no-op for onZoomChange", async () => {
+		// Don't churn the persist callback when nothing changed. Doing so would
+		// trigger needless saveData round-trips on a fast-clicker.
+		const h = await mountView({ initialZoom: 1 });
+		const buttons = h.root.querySelectorAll<HTMLButtonElement>(
+			".hashi-chat-view-zoom-btn",
+		);
+		buttons[1]!.dispatchEvent(new MouseEvent("click"));
+		expect(h.onZoomChange).not.toHaveBeenCalled();
+	});
+});
+
+describe("TomoChatView — pty resize wiring", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		connectionStore.set({ kind: "disconnected" });
+		terminalHooks.onResizeCb = null;
+		terminalHooks.onDataCb = null;
+		terminalHooks.rows = 24;
+		terminalHooks.cols = 80;
+	});
+
+	afterEach(() => {
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	it("subscribes terminal.onResize and forwards rows/cols to connection.resize", async () => {
+		// Without this, the container PTY stays at the docker-run -it default
+		// (80x24) regardless of xterm's actual size. Claude Code in the
+		// container draws TUI frames for the wrong geometry, leaving stale
+		// animation frames as ghost lines in the chat view.
+		const h = await mountView();
+		expect(terminalHooks.onResizeCb).not.toBeNull();
+		terminalHooks.onResizeCb!({ rows: 42, cols: 173 });
+		expect(h.connection.resize).toHaveBeenCalledTimes(1);
+		expect(h.connection.resize).toHaveBeenCalledWith(42, 173);
+	});
+
+	it("on transition to connected, fits and pushes current geometry to connection.resize", async () => {
+		// Auto-reconnect / first-connect path: the container's new PTY starts
+		// at 80x24. Pushing the cached xterm size right after Connected
+		// resyncs the geometry without waiting for a layout change to fire
+		// xterm's onResize.
+		const h = await mountView();
+		terminalHooks.rows = 50;
+		terminalHooks.cols = 200;
+		connectionStore.set({ kind: "connected", instance: inst() });
+		// Allow the post-state hook to run (it may be async).
+		await Promise.resolve();
+		expect(h.connection.resize).toHaveBeenCalledWith(50, 200);
 	});
 });
 

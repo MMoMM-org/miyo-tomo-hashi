@@ -34,10 +34,11 @@
 
 import { Buffer } from "node:buffer";
 import process from "node:process";
-import { PassThrough, type Duplex, type Readable, type Writable } from "node:stream";
+import { PassThrough, type Readable, type Writable } from "node:stream";
 
 import Dockerode from "dockerode";
 
+import { dialAttach } from "./dialAttach";
 import type { ConnectionError, TomoInstance } from "./types";
 
 // --- AttachSession contract --------------------------------------------------
@@ -46,12 +47,21 @@ import type { ConnectionError, TomoInstance } from "./types";
  * Stable surface returned from `attach()`. The view layer reads from `stdout`,
  * writes to `stdin`, registers a single `onClose` listener, and calls `close()`
  * to tear down. `close()` is idempotent; `onClose` fires exactly once.
+ *
+ * `resize(rows, cols)` forwards xterm's current geometry to the container's
+ * PTY via Docker's resize endpoint. Required because `docker run -it` creates
+ * a TTY with a fixed default size (80×24); without resize calls, every
+ * dimension Claude Code (or any TUI) thinks it's drawing into is wrong, so
+ * cursor backsteps and line-clears land on stale cells and animation frames
+ * stack visibly in xterm. After `close()` resize is a silent no-op so view
+ * code doesn't have to track session lifecycle.
  */
 export interface AttachSession {
 	readonly stdout: Readable;
 	readonly stdin: Writable;
 	close(): Promise<void>;
 	onClose(cb: (reason: "user" | "remote" | "error") => void): void;
+	resize(rows: number, cols: number): Promise<void>;
 }
 
 // --- internals ---------------------------------------------------------------
@@ -135,6 +145,30 @@ export async function listTomoInstances(): Promise<TomoInstance[]> {
 	return mapped;
 }
 
+// --- findInstanceByName ------------------------------------------------------
+
+/**
+ * Resolve a stable Tomo instance name (the `miyo.tomo.instance-name` label
+ * value, set by begin-tomo.sh per Tomo install) to whatever container ID is
+ * currently running for it.
+ *
+ * Why a name lookup exists: docker stop+start gives the container a fresh ID,
+ * so persisting the chosen instance by ID (FS2) used to break across Tomo
+ * restarts — the user had to re-pick from the settings every time. The
+ * instance-name label IS stable across restarts, so we persist that and
+ * resolve through this helper on every reconnect attempt.
+ *
+ * Returns the most recently created match when multiple containers share the
+ * same name (e.g. brief stop+start race). Returns null when nothing matches.
+ */
+export async function findInstanceByName(
+	name: string,
+): Promise<TomoInstance | null> {
+	const all = await listTomoInstances();
+	const hit = all.find((x) => x.name === name);
+	return hit ?? null;
+}
+
 // --- inspectContainer --------------------------------------------------------
 
 /**
@@ -172,14 +206,14 @@ export async function attach(id: string): Promise<AttachSession> {
 
 	const tty: boolean = info.Config.Tty === true;
 	const docker = client();
+	// `container` is captured here so the resize() closure below can use it
+	// without re-resolving from the client. We deliberately do NOT use
+	// `container.attach()` — see the comment block on `dialAttach()` above
+	// for the modem 4.0.12 bug chain we're avoiding. `inspect` and `resize`
+	// are safe (GET / POST without hijack) so we keep using dockerode for
+	// those.
 	const container = docker.getContainer(id);
-	const raw = (await container.attach({
-		stream: true,
-		stdout: true,
-		stderr: true,
-		stdin: true,
-		logs: false,
-	})) as Duplex;
+	const raw = await dialAttach(id);
 
 	let stdoutStream: Readable;
 	if (tty) {
@@ -228,6 +262,15 @@ export async function attach(id: string): Promise<AttachSession> {
 		},
 		onClose(cb): void {
 			listener = cb;
+		},
+		async resize(rows, cols): Promise<void> {
+			// Closed-session no-op: late resize events from a torn-down xterm
+			// (ResizeObserver flushing during view dispose) must not hit
+			// dockerode against a container reference that may already be
+			// stale. Silent return keeps the caller — TomoConnection — from
+			// having to wrap every call in a state check.
+			if (closed) return;
+			await container.resize({ h: rows, w: cols });
 		},
 	};
 }
