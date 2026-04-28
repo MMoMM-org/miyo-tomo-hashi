@@ -424,7 +424,7 @@ describe("SettingsTab — instruction executor controls", () => {
 
 		tab.display();
 		// Fire the onChange for tomoInboxFolder directly via the captured handler
-		await tab._handlers.tomoInboxFolder?.("inbox/tomo");
+		await tab._getHandlersForTest().tomoInboxFolder?.("inbox/tomo");
 
 		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
 		expect(plugin.settings.tomoInboxFolder).toBe("inbox/tomo");
@@ -437,7 +437,7 @@ describe("SettingsTab — instruction executor controls", () => {
 		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
 
 		tab.display();
-		await tab._handlers.debugLogging?.(true);
+		await tab._getHandlersForTest().debugLogging?.(true);
 
 		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
 		expect(plugin.settings.debugLogging).toBe(true);
@@ -450,7 +450,7 @@ describe("SettingsTab — instruction executor controls", () => {
 		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
 
 		tab.display();
-		await tab._handlers.executionMode?.("auto-run");
+		await tab._getHandlersForTest().executionMode?.("auto-run");
 
 		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
 		expect(plugin.settings.executionMode).toBe("auto-run");
@@ -479,7 +479,7 @@ describe("SettingsTab — instruction executor controls", () => {
 			const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
 
 			tab.display();
-			await tab._handlers.tomoInboxFolder?.(path);
+			await tab._getHandlersForTest().tomoInboxFolder?.(path);
 
 			// saveSettings must NOT be called — rejection rolls back
 			expect(plugin.saveSettings).not.toHaveBeenCalled();
@@ -497,7 +497,7 @@ describe("SettingsTab — instruction executor controls", () => {
 		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
 
 		tab.display();
-		await tab._handlers.tomoInboxFolder?.("");
+		await tab._getHandlersForTest().tomoInboxFolder?.("");
 
 		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
 		expect(plugin.settings.tomoInboxFolder).toBe("");
@@ -516,7 +516,7 @@ describe("SettingsTab — instruction executor controls", () => {
 			const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
 
 			tab.display();
-			await tab._handlers.hooksDir?.(path);
+			await tab._getHandlersForTest().hooksDir?.(path);
 
 			expect(plugin.saveSettings).not.toHaveBeenCalled();
 			expect(plugin.settings.hooksDir).toBe(".tomo-hashi/hooks");
@@ -543,7 +543,7 @@ describe("SettingsTab — instruction executor controls", () => {
 
 		tab.display();
 		// Trigger any save to exercise the path
-		await tab._handlers.debugLogging?.(false);
+		await tab._getHandlersForTest().debugLogging?.(false);
 		await Promise.resolve();
 
 		const savedKeys = new Set(Object.keys(plugin.settings));

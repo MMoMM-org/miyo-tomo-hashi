@@ -25,7 +25,6 @@ import { connectionStore, displayInstanceName } from "../connection/connectionSt
 import type { ConnectionState } from "../connection/state";
 import type { TomoConnection } from "../connection/TomoConnection";
 import type { ExecutionMode } from "../executor/state";
-import type { PluginSettings } from "../types/index";
 import { InstancePickerModal } from "./InstancePickerModal";
 
 // ---------------------------------------------------------------------------
@@ -48,6 +47,8 @@ function isUnsafeVaultRelative(s: string): SafetyResult {
 	if (/^[A-Za-z]:/.test(s)) {
 		return { ok: false, reason: "Windows drive letter" };
 	}
+	// `seg === ""` catches `a//b`-style double-separators; `s !== ""` carves
+	// out the empty-string default (split("") === [""]) which is valid.
 	if (s.split(/[/\\]/).some(seg => seg === ".." || (seg === "" && s !== ""))) {
 		return { ok: false, reason: "traversal or empty segment" };
 	}
@@ -55,15 +56,21 @@ function isUnsafeVaultRelative(s: string): SafetyResult {
 }
 
 // ---------------------------------------------------------------------------
-// Handler map — exposes onChange callbacks for test introspection.
-// Keys are PluginSettings field names; values are the async handlers
-// registered during display(). Tests can call these directly to simulate
-// user input without needing DOM click simulation on input/select elements.
-// Production callers never use this map — it is a narrow test seam.
+// Handler map — keyed test seam exposing onChange callbacks for direct
+// invocation from tests, without DOM event simulation. Each entry is typed
+// to its specific field's value type — no `unknown` widening, no contravariance
+// holes. Production code never reads this map; it's accessed by tests through
+// the `_getHandlersForTest()` accessor below.
 // ---------------------------------------------------------------------------
 
-type HandlerValue = string | boolean;
-type HandlerMap = Partial<Record<keyof PluginSettings, (v: HandlerValue) => Promise<void>>>;
+type HandlerMap = {
+	tomoInboxFolder?: (v: string) => Promise<void>;
+	hooksDir?: (v: string) => Promise<void>;
+	executionMode?: (v: string) => Promise<void>;
+	runLogRetention?: (v: string) => Promise<void>;
+	hooksPolicy?: (v: string) => Promise<void>;
+	debugLogging?: (v: boolean) => Promise<void>;
+};
 
 export class SettingsTab extends PluginSettingTab {
 	plugin: TomoHashiPlugin;
@@ -71,9 +78,15 @@ export class SettingsTab extends PluginSettingTab {
 
 	/**
 	 * onChange handler map populated during display(). Tests fire these to
-	 * simulate user edits without DOM interaction. Not used in production.
+	 * simulate user edits without DOM interaction. Not used in production —
+	 * private, accessed only via `_getHandlersForTest()` below.
 	 */
-	_handlers: HandlerMap = {};
+	private _handlers: HandlerMap = {};
+
+	/** @internal — test seam only. Returns the handler map for direct invocation in tests. */
+	_getHandlersForTest(): Readonly<HandlerMap> {
+		return this._handlers;
+	}
 
 	constructor(
 		app: App,
@@ -195,7 +208,7 @@ export class SettingsTab extends PluginSettingTab {
 					this.plugin.settings.debugLogging = v;
 					await this.plugin.saveSettings();
 				};
-				this._handlers.debugLogging = handler as unknown as (v: HandlerValue) => Promise<void>;
+				this._handlers.debugLogging = handler;
 				toggle.onChange(handler);
 			});
 	}
@@ -227,7 +240,7 @@ export class SettingsTab extends PluginSettingTab {
 					this.plugin.settings[key] = v;
 					await this.plugin.saveSettings();
 				};
-				this._handlers[key] = handler as unknown as (v: HandlerValue) => Promise<void>;
+				this._handlers[key] = handler;
 				text.onChange(handler);
 			});
 	}
@@ -240,7 +253,7 @@ export class SettingsTab extends PluginSettingTab {
 		containerEl: HTMLElement,
 		name: string,
 		desc: string,
-		key: keyof PluginSettings,
+		key: "executionMode" | "runLogRetention" | "hooksPolicy",
 		options: Array<[T, string]>,
 	): void {
 		new Setting(containerEl)
@@ -252,10 +265,10 @@ export class SettingsTab extends PluginSettingTab {
 				}
 				dropdown.setValue(this.plugin.settings[key] as string);
 				const handler = async (v: string): Promise<void> => {
-					(this.plugin.settings as unknown as Record<string, unknown>)[key as string] = v as T;
+					(this.plugin.settings as unknown as Record<string, unknown>)[key] = v as T;
 					await this.plugin.saveSettings();
 				};
-				this._handlers[key] = handler as unknown as (v: HandlerValue) => Promise<void>;
+				this._handlers[key] = handler;
 				dropdown.onChange(handler);
 			});
 	}

@@ -227,9 +227,12 @@ export class Setting {
 		containerEl.appendChild(this.settingEl);
 	}
 
+	// NOTE: setName/setDesc here APPEND a child each call. Real Obsidian
+	// REPLACES the existing name/desc element. Safe in current usage because
+	// `display()` calls `containerEl.empty()` and constructs fresh `Setting`
+	// instances, so each name/desc is appended exactly once. Do not reuse a
+	// `Setting` instance across `display()` calls — the labels would stack.
 	setName = vi.fn((name: string) => {
-		// Mirror real Obsidian: setName creates a name element inside settingEl
-		// so containerEl.textContent includes the label. Tests assert on this.
 		const nameEl = document.createElement("div");
 		nameEl.classList.add("setting-item-name");
 		nameEl.textContent = name;
