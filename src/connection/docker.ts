@@ -34,10 +34,11 @@
 
 import { Buffer } from "node:buffer";
 import process from "node:process";
-import { PassThrough, type Duplex, type Readable, type Writable } from "node:stream";
+import { PassThrough, type Readable, type Writable } from "node:stream";
 
 import Dockerode from "dockerode";
 
+import { dialAttach } from "./dialAttach";
 import type { ConnectionError, TomoInstance } from "./types";
 
 // --- AttachSession contract --------------------------------------------------
@@ -205,31 +206,14 @@ export async function attach(id: string): Promise<AttachSession> {
 
 	const tty: boolean = info.Config.Tty === true;
 	const docker = client();
+	// `container` is captured here so the resize() closure below can use it
+	// without re-resolving from the client. We deliberately do NOT use
+	// `container.attach()` — see the comment block on `dialAttach()` above
+	// for the modem 4.0.12 bug chain we're avoiding. `inspect` and `resize`
+	// are safe (GET / POST without hijack) so we keep using dockerode for
+	// those.
 	const container = docker.getContainer(id);
-	// `hijack: true` is REQUIRED when attaching with stdin so docker-modem
-	// performs the HTTP-Upgrade handshake to a raw bidirectional socket.
-	// Without it, output may still flow (initial response chunks) but writes
-	// to stdin are dropped — the connection isn't hijacked, it's just an
-	// HTTP response body. User-reported runtime bug 2026-04-28.
-	//
-	// `_body: {}` works around a docker-modem 4.0.12 bug: for any POST it
-	// JSON.stringifies the opts object as the request body (modem.js:208),
-	// then with hijack:true writes that body straight into the upgraded
-	// socket — i.e. into the container's stdin. The user sees
-	// `{"stream":true,"stdout":true,...}` echoed in the Tomo terminal on
-	// every connect. modem.js:212 has an explicit "{}" / '""' shortcut that
-	// drops the body when the JSON is empty; `_body: {}` triggers that path.
-	// (modem prefers `opts._body || opts` at line 208, so a truthy empty
-	// object wins over the full opts.)
-	const raw = (await container.attach({
-		stream: true,
-		stdout: true,
-		stderr: true,
-		stdin: true,
-		hijack: true,
-		logs: false,
-		_body: {},
-	} as unknown as Parameters<typeof container.attach>[0])) as Duplex;
+	const raw = await dialAttach(id);
 
 	let stdoutStream: Readable;
 	if (tty) {

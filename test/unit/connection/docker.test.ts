@@ -32,6 +32,9 @@ interface DockerodeMockHandles {
 const handles: DockerodeMockHandles = {
 	listContainers: vi.fn(),
 	inspect: vi.fn(),
+	// Kept on the dockerode mock to assert we NEVER call it after the
+	// modem-bypass refactor. dialAttach() lives in its own module and has
+	// its own mock below.
 	attach: vi.fn(),
 	resize: vi.fn(),
 	demuxStream: vi.fn(),
@@ -51,6 +54,14 @@ vi.mock("dockerode", () => {
 	return { default: Dockerode };
 });
 
+// dialAttach is the raw HTTP attach (modem-bypass). Mock it module-wide so
+// unit tests can hand the AttachSession factory a controllable Duplex
+// without driving a real Docker daemon.
+const mockDialAttach = vi.fn<(id: string) => Promise<import("node:stream").Duplex>>();
+vi.mock("../../../src/connection/dialAttach", () => ({
+	dialAttach: (id: string) => mockDialAttach(id),
+}));
+
 beforeEach(() => {
 	handles.listContainers.mockReset();
 	handles.inspect.mockReset();
@@ -59,6 +70,7 @@ beforeEach(() => {
 	handles.demuxStream.mockReset();
 	handles.getContainer.mockReset();
 	handles.dockerodeCtor.mockReset();
+	mockDialAttach.mockReset();
 	handles.getContainer.mockImplementation(() => ({
 		inspect: handles.inspect,
 		attach: handles.attach,
@@ -300,7 +312,7 @@ describe("attach()", () => {
 	it("TTY mode: returns AttachSession exposing the raw stream as stdout/stdin", async () => {
 		handles.inspect.mockResolvedValue(inspectStub(true));
 		const stream = new PassThrough();
-		handles.attach.mockResolvedValue(stream);
+		mockDialAttach.mockResolvedValue(stream);
 
 		const session = await attach(VALID_ID);
 
@@ -327,7 +339,7 @@ describe("attach()", () => {
 
 	it("TTY mode: onClose fires once with 'user' when close() is called", async () => {
 		handles.inspect.mockResolvedValue(inspectStub(true));
-		handles.attach.mockResolvedValue(new PassThrough());
+		mockDialAttach.mockResolvedValue(new PassThrough());
 
 		const session = await attach(VALID_ID);
 		const cb = vi.fn();
@@ -343,7 +355,7 @@ describe("attach()", () => {
 	it("non-TTY mode: invokes modem.demuxStream(stream, stdoutPT, stderrPT)", async () => {
 		handles.inspect.mockResolvedValue(inspectStub(false));
 		const stream = new PassThrough();
-		handles.attach.mockResolvedValue(stream);
+		mockDialAttach.mockResolvedValue(stream);
 
 		const session = await attach(VALID_ID);
 
@@ -379,7 +391,7 @@ describe("attach()", () => {
 
 	it("typed return: AttachSession contract has the expected shape", async () => {
 		handles.inspect.mockResolvedValue(inspectStub(true));
-		handles.attach.mockResolvedValue(new PassThrough());
+		mockDialAttach.mockResolvedValue(new PassThrough());
 
 		const session: AttachSession = await attach(VALID_ID);
 		// Typecheck-flavoured runtime assertions
@@ -400,7 +412,7 @@ describe("attach()", () => {
 		// leaving cursor backsteps and line-clears on the wrong cells. The
 		// AttachSession.resize() pass-through is what closes that gap.
 		handles.inspect.mockResolvedValue(inspectStub(true));
-		handles.attach.mockResolvedValue(new PassThrough());
+		mockDialAttach.mockResolvedValue(new PassThrough());
 		handles.resize.mockResolvedValue(undefined);
 
 		const session = await attach(VALID_ID);
@@ -414,7 +426,7 @@ describe("attach()", () => {
 
 	it("resize() rejection propagates so callers can decide retry policy", async () => {
 		handles.inspect.mockResolvedValue(inspectStub(true));
-		handles.attach.mockResolvedValue(new PassThrough());
+		mockDialAttach.mockResolvedValue(new PassThrough());
 		const boom = new Error("container gone");
 		handles.resize.mockRejectedValue(boom);
 
@@ -424,32 +436,39 @@ describe("attach()", () => {
 		await session.close();
 	});
 
-	it("attach options carry _body:{} so docker-modem skips writing the JSON body to the hijacked socket", async () => {
-		// docker-modem 4.0.12 (modem.js:208) JSON-stringifies POST opts as the
-		// request body. With hijack:true the connection upgrades to a raw
-		// socket and (modem.js:367) writes that body straight into the
-		// container's stdin — the user sees `{"stream":true,"stdout":true,…}`
-		// echoed in the Tomo terminal on every connect. Setting `_body: {}`
-		// makes modem JSON-stringify {} → "{}" → matches the empty-data
-		// branch (modem.js:212-216) and the body is dropped.
+	it("does NOT route the attach through dockerode.container.attach (avoids the modem 4.0.12 hijack body leak)", async () => {
+		// Two cascading docker-modem 4.0.12 bugs that this assertion locks in:
+		//   1. modem.js:208 JSON-stringifies POST opts as the request body
+		//      and (modem.js:367) writes that body to the upgraded socket —
+		//      i.e. straight into the container's stdin. The user saw
+		//      `{"stream":true,"stdout":true,...}` typed into bash/Claude
+		//      on every connect.
+		//   2. Suppressing the body via `_body:{}` makes modem skip req.end()
+		//      on the openStdin path (modem.js:376), so headers never flush
+		//      and the request hangs forever.
+		// Our attach() bypasses dockerode entirely with a raw http.request
+		// against the docker socket — see dialAttach() in docker.ts.
 		handles.inspect.mockResolvedValue(inspectStub(true));
-		handles.attach.mockResolvedValue(new PassThrough());
 
-		const session = await attach(VALID_ID);
-
-		expect(handles.attach).toHaveBeenCalledTimes(1);
-		const passedOpts = handles.attach.mock.calls[0]?.[0] as
-			| Record<string, unknown>
-			| undefined;
-		expect(passedOpts).toBeDefined();
-		expect(passedOpts?._body).toEqual({});
-
-		await session.close();
+		// dialAttach uses node:http; not reachable from the dockerode mock.
+		// In the unit test we can't drive a real socket, but we CAN assert
+		// the code never falls back to the buggy path.
+		try {
+			await Promise.race([
+				attach(VALID_ID),
+				new Promise((resolve) => setTimeout(resolve, 50)),
+			]);
+		} catch {
+			// dialAttach will fail in a unit-test environment (no docker
+			// socket), which is fine — the assertion is about the dockerode
+			// surface, not whether the raw http call succeeded.
+		}
+		expect(handles.attach).not.toHaveBeenCalled();
 	});
 
 	it("resize() after close() is a no-op (does not call dockerode)", async () => {
 		handles.inspect.mockResolvedValue(inspectStub(true));
-		handles.attach.mockResolvedValue(new PassThrough());
+		mockDialAttach.mockResolvedValue(new PassThrough());
 		handles.resize.mockResolvedValue(undefined);
 
 		const session = await attach(VALID_ID);
