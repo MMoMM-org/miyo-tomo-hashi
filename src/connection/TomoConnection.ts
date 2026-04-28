@@ -22,9 +22,12 @@
  *    through `dockerode`'s callback-style attach.
  *
  * 2. `chosenInstanceId` is mutated on `this.settings` on entering Connected,
- *    NOT cleared on disconnect (FS2: remember last connected). The actual
- *    `saveData()` call lives in T3.4 (plugin entrypoint) — T3.3 only
- *    persists in-memory.
+ *    NOT cleared on disconnect (FS2: remember last connected). T3.4 wires a
+ *    `persist` callback through the constructor so the settings object is
+ *    flushed to plugin data on every Connected transition; on Disconnect
+ *    the value stays put across sessions (PRD FS2/AC1) and the callback is
+ *    not invoked. The plugin-side wiring of `persist → plugin.saveData()`
+ *    happens in Phase 5 (main.ts integration).
  *
  * 3. Reconnect attempts inspect first, then attach. If inspect returns null
  *    we surface chosen-instance-gone immediately; the loop is cancelled and
@@ -115,7 +118,10 @@ export class TomoConnection {
 	private epoch = 0;
 	private disposed = false;
 
-	constructor(private settings: PluginSettings) {}
+	constructor(
+		private settings: PluginSettings,
+		private persist: (settings: PluginSettings) => Promise<void> = async () => {},
+	) {}
 
 	get state(): ConnectionState {
 		return this.currentState;
@@ -152,6 +158,7 @@ export class TomoConnection {
 			}
 			this.installSession(session, target);
 			this.settings.chosenInstanceId = target.containerId;
+			await this.persist(this.settings);
 			this.setState({ kind: "connected", instance: target });
 		} catch (err: unknown) {
 			if (epoch !== this.epoch) return;
@@ -196,6 +203,8 @@ export class TomoConnection {
 				return;
 			}
 			this.installSession(session, target);
+			this.settings.chosenInstanceId = target.containerId;
+			await this.persist(this.settings);
 			this.setState({ kind: "connected", instance: target });
 		} catch (err: unknown) {
 			if (epoch !== this.epoch) return;
@@ -240,6 +249,7 @@ export class TomoConnection {
 			}
 			this.installSession(session, target);
 			this.settings.chosenInstanceId = target.containerId;
+			await this.persist(this.settings);
 			this.setState({ kind: "connected", instance: target });
 		} catch (err: unknown) {
 			if (epoch !== this.epoch) return;
@@ -421,6 +431,8 @@ export class TomoConnection {
 						return false;
 					}
 					this.installSession(session, target);
+					this.settings.chosenInstanceId = target.containerId;
+					await this.persist(this.settings);
 					this.setState({ kind: "connected", instance: target });
 					return true;
 				} catch {

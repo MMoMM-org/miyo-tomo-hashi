@@ -51,8 +51,8 @@ export class Plugin extends Component {
 		this.app = app ?? new App();
 	}
 
-	loadData = vi.fn(async () => ({}));
-	saveData = vi.fn(async () => {});
+	loadData = vi.fn<() => Promise<unknown>>(async () => ({}));
+	saveData = vi.fn<(data: unknown) => Promise<void>>(async () => {});
 	addRibbonIcon = vi.fn(() => document.createElement("div"));
 	addStatusBarItem = vi.fn(() => ({ setText: vi.fn() }));
 	addCommand = vi.fn();

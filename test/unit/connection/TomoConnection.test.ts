@@ -218,6 +218,48 @@ describe("TomoConnection.connect()", () => {
 		await conn.dispose();
 	});
 
+	it("on Connected transition, persist callback is called with the updated settings (FS2)", async () => {
+		const target = inst();
+		const fake = makeFakeSession();
+		mockedAttach.mockResolvedValueOnce(fake.session);
+
+		const persist = vi.fn(async (_s: PluginSettings) => {});
+		const s = settings();
+		const conn = new TomoConnection(s, persist);
+
+		await conn.connect(target);
+
+		expect(persist).toHaveBeenCalledTimes(1);
+		expect(persist).toHaveBeenCalledWith({
+			chosenInstanceId: target.containerId,
+		});
+		// Must reference the live settings object (mutation visible to caller).
+		expect(persist.mock.calls[0]?.[0]).toBe(s);
+
+		await conn.dispose();
+	});
+
+	it("disconnect() does NOT clear chosenInstanceId nor invoke persist with null (FS2 semantics)", async () => {
+		const target = inst();
+		const fake = makeFakeSession();
+		mockedAttach.mockResolvedValueOnce(fake.session);
+
+		const persist = vi.fn(async (_s: PluginSettings) => {});
+		const s = settings();
+		const conn = new TomoConnection(s, persist);
+
+		await conn.connect(target);
+		expect(s.chosenInstanceId).toBe(target.containerId);
+
+		await conn.disconnect();
+
+		// Disconnect path leaves settings untouched and never re-persists.
+		expect(conn.state.kind).toBe("disconnected");
+		expect(s.chosenInstanceId).toBe(target.containerId);
+		expect(persist).toHaveBeenCalledTimes(1); // only the connect call
+		expect(persist).not.toHaveBeenCalledWith({ chosenInstanceId: null });
+	});
+
 	it("on daemon-unreachable error transitions to Disconnected{daemon-unreachable}; does not persist", async () => {
 		const target = inst();
 		mockedAttach.mockRejectedValue(
