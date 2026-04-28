@@ -103,6 +103,7 @@ function viewFor(state: ConnectionState): IndicatorView {
 export class TomoChatView extends ItemView {
 	private unsubscribe: (() => void) | null = null;
 	private dataDisposable: { dispose: () => void } | null = null;
+	private terminalInputDisposable: { dispose: () => void } | null = null;
 	private terminal: TerminalSession | null = null;
 	private resizeObserver: ResizeObserver | null = null;
 
@@ -188,6 +189,21 @@ export class TomoChatView extends ItemView {
 			if (this.terminal !== null) writeChunk(this.terminal, chunk);
 		});
 
+		// Forward keystrokes typed inside the xterm area to the container's
+		// stdin. This is what makes the chat view behave like a normal terminal
+		// emulator — without this, xterm captures key events but does nothing
+		// with them, so typing into the visible Tomo TUI silently drops bytes.
+		// The PRD-style separate input field below is still wired (for chat-
+		// style line submit on Enter); both entry points coexist.
+		this.terminalInputDisposable = this.terminal.terminal.onData((data) => {
+			try {
+				this.connection.write(data);
+			} catch {
+				// not connected — drop silently; render() shows the disconnected
+				// state and the user can re-Connect / Force Reconnect.
+			}
+		});
+
 		// Keep the terminal sized to its container. ResizeObserver is missing
 		// under jsdom (test runtime) — guard the wiring so unit tests don't
 		// blow up; the production runtime (Electron) provides it.
@@ -229,6 +245,10 @@ export class TomoChatView extends ItemView {
 		if (this.dataDisposable !== null) {
 			this.dataDisposable.dispose();
 			this.dataDisposable = null;
+		}
+		if (this.terminalInputDisposable !== null) {
+			this.terminalInputDisposable.dispose();
+			this.terminalInputDisposable = null;
 		}
 		if (this.resizeObserver !== null) {
 			this.resizeObserver.disconnect();

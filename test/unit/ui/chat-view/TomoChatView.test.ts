@@ -28,7 +28,14 @@ import { TomoChatView } from "../../../../src/ui/chat-view/TomoChatView";
 
 vi.mock("../../../../src/ui/chat-view/terminalHost", () => ({
 	createTerminal: vi.fn(() => ({
-		terminal: { write: vi.fn(), dispose: vi.fn() },
+		terminal: {
+			write: vi.fn(),
+			dispose: vi.fn(),
+			// xterm-onData wiring (T7 fix): TomoChatView subscribes via
+			// terminal.onData to forward keystrokes typed inside the xterm
+			// area to the container's stdin. Mock returns a disposable.
+			onData: vi.fn(() => ({ dispose: vi.fn() })),
+		},
 		fitAddon: { fit: vi.fn() },
 	})),
 	writeChunk: vi.fn(),
