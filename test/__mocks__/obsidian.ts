@@ -293,8 +293,17 @@ export class ItemView extends Component {
 		this.leaf = leaf;
 	}
 
-	onOpen = vi.fn(async () => {});
-	onClose = vi.fn(async () => {});
+	// onOpen() / onClose() are declared as prototype methods (not field
+	// assignments) so subclass overrides aren't clobbered by the parent
+	// constructor's field initialization order. Mirrors the Modal mock
+	// pattern below — same reasoning.
+	onOpen(): void | Promise<void> {
+		// default: no-op; subclasses override
+	}
+
+	onClose(): void | Promise<void> {
+		// default: no-op; subclasses override
+	}
 }
 
 // --- Menu / Modal ---
