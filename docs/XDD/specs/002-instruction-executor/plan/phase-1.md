@@ -1,6 +1,6 @@
 ---
 title: "Phase 1: Foundation"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 1
 ---
@@ -63,7 +63,7 @@ This phase vendors the Tomo schema, wires up the prebuild ajv-codegen pipeline, 
      - [ ] Types usable in downstream phases `[ref: SDD/Application Data Models]`
      - [ ] Discriminated unions enforce exhaustive handling `[ref: SDD/Application Data Models]`
 
-- [ ] **T1.3 Extend PluginSettings + Settings tab UI** `[activity: frontend-ui]`
+- [x] **T1.3 Extend PluginSettings + Settings tab UI** `[activity: frontend-ui]`
 
   1. Prime: Read PRD F11 (all 7 settings + defaults) `[ref: PRD/F11]`; read SDD "Plugin Settings" `[ref: SDD/Plugin Settings]`; read existing `src/settings/SettingsTab.ts` and `src/types/index.ts`.
   2. Test: Write `test/unit/settings/SettingsTab.test.ts`:
@@ -81,7 +81,7 @@ This phase vendors the Tomo schema, wires up the prebuild ajv-codegen pipeline, 
      - [ ] Per-hook ask-mode decisions NOT persisted in `data.json` `[ref: PRD/F11]`
      - [ ] Path-safety boundary at the settings layer prevents misconfig `[ref: PRD/F9, F11]`
 
-- [ ] **T1.4 Path-safety utility** `[activity: domain-modeling]`
+- [x] **T1.4 Path-safety utility** `[activity: domain-modeling]`
 
   1. Prime: Read PRD F9 (full AC list) `[ref: PRD/F9]`; read SDD `src/util/paths.ts` directory entry `[ref: SDD/Directory Map]`.
   2. Test: Write `test/unit/util/paths.test.ts`:
@@ -102,7 +102,7 @@ This phase vendors the Tomo schema, wires up the prebuild ajv-codegen pipeline, 
      - [ ] Path safety table covers every PRD F9 AC `[ref: PRD/F9]`
      - [ ] Deny-list correctly handles configurable `hooksDir` `[ref: PRD/F8, F9]`
 
-- [ ] **T1.5 Ensure `Store<T>` available + extend obsidian test mock** `[activity: testing]`
+- [x] **T1.5 Ensure `Store<T>` available + extend obsidian test mock** `[activity: testing]`
 
   1. Prime: Read 001's SDD State Store section `[ref: 001/SDD/State Store (typed Store<T> helper)]`. Check if `src/util/store.ts` already exists. Read existing `test/__mocks__/obsidian.ts`.
   2. Test: Write/extend `test/unit/__mocks__/obsidian-shape.test.ts`:
@@ -121,7 +121,7 @@ This phase vendors the Tomo schema, wires up the prebuild ajv-codegen pipeline, 
      - [ ] `Store<T>` available at `src/util/store.ts` `[ref: 001/SDD/ADR-4; 002/SDD/Solution Strategy]`
      - [ ] Obsidian mock covers every API the executor uses `[ref: SDD/Code Context; test/__mocks__/obsidian.ts]`
 
-- [ ] **T1.6 Phase 1 Validation** `[activity: validate]`
+- [x] **T1.6 Phase 1 Validation** `[activity: validate]`
 
   - Run `npm run build && npm test && npm run lint`. All green. Confirm: vendored schema present + asserted; types compile across the new modules; settings render and persist; path-safety utility passes its full table; obsidian mock covers the Phase 2+ API surface.
   - If `src/util/store.ts` was extracted on-demand here, append a deviation record to the plan README's Deviations section noting the extraction.

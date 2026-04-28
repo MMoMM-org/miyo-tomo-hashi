@@ -7,15 +7,17 @@ export type SafetyResult =
 /**
  * Documented validation order for any vault-targeting action. Callers
  * (Phase 4 InstructionExecutor) MUST evaluate in this order and short-circuit
- * on the first failure.
+ * on the first failure. Mirrors PRD F9 verbatim: schema → normalize → contain
+ * → denyList → payloadGuard → execute.
  */
 export const VALIDATION_ORDER: readonly [
 	"schema",
 	"normalize",
 	"contain",
 	"denyList",
+	"payloadGuard",
 	"execute",
-] = ["schema", "normalize", "contain", "denyList", "execute"] as const;
+] = ["schema", "normalize", "contain", "denyList", "payloadGuard", "execute"] as const;
 
 // Fixed deny-list patterns for v0.1 (not user-configurable beyond hooksDir).
 const FIXED_DENY_PATTERNS: readonly RegExp[] = [

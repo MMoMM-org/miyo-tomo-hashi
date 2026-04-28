@@ -268,12 +268,13 @@ describe("verifyRealpathContainment", () => {
 // ---------------------------------------------------------------------------
 
 describe("VALIDATION_ORDER", () => {
-	it("is the exact 5-element tuple in documented order", () => {
+	it("is the exact 6-element tuple in documented order (PRD F9)", () => {
 		expect(VALIDATION_ORDER).toEqual([
 			"schema",
 			"normalize",
 			"contain",
 			"denyList",
+			"payloadGuard",
 			"execute",
 		]);
 	});

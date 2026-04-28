@@ -11,12 +11,12 @@ version: "1.0"
 ## Constraints
 
 CON-1 **Platform & language**: Obsidian Desktop (Electron). TypeScript `strict: true`, `noUncheckedIndexedAccess: true`, `useUnknownInCatchVariables: true`. Target ES6 (per `tsconfig.json`). `lib: ["DOM", "ES5", "ES6", "ES7"]`. Inherits CON-1 from spec 001.
-CON-2 **Build**: esbuild CommonJS bundle to `main.js`. Externals exclude `obsidian` and node builtins. ajv 8.x runs at runtime — no prebuild step, no committed generated artifact. The schema is bundled as JSON and compiled to a validator function at plugin load (~once). Adds ~35 KB to the bundle, well within the 500 KB budget.
+CON-2 **Build**: esbuild CommonJS bundle to `main.js`. Externals exclude `obsidian` and node builtins. ajv 8.x runs at runtime — no prebuild step, no committed generated artifact. The schema is bundled as JSON and compiled to a validator function at plugin load (~once). Adds ~2 KB on top of the existing bundle (the schema JSON itself is ~10 KB; ajv's compiled validator is small relative to the v0.1 bundle that already includes dockerode + xterm.js).
 CON-3 **Desktop-only**: same drift as 001 (`manifest.json` `isDesktopOnly: false → true`). Spec 001's plan owns the fix; 002 inherits it.
 CON-4 **Testing**: vitest unit (jsdom + obsidian mock) + vitest live (node, real `fs/promises` against a temp vault). Inherits 001's split. **NEW vs 001**: live tests for 002 do NOT need Docker — they exercise an `InMemoryVaultFS`-or-`fs/promises`-backed adapter against a temp directory.
 CON-5 **No external inbound surface**: inherits CON-5 from 001. No ports, no MCP, no webhooks.
 CON-6 **One run at a time**: enforced by a single-run lock at the orchestrator. No queue.
-CON-7 **Bundle budget**: informal target ≤ 500 KB total `main.js`. ajv 8.x runtime adds ~35 KB; comfortable.
+CON-7 **Bundle budget**: informal target ≤ 1000 KB total `main.js`, inherited from 001's revised CON-7 (the original 500 KB target was set before 001 discovered dockerode + docker-modem must be bundled rather than externalized; combined ~940 KB pre-002). ajv 8.x runtime adds ~2 KB on top of that.
 CON-8 **Trust boundary**: instruction-set fields are NEVER passed to `eval`, `Function`, `exec`, or shell. Hooks are user-owned Node scripts and run with full plugin privilege (PRD F8) — compensating control is the *enabled / disabled / ask* setting plus the kill-switch.
 CON-9 **Tomo handoff — already integrated**: PRD F5 requires Tomo to emit `applied: false` per action. Tomo shipped this on 2026-04-25 in v0.7.0 (`build_actions()` in `tomo/scripts/instruction-render.py`; shared `$defs/applied_field` in `tomo/schemas/instructions.schema.json` across all 8 variants; round-trip test in `tests/test-008-phase1.py`; consumer doc updated; branch `feat/applied-field-instructions`, commit `f3ad49d`). The graceful-fallback path (treat missing as `false`) is retained as defensive code but is no longer the v0.1 path.
 CON-10 **No cross-spec coupling with 001**: post-pivot, 002 shares only the plugin shell (`main.ts`) and the `Store<T>` helper from `util/store.ts`. No shared services, no shared state, no shared error channel.
@@ -74,11 +74,11 @@ CON-10 **No cross-spec coupling with 001**: post-pivot, 002 shares only the plug
 
 - file: src/settings/SettingsTab.ts
   relevance: HIGH
-  why: "Will be extended with seven new settings (Tomo inbox folder, Execution mode, Run log retention, Hooks dir, Hooks setting, Disable all hooks, Debug logging) using Obsidian's `Setting` API"
+  why: "Will be extended with six new settings (Tomo inbox folder, Execution mode, Run log retention, Hooks dir, Hooks policy, Debug logging) using Obsidian's `Setting` API. The kill-switch is `hooksPolicy: 'disabled'` — no separate `disableAllHooks` toggle."
 
 - file: src/types/index.ts
   relevance: HIGH
-  why: "PluginSettings type extended with the seven 002 settings"
+  why: "PluginSettings type extended with the six 002 settings"
 
 - file: src/util/store.ts (NEW in 001 ADR-4 — to be authored as part of 001 plan)
   relevance: CRITICAL
@@ -183,7 +183,7 @@ inbound:
     type: Obsidian PluginSettingTab
     format: DOM events on Setting controls
     authentication: Trusted
-    data_flow: "Configures 7 settings; persists via saveData"
+    data_flow: "Configures 6 settings; persists via saveData"
 
   - name: "User → Status Bar 橋 Icon"
     type: HTMLElement on addStatusBarItem
@@ -349,9 +349,9 @@ graph TB
 ├── src/
 │   ├── main.ts                                      # MODIFY: wire 002's executor, modal, status bar, settings, commands
 │   ├── types/
-│   │   └── index.ts                                 # MODIFY: PluginSettings += 7 new fields
+│   │   └── index.ts                                 # MODIFY: PluginSettings += 6 new fields
 │   ├── settings/
-│   │   └── SettingsTab.ts                           # MODIFY: render 7 new Setting controls
+│   │   └── SettingsTab.ts                           # MODIFY: render 6 new Setting controls
 │   ├── executor/                                    # NEW: orchestration + state + planning
 │   │   ├── InstructionExecutor.ts                   # NEW: orchestrator (single-run lock, run lifecycle, dispatch)
 │   │   ├── executionStore.ts                        # NEW: Store<RunState> instance + derived slices

@@ -218,7 +218,7 @@ None in v0.1. Multi-user, cross-vault, and remote-instruction-source scenarios a
   - [ ] All settings persist via Obsidian's `data.json`; no other state is stored outside the vault.
   - [ ] Given the *Tomo inbox folder* is empty or points at a non-existent path, When I attempt a batch invocation, Then a `Notice` *"Tomo inbox folder is not configured — set it in settings"* is shown and no run starts.
   - [ ] Per-hook *ask*-mode decisions (Enable / Enable once / Disable) live **in memory** for the current Obsidian session only; they do NOT persist across Obsidian restarts. After a plugin reload or Obsidian restart, the next invocation that would run a previously-Enabled hook re-prompts via the disclosure modal.
-  - [ ] Radio and toggle controls (Execution mode, Run log retention, Hooks policy, Disable all hooks, Debug logging) are domain-bounded by Obsidian's `Setting` API — no invalid value is reachable through the UI. Text inputs (Tomo inbox folder, Hooks dir) reject absolute paths, traversal sequences, and Windows drive letters; on rejection they revert to the previous value and fire a `Notice` naming the rejected pattern.
+  - [ ] Radio and toggle controls (Execution mode, Run log retention, Hooks policy, Debug logging) are domain-bounded by Obsidian's `Setting` API — no invalid value is reachable through the UI. (Hooks policy = `enabled` / `disabled` / `ask`; the `disabled` value IS the kill-switch — no separate "Disable all hooks" toggle.) Text inputs (Tomo inbox folder, Hooks dir) reject absolute paths, traversal sequences, and Windows drive letters; on rejection they revert to the previous value and fire a `Notice` naming the rejected pattern.
 
 ### Should Have Features
 
@@ -286,7 +286,7 @@ None in v0.1.
 - Schema v2 instruction set ships from Tomo before Hashi upgrades → F2 fails closed, version-mismatch error pointing at the schema-version-pinning contract.
 - Hook file is a valid JS module but exports nothing → executor treats it as "no hook defined" and proceeds without error.
 - Hook's infinite loop → 30-second timeout kills it; action treated as hook failure per F8.
-- User toggles *Disable all hooks* mid-run → does NOT apply to the in-flight run; new runs honour the new setting.
+- User flips *Hooks policy* to `disabled` (the kill-switch) mid-run → does NOT apply to the in-flight run; new runs honour the new setting.
 - Two runs scheduled in the same minute (rare) → second run-log file gets `_2` suffix (F7 disambiguation).
 - `_instructions.json` contains 0 actions → preview shows "0 of 0 remaining"; *Execute* disabled; no-op; no `.json` write; run log records the empty file.
 - Single `skip` action → executes, sets `applied: true`, no other side effect; counts as 1 applied in the summary.
