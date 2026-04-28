@@ -109,6 +109,13 @@ function viewFor(state: ConnectionState): IndicatorView {
 	}
 }
 
+// Trailing-debounce window for the ResizeObserver-driven `fit()`. xterm's
+// fit() re-measures the host element, recomputes the cell grid, and pushes
+// a resize event downstream — non-trivial work to thrash on every pixel of
+// a pane drag. 150 ms is the standard xterm-integration debounce and feels
+// instant after the user stops dragging.
+const RESIZE_DEBOUNCE_MS = 150;
+
 export class TomoChatView extends ItemView {
 	private unsubscribe: (() => void) | null = null;
 	private dataDisposable: { dispose: () => void } | null = null;
@@ -116,11 +123,17 @@ export class TomoChatView extends ItemView {
 	private terminalResizeDisposable: { dispose: () => void } | null = null;
 	private terminal: TerminalSession | null = null;
 	private resizeObserver: ResizeObserver | null = null;
+	private resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 	// Drives the post-Connected resize push. Tracking the previous state
 	// kind avoids resyncing on every store transition (e.g. indicator-only
 	// updates) — only the disconnected→connected edge needs the explicit
 	// fit + resize.
 	private lastStateKind: ConnectionState["kind"] | null = null;
+	// Continuity-gap signal — flipped true on the reconnecting → connected
+	// transition (PRD F8/AC5 + F5/AC5). The indicator carries a
+	// "Reconnected (gap)" suffix until the user types a character, at which
+	// point we clear it (the user has acknowledged recovery by acting).
+	private showGapNotice: boolean = false;
 	private currentZoom: ZoomLevel;
 
 	// DOM refs — captured during onOpen() so render() can update them on
@@ -190,6 +203,13 @@ export class TomoChatView extends ItemView {
 		this.indicatorEl = header.createDiv({
 			cls: "hashi-chat-view-indicator",
 		});
+		// PRD F5/AC7 + F9/AC5 — screen-reader announcement contract for
+		// indicator state changes. `aria-live` is set on the indicator
+		// itself so the live-region attribute lives on the element whose
+		// text content changes; render() updates the live politeness based
+		// on severity (assertive for disconnected/error).
+		this.indicatorEl.setAttr("role", "status");
+		this.indicatorEl.setAttr("aria-live", "polite");
 		const headerActions = header.createDiv({
 			cls: "hashi-chat-view-header-actions",
 		});
@@ -261,9 +281,17 @@ export class TomoChatView extends ItemView {
 		// Keep the terminal sized to its container. ResizeObserver is missing
 		// under jsdom (test runtime) — guard the wiring so unit tests don't
 		// blow up; the production runtime (Electron) provides it.
+		// Debounced 150 ms trailing — fit() does real measurement work and
+		// must not run for every pixel of a pane drag.
 		if (typeof ResizeObserver !== "undefined") {
 			this.resizeObserver = new ResizeObserver(() => {
-				if (this.terminal !== null) fit(this.terminal);
+				if (this.resizeDebounceTimer !== null) {
+					clearTimeout(this.resizeDebounceTimer);
+				}
+				this.resizeDebounceTimer = setTimeout(() => {
+					this.resizeDebounceTimer = null;
+					if (this.terminal !== null) fit(this.terminal);
+				}, RESIZE_DEBOUNCE_MS);
 			});
 			this.resizeObserver.observe(termHost);
 		}
@@ -281,6 +309,12 @@ export class TomoChatView extends ItemView {
 			if (text.length === 0) return;
 			this.connection.write(`${text}\n`);
 			if (this.inputEl !== null) this.inputEl.value = "";
+			// User acknowledged recovery by acting — clear the gap notice and
+			// re-render so the indicator drops the suffix.
+			if (this.showGapNotice) {
+				this.showGapNotice = false;
+				this.render(connectionStore.get());
+			}
 		});
 
 		// Subscribe AFTER the skeleton is built — Store fires the listener
@@ -311,6 +345,10 @@ export class TomoChatView extends ItemView {
 		if (this.resizeObserver !== null) {
 			this.resizeObserver.disconnect();
 			this.resizeObserver = null;
+		}
+		if (this.resizeDebounceTimer !== null) {
+			clearTimeout(this.resizeDebounceTimer);
+			this.resizeDebounceTimer = null;
 		}
 		if (this.terminal !== null) {
 			dispose(this.terminal);
@@ -361,12 +399,34 @@ export class TomoChatView extends ItemView {
 		const input = this.inputEl;
 		if (indicator === null || btn === null || input === null) return;
 
+		// PRD F8/AC5 — flip the gap-notice flag on reconnecting → connected.
+		// The flag is sticky until the user types in the input (handled in
+		// the keydown listener); subsequent renders see it set and append
+		// "(gap)" to the indicator label.
+		const recoveredFromReconnect =
+			state.kind === "connected" && this.lastStateKind === "reconnecting";
+		if (recoveredFromReconnect) {
+			this.showGapNotice = true;
+		}
+
 		const view = viewFor(state);
-		indicator.setText(view.label);
+		const label =
+			this.showGapNotice && state.kind === "connected"
+				? `${view.label} — Reconnected (gap)`
+				: view.label;
+		indicator.setText(label);
 		for (const c of STATE_CLASSES) {
 			if (c === view.stateClass) indicator.addClass(c);
 			else indicator.removeClass(c);
 		}
+		// PRD F5/AC7 — politeness escalates with severity. Disconnected /
+		// error states use `aria-live="assertive"` so AT users hear the
+		// failure immediately; transitional states stay polite to avoid
+		// stomping on whatever the user is reading.
+		indicator.setAttr(
+			"aria-live",
+			view.stateClass === "is-disconnected" ? "assertive" : "polite",
+		);
 
 		const wasDisabled = input.disabled;
 		const shouldBeDisabled = state.kind !== "connected";
