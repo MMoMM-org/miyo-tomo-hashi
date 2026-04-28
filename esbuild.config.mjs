@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 import process from "node:process";
 import esbuild from "esbuild";
@@ -12,7 +12,21 @@ if you want to view the source, please visit the github repository of this plugi
 const prod = process.argv[2] === "production";
 const outdir = prod ? "build" : ".";
 
-// Copy plugin assets to build/ and optionally to test vault
+// Copy plugin assets to build/ and optionally to test vault. Per
+// `obsidianmd/no-forbidden-elements`, plugins should not inject `<style>`
+// tags at runtime — Obsidian loads `styles.css` automatically. T4.3's
+// xterm.js dependency ships its own CSS; we concatenate it into the
+// emitted `styles.css` at build time so xterm renders correctly without
+// any runtime DOM injection.
+const XTERM_CSS = "node_modules/@xterm/xterm/css/xterm.css";
+
+function bundleStylesCss(targetDir) {
+	const ours = readFileSync("styles.css", "utf8");
+	const xterm = readFileSync(XTERM_CSS, "utf8");
+	const out = `${ours}\n\n/* --- @xterm/xterm vendored CSS (T4.3) --- */\n${xterm}\n`;
+	writeFileSync(`${targetDir}/styles.css`, out, "utf8");
+}
+
 const copyAssets = {
 	name: "copy-assets",
 	setup(build) {
@@ -20,14 +34,14 @@ const copyAssets = {
 			if (prod) {
 				mkdirSync("build", { recursive: true });
 				copyFileSync("manifest.json", "build/manifest.json");
-				copyFileSync("styles.css", "build/styles.css");
+				bundleStylesCss("build");
 
 				// Uncomment and adjust to copy build output to your test vault:
 				// const VAULT_PLUGIN_DIR = "test/MyVault/.obsidian/plugins/miyo-tomo-hashi";
 				// if (existsSync(VAULT_PLUGIN_DIR)) {
 				// 	copyFileSync(`${outdir}/main.js`, `${VAULT_PLUGIN_DIR}/main.js`);
 				// 	copyFileSync("manifest.json", `${VAULT_PLUGIN_DIR}/manifest.json`);
-				// 	copyFileSync("styles.css", `${VAULT_PLUGIN_DIR}/styles.css`);
+				// 	bundleStylesCss(VAULT_PLUGIN_DIR);
 				// }
 			}
 		});
@@ -54,6 +68,14 @@ const context = await esbuild.context({
 		"@lezer/common",
 		"@lezer/highlight",
 		"@lezer/lr",
+		// dockerode pulls in optional native deps (ssh2 → cpu-features, both
+		// shipping `.node` binaries) that esbuild can't bundle. The plugin
+		// is `isDesktopOnly: true` (Electron + Node `require` available at
+		// runtime), so leaving dockerode + its transitive native modules
+		// external lets Node resolve them from `node_modules` at load time.
+		"dockerode",
+		"ssh2",
+		"cpu-features",
 		...builtinModules,
 		...builtinModules.map((m) => `node:${m}`),
 	],

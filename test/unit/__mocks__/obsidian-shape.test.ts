@@ -32,6 +32,25 @@ describe("obsidian mock shape", () => {
 		expect(vi.isMockFunction(menu.showAtMouseEvent)).toBe(true);
 	});
 
+	it("Menu captures every item-builder in items[] for test introspection", () => {
+		// T4.2 extension — lets popover tests assert on setTitle/onClick
+		// calls without re-running the builder callback.
+		const menu = new obs.Menu();
+		menu.addItem(() => {});
+		menu.addItem(() => {});
+		expect(menu.items).toHaveLength(2);
+		expect(typeof menu.items[0]?.setTitle).toBe("function");
+	});
+
+	it("Plugin.addStatusBarItem returns an HTMLElement", () => {
+		// T4.2 extension — the real Obsidian API returns a status-bar
+		// HTMLElement that supports the createSpan / addClass / setAttr
+		// prototype helpers.
+		const plugin = new obs.Plugin();
+		const root = plugin.addStatusBarItem();
+		expect(root).toBeInstanceOf(HTMLElement);
+	});
+
 	it("exports Modal with open/close/contentEl/lifecycle", () => {
 		const modal = new obs.Modal(new obs.App());
 		expect(vi.isMockFunction(modal.open)).toBe(true);

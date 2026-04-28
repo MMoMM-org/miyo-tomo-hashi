@@ -6,6 +6,121 @@
 
 import { vi } from "vitest";
 
+// --- HTMLElement polyfills (Obsidian DOM helpers) ---
+//
+// Real Obsidian augments HTMLElement.prototype with createDiv / createEl /
+// empty / addClass / removeClass / setText / setAttr. jsdom doesn't provide
+// these. Polyfill them here so production code can use the idiomatic
+// Obsidian style and still run under vitest. Idempotent — guarded so that
+// reloading the mock module under different test workers can't double-wrap.
+
+interface DomElInfo {
+	cls?: string | string[];
+	text?: string;
+	attr?: Record<string, string>;
+	parent?: HTMLElement;
+}
+
+function applyDomElInfo(el: HTMLElement, info?: DomElInfo): void {
+	if (info === undefined) return;
+	if (info.cls !== undefined) {
+		const classes = Array.isArray(info.cls) ? info.cls : [info.cls];
+		for (const c of classes) el.classList.add(c);
+	}
+	if (info.text !== undefined) el.textContent = info.text;
+	if (info.attr !== undefined) {
+		for (const [k, v] of Object.entries(info.attr)) el.setAttribute(k, v);
+	}
+}
+
+interface ObsidianElementShim {
+	createEl<K extends keyof HTMLElementTagNameMap>(
+		tag: K,
+		info?: DomElInfo,
+	): HTMLElementTagNameMap[K];
+	createDiv(info?: DomElInfo | string): HTMLDivElement;
+	createSpan(info?: DomElInfo | string): HTMLSpanElement;
+	empty(): void;
+	addClass(...classes: string[]): void;
+	removeClass(...classes: string[]): void;
+	setText(text: string): void;
+	setAttr(key: string, value: string): void;
+}
+
+if (typeof HTMLElement !== "undefined") {
+	const proto = HTMLElement.prototype as unknown as ObsidianElementShim & {
+		__hashiObsidianShimInstalled?: true;
+	};
+	if (proto.__hashiObsidianShimInstalled !== true) {
+		proto.__hashiObsidianShimInstalled = true;
+
+		proto.createEl = function createEl<K extends keyof HTMLElementTagNameMap>(
+			this: HTMLElement,
+			tag: K,
+			info?: DomElInfo,
+		): HTMLElementTagNameMap[K] {
+			const el = document.createElement(tag);
+			applyDomElInfo(el, info);
+			(info?.parent ?? this).appendChild(el);
+			return el;
+		};
+
+		proto.createDiv = function createDiv(
+			this: HTMLElement,
+			info?: DomElInfo | string,
+		): HTMLDivElement {
+			const normalized: DomElInfo | undefined =
+				typeof info === "string" ? { cls: info } : info;
+			const el = document.createElement("div");
+			applyDomElInfo(el, normalized);
+			(normalized?.parent ?? this).appendChild(el);
+			return el;
+		};
+
+		proto.createSpan = function createSpan(
+			this: HTMLElement,
+			info?: DomElInfo | string,
+		): HTMLSpanElement {
+			const normalized: DomElInfo | undefined =
+				typeof info === "string" ? { cls: info } : info;
+			const el = document.createElement("span");
+			applyDomElInfo(el, normalized);
+			(normalized?.parent ?? this).appendChild(el);
+			return el;
+		};
+
+		proto.empty = function empty(this: HTMLElement): void {
+			while (this.firstChild !== null) this.removeChild(this.firstChild);
+		};
+
+		proto.addClass = function addClass(
+			this: HTMLElement,
+			...classes: string[]
+		): void {
+			for (const c of classes) this.classList.add(c);
+		};
+
+		proto.removeClass = function removeClass(
+			this: HTMLElement,
+			...classes: string[]
+		): void {
+			for (const c of classes) this.classList.remove(c);
+		};
+
+		proto.setText = function setText(this: HTMLElement, text: string): void {
+			this.textContent = text;
+		};
+
+		proto.setAttr = function setAttr(
+			this: HTMLElement,
+			key: string,
+			value: string,
+		): void {
+			this.setAttribute(key, value);
+		};
+	}
+}
+
 // --- App & Workspace ---
 
 export class Component {
@@ -54,7 +169,11 @@ export class Plugin extends Component {
 	loadData = vi.fn<() => Promise<unknown>>(async () => ({}));
 	saveData = vi.fn<(data: unknown) => Promise<void>>(async () => {});
 	addRibbonIcon = vi.fn(() => document.createElement("div"));
-	addStatusBarItem = vi.fn(() => ({ setText: vi.fn() }));
+	// Real Obsidian returns a status-bar HTMLElement that supports the same
+	// DOM helpers as any other Obsidian element (createSpan / addClass /
+	// setAttr — provided by the prototype shim above). Returning a real
+	// HTMLElement lets production code use idiomatic Obsidian style.
+	addStatusBarItem = vi.fn(() => document.createElement("div"));
 	addCommand = vi.fn();
 	addSettingTab = vi.fn();
 	registerView = vi.fn();
@@ -174,8 +293,17 @@ export class ItemView extends Component {
 		this.leaf = leaf;
 	}
 
-	onOpen = vi.fn(async () => {});
-	onClose = vi.fn(async () => {});
+	// onOpen() / onClose() are declared as prototype methods (not field
+	// assignments) so subclass overrides aren't clobbered by the parent
+	// constructor's field initialization order. Mirrors the Modal mock
+	// pattern below — same reasoning.
+	onOpen(): void | Promise<void> {
+		// default: no-op; subclasses override
+	}
+
+	onClose(): void | Promise<void> {
+		// default: no-op; subclasses override
+	}
 }
 
 // --- Menu / Modal ---
@@ -188,6 +316,12 @@ interface MenuItem {
 }
 
 export class Menu {
+	// Per-instance capture of every item-builder addItem created. Tests
+	// can introspect setTitle / setIcon / setDisabled / onClick calls
+	// after the popover is built without re-running the addItem callback
+	// (which would double-bind handlers). Extended in T4.2 to support
+	// status-bar popover tests.
+	items: MenuItem[] = [];
 	addItem = vi.fn((cb: (item: MenuItem) => void) => {
 		const item: MenuItem = {
 			setTitle: vi.fn(() => item),
@@ -195,6 +329,7 @@ export class Menu {
 			setDisabled: vi.fn(() => item),
 			onClick: vi.fn(() => item),
 		};
+		this.items.push(item);
 		cb(item);
 		return this;
 	});
@@ -209,10 +344,26 @@ export class Modal {
 		this.app = app;
 	}
 
-	open = vi.fn();
-	close = vi.fn();
-	onOpen = vi.fn(() => {});
-	onClose = vi.fn(() => {});
+	// open() / close() mirror real Obsidian: `open` invokes `onOpen()` and
+	// `close` invokes `onClose()`. Both are vi.fn-wrapped so tests can spy
+	// on call-counts, but the wrapped impl still drives the lifecycle.
+	// Subclasses override `onOpen` / `onClose` as prototype methods (not
+	// field assignments) so overrides aren't clobbered by the parent
+	// constructor.
+	open = vi.fn(() => {
+		void this.onOpen();
+	});
+	close = vi.fn(() => {
+		void this.onClose();
+	});
+
+	onOpen(): void | Promise<void> {
+		// default: no-op; subclasses override
+	}
+
+	onClose(): void | Promise<void> {
+		// default: no-op; subclasses override
+	}
 }
 
 // --- Event ref (opaque marker) ---
