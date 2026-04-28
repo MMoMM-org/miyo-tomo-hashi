@@ -53,11 +53,13 @@ describe("settingsPersistence", () => {
 			chosenInstanceName: "abc123",
 		});
 		const result = await loadSettings(plugin);
-		expect(result).toEqual({ chosenInstanceName: "abc123", zoomLevel: 1 });
+		// Merge: persisted field wins; all other fields take DEFAULT_SETTINGS values.
+		expect(result).toEqual({ ...DEFAULT_SETTINGS, chosenInstanceName: "abc123" });
 	});
 
 	it("saveSettings calls plugin.saveData with the provided settings", async () => {
 		const settings: PluginSettings = {
+			...DEFAULT_SETTINGS,
 			chosenInstanceName: "def456",
 			zoomLevel: 1.5,
 		};

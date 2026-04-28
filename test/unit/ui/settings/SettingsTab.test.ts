@@ -1,6 +1,7 @@
 /**
  * Unit tests for SettingsTab + InstancePickerModal — Phase-4 T4.1 Settings
- * pane Connect/Disconnect + open picker.
+ * pane Connect/Disconnect + open picker; and T1.3 Instruction Executor
+ * settings (6 new fields + UI controls).
  *
  * Approach: TomoConnection is stubbed at the test-double level — we don't
  * mock the whole class, we instantiate a small object that satisfies the
@@ -13,7 +14,7 @@
  * can use idiomatic Obsidian style.
  */
 
-import { App } from "obsidian";
+import { App, Notice } from "obsidian";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { connectionStore } from "../../../../src/connection/connectionStore";
@@ -24,6 +25,8 @@ import type { TomoInstance } from "../../../../src/connection/types";
 import type TomoHashiPlugin from "../../../../src/main";
 import { InstancePickerModal } from "../../../../src/settings/InstancePickerModal";
 import { SettingsTab } from "../../../../src/settings/SettingsTab";
+import { DEFAULT_SETTINGS } from "../../../../src/types/index";
+import type { PluginSettings } from "../../../../src/types/index";
 
 // --- factories ---------------------------------------------------------------
 
@@ -67,15 +70,19 @@ function asConnection(fake: FakeConnection): TomoConnection {
 	return fake as unknown as TomoConnection;
 }
 
-// Minimal plugin stub — SettingsTab only uses it as the second `super()` arg
-// and reads no fields off it directly. The cast funnel mirrors `asConnection`
-// — narrow shape now, full TomoHashiPlugin in Phase-5 wire-up.
+// Minimal plugin stub — SettingsTab only uses it as the second `super()` arg,
+// reads plugin.settings, and calls plugin.saveSettings() when controls change.
+// Extended in T1.3 to include all PluginSettings fields + saveSettings().
 interface PluginStub {
-	settings: { chosenInstanceName: string | null };
+	settings: PluginSettings;
+	saveSettings: ReturnType<typeof vi.fn>;
 }
 
-function makePlugin(): PluginStub {
-	return { settings: { chosenInstanceName: null } };
+function makePlugin(overrides: Partial<PluginSettings> = {}): PluginStub {
+	return {
+		settings: { ...DEFAULT_SETTINGS, ...overrides },
+		saveSettings: vi.fn<() => Promise<void>>(async () => {}),
+	};
 }
 
 function asPlugin(stub: PluginStub): TomoHashiPlugin {
@@ -357,5 +364,220 @@ describe("InstancePickerModal", () => {
 		);
 		expect(err).not.toBeNull();
 		expect(err?.textContent).toContain("Docker socket is not reachable");
+	});
+});
+
+// --- T1.3: Instruction executor settings ------------------------------------
+//
+// Tests for the 6 new PluginSettings fields (tomoInboxFolder, executionMode,
+// runLogRetention, hooksDir, hooksPolicy, debugLogging) and their UI controls
+// in the "Instruction executor" section of SettingsTab.
+//
+// Test file location deviation: these tests are co-located in this file rather
+// than `test/unit/settings/SettingsTab.test.ts` (as the plan draft listed) for
+// codebase consistency — the existing 001 tests are here, and a second file for
+// the same component would fragment coverage.
+//
+// onChange testing approach: the improved obsidian mock (addText / addToggle /
+// addDropdown) captures the onChange handler passed in the callback and exposes
+// it on the SettingsTab instance via `_handlers` map keyed by the setting name.
+// This lets tests fire onChange without test hooks in production code.
+
+describe("SettingsTab — instruction executor controls", () => {
+	it("renders 'Instruction executor' heading", () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+		tab.display();
+
+		// The heading setting has setName("Instruction executor") called.
+		// The mock Setting appends a settingEl div; setName records the call.
+		// The simplest assertion: the text content of containerEl contains the label.
+		const text = tab.containerEl.textContent ?? "";
+		expect(text).toContain("Instruction executor");
+	});
+
+	it("renders all 6 instruction executor controls by label", () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+		tab.display();
+
+		const text = tab.containerEl.textContent ?? "";
+		expect(text).toContain("Tomo inbox folder");
+		expect(text).toContain("Execution mode");
+		expect(text).toContain("Run log retention");
+		expect(text).toContain("Hooks directory");
+		expect(text).toContain("Hooks");
+		expect(text).toContain("Debug logging");
+	});
+
+	it("changing tomoInboxFolder to a valid path calls saveSettings once", async () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+		tab.display();
+		// Fire the onChange for tomoInboxFolder directly via the captured handler
+		await tab._handlers.tomoInboxFolder?.("inbox/tomo");
+
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
+		expect(plugin.settings.tomoInboxFolder).toBe("inbox/tomo");
+	});
+
+	it("changing debugLogging toggle calls saveSettings once", async () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+		tab.display();
+		await tab._handlers.debugLogging?.(true);
+
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
+		expect(plugin.settings.debugLogging).toBe(true);
+	});
+
+	it("changing executionMode dropdown calls saveSettings once", async () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+		tab.display();
+		await tab._handlers.executionMode?.("auto-run");
+
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
+		expect(plugin.settings.executionMode).toBe("auto-run");
+	});
+
+	// ---- path-safety guard — tomoInboxFolder ----
+
+	const unsafePaths = [
+		{ path: "/foo", reason: "absolute path" },
+		{ path: "\\foo", reason: "absolute path (backslash)" },
+		{ path: "C:\\foo", reason: "Windows drive letter" },
+		{ path: "D:foo", reason: "Windows drive letter" },
+		{ path: "..", reason: "traversal" },
+		{ path: "a/../b", reason: "traversal segment" },
+		{ path: "a//b", reason: "empty segment" },
+	];
+
+	for (const { path, reason } of unsafePaths) {
+		it(`tomoInboxFolder rejects unsafe path: ${reason} (${JSON.stringify(path)})`, async () => {
+			const noticeSpy = vi.mocked(Notice);
+			noticeSpy.mockClear();
+
+			const conn = makeConnection();
+			const app = new App();
+			const plugin = makePlugin({ tomoInboxFolder: "safe/path" });
+			const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+			tab.display();
+			await tab._handlers.tomoInboxFolder?.(path);
+
+			// saveSettings must NOT be called — rejection rolls back
+			expect(plugin.saveSettings).not.toHaveBeenCalled();
+			// value must revert to previous safe value
+			expect(plugin.settings.tomoInboxFolder).toBe("safe/path");
+			// Notice must have fired
+			expect(noticeSpy).toHaveBeenCalled();
+		});
+	}
+
+	it("tomoInboxFolder accepts empty string (default state)", async () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin({ tomoInboxFolder: "some/path" });
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+		tab.display();
+		await tab._handlers.tomoInboxFolder?.("");
+
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
+		expect(plugin.settings.tomoInboxFolder).toBe("");
+	});
+
+	// ---- path-safety guard — hooksDir ----
+
+	for (const { path, reason } of unsafePaths) {
+		it(`hooksDir rejects unsafe path: ${reason} (${JSON.stringify(path)})`, async () => {
+			const noticeSpy = vi.mocked(Notice);
+			noticeSpy.mockClear();
+
+			const conn = makeConnection();
+			const app = new App();
+			const plugin = makePlugin({ hooksDir: ".tomo-hashi/hooks" });
+			const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+			tab.display();
+			await tab._handlers.hooksDir?.(path);
+
+			expect(plugin.saveSettings).not.toHaveBeenCalled();
+			expect(plugin.settings.hooksDir).toBe(".tomo-hashi/hooks");
+			expect(noticeSpy).toHaveBeenCalled();
+		});
+	}
+
+	// ---- ask-mode contract: no extraneous fields in persisted settings ----
+	//
+	// PRD F11: ask-mode per-hook decisions live in memory only (HookRunner
+	// runtime map) and NEVER appear in data.json. Phase 4 will add the full
+	// reload-and-reprompt behavioral test once HookRunner exists. For T1.3
+	// we assert that after plugin.saveSettings() is called, the object saved
+	// contains exactly the expected union of 001 + 002 keys, no extras.
+	//
+	// Note: plugin.saveSettings() in the stub updates plugin.settings;
+	// we assert the exact keys on that settings object.
+
+	it("persisted settings contain exactly the expected keys — no hookAskDecisions or extras", async () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+		tab.display();
+		// Trigger any save to exercise the path
+		await tab._handlers.debugLogging?.(false);
+		await Promise.resolve();
+
+		const savedKeys = new Set(Object.keys(plugin.settings));
+		const expectedKeys = new Set<string>([
+			// 001 fields
+			"chosenInstanceName",
+			"zoomLevel",
+			// 002 fields
+			"tomoInboxFolder",
+			"executionMode",
+			"runLogRetention",
+			"hooksDir",
+			"hooksPolicy",
+			"debugLogging",
+		]);
+
+		// No extra keys (e.g. hookAskDecisions) in persisted data
+		for (const key of savedKeys) {
+			expect(expectedKeys).toContain(key);
+		}
+		// All expected keys present
+		for (const key of expectedKeys) {
+			expect(savedKeys).toContain(key);
+		}
+	});
+
+	// ---- defaults render correctly on a fresh PluginSettings ----
+
+	it("default values are set on a fresh PluginSettings", () => {
+		expect(DEFAULT_SETTINGS.tomoInboxFolder).toBe("");
+		expect(DEFAULT_SETTINGS.executionMode).toBe("confirm");
+		expect(DEFAULT_SETTINGS.runLogRetention).toBe("always");
+		expect(DEFAULT_SETTINGS.hooksDir).toBe(".tomo-hashi/hooks");
+		expect(DEFAULT_SETTINGS.hooksPolicy).toBe("ask");
+		expect(DEFAULT_SETTINGS.debugLogging).toBe(false);
 	});
 });

@@ -29,7 +29,7 @@ phase: 1
 
 This phase vendors the Tomo schema, wires up the prebuild ajv-codegen pipeline, defines core types, extends `PluginSettings` and the settings UI for the seven new fields, builds the path-safety utility, and extends the Obsidian test mock.
 
-- [ ] **T1.1 Vendor schema + add ajv tooling** `[activity: platform]`
+- [x] **T1.1 Vendor schema + add ajv tooling** `[activity: platform]`
 
   1. Prime: Read SDD CON-2 (build), ADR-1 (ajv standalone), ADR-2 (vendored schema) `[ref: SDD/Constraints; CON-2]` `[ref: SDD/Architecture Decisions; ADR-1, ADR-2]`. Read the Tomo schema source. **Important**: the Tomo repo is on the same machine; copy `tomo/schemas/instructions.schema.json` from a Tomo v0.7.0+ checkout (commit `f3ad49d` or later — see spec README decisions log) into `src/schema/`.
   2. Test: Add a regression test `test/unit/schema/vendored-schema.test.ts` that:
@@ -45,7 +45,7 @@ This phase vendors the Tomo schema, wires up the prebuild ajv-codegen pipeline, 
      - [ ] Vendored schema file present and asserted by regression test `[ref: SDD/ADR-2]`
      - [ ] `src/schema/validator.ts` compiles ajv against bundled schema at module load `[ref: SDD/ADR-1 (revised 2026-04-25)]`
 
-- [ ] **T1.2 Define core types** `[activity: domain-modeling]`
+- [x] **T1.2 Define core types** `[activity: domain-modeling]`
 
   1. Prime: Read SDD "Application Data Models" — `Action`, `InstructionSet`, `RunState`, `ActionOutcome` (single end-to-end outcome type — `HandlerOutcome` was collapsed into it on 2026-04-25), `ExecutionMode` `[ref: SDD/Interface Specifications; Application Data Models]`.
   2. Test: Write `test/unit/schema/types.test.ts` and `test/unit/executor/state.test.ts`:

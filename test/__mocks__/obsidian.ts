@@ -227,8 +227,22 @@ export class Setting {
 		containerEl.appendChild(this.settingEl);
 	}
 
-	setName = vi.fn(() => this);
-	setDesc = vi.fn(() => this);
+	setName = vi.fn((name: string) => {
+		// Mirror real Obsidian: setName creates a name element inside settingEl
+		// so containerEl.textContent includes the label. Tests assert on this.
+		const nameEl = document.createElement("div");
+		nameEl.classList.add("setting-item-name");
+		nameEl.textContent = name;
+		this.settingEl.appendChild(nameEl);
+		return this;
+	});
+	setDesc = vi.fn((desc: string) => {
+		const descEl = document.createElement("div");
+		descEl.classList.add("setting-item-description");
+		descEl.textContent = desc;
+		this.settingEl.appendChild(descEl);
+		return this;
+	});
 	setHeading = vi.fn(() => this);
 	addText = vi.fn(
 		(
@@ -238,13 +252,14 @@ export class Setting {
 				onChange: ReturnType<typeof vi.fn>;
 			}) => void,
 		) => {
-			cb({
-				setValue: vi.fn(() => ({ onChange: vi.fn() })),
-				setPlaceholder: vi.fn(() => ({
-					setValue: vi.fn(() => ({ onChange: vi.fn() })),
-				})),
-				onChange: vi.fn(),
-			});
+			// component returns itself from setValue/setPlaceholder/onChange so
+			// both fluent chaining and separate-call patterns work in tests.
+			const component = {
+				setValue: vi.fn(() => component),
+				setPlaceholder: vi.fn(() => component),
+				onChange: vi.fn(() => component),
+			};
+			cb(component);
 			return this;
 		},
 	);
@@ -255,7 +270,11 @@ export class Setting {
 				onChange: ReturnType<typeof vi.fn>;
 			}) => void,
 		) => {
-			cb({ setValue: vi.fn(() => ({ onChange: vi.fn() })), onChange: vi.fn() });
+			const component = {
+				setValue: vi.fn(() => component),
+				onChange: vi.fn(() => component),
+			};
+			cb(component);
 			return this;
 		},
 	);
@@ -274,6 +293,23 @@ export class Setting {
 				setCta: vi.fn(),
 				onClick: vi.fn(),
 			});
+			return this;
+		},
+	);
+	addDropdown = vi.fn(
+		(
+			cb: (dropdown: {
+				addOption: ReturnType<typeof vi.fn>;
+				setValue: ReturnType<typeof vi.fn>;
+				onChange: ReturnType<typeof vi.fn>;
+			}) => void,
+		) => {
+			const component = {
+				addOption: vi.fn(() => component),
+				setValue: vi.fn(() => component),
+				onChange: vi.fn(() => component),
+			};
+			cb(component);
 			return this;
 		},
 	);

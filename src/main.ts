@@ -69,6 +69,15 @@ export default class TomoHashiPlugin extends Plugin {
 	private statusBarIcon: StatusBarIcon | null = null;
 	private loaded = false;
 
+	/**
+	 * Persist the current `this.settings` to Obsidian's data store.
+	 * Used by SettingsTab controls — keeps the settings-tab wiring simple
+	 * (no closure juggling, mirrors the Kado plugin pattern).
+	 */
+	async saveSettings(): Promise<void> {
+		await saveSettings(this, this.settings);
+	}
+
 	async onload(): Promise<void> {
 		if (this.loaded) {
 			// See header decision (1) — fail loud rather than silently

@@ -1,8 +1,11 @@
 /**
  * Plugin-wide settings persisted via Obsidian's `loadData`/`saveData`.
  *
- * Spec: docs/XDD/specs/001-session-view — SDD "Application Data Models".
+ * Spec: docs/XDD/specs/001-session-view — SDD "Application Data Models";
+ *       docs/XDD/specs/002-instruction-executor — SDD "Plugin Settings".
  */
+
+import type { ExecutionMode } from "../executor/state";
 
 /**
  * Permitted xterm font-size multipliers for the chat-view "magnify" control.
@@ -13,6 +16,8 @@ export const ZOOM_LEVELS = [0.5, 1, 1.5] as const;
 export type ZoomLevel = (typeof ZOOM_LEVELS)[number];
 
 export interface PluginSettings {
+	// --- 001 fields ---
+
 	/**
 	 * Tomo instance name (from the `miyo.tomo.instance-name` Docker label,
 	 * set by begin-tomo.sh per Tomo install). Stable across container
@@ -26,9 +31,58 @@ export interface PluginSettings {
 	 * doesn't re-pick on every reload.
 	 */
 	zoomLevel: ZoomLevel;
+
+	// --- 002 fields (NEW — instruction executor) ---
+
+	/**
+	 * Vault-relative path to the Tomo inbox folder watched for
+	 * `_instructions.json` files. Empty string until configured by the user.
+	 * Spec: docs/XDD/specs/002-instruction-executor — PRD F1, SDD "Plugin Settings".
+	 */
+	tomoInboxFolder: string;
+	/**
+	 * Controls how the executor presents a run to the user.
+	 * - "confirm": preview modal, user must approve before execution.
+	 * - "auto-run": preview shown then auto-proceeds after brief delay.
+	 * - "silent": executes immediately with no modal.
+	 * Spec: PRD F11.
+	 */
+	executionMode: ExecutionMode;
+	/**
+	 * Whether run logs are retained after every run or only after a failed run.
+	 * Spec: PRD F11.
+	 */
+	runLogRetention: "always" | "only-after-failed";
+	/**
+	 * Vault-relative path to the directory scanned for user-authored hook
+	 * scripts (before-X / after-X .js files). Spec: PRD F8, F11.
+	 */
+	hooksDir: string;
+	/**
+	 * Policy for executing hook scripts.
+	 * - "enabled": run all hooks unconditionally.
+	 * - "disabled": kill-switch — no hooks run (equivalent to disableAllHooks).
+	 * - "ask": prompt the user once per hook file per session.
+	 * Spec: PRD F8, F11. Note: no separate `disableAllHooks` field — "disabled"
+	 * IS the kill-switch per SDD decision recorded in plan/README.md.
+	 */
+	hooksPolicy: "enabled" | "disabled" | "ask";
+	/**
+	 * When true, verbose executor logging is written to the developer console.
+	 * Spec: PRD F11.
+	 */
+	debugLogging: boolean;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
+	// 001 defaults
 	chosenInstanceName: null,
 	zoomLevel: 1,
+	// 002 defaults
+	tomoInboxFolder: "",
+	executionMode: "confirm",
+	runLogRetention: "always",
+	hooksDir: ".tomo-hashi/hooks",
+	hooksPolicy: "ask",
+	debugLogging: false,
 };
