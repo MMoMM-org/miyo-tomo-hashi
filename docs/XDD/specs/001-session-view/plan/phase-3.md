@@ -1,6 +1,6 @@
 ---
 title: "Phase 3: Connection Service"
-status: pending
+status: completed
 version: "1.0"
 phase: 3
 ---
@@ -29,7 +29,7 @@ phase: 3
 
 This phase produces the full state machine that the UI subscribes to in Phase 4. Every PRD lifecycle requirement lands here.
 
-- [ ] **T3.1 `connectionStore` + derived slices** `[activity: domain-modeling]`
+- [x] **T3.1 `connectionStore` + derived slices** `[activity: domain-modeling]`
 
   1. Prime: Read SDD "State Store — typed Store<T> helper" subsection `[ref: SDD/Interface Specifications; State Store]`.
   2. Test: Write `test/unit/connection/connectionStore.test.ts`:
@@ -43,7 +43,7 @@ This phase produces the full state machine that the UI subscribes to in Phase 4.
   5. Success:
      - [ ] Derived slices match SDD contract exactly `[ref: SDD/State Store]`
 
-- [ ] **T3.2 `ReconnectLoop` with cancellation** `[activity: backend-api]`
+- [x] **T3.2 `ReconnectLoop` with cancellation** `[activity: backend-api]`
 
   1. Prime: Read SDD "Example: Reconnect Backoff" with both traced walkthroughs — including the cancel-during-wait bug caught in the first sketch `[ref: SDD/Implementation Examples; Reconnect Backoff]`.
   2. Test: Write `test/unit/connection/reconnectLoop.test.ts` using vitest fake timers:
@@ -58,7 +58,7 @@ This phase produces the full state machine that the UI subscribes to in Phase 4.
      - [ ] Exact backoff schedule [500, 1000, 2000, 4000, 8000] ms `[ref: PRD/F8/AC2]`
      - [ ] Cancel-during-wait handled correctly `[ref: SDD/Implementation Examples; traced walkthrough]`
 
-- [ ] **T3.3 `TomoConnection` service** `[activity: backend-api]`
+- [x] **T3.3 `TomoConnection` service** `[activity: backend-api]`
 
   1. Prime: Read SDD "TomoConnection Service Surface" + all four "Runtime View" sequence diagrams `[ref: SDD/TomoConnection Service Surface; SDD/Runtime View]`.
   2. Test: Write `test/unit/connection/TomoConnection.test.ts` using `vi.mock('dockerode')` (per ADR-5 v2 — no `FakeDockerClient`):
@@ -81,7 +81,7 @@ This phase produces the full state machine that the UI subscribes to in Phase 4.
      - [ ] Picker never auto-opens from non-Settings sources `[ref: PRD/F5/AC4; PRD/F6/AC4-5; README Decisions Log 2026-04-24]`
      - [ ] chosen-instance-gone handled consistently across Force Reconnect, auto-reconnect, palette `[ref: PRD/F5/AC4; PRD/F6/AC4]`
 
-- [ ] **T3.4 Plugin-data persistence helper** `[activity: data-architecture]`
+- [x] **T3.4 Plugin-data persistence helper** `[activity: data-architecture]`
 
   1. Prime: Read SDD "Data Storage Changes" `[ref: SDD/Data Storage Changes]` and FS2 in PRD.
   2. Test: Write `test/unit/connection/settingsPersistence.test.ts`:
@@ -98,7 +98,7 @@ This phase produces the full state machine that the UI subscribes to in Phase 4.
      - [ ] `chosenInstanceId` survives plugin reload `[ref: PRD/FS2/AC1]`
      - [ ] Missing remembered container → Disconnected with `chosen-instance-gone`, picker NOT opened `[ref: PRD/FS2/AC2]`
 
-- [ ] **T3.5 Phase 3 Validation** `[activity: validate]`
+- [x] **T3.5 Phase 3 Validation** `[activity: validate]`
 
   - Run `npm test`. Verify all state-machine unit tests pass. Add a short integration exercise in `test/unit/connection/serviceIntegration.test.ts` wiring `TomoConnection` + `connectionStore`: subscribe to `connectionStore`, drive the service through a full lifecycle (connect → stream-error → reconnect → disconnect), assert every observed state transition in order.
   - Success:

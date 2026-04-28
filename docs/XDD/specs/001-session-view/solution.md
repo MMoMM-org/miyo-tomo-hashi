@@ -478,7 +478,7 @@ export function displayInstanceName(state: ConnectionState): string | null {
 ```yaml
 # Plugin data (Obsidian loadData/saveData)
 PluginSettings:
-  + chosenInstanceId: string | null    # full container ID; persisted on successful connect; cleared on user Disconnect
+  + chosenInstanceId: string | null    # full container ID; persisted on successful connect; persisted across sessions; not cleared on Disconnect (FS2 semantics)
 ```
 
 No vault file writes. No new Obsidian settings beyond `chosenInstanceId`.
