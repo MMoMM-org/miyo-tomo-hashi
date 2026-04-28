@@ -76,7 +76,9 @@ When implementation requires changes from the specification:
 4. Record all deviations in this plan's notes section below for traceability.
 
 ### Deviations recorded during implementation
-*(empty at plan draft time; populated during execution)*
+
+- **2026-04-28 (T1.2)** — `InstructionSet.schema_version` typed as `"1"` (string literal), not `1` (number). Reason: actual vendored schema declares `{"const": "1"}` (string). SDD code excerpt at `Application Data Models` is incorrect on this point; T1.1's regression test already locks the runtime value as `"1"`.
+- **2026-04-28 (T1.2)** — `Action` discriminated union uses field `action` (matches schema `$defs/*.properties.action.const`), not `kind`. Plan task wording "narrows on `kind`" was loose; actual discriminant per schema is `action`. `ActionRecord.kind` (executor-internal wrapper) is unchanged — it remains `kind: ActionKind`. Both fields coexist on different types.
 
 ## Metadata Reference
 
