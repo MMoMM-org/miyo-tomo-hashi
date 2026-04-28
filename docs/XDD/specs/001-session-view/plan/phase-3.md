@@ -21,7 +21,7 @@ phase: 3
 - ADR-7: cancellable promise chain, delays `[500, 1000, 2000, 4000, 8000]` ms
 - ADR-5 (revised 2026-04-25): All Docker I/O is direct dockerode use via `src/connection/docker.ts` (no `DockerClient` port, no `FakeDockerClient`). Unit tests use `vi.mock('dockerode')`.
 
-**Dependencies**: Phase 1 (types, Store, mock), Phase 2 (DockerClient port).
+**Dependencies**: Phase 1 (types, Store, mock), Phase 2 (`src/connection/docker.ts` helpers — no port per ADR-5 v2).
 
 ---
 

@@ -21,7 +21,7 @@ phase: 4
 - ADR-9: status bar popover uses Obsidian `Menu` API
 - CSS class convention: prefix all plugin classes with `hashi-`
 
-**Dependencies**: Phase 3 complete (`connectionStore` + `TomoConnection` + `DockerClient` port). `TomoConnection` is available via plugin instance (wired in Phase 5).
+**Dependencies**: Phase 3 complete (`connectionStore` + `TomoConnection` + `src/connection/docker.ts` helpers, per ADR-5 v2 — no port). `TomoConnection` is available via plugin instance (wired in Phase 5).
 
 ---
 

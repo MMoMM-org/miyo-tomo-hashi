@@ -87,7 +87,7 @@ Columns: `# | AC ref | What to observe | Expected | Observed | Passed (Y/N) | No
 | 11 | F3.2 | Cycle through states: connect (green), then `docker restart hashi-qa-tomo` (reconnecting), then disconnect via popover (disconnected). Take screenshots of each state. **Then enable macOS color-blind filter** (System Settings → Accessibility → Display → Color Filters → Greyscale) and re-cycle. | Each state is visually distinct via shape **and** color (e.g., outline vs. filled, dot vs. ring, pulse vs. static) — **never color alone**. Distinguishable in greyscale. | | | |
 | 12 | F3.3 | Hover over the icon in each state. Wait for the tooltip. | Tooltip text matches state: "Tomo: qa-test" (connected with named instance), "Tomo: <shortId>" (connected with no name label), "Reconnecting…" (during reconnect), "Connecting…" (during initial attach), "Tomo: disconnected" (after Disconnect). | | | |
 | 13 | F3.4 | Click the icon. | Popover (Obsidian `Menu`) opens with **exactly three** items: "Force reconnect", "Open chat window", "Go to settings" — in that order. | | | |
-| 14 | F3.5 | While disconnected with no remembered instance (clear settings or first run), click the icon. | "Force reconnect" item is **disabled** (greyed) and carries an explanatory tooltip ("No Tomo instance chosen — open Settings → Connect"). Other two items remain enabled. | | | |
+| 14 | F3.5 | While disconnected with no remembered instance (clear settings or first run), click the icon. | "Force reconnect" item is **disabled** (greyed) and carries the canonical PRD tooltip copy verbatim: "No Tomo instance chosen — open Settings → Connect." Other two items remain enabled. | | | |
 | 15 | F3.6 | Click "Open chat window" in the popover. | Chat view opens (or focuses if already open). Same singleton behavior as the F7 palette command. | | | |
 | 16 | F3.7 | Click "Go to settings" in the popover. | Obsidian Settings opens, scrolled to the Hashi section. | | | |
 | 17 | F3.8 | Toggle macOS *System Settings → Accessibility → Display → Reduce Motion* **on**. Re-trigger any state transition (e.g., disconnect→reconnect cycle). | Status bar icon transitions are **instant** — no pulse/fade animation. The Reconnecting state shows as static (e.g., a frozen indicator) rather than animated. | | | |
@@ -108,7 +108,7 @@ Columns: `# | AC ref | What to observe | Expected | Observed | Passed (Y/N) | No
 | # | AC ref | What to observe | Expected | Observed | Passed (Y/N) | Notes |
 |---|---|---|---|---|---|---|
 | 24 | F5.2 | Connect, then `docker restart hashi-qa-tomo`. While the in-view banner shows "Reconnecting (attempt N)…", press Tab from the chat input. | Force Reconnect button receives keyboard focus (visible focus ring). Enter activates it. Reachable in ≤ 3 Tab presses from the input. | | | |
-| 25 | F5.5 | Connect, `docker restart hashi-qa-tomo`, wait for the reconnect loop to succeed and return to Connected. Look at the in-view indicator. | The user is informed that a disconnection occurred (e.g., a sticky banner "Reconnected after N seconds — output during gap not replayed", or a small badge until dismissed). **KNOWN GAP per traceability.md F5.5/F8.5** — if the indicator silently reverts to "Connected — qa-test" with no gap message, mark `N` and note "F5.5/F8.5 follow-up TDD task required". | | | Same root cause as row 31 (F8.5). |
+| 25 | F5.5 | Connect, `docker restart hashi-qa-tomo`, wait for the reconnect loop to succeed and return to Connected. Look at the in-view indicator. | After recovery the indicator transiently reads "Reconnected (gap)" alongside "Connected — qa-test"; the gap notice clears on the next user input. (Implemented 2026-04-28; unit-tested in `TomoChatView.test.ts` "indicator shows reconnected-gap after recovery, clears on next user input".) | | | Same root cause as row 31 (F8.5). |
 | 26 | F5.6 | While in each state (connected / reconnecting / disconnected), inspect the in-view indicator. Repeat with macOS Reduce Motion **on**. | Severity is conveyed via icon **and** text, not color alone. Reconnecting animation is suppressed under reduced-motion. | | | |
 | 27 | F5.7 | With VoiceOver active and the chat view focused, trigger a state change. | VoiceOver announces the indicator change. Transitional changes use `aria-live="polite"` (e.g., reconnecting); error/disconnected uses `aria-live="assertive"`. | | | |
 
@@ -122,7 +122,7 @@ Columns: `# | AC ref | What to observe | Expected | Observed | Passed (Y/N) | No
 
 | # | AC ref | What to observe | Expected | Observed | Passed (Y/N) | Notes |
 |---|---|---|---|---|---|---|
-| 29 | F8.5 | Connect, `docker restart hashi-qa-tomo`, observe the indicator during the reconnect window AND after success. | Banner shows "Reconnecting (attempt N)…" during the loop. After successful recovery, the user is informed that a gap occurred. **KNOWN GAP per traceability.md** — same as row 25 (F5.5). If the indicator silently goes back to "Connected — qa-test", mark `N` and note "F5.5/F8.5 follow-up TDD task required". | | | |
+| 29 | F8.5 | Connect, `docker restart hashi-qa-tomo`, observe the indicator during the reconnect window AND after success. | Banner shows "Reconnecting (attempt N)…" during the loop. After recovery, the indicator transiently reads "Reconnected (gap)" alongside "Connected — qa-test"; gap notice clears on next user input. (Same implementation as row 25.) | | | |
 
 ### F9 — Error Surfacing
 
@@ -130,7 +130,7 @@ Columns: `# | AC ref | What to observe | Expected | Observed | Passed (Y/N) | No
 |---|---|---|---|---|---|---|
 | 30 | F9.1 | With chat view open and connected, force an error (e.g., `docker rm -f hashi-qa-tomo` to trigger reconnect-exhausted). | Error surfaced in a sticky in-view indicator banner. Banner persists until the user resolves (Force Reconnect succeeds) or dismisses (× button). Does NOT auto-dismiss on a timer. | | | |
 | 31 | F9.5 | Trigger each error class (daemon-not-reachable, socket-permission-denied, no-instances, chosen-instance-gone, stream-error). Repeat with Reduce Motion + VoiceOver on. | Error severity conveyed via icon + text (not color alone). Reduced-motion suppresses any error-state animation. VoiceOver announces each error message. | | | |
-| 32 | F9.6 | Manual grep walkthrough: `rg -n 'logger\.(info\|warn\|error\|debug)\((.*?(chunk\|data\|stdout\|stderr))' src/connection/ src/ui/chat-view/`. | Zero matches. (PRD-mandated invariant: no chat content logged.) **Strong follow-up per traceability.md**: replace this manual row with an automated grep test. | | | If the grep test lands before this QA pass, mark `Y` and note "automated by test/unit/no-chat-content-logged.test.ts" |
+| 32 | F9.6 | Defense-in-depth manual: `rg -n 'logger\.(info\|warn\|error\|debug)\((.*?(chunk\|data\|stdout\|stderr))' src/connection/ src/ui/chat-view/`. | Zero matches. Automated by `test/unit/no-chat-content-logged.test.ts` (2026-04-28); this manual run is a redundancy check, not the primary gate. | | | |
 
 ### FS1 — File Right-Click → Chat with @file Reference
 

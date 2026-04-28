@@ -1,12 +1,12 @@
 ---
 title: "Tomo Connection & Chat Window — Hashi's live-Tomo surface"
 status: draft
-version: "2.1"
+version: "2.2"
 ---
 
 # Product Requirements Document
 
-> **AC count gate**: `grep -c '^  - \[ \]' requirements.md` is the canonical AC total. Plan T5.4 reads it at run time. Last counted: 61 ACs (2026-04-25).
+> **AC count gate**: `grep -c '^  - \[ \]' requirements.md` is the canonical AC total. Plan T5.4 reads it at run time. Last counted: 64 ACs (2026-04-28).
 
 ## Product Overview
 
@@ -91,7 +91,7 @@ None in v0.1. Multi-user, remote Tomo, and mobile users are out of scope for v0.
   - [ ] The icon visually distinguishes three states via icon shape and/or a colored indicator dot — never through color alone: Connected, Reconnecting, Disconnected.
   - [ ] Given I hover the icon, When the tooltip appears, Then it shows the instance name for Connected state, "Reconnecting…" for Reconnecting state, or "Tomo: disconnected" for Disconnected state.
   - [ ] Given I click the icon, When the popover opens, Then it contains exactly three actions: **Force Reconnect**, **Open Chat Window**, **Go to Settings**.
-  - [ ] Given the popover is open and the plugin is Disconnected with no remembered instance to reconnect to, When I view the Force Reconnect action, Then it is disabled with a tooltip explaining "No instance chosen yet — open Settings → Connect first."
+  - [ ] Given the popover is open and the plugin is Disconnected with no remembered instance to reconnect to, When I view the Force Reconnect action, Then it is disabled with a tooltip whose canonical copy is **"No Tomo instance chosen — open Settings → Connect."** (verbatim — same string as the F6/AC5 Notice; one source of truth in the codebase at `src/commands/registerCommands.ts`).
   - [ ] Given the popover is open, When I select Open Chat Window, Then the chat window opens or focuses (same behavior as F7 palette command).
   - [ ] Given the popover is open, When I select Go to Settings, Then Obsidian opens Settings and scrolls to the MiYo Tomo Hashi Connect/Disconnect area.
   - [ ] The icon respects `prefers-reduced-motion` — any transitional animation (e.g., Reconnecting) degrades to a static state when reduced motion is requested.
@@ -243,19 +243,7 @@ MiYo v0.1 is a private single-user system; cohort adoption metrics do not apply.
 
 ### Tracking Requirements
 
-No telemetry in v0.1. "Tracking" means verification points for integration tests:
-
-| Event | Properties | Purpose |
-|-------|------------|---------|
-| connect.picker_opened | candidate count | Verify Connect flow triggers label-scoped discovery |
-| connect.outcome | outcome (connected / daemon-absent / socket-permission-denied / empty / picker-cancelled) | Verify each named outcome is distinguishable and surfaced correctly |
-| connection.state_transition | from → to; trigger (user / auto / external) | Verify state machine is observable |
-| reconnect.attempt | attempt-number; delay-ms; outcome | Verify backoff schedule matches 500ms / 1s / 2s / 4s / 8s |
-| reconnect.source | source (chat-view / palette / status-bar / auto) | Verify no source opens the picker; picker-only-from-Settings holds |
-| chat_view.input_state_change | enabled ↔ disabled; state at change | Verify input-enablement rule (enabled iff Connected) |
-| status_bar.popover_action | action (force-reconnect / open-chat / go-to-settings); state at click | Verify popover routing |
-| error.surfaced | surface (status-bar / chat-view indicator / Settings inline / Notice); category | Verify errors appear in the expected surface |
-| file_menu.mention_inserted | file path length; chat-view state at insert | Verify `@file` prefill in both open-chat and closed-chat scenarios |
+No telemetry in v0.1. Acceptance criteria above already enumerate every observable transition that integration tests verify; no event-table duplication is necessary. (A 9-event analytics-shaped table existed in PRD v2.1 and was removed in the 2026-04-28 review pass — it duplicated the AC list under another name without adding falsifiable behavior.)
 
 ---
 

@@ -1,12 +1,12 @@
 ---
 title: "Tomo Connection & Chat Window — Solution Design"
 status: draft
-version: "1.1"
+version: "1.2"
 ---
 
 # Solution Design Document
 
-> **Architecture pattern**: Layered plugin with singleton connection service + event-subscribed UI. Key components: TomoConnection (uses dockerode directly), TomoChatView (ItemView), StatusBarIcon, SettingsTab, InstancePickerModal, FileMenuHandler, CommandRegistry, Store helper. External integrations: Docker Engine API (local socket), Obsidian Plugin API. 10 ADRs (5 revised in 2026-04-25 simplification — see §Architecture Decisions).
+> **Architecture pattern**: Layered plugin with singleton connection service + event-subscribed UI. Key components: TomoConnection (uses dockerode directly), TomoChatView (ItemView), StatusBarIcon, SettingsTab, InstancePickerModal, fileMenu (registerFileMenu), CommandRegistry, Store helper. External integrations: Docker Engine API (local socket), Obsidian Plugin API. 10 ADRs (5 revised in 2026-04-25 simplification — see §Architecture Decisions).
 
 ## Constraints
 
@@ -250,7 +250,7 @@ graph TB
         ChatView[TomoChatView : ItemView]
         SettingsUI[SettingsTab : PluginSettingTab]
         Picker[InstancePickerModal : Modal]
-        FileMenu[FileMenuHandler]
+        FileMenu[fileMenu/registerFileMenu]
         Commands[CommandRegistry]
     end
 
@@ -289,14 +289,13 @@ graph TB
 │   ├── main.ts                              # MODIFY: plugin entry; wire everything on onload
 │   ├── types/
 │   │   └── index.ts                         # MODIFY: PluginSettings (chosenInstanceId)
-│   ├── connection/                          # NEW: core service + types
+│   ├── connection/                          # NEW: core service + types + Docker boundary
 │   │   ├── TomoConnection.ts                # NEW: the service (state machine, reconnect orchestration, stream plumbing)
 │   │   ├── connectionStore.ts               # NEW: `Store<ConnectionState>` instance + derived slices (displayInstanceName, kind)
 │   │   ├── state.ts                         # NEW: ConnectionState discriminated union + transition helpers
 │   │   ├── reconnectLoop.ts                 # NEW: cancellable backoff loop (extracted from service for testability)
+│   │   ├── docker.ts                        # NEW: thin dockerode helpers used by TomoConnection (NO port — see ADR-5 v2). Exports listTomoInstances, attach, inspect helpers and the AttachSession type. Unit tests use vi.mock('dockerode').
 │   │   └── types.ts                         # NEW: TomoInstance, ConnectionError
-│   ├── docker/                              # NEW: Docker boundary (port + adapter)
-│   │   └── docker.ts                        # NEW: thin dockerode wrapper used by TomoConnection (no port); exports listTomoInstances, attach, inspect helpers and the AttachSession type. Unit tests use vi.mock('dockerode').
 │   ├── ui/
 │   │   ├── chat-view/
 │   │   │   ├── TomoChatView.ts              # NEW: Obsidian ItemView subclass; builds DOM in onOpen; owns xterm.js instance; subscribes to connectionStore
@@ -730,7 +729,7 @@ OUTPUT: TomoInstance[]
 - **Environment**: Obsidian Desktop plugin, loaded from the vault's `.obsidian/plugins/miyo-tomo-hashi/` directory.
 - **Configuration**: No environment variables. Plugin data stored via `saveData()` (JSON blob in the vault-local plugin data file).
 - **Dependencies**: Local Docker daemon reachable via socket. No network dependencies. No outbound HTTP other than Docker socket.
-- **Performance**: Idle CPU near-zero (one attached TCP-over-socket stream, Node event loop). Memory proportional to xterm scrollback buffer (default ~1000 lines; ~100 KB for typical sessions). Plugin bundle ≤ 500 KB minified.
+- **Performance**: Idle CPU near-zero (one attached TCP-over-socket stream, Node event loop). Memory bounded by xterm scrollback cap (`scrollback: 5000` lines configured in `terminalHost.ts`; ~500 KB for typical sessions, hard-bounded for floods). Plugin bundle ≤ 1000 KB minified (CON-7 revised 2026-04-28).
 - **Distribution**: Community plugin listing (post-v0.1 release) + manual + BRAT (beta), per `README.md`.
 
 ### Rollback Strategy
@@ -821,7 +820,7 @@ stateDiagram-v2
 
 ### System-Wide Patterns
 
-- **Security**: Hashi v0.1 is local-only and outbound-only — no inbound surface, no remote endpoint resolution. Trust derives from (a) OS file permissions on the Docker socket, (b) the user explicitly choosing the container in the Settings picker, and (c) `DockerodeAdapter` pinning the connection to the platform-default local socket (no `DOCKER_HOST`/`DOCKER_CONTEXT` follow). No credentials are stored. Container output is rendered through xterm.js as terminal text; the renderer is configured with `allowProposedApi: false`, hyperlink handling disabled (no OSC 8 link activation), and OSC 52 clipboard writes ignored — bytes from the container can never trigger a clipboard write or open a URI without explicit user copy/paste. Chat input is opaque bytes from the user — sent to stdin as-is (claude interprets it). Cryptographic identity controls (image-digest pinning, vault↔container fingerprinting, preview-to-execute hash-pinning) are explicitly out of scope per PRD Won't Have — the user has no out-of-band reference value to verify against, so such controls would be ceremony, not protection.
+- **Security**: Hashi v0.1 is local-only and outbound-only — no inbound surface, no remote endpoint resolution. Trust derives from (a) OS file permissions on the Docker socket, (b) the user explicitly choosing the container in the Settings picker, and (c) `src/connection/docker.ts` helpers pinning the connection to the platform-default local socket (no `DOCKER_HOST`/`DOCKER_CONTEXT` follow — verified by both positive and negative unit tests in `docker.test.ts`). No credentials are stored. Container output is rendered through xterm.js as terminal text; the renderer is configured with `allowProposedApi: false`, hyperlink handling disabled (no OSC 8 link activation), and OSC 52 clipboard writes ignored — bytes from the container can never trigger a clipboard write or open a URI without explicit user copy/paste. Chat input is opaque bytes from the user — sent to stdin as-is (claude interprets it). Cryptographic identity controls (image-digest pinning, vault↔container fingerprinting, preview-to-execute hash-pinning) are explicitly out of scope per PRD Won't Have — the user has no out-of-band reference value to verify against, so such controls would be ceremony, not protection.
 - **Error Handling**: One `ConnectionError` discriminated union normalizes all error sources. Surface selection (banner vs Notice vs Settings inline) is the UI layer's job; `TomoConnection` just publishes state.
 - **Performance**: Discovery is on-demand only. No polling. Stream reads flow through xterm.js directly — no per-byte allocation in our code. Reconnect backoff bounded at ~15.5 s; cancellable.
 - **Logging**: `logger.ts` wraps `console.debug` tagged `[miyo-tomo-hashi]`. Logs state transitions and connection-error categories. **No chat content is logged.** Enforced by a grep-based assertion in tests: no `logger.*(chunk|data|stdout|stderr` call is permitted in `src/connection/**` or `src/ui/chat-view/**`. Log level is compile-time fixed to `debug` in v0.1 (no setting).
@@ -892,11 +891,10 @@ stateDiagram-v2
 ## Quality Requirements
 
 - **Performance**:
-  - Plugin load → chat view ready to receive input: ≤ 500 ms p95 on a warm Obsidian start (measured from `onload` return to first xterm frame).
-  - Discovery `listTomoInstances` p95: ≤ 300 ms against a local daemon with ≤ 20 containers total.
-  - Attach to first byte from container: ≤ 500 ms p95.
-  - Reconnect after transient disconnect: ≤ 15.5 s total before giving up (matches F8 AC).
-  - Plugin bundle `main.js`: ≤ 500 KB minified.
+  - Reconnect after transient disconnect: ≤ 15.5 s total before giving up (matches F8 AC; verified by `reconnectLoop.test.ts` exhaustion case).
+  - Plugin bundle `main.js`: ≤ 1000 KB minified (per CON-7, revised 2026-04-28; verified by `build-output.test.ts`).
+  - Streaming output through xterm.js does not block the main thread: chunks are coalesced per RAF frame in `terminalHost.ts` (one `xterm.write` per frame regardless of arrival rate). See §Implementation Examples / Streaming Coalescing.
+  - Note: load-time / discovery / attach p95 budgets were considered (≤500ms, ≤300ms, ≤500ms) and dropped in the 2026-04-28 review pass — no measurement harness exists for v0.1, no CI gate enforces them, and unmeasured budgets are aspiration rather than spec. If a perf regression surfaces, add an instrumented test then.
 - **Usability**:
   - All interactive controls reachable via Tab/Shift+Tab.
   - All state transitions announced to screen readers via ARIA live regions.

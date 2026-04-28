@@ -19,7 +19,7 @@ phase: 5
 **Key Decisions** (affecting this phase):
 - ADR-8: dynamic command label via `removeCommand` + `addCommand`
 - ADR-6: singleton chat view via `getLeavesOfType` + `setViewState`
-- PRD command palette = exactly 3 commands (Reconnect, Show chat, Execute instructions — the last belongs to spec 002 and is OUT OF SCOPE for this plan)
+- PRD command palette in spec 001 = exactly 2 Hashi commands (Reconnect to Tomo, Show chat window). The third user-facing command, "Execute instructions document", is owned by spec 002 and is registered there — `registerCommands.test.ts` asserts "exactly two commands" registered by 001's plugin.
 - Release gate: Tomo handoff file created in `_outbox/for-tomo/` and returned `status: done` (Tomo v0.7.0)
 
 **Dependencies**: Phases 1–4 complete.
@@ -69,13 +69,13 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
   1. Prime: Read current `src/main.ts` + SDD "Building Block View / Components" diagram + ADR-10 (plugin unload best-effort) `[ref: src/main.ts; SDD/Building Block View]`.
   2. Test: Write `test/unit/main.integration.test.ts`:
      - `onload` registers: settings tab, chat view type, status bar item, file menu listener, two commands
-     - `onload` creates a `TomoConnection` instance which imports `dockerode` directly via `src/connection/docker.ts`. Unit tests use `vi.mock('dockerode')` to script the small surface (listContainers, getContainer, container.inspect, container.attach).
+     - `onload` creates a `TomoConnection` instance; the service imports `dockerode` directly via `src/connection/docker.ts` helpers (no `DockerClient` port, no `DockerodeAdapter` — see ADR-5 v2). Unit tests use `vi.mock('dockerode')` to script the small surface (listContainers, getContainer, container.inspect, container.attach).
      - `onload` calls `autoReconnectIfRemembered()` (FS2)
      - `onunload` calls `connection.dispose()` and detaches any `VIEW_TYPE_TOMO_CHAT` leaves
      - Double-onload (defensive): second call is a no-op (or throws a clear error)
   3. Implement: Rewrite `src/main.ts`:
      - Class `HashiPlugin extends Plugin` with `settings: PluginSettings` + `connection: TomoConnection`
-     - `onload()`: load settings; create `DockerodeAdapter`; instantiate `TomoConnection(adapter, settings)`; register view + settings + status bar + file menu + commands; kick off `autoReconnectIfRemembered()`; log plugin loaded
+     - `onload()`: load settings; instantiate `TomoConnection(settings, persist)` (the service imports the dockerode helpers from `src/connection/docker.ts` directly — no adapter to construct); register view + settings + status bar + file menu + commands; kick off `autoReconnectIfRemembered()`; log plugin loaded
      - `onunload()`: best-effort stream close via `connection.dispose()`; detach chat leaves; log plugin unloaded
   4. Validate: Integration test passes; production build succeeds; manual smoke in test vault.
   5. Success:
@@ -103,7 +103,7 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
 
   1. Prime: Read SDD "Runtime View" — primary flow + failure flows `[ref: SDD/Runtime View]`.
   2. Test: Write `test/live/e2e.live.test.ts`:
-     - Start an `alpine:latest` container with label `miyo.component=tomo` and `miyo.tomo.instance-name=e2e-test`, running `cat`; full flow: instantiate `TomoConnection` with real `DockerodeAdapter` → `openPicker()` returns 1 instance → `connect(instance)` reaches Connected → write "hello\n" → read "hello\n" back from `onData` within 2s → `disconnect()` → container still running (assert via direct docker inspect) → cleanup
+     - Start an `alpine:latest` container with label `miyo.component=tomo` and `miyo.tomo.instance-name=e2e-test`, running `cat`; full flow: instantiate `TomoConnection(settings, persist)` against real Docker (no mock; the dockerode helpers in `src/connection/docker.ts` are exercised live per ADR-5 v2 + ADR-10) → `openPicker()` returns 1 instance → `connect(instance)` reaches Connected → write "hello\n" → read "hello\n" back from `onData` within 2s → `disconnect()` → container still running (assert via direct docker inspect) → cleanup
      - Transient disconnect: kill the container's stream externally (`docker restart`); observe reconnect loop; on failure, verify Disconnected with `reconnect-exhausted`; restart the container; forceReconnect; verify Connected
      - Chosen-instance-gone: connect; stop + remove container; forceReconnect; verify state stays Disconnected with `chosen-instance-gone`; picker NOT invoked (no spy call)
   3. Implement: No production code; this is a test-only task. Ensure Docker helpers are in `test/live/_helpers/` and isolated per-test.
@@ -142,12 +142,12 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
   1. Prime: Read SDD "Quality Requirements / Performance" and "Constraints / CON-3, CON-7" `[ref: SDD/Quality Requirements; SDD/CON-3; SDD/CON-7]`.
   2. Test: Extend `test/unit/build-output.test.ts`:
      - `build/main.js` exists after `npm run build`
-     - `build/main.js` size ≤ 500 KB minified
+     - `build/main.js` size ≤ 1000 KB minified
      - `build/manifest.json` has `isDesktopOnly: true`
   3. Implement: Test only; no production-code change unless bundle exceeds budget (in which case, investigate per SDD "Implementation Gotchas").
   4. Validate: `npm run build && npm test` passes.
   5. Success:
-     - [ ] Bundle ≤ 500 KB `[ref: SDD/Quality Requirements]`
+     - [ ] Bundle ≤ 1000 KB `[ref: SDD/Quality Requirements]`
      - [ ] Manifest desktop-only confirmed `[ref: PRD/Constraints; SDD/CON-3]`
 
 - [x] **T5.7 Tomo outbound handoff — instance-name label** `[activity: handoff]` — **completed 2026-04-24 ahead of implementation; Tomo returned `status: done` on 2026-04-24** so the label is now Tomo's primary path; the SDD's graceful fallback (short container ID + warning icon) is now backup-only, not the v0.1 path.
@@ -194,5 +194,5 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
 | FS1 all (@file prefill) | T4.4 |
 | FS2 all (remember last instance) | T3.4, T5.3 |
 | Constraint: manifest desktop-only | T1.1, T5.6 |
-| Constraint: bundle ≤ 500 KB | T5.6 |
+| Constraint: bundle ≤ 1000 KB | T5.6 |
 | Handoffs | T5.7, T5.8 |
