@@ -89,14 +89,8 @@ describe("obsidian mock shape", () => {
 });
 
 describe("002 surface (T1.5 mock extensions)", () => {
-	it("Modal exposes open / close / contentEl / onOpen / onClose", () => {
-		const modal = new obs.Modal(new obs.App());
-		expect(typeof modal.open).toBe("function");
-		expect(typeof modal.close).toBe("function");
-		expect(modal.contentEl).toBeInstanceOf(HTMLElement);
-		expect(typeof modal.onOpen).toBe("function");
-		expect(typeof modal.onClose).toBe("function");
-	});
+	// Modal shape is already covered by `exports Modal with open/close/contentEl/lifecycle`
+	// in the parent describe; not duplicated here.
 
 	it("vault.process is vi.fn returning Promise<void>", async () => {
 		const app = new obs.App();
