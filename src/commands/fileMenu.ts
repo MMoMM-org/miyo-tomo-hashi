@@ -43,6 +43,28 @@ export interface FileMenuDeps {
 const ENTRY_LABEL = "Open Tomo chat with @file reference";
 const ENTRY_ICON = "message-square";
 
+/**
+ * Strip control characters that could act as command separators when the
+ * inserted reference is later sent to the container's stdin. macOS and Linux
+ * filesystems both allow `\n`, `\r`, and `\0` in filenames; a file named
+ * `foo\nrm -rf /` would inject a newline and a second command into the
+ * Tomo session. Vanishingly unlikely in practice but cheap to defend
+ * against, and aligns with the PRD's "container input is opaque bytes
+ * from the user" trust model: the user did not type those control bytes,
+ * the filesystem did.
+ *
+ * Stripped (not escaped) — escape sequences would render visibly in the
+ * terminal where the user's preview expects literal `@vault/path` text.
+ *
+ * Spec ref: spec 001-session-view requirements.md FS1; review-fix M3
+ * (2026-04-28).
+ */
+function stripControlChars(path: string): string {
+	// `\n` (newline), `\r` (carriage return), `\0` (NUL). Leaving tabs alone —
+	// not a separator, doesn't break the @-mention boundary.
+	return path.replace(/[\n\r\0]/g, "");
+}
+
 export function registerFileMenu(plugin: Plugin, deps: FileMenuDeps): void {
 	plugin.registerEvent(
 		plugin.app.workspace.on(
@@ -56,7 +78,8 @@ export function registerFileMenu(plugin: Plugin, deps: FileMenuDeps): void {
 							// `file.path` is already vault-relative in Obsidian — no
 							// resolution needed. Trailing space matches PRD FS1: lets
 							// the user start typing immediately after the reference.
-							const text = `@${file.path} `;
+							const safePath = stripControlChars(file.path);
+							const text = `@${safePath} `;
 							const input = deps.getOpenChatInput();
 							if (input !== null) {
 								insertAtCaret(input, text);

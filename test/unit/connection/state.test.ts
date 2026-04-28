@@ -20,8 +20,6 @@ describe("ConnectionState", () => {
 					return s.instance.shortId;
 				case "reconnecting":
 					return `${s.target.shortId}@${s.attempt}`;
-				case "error":
-					return s.error.code;
 				default:
 					return assertExhaustive(s);
 			}

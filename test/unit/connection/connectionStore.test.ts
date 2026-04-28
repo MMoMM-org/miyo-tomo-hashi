@@ -119,16 +119,18 @@ describe("displayInstanceName", () => {
 		expect(displayInstanceName(state)).toBe("deadbeef0003");
 	});
 
-	it("returns null when in error state (even if lastKnown is present)", () => {
-		const error: ConnectionError = {
+	it("returns null on disconnected even when a reason is carried", () => {
+		// The previous v1.1 SDD had a separate `{ kind: "error"; ... }`
+		// variant that this test exercised; the variant was removed in the
+		// 2026-04-28 review-fix pass (see state.ts). The remaining failure
+		// surface — `disconnected{reason}` — was already covered above; this
+		// case asserts displayInstanceName returns null even when the reason
+		// payload is non-trivial.
+		const reason: ConnectionError = {
 			code: "attach-failed",
 			detail: "stream closed",
 		};
-		const state: ConnectionState = {
-			kind: "error",
-			error,
-			lastKnown: inst({ name: "delta" }),
-		};
+		const state: ConnectionState = { kind: "disconnected", reason };
 		expect(displayInstanceName(state)).toBeNull();
 	});
 });

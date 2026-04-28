@@ -93,11 +93,6 @@ function viewFor(state: ConnectionState): IndicatorView {
 				label: `Connecting to ${name ?? "Tomo"}…`,
 				stateClass: "is-attaching",
 			};
-		case "error":
-			return {
-				label: `Disconnected — ${state.error.detail}`,
-				stateClass: "is-disconnected",
-			};
 		case "disconnected":
 			return {
 				label:
