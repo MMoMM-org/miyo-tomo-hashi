@@ -79,6 +79,8 @@ When implementation requires changes from the specification:
 
 - **2026-04-28 (T1.2)** — `InstructionSet.schema_version` typed as `"1"` (string literal), not `1` (number). Reason: actual vendored schema declares `{"const": "1"}` (string). SDD code excerpt at `Application Data Models` is incorrect on this point; T1.1's regression test already locks the runtime value as `"1"`.
 - **2026-04-28 (T1.2)** — `Action` discriminated union uses field `action` (matches schema `$defs/*.properties.action.const`), not `kind`. Plan task wording "narrows on `kind`" was loose; actual discriminant per schema is `action`. `ActionRecord.kind` (executor-internal wrapper) is unchanged — it remains `kind: ActionKind`. Both fields coexist on different types.
+- **2026-04-28 (T1.2)** — `InstructionSet` requires 3 fields the SDD code excerpt omitted: `type`, `generated`, `profile` (all in the schema's top-level `required` array alongside `schema_version` and `actions`). Hand-aligned types include them. SDD `Application Data Models` excerpt was abbreviated.
+- **2026-04-28 (T1.2)** — `Readable<T>` (in `src/executor/state.ts`) typed as `import("../util/store").Store<T>` directly. Reason: 001's `src/util/store.ts` (lines 4–5) explicitly documents "no `Readable<T>` interface (per ADR-4 v3, 2026-04-25 simplification)". The SDD excerpt referencing `import("../util/store").Readable<T>` was written before 001's ADR-4 v3.
 
 ## Metadata Reference
 
