@@ -2,6 +2,8 @@
   <img src="tomo-hashi-banner.svg" alt="MiYo Tomo Hashi" />
 </p>
 
+# MiYo Tomo Hashi
+
 Direct integration with Tomo (Claude Code) sessions for session interaction and automated vault updates
 
 <p align="center">
