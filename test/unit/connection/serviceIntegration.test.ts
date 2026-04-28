@@ -118,7 +118,7 @@ function makeFakeSession(): FakeSession {
 }
 
 function settings(initial: Partial<PluginSettings> = {}): PluginSettings {
-	return { chosenInstanceId: null, ...initial };
+	return { chosenInstanceId: null, zoomLevel: 1, ...initial };
 }
 
 // --- suite -------------------------------------------------------------------

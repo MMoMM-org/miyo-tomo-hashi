@@ -42,6 +42,7 @@ import {
 } from "../../connection/connectionStore";
 import type { ConnectionState } from "../../connection/state";
 import type { TomoConnection } from "../../connection/TomoConnection";
+import { ZOOM_LEVELS, type ZoomLevel } from "../../types/index";
 
 import { VIEW_TYPE_TOMO_CHAT } from "./index";
 import {
@@ -51,6 +52,11 @@ import {
 	writeChunk,
 	type TerminalSession,
 } from "./terminalHost";
+
+// Anchors xterm font sizing to a fixed base so the zoom multipliers map to
+// concrete pixel sizes (0.5×→7px, 1×→14px, 1.5×→21px). 14px matches the
+// xterm.js default and keeps cells legible on standard Obsidian themes.
+const BASE_FONT_SIZE = 14;
 
 const STATE_CLASSES = [
 	"is-connected",
@@ -112,19 +118,24 @@ export class TomoChatView extends ItemView {
 	// updates) — only the disconnected→connected edge needs the explicit
 	// fit + resize.
 	private lastStateKind: ConnectionState["kind"] | null = null;
+	private currentZoom: ZoomLevel;
 
 	// DOM refs — captured during onOpen() so render() can update them on
 	// every store transition.
 	private indicatorEl: HTMLElement | null = null;
 	private forceReconnectBtn: HTMLButtonElement | null = null;
 	private inputEl: HTMLInputElement | null = null;
+	private zoomButtons: Map<ZoomLevel, HTMLButtonElement> = new Map();
 
 	constructor(
 		leaf: WorkspaceLeaf,
 		private readonly connection: TomoConnection,
 		private readonly chosenInstanceId: () => string | null,
+		initialZoom: ZoomLevel,
+		private readonly onZoomChange: (level: ZoomLevel) => Promise<void>,
 	) {
 		super(leaf);
+		this.currentZoom = initialZoom;
 	}
 
 	override getViewType(): string {
@@ -171,7 +182,7 @@ export class TomoChatView extends ItemView {
 		root.empty();
 		root.addClass("hashi-chat-view");
 
-		// --- Header (indicator + force-reconnect action) ---------------------
+		// --- Header (indicator + zoom controls + force-reconnect action) ----
 		const header = root.createDiv({ cls: "hashi-chat-view-header" });
 		this.indicatorEl = header.createDiv({
 			cls: "hashi-chat-view-indicator",
@@ -179,6 +190,27 @@ export class TomoChatView extends ItemView {
 		const headerActions = header.createDiv({
 			cls: "hashi-chat-view-header-actions",
 		});
+
+		// Zoom buttons — fixed-arity selector (see ZOOM_LEVELS). Continuous
+		// slider was rejected because xterm's cell grid rounds to integer
+		// pixel cells, and a slider would drift between integer fontSizes,
+		// constantly fighting the fit-addon for a stable layout.
+		const zoomGroup = headerActions.createDiv({
+			cls: "hashi-chat-view-zoom-group",
+		});
+		this.zoomButtons.clear();
+		for (const level of ZOOM_LEVELS) {
+			const btn = zoomGroup.createEl("button", {
+				cls: "hashi-chat-view-zoom-btn",
+				text: this.formatZoomLabel(level),
+			});
+			btn.setAttr("aria-label", `Zoom ${this.formatZoomLabel(level)}`);
+			btn.addEventListener("click", () => {
+				void this.handleZoomClick(level);
+			});
+			this.zoomButtons.set(level, btn);
+		}
+
 		this.forceReconnectBtn = headerActions.createEl("button", {
 			cls: "hashi-chat-view-force-reconnect",
 			text: "Force reconnect",
@@ -190,6 +222,8 @@ export class TomoChatView extends ItemView {
 		// --- Terminal host ---------------------------------------------------
 		const termHost = root.createDiv({ cls: "hashi-chat-view-terminal-host" });
 		this.terminal = createTerminal(termHost);
+		this.applyZoomToTerminal(this.currentZoom);
+		this.refreshZoomButtons();
 
 		this.dataDisposable = this.connection.onData((chunk: Uint8Array) => {
 			if (this.terminal !== null) writeChunk(this.terminal, chunk);
@@ -279,6 +313,43 @@ export class TomoChatView extends ItemView {
 			dispose(this.terminal);
 			this.terminal = null;
 		}
+	}
+
+	private formatZoomLabel(level: ZoomLevel): string {
+		// "0.5×" / "1×" / "1.5×" — strip any trailing ".0" so 1 reads as "1×"
+		// rather than "1.0×". Number.toString() already does this for integer
+		// values; explicit branches keep the formatting deterministic.
+		if (level === 1) return "1×";
+		return `${level}×`;
+	}
+
+	private applyZoomToTerminal(level: ZoomLevel): void {
+		if (this.terminal === null) return;
+		this.terminal.terminal.options.fontSize = BASE_FONT_SIZE * level;
+		// Re-fit so xterm's cell grid is recomputed against the new font;
+		// fit() triggers terminal.onResize, which we already wire to
+		// connection.resize so the container PTY follows. Without this the
+		// PTY would stay at the old geometry and ghost-line artifacts would
+		// reappear immediately after a zoom change.
+		fit(this.terminal);
+	}
+
+	private refreshZoomButtons(): void {
+		for (const [level, btn] of this.zoomButtons) {
+			if (level === this.currentZoom) btn.addClass("is-active");
+			else btn.removeClass("is-active");
+		}
+	}
+
+	private async handleZoomClick(level: ZoomLevel): Promise<void> {
+		// No-op when the user clicks the already-active level — saves a
+		// saveData round-trip on a fast-clicker and avoids a needless
+		// fit/resize churn on the container PTY.
+		if (level === this.currentZoom) return;
+		this.currentZoom = level;
+		this.applyZoomToTerminal(level);
+		this.refreshZoomButtons();
+		await this.onZoomChange(level);
 	}
 
 	private render(state: ConnectionState): void {

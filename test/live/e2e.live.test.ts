@@ -106,7 +106,7 @@ describe("Hashi e2e — happy path + reconnect + chosen-instance-gone", () => {
 		});
 		created.push(c);
 
-		const settings: PluginSettings = { chosenInstanceId: null };
+		const settings: PluginSettings = { chosenInstanceId: null, zoomLevel: 1 };
 		const conn = new TomoConnection(settings);
 
 		// openPicker discovers our container.
@@ -174,7 +174,7 @@ describe("Hashi e2e — happy path + reconnect + chosen-instance-gone", () => {
 			});
 			created.push(c);
 
-			const settings: PluginSettings = { chosenInstanceId: null };
+			const settings: PluginSettings = { chosenInstanceId: null, zoomLevel: 1 };
 			const conn = new TomoConnection(settings);
 
 			const candidates = await conn.openPicker();
@@ -239,7 +239,7 @@ describe("Hashi e2e — happy path + reconnect + chosen-instance-gone", () => {
 			});
 			created.push(c);
 
-			const settings: PluginSettings = { chosenInstanceId: null };
+			const settings: PluginSettings = { chosenInstanceId: null, zoomLevel: 1 };
 			const conn = new TomoConnection(settings);
 
 			// Spy on openPicker so we can prove forceReconnect never falls

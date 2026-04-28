@@ -4,3 +4,33 @@
 	color: var(--text-muted);
 	font-size: var(--font-small);
 }
+
+/* --- Chat-view zoom controls (ADR-6 — theme-bound CSS vars only) --- */
+
+.hashi-chat-view-zoom-group {
+	display: inline-flex;
+	gap: 2px;
+	margin-right: 8px;
+}
+
+.hashi-chat-view-zoom-btn {
+	padding: 2px 6px;
+	font-size: var(--font-smaller);
+	line-height: 1.2;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+
+.hashi-chat-view-zoom-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.hashi-chat-view-zoom-btn.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}

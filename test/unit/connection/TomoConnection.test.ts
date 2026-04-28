@@ -171,7 +171,7 @@ function recordStates(): { states: ConnectionState[]; unsub: () => void } {
 }
 
 function settings(initial: Partial<PluginSettings> = {}): PluginSettings {
-	return { chosenInstanceId: null, ...initial };
+	return { chosenInstanceId: null, zoomLevel: 1, ...initial };
 }
 
 // --- suite -------------------------------------------------------------------
@@ -248,6 +248,7 @@ describe("TomoConnection.connect()", () => {
 		expect(persist).toHaveBeenCalledTimes(1);
 		expect(persist).toHaveBeenCalledWith({
 			chosenInstanceId: target.containerId,
+			zoomLevel: 1,
 		});
 		// Must reference the live settings object (mutation visible to caller).
 		expect(persist.mock.calls[0]?.[0]).toBe(s);

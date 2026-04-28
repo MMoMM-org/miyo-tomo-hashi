@@ -53,11 +53,14 @@ describe("settingsPersistence", () => {
 			chosenInstanceId: "abc123",
 		});
 		const result = await loadSettings(plugin);
-		expect(result).toEqual({ chosenInstanceId: "abc123" });
+		expect(result).toEqual({ chosenInstanceId: "abc123", zoomLevel: 1 });
 	});
 
 	it("saveSettings calls plugin.saveData with the provided settings", async () => {
-		const settings: PluginSettings = { chosenInstanceId: "def456" };
+		const settings: PluginSettings = {
+			chosenInstanceId: "def456",
+			zoomLevel: 1.5,
+		};
 		await saveSettings(plugin, settings);
 		expect(plugin.saveData).toHaveBeenCalledWith(settings);
 	});
