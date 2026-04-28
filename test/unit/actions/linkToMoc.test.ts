@@ -39,18 +39,6 @@ const makeCalloutMetadata = (): FileMetadata => ({
 });
 
 /**
- * Build a FileMetadata with two callouts.
- * First callout "Other" lines 1–4; second callout "Projects" lines 6–10.
- */
-const makeTwoCalloutMetadata = (): FileMetadata => ({
-	headings: [],
-	sections: [
-		{ type: "callout", line: 1, endLine: 4 },
-		{ type: "callout", line: 6, endLine: 10 },
-	],
-});
-
-/**
  * Build a FileMetadata with one callout titled "Other" (no match for "Projects").
  */
 const makeFallbackCalloutMetadata = (): FileMetadata => ({
@@ -138,7 +126,6 @@ describe("linkToMoc handler", () => {
 	// target_moc_path takes priority over target_moc for path resolution
 	// -------------------------------------------------------------------------
 	it("target_moc_path present → uses it for MOC lookup", async () => {
-		const vault = new FakeVaultFS();
 		const canonicalPath = "MOCs/canonical.md";
 		const metaMap = new Map<string, FileMetadata | null>([
 			[canonicalPath, makeHeadingMetadata()],
