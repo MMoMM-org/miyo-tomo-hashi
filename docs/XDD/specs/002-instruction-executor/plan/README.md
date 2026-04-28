@@ -51,7 +51,7 @@ version: "1.0"
 |-------|------|--------|-------|------|
 | 1 | Foundation | completed | 6 | [phase-1.md](phase-1.md) |
 | 2 | Vault Boundary & Schema | completed | 5 | [phase-2.md](phase-2.md) |
-| 3 | Action Handlers | pending | 6 | [phase-3.md](phase-3.md) |
+| 3 | Action Handlers | completed | 6 | [phase-3.md](phase-3.md) |
 | 4 | Orchestrator, Hooks, Run Log | pending | 5 | [phase-4.md](phase-4.md) |
 | 5 | UI Surfaces | pending | 4 | [phase-5.md](phase-5.md) |
 | 6 | Wire-up, Integration & Release Gate | pending | 5 | [phase-6.md](phase-6.md) |
@@ -92,6 +92,7 @@ When implementation requires changes from the specification:
 - **2026-04-28 (T3.4)** — `update_log_link` at_time format is `HH:MM - - [[stem]]` (two hyphens). The PRD wording specifies the wikilink line as `- [[stem]]` and the at_time prefix as `HH:MM - `. Concatenating yields `HH:MM - - [[stem]]` — visually unusual but internally consistent with `update_log_entry`'s at_time prefix application and with the PRD's literal wording. Tests lock in this exact format. If real-vault QA in T6.4 reveals the format reads poorly, a follow-up clarification with Tomo can collapse to `HH:MM - [[stem]]`.
 - **2026-04-28 (T3.4)** — `update_tracker` callout_body sub-mode matches only `> field::` (Dataview double-colon). Single-colon `> field:` is NOT matched. Reason: Dataview inline-field syntax is canonically `::`; matching `:` would cause false positives on plain markdown lines containing colons (e.g. `> Note: this is fine`). If a real vault uses single-colon trackers, the rule can be extended in a follow-up — but the safer default is the stricter form.
 - **2026-04-28 (T3.4)** — `update_tracker` field-not-found returns `failed` (not `applied`/inserted) for all three sub-modes. The PRD specifies "Given the tracker field is reachable, Then set it" — the field must exist. Tracker fields are populated by daily-note templates upstream; an absent field signals a misalignment with the template, which a deterministic failure surfaces to the run log rather than silently inserting.
+- **2026-04-28 (T3.6)** — HANDLERS registry type uses `Extract<Action, { action: K }>`, not `Extract<Action, { kind: K }>` as stated in the SDD code excerpt and the plan task wording. Reason: `Action` discriminates on field `action` (per T1.2 deviation). The `kind` field does not exist on `Action` — it exists on `ActionRecord` (executor-internal wrapper). Using `{ kind: K }` would produce `never` for every branch, breaking the type narrowing. The call-site pattern is `HANDLERS[action.action](action, ctx)` — not `HANDLERS[action.kind]`. In orchestrator code that works from `ActionRecord`, the dispatch key `record.kind` is still valid because `ActionRecord.kind: ActionKind` is kept in sync with `Action["action"]` at record-construction time.
 
 ## Metadata Reference
 
@@ -184,7 +185,7 @@ Each phase is defined in a separate file.
 
 - [x] [Phase 1: Foundation](phase-1.md)
 - [x] [Phase 2: Vault Boundary & Schema](phase-2.md)
-- [ ] [Phase 3: Action Handlers](phase-3.md)
+- [x] [Phase 3: Action Handlers](phase-3.md)
 - [ ] [Phase 4: Orchestrator, Hooks, Run Log](phase-4.md)
 - [ ] [Phase 5: UI Surfaces](phase-5.md)
 - [ ] [Phase 6: Wire-up, Integration & Release Gate](phase-6.md)

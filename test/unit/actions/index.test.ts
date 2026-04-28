@@ -146,6 +146,7 @@ describe("HANDLERS — dispatch smoke", () => {
 			id: "smoke-ltm",
 			target_moc: mocPath,
 			line_to_add: "- [[Notes/x|X]]",
+			section_name: "Projects",
 		};
 		const handler = HANDLERS[action.action];
 		const outcome = await handler(action, makeCtx(vault));
