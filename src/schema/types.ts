@@ -11,20 +11,6 @@
  */
 
 // ---------------------------------------------------------------------------
-// ActionKind — 8-literal union
-// ---------------------------------------------------------------------------
-
-export type ActionKind =
-	| "create_moc"
-	| "move_note"
-	| "link_to_moc"
-	| "update_tracker"
-	| "update_log_entry"
-	| "update_log_link"
-	| "delete_source"
-	| "skip";
-
-// ---------------------------------------------------------------------------
 // Action variant interfaces — all discriminated by field `action`
 // ---------------------------------------------------------------------------
 
@@ -127,6 +113,13 @@ export type Action =
 	| UpdateLogLinkAction
 	| DeleteSourceAction
 	| SkipAction;
+
+// ---------------------------------------------------------------------------
+// ActionKind — derived from Action["action"] so it cannot drift out of sync
+// when a variant is added or removed.
+// ---------------------------------------------------------------------------
+
+export type ActionKind = Action["action"];
 
 // ---------------------------------------------------------------------------
 // InstructionSet — top-level schema shape

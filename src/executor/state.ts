@@ -39,6 +39,9 @@ export interface ActionRecord {
 	readonly id: string;
 	readonly kind: ActionKind;
 	readonly summary: string;
+	// Mutable: set by the executor as each action completes. Other fields are
+	// frozen at record-construction time; outcome is the only post-construction
+	// state that flows through the run.
 	outcome: ActionOutcome | null;
 }
 
@@ -46,7 +49,7 @@ export interface ActionRecord {
 // RunCounts — tallied per-outcome counts plus elapsed duration
 // ---------------------------------------------------------------------------
 
-export type RunCounts = Record<ActionOutcome["kind"] | "pending", number> & {
+export type RunCounts = Readonly<Record<ActionOutcome["kind"] | "pending", number>> & {
 	readonly durationMs: number;
 };
 
