@@ -113,14 +113,6 @@ describe("updateTracker — inline_field", () => {
 		expect(await vault.read(DAILY_PATH)).toBe(content);
 	});
 
-	it("field absent, but value matches format → applied; file now contains field:: value", async () => {
-		// This scenario: a fresh daily note has no tracker field yet — applied means we SET it.
-		// Actually per PRD: "if field not found → failed". The PRD says "Given the tracker field is reachable
-		// Then set it" — but the field must already be present (tracker is maintained by a template).
-		// So absent → failed is correct. No "apply on absent" case needed.
-		// (This test placeholder is intentionally omitted — see above reasoning.)
-	});
-
 	it("field present with numeric value at target → skipped-already", async () => {
 		const content = "# Daily\n\nscore:: 5\n";
 		const vault = new FakeVaultFS();

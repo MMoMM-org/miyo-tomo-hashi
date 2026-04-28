@@ -3,7 +3,7 @@
  *
  * Three sub-modes determined by `action.syntax`:
  *   - inline_field: `field:: value` (Dataview-style inline field anywhere in file)
- *   - callout_body: `> field:: value` or `> field: value` inside a named callout section
+ *   - callout_body: `> field:: value` (Dataview double-colon) inside a named callout section
  *   - checkbox:     `- [x] field` / `- [ ] field` — truthy value → checked; falsy → unchecked
  *
  * Idempotency + conflict semantics (PRD F4):
