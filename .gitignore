@@ -36,8 +36,8 @@ _outbox/
 # Claude Code
 .claude/
 
-# Docker-based dev environment (deployed by ~/Kouzou/scripts/)
-claude-docker/
-claude-docker-home/
-begin-code.sh
-generated-images/
+# Docker-based dev environment (deployed by ~/Kouzou/scripts/) — anchored to repo root
+/claude-docker/
+/claude-docker-home/
+/begin-code.sh
+/generated-images/

@@ -1,6 +1,12 @@
-# MiYo Tomo Hashi
+<p align="center">
+  <img src="tomo-hashi-banner.svg" alt="MiYo Tomo Hashi" />
+</p>
 
 Direct integration with Tomo (Claude Code) sessions for session interaction and automated vault updates
+
+<p align="center">
+  <img src="tomo-hashi-hanko.png" alt="" width="120" />
+</p>
 
 ## Installation
 
