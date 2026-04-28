@@ -50,28 +50,50 @@ export function runContractTests(makeVaultFS: () => VaultFS): void {
       await vault.create("notes/roundtrip.md", content);
       expect(await vault.read("notes/roundtrip.md")).toBe(content);
     });
+
+    it("create rejects when the path already exists (matches Obsidian vault.create)", async () => {
+      // Real Obsidian's vault.create THROWS on existing path; vault.modify is
+      // the overwrite primitive. v0.1 only uses create() for run-log files,
+      // whose paths are timestamp-unique with collision suffix, so a throwing
+      // create is safe. Locking the contract here keeps FakeVaultFS and
+      // ObsidianVaultFS aligned — a silent overwrite would mask bugs.
+      const vault = makeVaultFS();
+      await vault.create("notes/twice.md", "first");
+      await expect(vault.create("notes/twice.md", "second")).rejects.toThrow();
+    });
   });
 
   describe("process atomicity", () => {
-    it("concurrent process calls on the same path serialize", async () => {
+    it("the second concurrent process sees the first transform's output", async () => {
+      // Load-bearing assertion: a non-serializing implementation would run
+      // both transforms against the SAME initial empty content, producing
+      // either "A" or "B" (race) — never "AB". Forcing a microtask yield
+      // inside the first transform ensures the second call's await on
+      // process() can interleave; only a serializing impl will still produce
+      // "AB" because the second transform will see "A" as its input.
       const vault = makeVaultFS();
       const path = "notes/atomic.md";
       await vault.create(path, "");
 
-      const order: string[] = [];
+      const seen: string[] = [];
 
       const a = vault.process(path, (content) => {
-        order.push("a-start");
+        seen.push(`a-saw:${content}`);
         return content + "A";
       });
+      // Yield to the event loop so a non-atomic impl would race here.
+      await Promise.resolve();
       const b = vault.process(path, (content) => {
-        order.push("b-start");
+        seen.push(`b-saw:${content}`);
         return content + "B";
       });
       await Promise.all([a, b]);
 
-      // Both transforms must be applied in order
-      expect(order).toEqual(["a-start", "b-start"]);
+      // Serialization proof: the second transform's input is "A" (the
+      // output of the first), not "" (the initial state). A racy impl
+      // would record "b-saw:" with empty content and the final read
+      // would be "A" or "B" but not "AB".
+      expect(seen).toEqual(["a-saw:", "b-saw:A"]);
       expect(await vault.read(path)).toBe("AB");
     });
   });
@@ -305,5 +327,34 @@ describe("contract self-test (broken stub)", () => {
     // Contract asserts exists() returns false after trash — broken stub fails
     const stillExists = await brokenVault.exists("notes/totrash.md");
     expect(stillExists).toBe(true); // proves the stub IS broken
+  });
+
+  it("flags a stub whose process() does NOT serialize concurrent calls", async () => {
+    // Build a stub that reads-modifies-writes WITHOUT a per-path queue.
+    // The transform is delayed by a setTimeout(0) so both calls observe
+    // the same initial state before either writes. The contract assertion
+    // expects "AB"; this stub produces "B" (the second write wins).
+    const store = new Map<string, string>();
+    const brokenVault = makeBrokenStub({
+      create: vi.fn(async (path: string, content: string) => {
+        store.set(path, content);
+      }),
+      read: vi.fn(async (path: string) => store.get(path) ?? ""),
+      // BUG: read happens NOW; write happens after a real delay; no queue.
+      process: vi.fn(async (path: string, transform: (c: string) => string) => {
+        const current = store.get(path) ?? "";
+        await new Promise((r) => setTimeout(r, 5));
+        store.set(path, transform(current));
+      }),
+    });
+
+    await brokenVault.create("notes/atomic.md", "");
+    // Start both WITHOUT yielding between them — both calls capture the
+    // initial empty state synchronously before either resolves.
+    const a = brokenVault.process("notes/atomic.md", (c) => c + "A");
+    const b = brokenVault.process("notes/atomic.md", (c) => c + "B");
+    await Promise.all([a, b]);
+    // A serializing impl produces "AB"; this racy stub produces "B".
+    expect(await brokenVault.read("notes/atomic.md")).toBe("B");
   });
 });
