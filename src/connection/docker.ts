@@ -173,11 +173,17 @@ export async function attach(id: string): Promise<AttachSession> {
 	const tty: boolean = info.Config.Tty === true;
 	const docker = client();
 	const container = docker.getContainer(id);
+	// `hijack: true` is REQUIRED when attaching with stdin so docker-modem
+	// performs the HTTP-Upgrade handshake to a raw bidirectional socket.
+	// Without it, output may still flow (initial response chunks) but writes
+	// to stdin are dropped — the connection isn't hijacked, it's just an
+	// HTTP response body. User-reported runtime bug 2026-04-28.
 	const raw = (await container.attach({
 		stream: true,
 		stdout: true,
 		stderr: true,
 		stdin: true,
+		hijack: true,
 		logs: false,
 	})) as Duplex;
 
