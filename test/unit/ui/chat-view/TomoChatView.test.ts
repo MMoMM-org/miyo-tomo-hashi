@@ -443,6 +443,38 @@ describe("TomoChatView — onClose lifecycle", () => {
 	});
 });
 
+describe("TomoChatView — input accessors (T5.3 file-menu wiring)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	afterEach(() => {
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	it("getInputElement returns the input element after onOpen", async () => {
+		const h = await mountView();
+		const input = h.view.getInputElement();
+		expect(input).not.toBeNull();
+		expect(input!.classList.contains("hashi-chat-view-input")).toBe(true);
+	});
+
+	it("setInputAndFocus sets value, focuses input, and places caret at end", async () => {
+		const h = await mountView();
+		document.body.appendChild(h.root);
+		// Input must be enabled for jsdom focus() to move activeElement —
+		// disabled inputs reject focus per WHATWG spec.
+		connectionStore.set({ kind: "connected", instance: inst() });
+		h.view.setInputAndFocus("@foo/bar.md ");
+		const input = h.view.getInputElement();
+		expect(input!.value).toBe("@foo/bar.md ");
+		expect(document.activeElement).toBe(input);
+		expect(input!.selectionStart).toBe("@foo/bar.md ".length);
+		expect(input!.selectionEnd).toBe("@foo/bar.md ".length);
+	});
+});
+
 describe("terminalHost module surface", () => {
 	it("exports createTerminal, writeChunk, fit, dispose", async () => {
 		// xterm's static module init touches HTMLCanvasElement.getContext (its
