@@ -211,7 +211,7 @@ Every PRD edge-case bullet (PRD §F1–F11 *Edge Cases*) must trace to a test ar
 | F8: User toggles hooks → disabled mid-run | unit | `test/unit/executor/InstructionExecutor.test.ts` (assert in-flight run unaffected; new run honors new policy) |
 | F7: Two runs scheduled in same minute | unit | `test/unit/executor/runLog.test.ts` (filename `_2` suffix) |
 | F1/F4: `.json` with 0 actions | unit | `test/unit/executor/InstructionExecutor.test.ts` (empty-actions branch) |
-| F4: Single `skip` action | unit | `test/unit/actions/skipHandler.test.ts` |
+| F4: Single `skip` action | unit | `test/unit/actions/skip.test.ts` |
 | F1: Inbox contains 50 `_instructions.json` at once | unit + manual QA | unit asserts merged plan size; manual QA in T6.4 timing observation |
 | F7: Obsidian closes mid-run | manual QA | T6.4 — kill Obsidian during a run; reopen; verify next invocation sees correct partial-applied state from `.json` |
 | F9: Vault-internal symlink to outside vault | unit | `test/unit/util/paths.test.ts` (realpath rejection) |
