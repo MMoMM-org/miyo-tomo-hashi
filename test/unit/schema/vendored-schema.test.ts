@@ -53,8 +53,12 @@ describe("src/schema/instructions.schema.json — vendored Tomo schema (ADR-2)",
 });
 
 describe("src/schema/validator.ts — ajv compiles at module load (ADR-1 revised 2026-04-25)", () => {
-	it("validator module imports cleanly and exports a compiled ajv validate function", async () => {
+	it("validator module imports cleanly and exposes a compiled ajv validator (not a lazy factory)", async () => {
 		const mod = await import("../../../src/schema/validator.js");
 		expect(typeof mod.validateInstructionSet).toBe("function");
+		// ajv v8 compiled validators carry the source schema on .schema —
+		// load-bearing for CON-2: proves compilation already happened at import
+		// time, would not be true of a deferred-compile factory.
+		expect(mod.validateInstructionSet).toHaveProperty("schema");
 	});
 });
