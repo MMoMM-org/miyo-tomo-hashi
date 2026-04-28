@@ -40,4 +40,21 @@ describe("production build pipeline", () => {
 		// Loader entry can be `".css":` or `'.css':` — accept either quote style.
 		expect(configSource).toMatch(/loader\s*:\s*\{[^}]*['"]\.css['"]\s*:/);
 	});
+
+	it("build/main.js is at most 500 KB minified (SDD CON-7 / Quality Requirements)", () => {
+		const stats = statSync(buildOutput);
+		const sizeKb = stats.size / 1024;
+		// 500 KB ceiling per SDD CON-7 informal target. Production build is
+		// minified; if this trips, see SDD Implementation Gotchas before
+		// raising the bound.
+		expect(sizeKb).toBeLessThanOrEqual(500);
+	});
+
+	it("build/manifest.json declares isDesktopOnly: true (PRD Constraints / SDD CON-3)", () => {
+		const manifestPath = resolve(repoRoot, "build/manifest.json");
+		const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
+			isDesktopOnly: boolean;
+		};
+		expect(manifest.isDesktopOnly).toBe(true);
+	});
 });

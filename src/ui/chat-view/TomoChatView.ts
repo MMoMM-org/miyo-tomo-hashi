@@ -132,6 +132,33 @@ export class TomoChatView extends ItemView {
 		return "message-square";
 	}
 
+	/**
+	 * Returns the chat input element, or `null` if `onOpen()` has not yet
+	 * built the DOM. Used by the file-menu @file prefill (T5.3) to insert a
+	 * reference at the caret of the open chat. Narrow accessor — exposes the
+	 * input element only, not the rest of the view internals.
+	 *
+	 * Spec ref: spec 001-session-view phase-5 T5.3; PRD FS1.
+	 */
+	getInputElement(): HTMLInputElement | null {
+		return this.inputEl;
+	}
+
+	/**
+	 * Sets the input value, focuses it, and places the caret at the end. Used
+	 * by the file-menu @file prefill (T5.3) when the chat view was just opened
+	 * by `openChatViewAndPrefill` and the user expects to start typing
+	 * immediately after the inserted reference. No-op when the DOM has not
+	 * yet been built.
+	 */
+	setInputAndFocus(text: string): void {
+		if (this.inputEl === null) return;
+		this.inputEl.value = text;
+		this.inputEl.focus();
+		const len = text.length;
+		this.inputEl.setSelectionRange(len, len);
+	}
+
 	override async onOpen(): Promise<void> {
 		const root = this.contentEl;
 		root.empty();

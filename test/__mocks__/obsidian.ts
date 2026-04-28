@@ -157,13 +157,34 @@ export class App {
 
 // --- Plugin ---
 
+export interface PluginManifest {
+	id: string;
+	name: string;
+	version: string;
+	minAppVersion?: string;
+	description?: string;
+	author?: string;
+	authorUrl?: string;
+	isDesktopOnly?: boolean;
+}
+
 export class Plugin extends Component {
 	app: App;
-	manifest = { id: "test-plugin", name: "Test Plugin", version: "0.0.0" };
+	manifest: PluginManifest = {
+		id: "test-plugin",
+		name: "Test Plugin",
+		version: "0.0.0",
+	};
 
-	constructor(app?: App) {
+	// Real obsidian.d.ts declares `(app, manifest)` (2-arg). The mock accepts
+	// either form so existing tests that pass `(app)` keep working AND tests
+	// that need `this.manifest.id` to reflect a real plugin id can pass a
+	// manifest. Extended in T5.3 — `main.ts` calls
+	// `app.setting.openTabById(this.manifest.id)`.
+	constructor(app?: App, manifest?: PluginManifest) {
 		super();
 		this.app = app ?? new App();
+		if (manifest !== undefined) this.manifest = manifest;
 	}
 
 	loadData = vi.fn<() => Promise<unknown>>(async () => ({}));
@@ -183,12 +204,21 @@ export class Plugin extends Component {
 
 // --- UI Components ---
 
-export class Notice {
-	constructor(
-		public message: string,
-		public timeout?: number,
-	) {}
-}
+// `Notice` is exposed as a `vi.fn()` constructor (not a `class`) so tests can
+// assert `vi.mocked(Notice).toHaveBeenCalledWith(...)` without spying.
+// Production code uses it as `new Notice(message, timeout?)`; vi.fn supports
+// `new`-construction and records the same call list as a function call.
+export const Notice = vi.fn(function Notice(
+	this: { message: string; timeout?: number },
+	message: string,
+	timeout?: number,
+) {
+	this.message = message;
+	this.timeout = timeout;
+}) as unknown as new (message: string, timeout?: number) => {
+	message: string;
+	timeout?: number;
+};
 
 export class Setting {
 	settingEl = document.createElement("div");

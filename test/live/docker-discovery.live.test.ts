@@ -22,76 +22,35 @@
  * --- Daemon-availability gate ---
  *
  * The dev environment used to author this file has no Docker daemon, so
- * we cannot execute it locally. The gate (`docker.ping()` in `beforeAll`)
+ * we cannot execute it locally. The gate (`pingDaemon()` in `beforeAll`)
  * makes every test pass cleanly when the daemon is unreachable: each
  * test bails after the gate before doing any setup. CI is expected to
  * provide a daemon and exercise the assertions in full (plan T2.4).
+ *
+ * Helpers (daemon ping, alpine pull, container start/cleanup, unique-name
+ * minting) live in `_helpers/docker.ts` — shared with the attach and e2e
+ * live test files (T5.5 consolidation).
  */
 
-import process from "node:process";
-
-import Dockerode from "dockerode";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import type Dockerode from "dockerode";
 
 import { listTomoInstances } from "../../src/connection/docker";
 import type { TomoInstance } from "../../src/connection/types";
 
-// --- daemon handle -----------------------------------------------------------
-
-const docker = new Dockerode({
-	socketPath:
-		process.platform === "win32"
-			? "\\\\.\\pipe\\docker_engine"
-			: "/var/run/docker.sock",
-});
-
-const TEST_IMAGE = "alpine:latest";
+import {
+	TEST_IMAGE,
+	cleanupContainers,
+	pingDaemon,
+	pullAlpineIfMissing,
+	startContainer,
+	uniqueName as helperUniqueName,
+} from "./_helpers/docker";
 
 let daemonReachable = false;
 
-// --- helpers -----------------------------------------------------------------
-
-async function pullAlpineIfMissing(): Promise<void> {
-	try {
-		await docker.getImage(TEST_IMAGE).inspect();
-		return;
-	} catch {
-		// fall through to pull
-	}
-	const stream: NodeJS.ReadableStream = await docker.pull(TEST_IMAGE);
-	await new Promise<void>((resolve, reject) => {
-		docker.modem.followProgress(stream, (err: Error | null) => {
-			if (err) reject(err);
-			else resolve();
-		});
-	});
-}
-
-interface StartOpts {
-	readonly name: string;
-	readonly labels: Record<string, string>;
-}
-
-async function startContainer(opts: StartOpts): Promise<Dockerode.Container> {
-	const c = await docker.createContainer({
-		Image: TEST_IMAGE,
-		// Long-lived but cheaply killable; sleep keeps the container in
-		// the "running" state without spinning a CPU.
-		Cmd: ["sh", "-c", "sleep 3600"],
-		Labels: opts.labels,
-		name: opts.name,
-	});
-	await c.start();
-	return c;
-}
-
 function uniqueName(slug: string): string {
-	// Suffix with high-resolution time to avoid collisions across parallel
-	// test runs (e.g. CI matrix). Docker container names are unique per
-	// daemon, so a stale leftover would otherwise wedge the suite.
-	return `hashi-disco-${slug}-${Date.now()}-${Math.floor(
-		Math.random() * 1e6,
-	)}`;
+	return helperUniqueName(`disco-${slug}`);
 }
 
 function findById(
@@ -108,33 +67,14 @@ let created: Dockerode.Container[] = [];
 afterEach(async () => {
 	const toClean = created;
 	created = [];
-	for (const c of toClean) {
-		// stop() may race with an already-stopped container (e.g. test
-		// failure mid-run). remove({ force: true }) is the authoritative
-		// teardown; the stop is best-effort and swallowed.
-		try {
-			await c.stop();
-		} catch {
-			// ignore
-		}
-		try {
-			await c.remove({ force: true });
-		} catch {
-			// ignore — container may have been removed already
-		}
-	}
+	await cleanupContainers(toClean);
 });
 
 // --- daemon gate -------------------------------------------------------------
 
 beforeAll(async () => {
-	try {
-		await docker.ping();
-		daemonReachable = true;
-	} catch {
-		daemonReachable = false;
-		return;
-	}
+	daemonReachable = await pingDaemon();
+	if (!daemonReachable) return;
 	await pullAlpineIfMissing();
 });
 

@@ -38,7 +38,7 @@ version: "1.0"
 |-------|-------|
 | specId | 001-session-view |
 | title | Tomo Connection & Chat Window |
-| status | DRAFT |
+| status | COMPLETE (release gate passed for code; manual-QA pending) |
 | phases | 5 |
 | totalTasks | 29 |
 | parallelTasks | 4 (Phase 4 UI surfaces) |
@@ -53,7 +53,7 @@ version: "1.0"
 | 2 | Docker Boundary | completed | 4 | [phase-2.md](phase-2.md) |
 | 3 | Connection Service | completed | 5 | [phase-3.md](phase-3.md) |
 | 4 | UI Surfaces | completed | 5 | [phase-4.md](phase-4.md) |
-| 5 | Wire-up, Integration & Release Gate | pending | 9 | [phase-5.md](phase-5.md) |
+| 5 | Wire-up, Integration & Release Gate | completed | 9 | [phase-5.md](phase-5.md) |
 
 ---
 
@@ -165,7 +165,7 @@ Each phase is defined in a separate file.
 - [x] [Phase 2: Docker Boundary](phase-2.md)
 - [x] [Phase 3: Connection Service](phase-3.md)
 - [x] [Phase 4: UI Surfaces](phase-4.md)
-- [ ] [Phase 5: Wire-up, Integration & Release Gate](phase-5.md)
+- [x] [Phase 5: Wire-up, Integration & Release Gate](phase-5.md)
 
 ---
 

@@ -34,67 +34,36 @@
  * --- Daemon-availability gate ---
  *
  * The dev environment used to author this file has no Docker daemon, so
- * we cannot execute it locally. The gate (`docker.ping()` in `beforeAll`)
+ * we cannot execute it locally. The gate (`pingDaemon()` in `beforeAll`)
  * makes every test pass cleanly when the daemon is unreachable: each
  * test bails after the gate before doing any setup. CI is expected to
  * provide a daemon and exercise the assertions in full (plan T2.4).
+ *
+ * Helpers (daemon ping, alpine pull, container start/cleanup, unique-name
+ * minting, waitFor polling) live in `_helpers/docker.ts` — shared with the
+ * discovery and e2e live test files (T5.5 consolidation).
  */
 
 import { Buffer } from "node:buffer";
-import process from "node:process";
 
-import Dockerode from "dockerode";
+import type Dockerode from "dockerode";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { attach } from "../../src/connection/docker";
 
-// --- daemon handle -----------------------------------------------------------
-
-const docker = new Dockerode({
-	socketPath:
-		process.platform === "win32"
-			? "\\\\.\\pipe\\docker_engine"
-			: "/var/run/docker.sock",
-});
-
-const TEST_IMAGE = "alpine:latest";
+import {
+	cleanupContainers,
+	docker,
+	pingDaemon,
+	pullAlpineIfMissing,
+	uniqueName as helperUniqueName,
+	waitFor,
+} from "./_helpers/docker";
 
 let daemonReachable = false;
 
-// --- helpers -----------------------------------------------------------------
-
-async function pullAlpineIfMissing(): Promise<void> {
-	try {
-		await docker.getImage(TEST_IMAGE).inspect();
-		return;
-	} catch {
-		// fall through to pull
-	}
-	const stream: NodeJS.ReadableStream = await docker.pull(TEST_IMAGE);
-	await new Promise<void>((resolve, reject) => {
-		docker.modem.followProgress(stream, (err: Error | null) => {
-			if (err) reject(err);
-			else resolve();
-		});
-	});
-}
-
 function uniqueName(slug: string): string {
-	return `hashi-attach-${slug}-${Date.now()}-${Math.floor(
-		Math.random() * 1e6,
-	)}`;
-}
-
-async function waitFor(
-	predicate: () => boolean,
-	timeoutMs: number,
-	pollMs = 50,
-): Promise<void> {
-	const deadline = Date.now() + timeoutMs;
-	while (Date.now() < deadline) {
-		if (predicate()) return;
-		await new Promise<void>((r) => setTimeout(r, pollMs));
-	}
+	return helperUniqueName(`attach-${slug}`);
 }
 
 // --- per-test cleanup --------------------------------------------------------
@@ -104,34 +73,14 @@ let created: Dockerode.Container[] = [];
 afterEach(async () => {
 	const toClean = created;
 	created = [];
-	for (const c of toClean) {
-		// stop({ t: 0 }) avoids the default 10s graceful-stop wait. remove
-		// is the authoritative teardown — stop is best-effort and may race
-		// with a container that already exited (e.g. closed stdin → cat
-		// exits naturally).
-		try {
-			await c.stop({ t: 0 });
-		} catch {
-			// ignore — container may have stopped already
-		}
-		try {
-			await c.remove({ force: true });
-		} catch {
-			// ignore — container may have been removed already
-		}
-	}
+	await cleanupContainers(toClean);
 });
 
 // --- daemon gate -------------------------------------------------------------
 
 beforeAll(async () => {
-	try {
-		await docker.ping();
-		daemonReachable = true;
-	} catch {
-		daemonReachable = false;
-		return;
-	}
+	daemonReachable = await pingDaemon();
+	if (!daemonReachable) return;
 	await pullAlpineIfMissing();
 });
 
@@ -141,8 +90,12 @@ describe("attach() — live Docker", () => {
 	it("TTY=true: writing to stdin is echoed on stdout, close() fires onClose('user')", async () => {
 		if (!daemonReachable) return;
 
+		// We don't go through `startContainer()` here because this test wants
+		// a direct `cat` + AttachStdin/Tty container with no labels, and the
+		// helper's defaults are tuned for the long-lived discovery case. The
+		// shared helper still owns daemon ping / image pull / cleanup.
 		const c = await docker.createContainer({
-			Image: TEST_IMAGE,
+			Image: "alpine:latest",
 			Cmd: ["cat"],
 			Tty: true,
 			OpenStdin: true,
@@ -190,7 +143,7 @@ describe("attach() — live Docker", () => {
 		// stderr line, then waits on stdin. The trailing `cat` keeps the
 		// container alive (and the attach open) until afterEach tears it down.
 		const c = await docker.createContainer({
-			Image: TEST_IMAGE,
+			Image: "alpine:latest",
 			Cmd: ["sh", "-c", "echo out; echo err 1>&2; cat"],
 			Tty: false,
 			OpenStdin: true,
@@ -231,7 +184,7 @@ describe("attach() — live Docker", () => {
 		if (!daemonReachable) return;
 
 		const c = await docker.createContainer({
-			Image: TEST_IMAGE,
+			Image: "alpine:latest",
 			Cmd: ["cat"],
 			Tty: true,
 			OpenStdin: true,
