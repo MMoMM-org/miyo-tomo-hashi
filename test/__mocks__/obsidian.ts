@@ -169,7 +169,11 @@ export class Plugin extends Component {
 	loadData = vi.fn<() => Promise<unknown>>(async () => ({}));
 	saveData = vi.fn<(data: unknown) => Promise<void>>(async () => {});
 	addRibbonIcon = vi.fn(() => document.createElement("div"));
-	addStatusBarItem = vi.fn(() => ({ setText: vi.fn() }));
+	// Real Obsidian returns a status-bar HTMLElement that supports the same
+	// DOM helpers as any other Obsidian element (createSpan / addClass /
+	// setAttr — provided by the prototype shim above). Returning a real
+	// HTMLElement lets production code use idiomatic Obsidian style.
+	addStatusBarItem = vi.fn(() => document.createElement("div"));
 	addCommand = vi.fn();
 	addSettingTab = vi.fn();
 	registerView = vi.fn();
@@ -303,6 +307,12 @@ interface MenuItem {
 }
 
 export class Menu {
+	// Per-instance capture of every item-builder addItem created. Tests
+	// can introspect setTitle / setIcon / setDisabled / onClick calls
+	// after the popover is built without re-running the addItem callback
+	// (which would double-bind handlers). Extended in T4.2 to support
+	// status-bar popover tests.
+	items: MenuItem[] = [];
 	addItem = vi.fn((cb: (item: MenuItem) => void) => {
 		const item: MenuItem = {
 			setTitle: vi.fn(() => item),
@@ -310,6 +320,7 @@ export class Menu {
 			setDisabled: vi.fn(() => item),
 			onClick: vi.fn(() => item),
 		};
+		this.items.push(item);
 		cb(item);
 		return this;
 	});
