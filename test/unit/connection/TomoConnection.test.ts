@@ -446,6 +446,76 @@ describe("TomoConnection — stream close auto-reconnect", () => {
 		await conn.dispose();
 	});
 
+	it("auto-reconnect short-circuits on socket-permission-denied (review-fix M2 / PRD F1/AC12)", async () => {
+		// A socket-permission-denied error will not resolve by waiting; the
+		// loop must NOT run all 5 attempts × 15.5 s for a non-transient
+		// error. The user needs the named error within ~500 ms (after the
+		// first reconnect wait).
+		vi.useFakeTimers();
+		const target = inst();
+		const first = makeFakeSession();
+		mockedAttach.mockResolvedValueOnce(first.session);
+		mockedFindByName.mockResolvedValue(target);
+		// First reconnect attempt rejects with the non-transient error.
+		mockedAttach.mockRejectedValueOnce(
+			new docker.ConnectionFailure({
+				code: "socket-permission-denied",
+				detail: "EACCES on /var/run/docker.sock",
+			}),
+		);
+
+		const conn = new TomoConnection(settings());
+		await conn.connect(target);
+
+		first.fireError();
+		await Promise.resolve();
+		expect(conn.state.kind).toBe("reconnecting");
+
+		// Single backoff window — the loop should short-circuit, NOT
+		// continue through 1s/2s/4s/8s.
+		await vi.advanceTimersByTimeAsync(500);
+		await vi.advanceTimersByTimeAsync(0);
+
+		const state = conn.state;
+		expect(state.kind).toBe("disconnected");
+		if (state.kind !== "disconnected") throw new Error("expected disconnected");
+		expect(state.reason?.code).toBe("socket-permission-denied");
+
+		// Definitive: no further attempts after the first short-circuit.
+		// Advance by the remaining ~14 s and verify the state didn't change.
+		const callsAfterShort = mockedAttach.mock.calls.length;
+		await vi.advanceTimersByTimeAsync(15_000);
+		expect(mockedAttach.mock.calls.length).toBe(callsAfterShort);
+		expect(conn.state.kind).toBe("disconnected");
+	});
+
+	it("auto-reconnect short-circuits on daemon-unreachable (review-fix M2 / PRD F1/AC12)", async () => {
+		vi.useFakeTimers();
+		const target = inst();
+		const first = makeFakeSession();
+		mockedAttach.mockResolvedValueOnce(first.session);
+		mockedFindByName.mockResolvedValue(target);
+		mockedAttach.mockRejectedValueOnce(
+			new docker.ConnectionFailure({
+				code: "daemon-unreachable",
+				detail: "ECONNREFUSED",
+			}),
+		);
+
+		const conn = new TomoConnection(settings());
+		await conn.connect(target);
+		first.fireError();
+		await Promise.resolve();
+
+		await vi.advanceTimersByTimeAsync(500);
+		await vi.advanceTimersByTimeAsync(0);
+
+		const state = conn.state;
+		expect(state.kind).toBe("disconnected");
+		if (state.kind !== "disconnected") throw new Error("expected disconnected");
+		expect(state.reason?.code).toBe("daemon-unreachable");
+	});
+
 	it("error close while Connected → all 5 attempts fail → Disconnected{reconnect-exhausted}", async () => {
 		vi.useFakeTimers();
 		const target = inst();

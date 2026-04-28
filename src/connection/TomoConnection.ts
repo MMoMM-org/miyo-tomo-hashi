@@ -465,7 +465,28 @@ export class TomoConnection {
 					await this.persist(this.settings);
 					this.setState({ kind: "connected", instance: live });
 					return true;
-				} catch {
+				} catch (err: unknown) {
+					// Non-transient errors short-circuit the loop. A
+					// permission-denied or daemon-unreachable error will not
+					// resolve by waiting; retrying 5× across 15.5 s just delays
+					// the named error the user needs to act on. Transient
+					// errors (`attach-failed` for stream race / 404 / etc.)
+					// still ride the full backoff schedule. Spec ref:
+					// requirements.md F1/AC12 (added 2026-04-28).
+					if (
+						isConnectionFailure(err) &&
+						(err.code === "socket-permission-denied" ||
+							err.code === "daemon-unreachable")
+					) {
+						if (epoch === this.epoch) {
+							this.setState({
+								kind: "disconnected",
+								reason: toConnectionError(err),
+							});
+						}
+						loop.cancel();
+						return false;
+					}
 					return false;
 				}
 			},
