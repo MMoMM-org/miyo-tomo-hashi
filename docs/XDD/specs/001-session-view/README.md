@@ -14,15 +14,22 @@ The release gate has two independent halves; today only the **code-side** half h
 
 | Gate half | Status | What it covers |
 |-----------|--------|----------------|
-| **Code-side** | ✅ PASS (2026-04-28) | Build green, 203/203 unit tests, lint clean, bundle ≤ 1000 KB (CON-7 revised 2026-04-28), manifest desktop-only verified, traceability matrix at 61/64 ✅ (3 known orphans tracked below) |
-| **Operational** | ⏳ PENDING | (a) `npm run test:live` must run green in CI against a real Docker daemon — no `test:live` run has been recorded against this branch; (b) the 37-row T5.5b manual-QA checklist must be walked end-to-end against a live Tomo container — frontmatter `status: pending` is the gate, T5.9 reads it; (c) the F5.5/F8.5 continuity-gap finding (or downgraded AC) must be reconciled with implementation truth |
+| **Code-side** | ✅ PASS (2026-04-28, after review-fix branch) | Build green, 256/256 unit tests, lint clean, bundle ≤ 1000 KB (CON-7 revised 2026-04-28), manifest desktop-only verified, traceability matrix at 68/70 ✅ (2 documented orphans — both intentionally manual+live, not unit-coverable) |
+| **Operational** | ⏳ PENDING | (a) `npm run test:live` must run green in CI against a real Docker daemon — no `test:live` run has been recorded against this branch yet; (b) the 37-row T5.5b manual-QA checklist must be walked end-to-end against a live Tomo container — frontmatter `status: pending` is the gate, T5.9 reads it. The F5.5 / F8.5 / F4.8 / F9.6 ❌ orphans from before the review-fix pass have all flipped ✅. |
 
 The 2026-04-28 code-side gate pass does **not** authorize a public release. T5.9's release-gate task remains `[ ]` until both operational halves clear; references in earlier Decisions Log entries to "Release Gate code-side passed" should be read as "passed for the code half only."
 
-Three orphan ACs tracked in `plan/traceability.md`:
-- **F1.10** (picker→connect→inspect-null→refresh) — covered by T5.5 e2e (live) + T5.5b manual-QA row.
-- **F4.5** (closed-loop chat-view ↔ xterm) — covered by T5.5 e2e (live) + manual visual.
-- **F8.5 / F5.5** (user informed of continuity gap after auto-reconnect) — see the 2026-04-28 review-fix Decisions Log entry below.
+Two orphan ACs tracked in `plan/traceability.md` — both intentionally not unit-coverable:
+- **F1.10** (picker→connect→inspect-null→refresh) — covered by T5.5 e2e (live) + T5.5b manual-QA row. The same code path is exercised by `forceReconnect` chosen-gone unit tests; the SettingsTab is the only entry point that doesn't have a unit test.
+- **F4.5** (closed-loop chat-view ↔ xterm) — covered by `docker-attach.live.test.ts` (TTY echo at the attach boundary) + T5.5 e2e + T5.5b manual visual. Closed-loop through xterm.js is intentionally manual — jsdom doesn't render xterm.
+
+### CI live-test environment
+
+`npm run test:live` requires a Docker daemon reachable via the local socket. Expected runner profile:
+- macOS / Linux GitHub Actions runner with `services.docker` (or Docker pre-installed). Windows runners are user-contribution tier and not gated.
+- The live tests pull `alpine:latest` and run short-lived containers labeled `miyo.component=tomo` — first run incurs the image pull (~3 MB). Subsequent runs use the cached image.
+- Per-test timeout: 90 s (vitest.live.config.ts). A flake budget of one retry is acceptable; persistent flake = a real bug.
+- The CI run result must be recorded in this README's Decisions Log (CI job URL + commit hash) before T5.9 flips ✅.
 
 ## Documents
 

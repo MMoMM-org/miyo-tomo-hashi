@@ -21,18 +21,16 @@ generated: 2026-04-28
 ## Coverage summary
 
 - **Total ACs**: 70 (verified 2026-04-28 by `grep -c '^  - \[ \]' requirements.md`). Bundle 2 added 6 ACs: F1.11 picker keyboard contract, F1.12 reconnect non-transient short-circuit, F3.10 status-bar keyboard activation, F4.9 xterm a11y mode, F4.10 focus on disconnected open, F5.8 Force Reconnect ≤3 Tab reach.
-- **❌ orphans**: 4 (listed below — all must clear before T5.9 release gate flips to passed)
+- **❌ orphans**: 2 (after the 2026-04-28 review-fix bundles landed; previously 4 — F4.8, F5.5/F8.5, F9.6 all flipped ✅)
 
-**Orphan list** (status ❌ — must close before T5.9 release gate):
+**Orphan list** (status ❌ — must clear before T5.9 release gate flips to passed):
 
 | AC | Reason | Resolution |
 |---|---|---|
 | F1.10 | "chosen instance gone between list and select" — unit covers `chosen-instance-gone` for `forceReconnect`/`autoReconnectIfRemembered` only; not the picker → connect path with refresh | Manual-QA row covers it (`M:row F1/AC10`); the e2e covers the same code path via `forceReconnect` chosen-gone, which is the only place the SettingsTab leads to. Manual + e2e is sufficient — no closed-loop test claim. |
 | F4.5 | Bidirectional stdin → stdout flow at the `TomoChatView` level — unit covers `connection.write` and `terminalHost.writeChunk` separately, not the closed-loop integration through xterm.js | Covered by `T/L/docker-attach.live.test.ts` (TTY echo at `attach()` boundary) + T5.5 e2e + T5.5b manual visual (xterm renders the Claude Code TUI cleanly). Closed-loop through xterm.js is intentionally manual — jsdom doesn't render xterm. |
-| F5.5 / F8.5 | "user is informed via in-view indicator that a disconnection occurred" after auto-reconnect | **2026-04-28 review-fix decision**: wording tightened in `requirements.md` F8/AC5 — "the indicator transiently displays a 'Reconnected (gap)' state when transitioning `reconnecting → connected`, dismissable by the next user input". TomoChatView implements the transient state; tested in `TomoChatView.test.ts` ("indicator shows reconnected-gap after recovery, clears on next write"). Both rows flip ✅ on Bundle 4 landing. |
-| F9.6 | "no chat content logged" — PRD AC explicitly mandates a grep-based assertion test | **2026-04-28 review-fix**: grep test now lives at `test/unit/no-chat-content-logged.test.ts` (regex over `src/connection/**` and `src/ui/chat-view/**`). Row flips ✅ on Bundle 3 landing. |
 
-The remaining 60 ACs are ✅ — see the Matrix section below.
+The remaining 68 ACs are ✅ — see the Matrix section below.
 
 ## Matrix
 
@@ -84,7 +82,7 @@ The remaining 60 ACs are ✅ — see the Matrix section below.
 | F4.5 | Connected → typed message goes to stdin; echoed to history | `T/u/ui/chat-view/TomoChatView.test.ts` ("Enter key sends the input value with a trailing newline via connection.write"); `T/u/connection/TomoConnection.test.ts` ("write() while Connected forwards to stdin") — **but no closed-loop integration through xterm.js** | partial — `T/L/docker-attach.live.test.ts` ("TTY=true: writing to stdin is echoed on stdout") covers the docker boundary, not the chat-view boundary | scheduled in T5.5 e2e (`e2e.live.test.ts` — close the loop **through** TomoChatView write → terminalHost.writeChunk render); also needs `M:row F4/AC5` for visual confirmation in real xterm | ❌ |
 | F4.6 | Connected → container output rendered as text only; no auto-execution / URI activation / command routing | `T/u/ui/chat-view/TomoChatView.test.ts` ("forwards onData chunks to terminalHost.writeChunk"; "forwards multiple chunks in order") | — | `M:row F4/AC6` (verify with crafted output containing Obsidian URIs — phase-5.md §T5.5b explicit row) | ✅ |
 | F4.7 | Not Connected → send attempt is gated; no message queued | `T/u/ui/chat-view/TomoChatView.test.ts` ("input is disabled when state is disconnected"); `T/u/connection/TomoConnection.test.ts` ("write() while not Connected throws") | — | — | ✅ |
-| F4.8 | Terminal renderer trust boundary — no OSC 8, no OSC 52, `allowProposedApi: false` | `T/u/ui/chat-view/terminalHost.test.ts` (added 2026-04-28 — reads `terminalHost.ts` source and regex-asserts `allowProposedApi: false`; configures xterm without OSC 8/52 handlers — this short-circuits the regression where a refactor enables proposed APIs) | — | `M:row F4/AC8` (craft output with OSC 8 hyperlink + OSC 52 clipboard write; verify neither activates — phase-5.md §T5.5b explicit row) | ❌ (will flip ✅ on Bundle 3 landing) |
+| F4.8 | Terminal renderer trust boundary — no OSC 8, no OSC 52, `allowProposedApi: false` | `T/u/ui/chat-view/terminalHost.test.ts` (added 2026-04-28 — reads `terminalHost.ts` source and regex-asserts `allowProposedApi: false`, no OSC 8 / OSC 52 addon imports; behavioral RAF coalescing tests verify writeChunk batching) | — | `M:row F4/AC8` (craft output with OSC 8 hyperlink + OSC 52 clipboard write; verify neither activates — phase-5.md §T5.5b explicit row) | ✅ |
 
 ### F5 — Chat Window: Status Indicator and Force Reconnect
 
@@ -94,7 +92,7 @@ The remaining 60 ACs are ✅ — see the Matrix section below.
 | F5.2 | Force Reconnect visible + keyboard-reachable when Reconnecting/Disconnected (and an instance was chosen at least once) | `T/u/ui/chat-view/TomoChatView.test.ts` ("is disabled when chosenInstanceId() returns null"; "is enabled when chosenInstanceId() returns a string"; "click calls connection.forceReconnect()") | — | `M:row F5/AC2` (Tab-key reach; phase-5.md §T5.5b explicit row) | ✅ |
 | F5.3 | Force Reconnect closes existing stream and re-attaches to chosen instance | `T/u/connection/TomoConnection.test.ts` ("while Connected: closes existing stream, re-attaches, stays Connected on success") | scheduled in T5.5 e2e | — | ✅ |
 | F5.4 | Chosen instance gone → stays Disconnected with named cause; picker does NOT open | `T/u/connection/TomoConnection.test.ts` ("when chosen instance is gone: stays Disconnected{attach-failed/chosen-instance-gone}; never opens picker") | scheduled in T5.5 e2e | — | ✅ |
-| F5.5 | Force Reconnect succeeds → prior message history visible; user informed of continuity gap | `T/u/ui/chat-view/TomoChatView.test.ts` ("indicator shows reconnected-gap after recovery, clears on next user input") — added 2026-04-28 | — | `M:row F5/AC5` (visual confirmation in real Obsidian) | ❌ (will flip ✅ on Bundle 4 landing) |
+| F5.5 | Force Reconnect succeeds → prior message history visible; user informed of continuity gap | `T/u/ui/chat-view/TomoChatView.test.ts` ("indicator shows reconnected-gap after recovery, clears on next user input"; "does NOT show gap suffix on initial connect"; "clears the gap suffix on input submit") — added 2026-04-28 | — | `M:row F5/AC5` (visual confirmation in real Obsidian) | ✅ |
 | F5.6 | Indicator severity via icon + text, not color alone; respects `prefers-reduced-motion` | — (CSS media-query + visual presentation) | — | `M:row F5/AC6` (visual + reduced-motion toggle) | ✅ |
 | F5.7 | Screen readers announce indicator changes (live region: polite for transitional, assertive for Disconnected/error) | — (live-region ARIA assertions not present in unit tests; same gap as F3.9) | — | `M:row F5/AC7` (VoiceOver) | ✅ |
 
@@ -124,7 +122,7 @@ The remaining 60 ACs are ✅ — see the Matrix section below.
 | F8.2 | Backoff schedule: 5 attempts, 500ms / 1s / 2s / 4s / 8s (≈15.5s total) | `T/u/connection/reconnectLoop.test.ts` ("happy path: succeeds on 3rd attempt" — asserts onAttempt(1, 500), (2, 1000), (3, 2000); "exhaustion: 5 attempts all fail" — asserts all 5 delays 500/1000/2000/4000/8000) | — | — | ✅ |
 | F8.3 | Reconnect attempt succeeds → Connected; input re-enables; prior message history visible | `T/u/connection/TomoConnection.test.ts` ("remote close while Connected → Reconnecting → Connected on success"); `T/u/connection/serviceIntegration.test.ts` (full lifecycle observable from the store) | — | — | ✅ |
 | F8.4 | Bound exhausted → Disconnected with named cause; auto-retries STOP; only Force Reconnect resumes | `T/u/connection/TomoConnection.test.ts` ("error close while Connected → all 5 attempts fail → Disconnected{reconnect-exhausted}"); `T/u/connection/reconnectLoop.test.ts` ("exhaustion: 5 attempts all fail → 'exhausted'") | — | — | ✅ |
-| F8.5 | After successful reconnect → user informed via in-view indicator that disconnection occurred (no replay) | partial — indicator goes back to "Connected — `<name>`" after recovery; explicit "continuity gap" badge / sticky message is **not present** in current TomoChatView. PRD requires user be informed. | — | `M:row F8/AC5` (manual: trigger transient disconnect; on recovery, is the user informed a gap occurred?) — **likely to fail manual QA**, in which case a follow-up TDD task is required to add the indicator copy | ❌ |
+| F8.5 | After successful reconnect → user informed via in-view indicator that disconnection occurred (no replay) | `T/u/ui/chat-view/TomoChatView.test.ts` (same continuity-gap suite as F5.5 — F8.5 and F5.5 are the same indicator UX, two PRD rows) — added 2026-04-28 | — | `M:row F8/AC5` (visual confirmation in real Obsidian) | ✅ |
 
 ### F9 — Error Surfacing
 
@@ -135,7 +133,7 @@ The remaining 60 ACs are ✅ — see the Matrix section below.
 | F9.3 | Chat window not open → palette-invoked Reconnect error surfaced via Obsidian Notice | `T/u/commands/registerCommands.test.ts` ("with chosenInstanceId=null: shows Notice with PRD F6/AC5 message") | — | — | ✅ |
 | F9.4 | All error messages distinguish: daemon-not-reachable / socket-permission / no-instances / chosen-instance-gone / stream-error | `T/u/connection/state.test.ts` ("ConnectionError compiles with exhaustive switch over all codes"; "locks the no-instances detail to the user-facing copy"); `T/u/connection/TomoConnection.test.ts` (daemon-unreachable + socket-permission-denied + chosen-instance-gone tests); `T/u/connection/docker.test.ts` ("throws ConnectionError 'attach-failed' when inspect returns null (404)") | — | — | ✅ |
 | F9.5 | Error severity via icon + text, not color alone; reduced-motion respected; screen readers announce via live regions | — (visual + ARIA — same as F3.8/F3.9, F5.6/F5.7) | — | `M:row F9/AC5` (visual + reduced-motion + VoiceOver) | ✅ |
-| F9.6 | No chat content logged — forbidden patterns `logger.*(chunk\|data\|stdout\|stderr)` in `src/connection/**` and `src/ui/chat-view/**`; verified by grep-based assertion | `T/u/no-chat-content-logged.test.ts` (added 2026-04-28 — regex scan over both directories; fails on any forbidden match). | — | `M:row F9/AC6` (manual grep walkthrough as defense-in-depth) | ❌ (will flip ✅ on Bundle 3 landing) |
+| F9.6 | No chat content logged — forbidden patterns `logger.*(chunk\|data\|stdout\|stderr)` in `src/connection/**` and `src/ui/chat-view/**`; verified by grep-based assertion | `T/u/no-chat-content-logged.test.ts` (added 2026-04-28 — regex scan over both directories; fails on any forbidden match; strips block + line comments before scanning so commentary about the rule does not false-positive). | — | `M:row F9/AC6` (manual grep walkthrough as defense-in-depth) | ✅ |
 
 ### FS1 — File Right-Click → Chat with @file Reference
 
