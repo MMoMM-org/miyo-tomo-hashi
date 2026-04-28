@@ -1,6 +1,6 @@
 ---
 title: "Phase 4: UI Surfaces"
-status: pending
+status: in_progress
 version: "1.0"
 phase: 4
 ---
@@ -29,7 +29,7 @@ phase: 4
 
 Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `TomoConnection` methods (write). Can be developed concurrently by different agents or in any order; none depend on another's DOM.
 
-- [ ] **T4.1 Settings pane — Connect/Disconnect + open picker** `[activity: frontend-ui] [parallel: true]`
+- [x] **T4.1 Settings pane — Connect/Disconnect + open picker** `[activity: frontend-ui] [parallel: true]`
 
   1. Prime: Read PRD F1, F2 acceptance criteria and SDD "Directory Map" entry for `src/settings/` `[ref: PRD/F1; PRD/F2; SDD/Directory Map]`.
   2. Test: Write `test/unit/ui/settings/SettingsTab.test.ts`:
@@ -45,9 +45,9 @@ Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `
      - Error rendering: if `openPicker()` rejects with a `ConnectionError`, render the error inline in the modal with the specific cause message.
   4. Validate: Unit tests pass; `npm run lint` clean.
   5. Success:
-     - [ ] Connect + Disconnect + picker round-trip works `[ref: PRD/F1/AC1; PRD/F2]`
-     - [ ] Error surfaces in Settings inline `[ref: PRD/F9/AC2]`
-     - [ ] Picker shows name + uptime per row `[ref: PRD/F1/AC1; Decisions Log 2026-04-24]`
+     - [x] Connect + Disconnect + picker round-trip works `[ref: PRD/F1/AC1; PRD/F2]`
+     - [x] Error surfaces in Settings inline `[ref: PRD/F9/AC2]`
+     - [x] Picker shows name + uptime per row `[ref: PRD/F1/AC1; Decisions Log 2026-04-24]`
 
 - [ ] **T4.2 Status bar icon + popover** `[activity: frontend-ui] [parallel: true]`
 

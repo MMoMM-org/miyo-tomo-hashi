@@ -54,6 +54,14 @@ const context = await esbuild.context({
 		"@lezer/common",
 		"@lezer/highlight",
 		"@lezer/lr",
+		// dockerode pulls in optional native deps (ssh2 → cpu-features, both
+		// shipping `.node` binaries) that esbuild can't bundle. The plugin
+		// is `isDesktopOnly: true` (Electron + Node `require` available at
+		// runtime), so leaving dockerode + its transitive native modules
+		// external lets Node resolve them from `node_modules` at load time.
+		"dockerode",
+		"ssh2",
+		"cpu-features",
 		...builtinModules,
 		...builtinModules.map((m) => `node:${m}`),
 	],
