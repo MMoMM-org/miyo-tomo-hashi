@@ -1,6 +1,6 @@
 ---
 title: "Phase 1: Foundation"
-status: pending
+status: completed
 version: "1.0"
 phase: 1
 ---
@@ -29,7 +29,7 @@ phase: 1
 
 This phase establishes build foundations, shared types, the state-store primitive, and an extended obsidian test mock — everything the rest of the plan consumes.
 
-- [ ] **T1.1 Flip `manifest.json` to desktop-only + add runtime deps** `[activity: platform]`
+- [x] **T1.1 Flip `manifest.json` to desktop-only + add runtime deps** `[activity: platform]`
 
   1. Prime: Read PRD Constraints `[ref: PRD/Constraints; platform line]` and SDD CON-1, CON-2 `[ref: SDD/Constraints; CON-1..CON-2]`.
   2. Test: No unit test needed for static config. Create a tiny assertion test `test/unit/manifest.test.ts` that reads `manifest.json` and asserts `isDesktopOnly === true` (protects against regression).
@@ -43,7 +43,7 @@ This phase establishes build foundations, shared types, the state-store primitiv
      - [ ] Runtime deps installed and resolvable by TypeScript `[ref: SDD/CON-2]`
      - [ ] Manifest regression test added and passing `[ref: SDD/Acceptance Criteria; Quality]`
 
-- [ ] **T1.2 Extend esbuild config for xterm CSS** `[activity: platform]`
+- [x] **T1.2 Extend esbuild config for xterm CSS** `[activity: platform]`
 
   1. Prime: Read `esbuild.config.mjs` + SDD implementation gotcha on xterm CSS bundling `[ref: SDD/Implementation Gotchas]`.
   2. Test: Add a smoke check to `test/unit/build-output.test.ts` that reads the production `main.js` after build and asserts the file exists and is non-empty (no functional assertion yet; validates the pipeline).
@@ -55,7 +55,7 @@ This phase establishes build foundations, shared types, the state-store primitiv
      - [ ] Production build succeeds with new config `[ref: SDD/CON-2]`
      - [ ] Build output smoke test passes `[ref: SDD/Quality Requirements; bundle budget]`
 
-- [ ] **T1.3 Introduce `Store<T>` helper and `derived`** `[activity: domain-modeling]`
+- [x] **T1.3 Introduce `Store<T>` helper and `derived`** `[activity: domain-modeling]`
 
   1. Prime: Read SDD "State Store (typed Store<T> helper)" section with full code sketch `[ref: SDD/Interface Specifications; State Store]`.
   2. Test: Write `test/unit/util/store.test.ts`:
@@ -70,7 +70,7 @@ This phase establishes build foundations, shared types, the state-store primitiv
      - [ ] All store behaviors verified via unit tests `[ref: SDD/ADR-4]`
      - [ ] Derived stores update on source change `[ref: SDD/State Store]`
 
-- [ ] **T1.4 Define connection domain types** `[activity: domain-modeling]`
+- [x] **T1.4 Define connection domain types** `[activity: domain-modeling]`
 
   1. Prime: Read SDD "Application Data Models" — `ConnectionState`, `TomoInstance`, `ConnectionError`, extended `PluginSettings` `[ref: SDD/Application Data Models]`.
   2. Test: Write `test/unit/connection/state.test.ts`:
@@ -86,7 +86,7 @@ This phase establishes build foundations, shared types, the state-store primitiv
      - [ ] Types usable in downstream phases `[ref: SDD/Application Data Models]`
      - [ ] Discriminated union enforces exhaustive handling `[ref: SDD/State]`
 
-- [ ] **T1.5 Extend obsidian test mock** `[activity: testing]`
+- [x] **T1.5 Extend obsidian test mock** `[activity: testing]`
 
   1. Prime: Read `test/__mocks__/obsidian.ts` (current state), SDD "Directory Map" (what new Obsidian classes the plan uses) `[ref: SDD/Directory Map]`.
   2. Test: Write `test/unit/__mocks__/obsidian-shape.test.ts` that imports the mock and asserts the presence of: `ItemView`, `WorkspaceLeaf`, `Menu`, `Modal`, `EventRef`, `setIcon` (as a vi.fn), and confirms `Plugin.registerView` / `Plugin.registerEvent` / `Plugin.register` exist.
@@ -103,7 +103,7 @@ This phase establishes build foundations, shared types, the state-store primitiv
      - [ ] Mock covers every Obsidian API used by Phases 3–5 `[ref: SDD/Integration Points; Obsidian]`
      - [ ] Existing tests continue to pass `[ref: test/CLAUDE.md]`
 
-- [ ] **T1.6 Phase 1 Validation** `[activity: validate]`
+- [x] **T1.6 Phase 1 Validation** `[activity: validate]`
 
   - Run `npm run build && npm test`. Verify: manifest desktop-only, all unit tests pass (Store<T>, state types, mock shape, manifest regression, build smoke). Lint clean. Tick all Phase 1 checkboxes in `plan/README.md` phases list.
   - Success: All Phase 1 tests pass; foundation deps and types available for Phase 2.

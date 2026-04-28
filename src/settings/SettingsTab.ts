@@ -1,10 +1,10 @@
-import type MyPlugin from "main";
+import type TomoHashiPlugin from "main";
 import { type App, PluginSettingTab, Setting } from "obsidian";
 
 export class SettingsTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: TomoHashiPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: TomoHashiPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -14,16 +14,16 @@ export class SettingsTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName("Example setting")
-			.setDesc("A placeholder setting to demonstrate the pattern.")
+			.setName("Chosen instance")
+			.setDesc(
+				"Container ID of the last Tomo instance Hashi connected to. " +
+					"Managed by the connection flow — not editable here.",
+			)
 			.addText((text) =>
 				text
-					.setPlaceholder("Enter a value")
-					.setValue(this.plugin.settings.exampleSetting)
-					.onChange(async (value) => {
-						this.plugin.settings.exampleSetting = value;
-						await this.plugin.saveSettings();
-					}),
+					.setPlaceholder("(none)")
+					.setValue(this.plugin.settings.chosenInstanceId ?? "")
+					.setDisabled(true),
 			);
 	}
 }

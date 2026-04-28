@@ -64,6 +64,11 @@ const context = await esbuild.context({
 	treeShaking: true,
 	outfile: `${outdir}/main.js`,
 	minify: prod,
+	// SDD CON-2 + Implementation Gotchas: xterm.js requires a CSS loader for
+	// `@xterm/xterm/css/xterm.css`. Use `text` so the CSS is inlined as a string
+	// in the single `main.js` artifact (Obsidian plugin packaging model). The
+	// xterm CSS will be appended to <head> at view-mount time in phase 4.
+	loader: { ".css": "text" },
 	plugins: [copyAssets],
 });
 

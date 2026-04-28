@@ -28,6 +28,11 @@ export class App {
 		getActiveViewOfType: vi.fn(),
 		on: vi.fn(),
 		off: vi.fn(),
+		getLeavesOfType: vi.fn(() => [] as WorkspaceLeaf[]),
+		getRightLeaf: vi.fn(() => new WorkspaceLeaf()),
+		getLeaf: vi.fn(() => new WorkspaceLeaf()),
+		revealLeaf: vi.fn(),
+		setActiveLeaf: vi.fn(),
 	};
 	metadataCache = {
 		getFileCache: vi.fn(() => null),
@@ -52,6 +57,9 @@ export class Plugin extends Component {
 	addStatusBarItem = vi.fn(() => ({ setText: vi.fn() }));
 	addCommand = vi.fn();
 	addSettingTab = vi.fn();
+	registerView = vi.fn();
+	register = vi.fn();
+	removeCommand = vi.fn();
 }
 
 // --- UI Components ---
@@ -148,6 +156,72 @@ export class TFolder {
 	name = "test-folder";
 	children: (TFile | TFolder)[] = [];
 }
+
+// --- Workspace / Views ---
+
+export class WorkspaceLeaf {
+	view: unknown = undefined;
+	setViewState = vi.fn();
+	detach = vi.fn();
+}
+
+export class ItemView extends Component {
+	leaf: WorkspaceLeaf;
+	contentEl = document.createElement("div");
+
+	constructor(leaf: WorkspaceLeaf) {
+		super();
+		this.leaf = leaf;
+	}
+
+	onOpen = vi.fn(async () => {});
+	onClose = vi.fn(async () => {});
+}
+
+// --- Menu / Modal ---
+
+interface MenuItem {
+	setTitle: ReturnType<typeof vi.fn>;
+	setIcon: ReturnType<typeof vi.fn>;
+	setDisabled: ReturnType<typeof vi.fn>;
+	onClick: ReturnType<typeof vi.fn>;
+}
+
+export class Menu {
+	addItem = vi.fn((cb: (item: MenuItem) => void) => {
+		const item: MenuItem = {
+			setTitle: vi.fn(() => item),
+			setIcon: vi.fn(() => item),
+			setDisabled: vi.fn(() => item),
+			onClick: vi.fn(() => item),
+		};
+		cb(item);
+		return this;
+	});
+	showAtMouseEvent = vi.fn();
+}
+
+export class Modal {
+	app: App;
+	contentEl = document.createElement("div");
+
+	constructor(app: App) {
+		this.app = app;
+	}
+
+	open = vi.fn();
+	close = vi.fn();
+	onOpen = vi.fn(() => {});
+	onClose = vi.fn(() => {});
+}
+
+// --- Event ref (opaque marker) ---
+
+export class EventRef {}
+
+// --- Icons ---
+
+export const setIcon = vi.fn();
 
 // --- Utilities ---
 
