@@ -27,6 +27,32 @@ function bundleStylesCss(targetDir) {
 	writeFileSync(`${targetDir}/styles.css`, out, "utf8");
 }
 
+/**
+ * Stamp the source manifest with a dev-suffixed version for the test vault
+ * so every build looks like a fresh version to Obsidian's plugin loader —
+ * defeats stale-module caching during manual QA. Source manifest.json is
+ * NEVER modified; the canonical version stays the GitHub release version.
+ *
+ * Format mirrors miyo-archivist (`obsidian-archivist/esbuild.config.mjs`):
+ * `${baseVersion}-dev.${YYYYMMDD-HHmm}`, e.g. "0.0.0-dev.20260428-1620".
+ * The `-dev.` is a semver pre-release identifier so it sorts BELOW the
+ * canonical version — Obsidian and the Community Plugins manifest both
+ * stay clean.
+ *
+ * Returns the stamped manifest object so the caller can log the version.
+ */
+function stampManifestForVault() {
+	const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
+	const baseVersion = manifest.version;
+	const stamp = new Date()
+		.toISOString()
+		.slice(0, 16)
+		.replace(/[-:]/g, "")
+		.replace("T", "-");
+	manifest.version = `${baseVersion}-dev.${stamp}`;
+	return manifest;
+}
+
 // Stub modules that dockerode pulls transitively but never executes under our
 // configuration: `ssh2` and `cpu-features` are only loaded by docker-modem
 // when `protocol === "ssh"`. We construct dockerode with an explicit
@@ -84,9 +110,16 @@ const copyAssets = {
 					if (existsSync("test/Hashi/.obsidian")) {
 						mkdirSync(VAULT_PLUGIN_DIR, { recursive: true });
 						copyFileSync(`${outdir}/main.js`, `${VAULT_PLUGIN_DIR}/main.js`);
-						copyFileSync("manifest.json", `${VAULT_PLUGIN_DIR}/manifest.json`);
+						const stampedManifest = stampManifestForVault();
+						writeFileSync(
+							`${VAULT_PLUGIN_DIR}/manifest.json`,
+							JSON.stringify(stampedManifest, null, "\t") + "\n",
+							"utf8",
+						);
 						bundleStylesCss(VAULT_PLUGIN_DIR);
-						console.log(`[deploy] Plugin copied to ${VAULT_PLUGIN_DIR}`);
+						console.log(
+							`[deploy] Plugin copied to ${VAULT_PLUGIN_DIR} (version: ${stampedManifest.version})`,
+						);
 					} else {
 						console.warn(
 							"[deploy] HASHI_DEPLOY_VAULT set but test/Hashi/.obsidian missing — skipped",
