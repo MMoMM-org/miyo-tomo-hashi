@@ -20,7 +20,7 @@ generated: 2026-04-28
 
 ## Coverage summary
 
-- **Total ACs**: 64 (subject to Bundle 2 additions for keyboard-activation, focus-trap, xterm-a11y ACs — count will refresh in Bundle 5 verification)
+- **Total ACs**: 70 (verified 2026-04-28 by `grep -c '^  - \[ \]' requirements.md`). Bundle 2 added 6 ACs: F1.11 picker keyboard contract, F1.12 reconnect non-transient short-circuit, F3.10 status-bar keyboard activation, F4.9 xterm a11y mode, F4.10 focus on disconnected open, F5.8 Force Reconnect ≤3 Tab reach.
 - **❌ orphans**: 4 (listed below — all must clear before T5.9 release gate flips to passed)
 
 **Orphan list** (status ❌ — must close before T5.9 release gate):

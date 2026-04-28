@@ -6,7 +6,7 @@ version: "2.2"
 
 # Product Requirements Document
 
-> **AC count gate**: `grep -c '^  - \[ \]' requirements.md` is the canonical AC total. Plan T5.4 reads it at run time. Last counted: 64 ACs (2026-04-28).
+> **AC count gate**: `grep -c '^  - \[ \]' requirements.md` is the canonical AC total. Plan T5.4 reads it at run time. Last counted: 70 ACs (2026-04-28; up from 64 in the same-day review-fix pass — added F1.11 picker keyboard contract, F1.12 reconnect non-transient short-circuit, F3.10 status-bar keyboard activation, F4.9 xterm a11y mode, F4.10 focus on disconnected open, F5.8 Force Reconnect ≤3 Tab reach).
 
 ## Product Overview
 
@@ -76,13 +76,15 @@ None in v0.1. Multi-user, remote Tomo, and mobile users are out of scope for v0.
   - [ ] **Multi-Tomo edge case — duplicate instance-name labels.** Given two or more containers share the same `miyo.tomo.instance-name`, When the picker opens, Then both rows are rendered, disambiguated by appending the short container ID in parentheses to the displayed name (e.g., `my-tomo (a1b2c3d4)` / `my-tomo (e5f6g7h8)`).
   - [ ] **Multi-Tomo edge case — many containers.** Given more than twenty matching containers (rare but possible on dev machines), When the picker opens, Then it remains keyboard-navigable (scroll within the modal, Enter selects the focused row); no hard cap is enforced and no truncation is applied — the user sees the full list in `startedAt` desc order.
   - [ ] **Multi-Tomo edge case — chosen instance gone between list and select.** Given the picker is open and the user selects an instance whose container has been stopped or removed since `listTomoInstances()` ran, When the connect attempt runs, Then it fails with the named error `attach-failed` and the picker stays open showing only still-running candidates after a refresh. (No silent fallback to a different instance — the user must reselect.)
+  - [ ] **Picker modal keyboard contract.** Given the picker modal is open, When the user presses Escape, Then the modal closes without connecting and focus returns to the Settings Connect button. While the modal is open, focus is trapped inside it (Tab does not escape to the underlying Settings DOM). Provided by Obsidian's `Modal` default behavior; the spec asserts the application-level invariant only.
+  - [ ] **Auto-reconnect short-circuits on non-transient errors.** Given the auto-reconnect loop encounters `socket-permission-denied` or `daemon-unreachable` on any attempt, When the error is detected, Then the loop terminates immediately (transitions to `disconnected{reason}` with the named error, cancels remaining attempts) — does not run the full 5-attempt schedule. Transient `attach-failed` continues through the full schedule per F8/AC2.
 
 #### F2: Settings — Disconnect
 - **User Story:** As the PKM Author, I want a Disconnect button in plugin settings, so that I can release the plugin's attachment without stopping the Tomo container.
 - **Acceptance Criteria:**
   - [ ] Given the plugin is connected, When I click Disconnect, Then the plugin closes its Docker stream and transitions to disconnected state; the Tomo container remains running (verifiable with `docker ps`).
   - [ ] Given the plugin is disconnected, When I view the Connect/Disconnect area, Then only Connect is visible (no Disconnect for a non-existent session).
-  - [ ] Given the plugin is connected, When I click Disconnect, Then the chat window's status indicator and status-bar icon both reflect disconnected state within one frame of the `connectionStore.set(...)` call (≤16 ms p95 in jsdom; verified by an assertion that the indicator's state class is updated synchronously after the store transition returns).
+  - [ ] Given the plugin is connected, When I click Disconnect, Then the chat window's status indicator and status-bar icon both update **in the same microtask as `connectionStore.set` returns** — verified by a unit assertion that the indicator's state class is the new value immediately after the `set` call returns (no `await`, no `await microtask`). (The previous "≤ 16 ms p95 in jsdom" wording was unfalsifiable — jsdom has no rendering pipeline; the synchronous-class-swap behavior is the actual contract.)
 
 #### F3: Obsidian Status Bar Icon (icon-only with popover)
 - **User Story:** As the PKM Author, I want a compact Tomo icon in Obsidian's status bar that shows connection state at a glance, reveals the instance name on hover, and opens a quick-action popover on click, so that I manage the connection without leaving my current pane.
@@ -95,7 +97,8 @@ None in v0.1. Multi-user, remote Tomo, and mobile users are out of scope for v0.
   - [ ] Given the popover is open, When I select Open Chat Window, Then the chat window opens or focuses (same behavior as F7 palette command).
   - [ ] Given the popover is open, When I select Go to Settings, Then Obsidian opens Settings and scrolls to the MiYo Tomo Hashi Connect/Disconnect area.
   - [ ] The icon respects `prefers-reduced-motion` — any transitional animation (e.g., Reconnecting) degrades to a static state when reduced motion is requested.
-  - [ ] Screen readers announce state changes via an ARIA live region (`polite` for transitional, `assertive` for Disconnected after an unexpected drop).
+  - [ ] Screen readers announce state changes via an ARIA live region (`polite` for transitional, `assertive` for Disconnected after an unexpected drop). Both `aria-live` and `aria-label` attributes are unit-asserted on the status bar element.
+  - [ ] **Keyboard activation.** The status bar icon has `role="button"` and `tabindex="0"`; Space/Enter triggers the same popover handler as click. Reachable via Obsidian's status-bar Tab order.
 
 #### F4: Chat Window View
 - **User Story:** As the PKM Author, I want a chat window that I can dock in a sidebar or open as a main-pane tab, so that I can lay out my workspace how I prefer.
@@ -107,7 +110,9 @@ None in v0.1. Multi-user, remote Tomo, and mobile users are out of scope for v0.
   - [ ] Given the chat window is Connected, When I type a message and submit, Then the message is delivered to the Tomo container's stdin and echoed in the message history.
   - [ ] Given the chat window is Connected, When the container emits stdout/stderr, Then the output appears in the message history as rendered text only — no auto-execution, no URI activation, no command routing.
   - [ ] Given the chat window is not Connected, When I attempt to send a message, Then the input is disabled and no message is queued or sent.
-  - [ ] **Terminal renderer trust boundary.** The xterm.js instance rendering container output SHALL be configured with hyperlink handling disabled (no OSC 8 link activation), OSC 52 clipboard writes ignored, and `allowProposedApi: false`. The renderer presents bytes as text only — bytes from the container can never trigger a clipboard write or open a URI without explicit user copy/paste action.
+  - [ ] **Terminal renderer trust boundary.** The xterm.js instance rendering container output SHALL be configured with hyperlink handling disabled (no OSC 8 link activation), OSC 52 clipboard writes ignored, and `allowProposedApi: false`. The renderer presents bytes as text only — bytes from the container can never trigger a clipboard write or open a URI without explicit user copy/paste action. The configuration is unit-asserted by `terminalHost.test.ts` (regex over the source) so a refactor cannot silently re-enable proposed APIs.
+  - [ ] **xterm.js accessibility mode.** The xterm.js instance is configured to keep its accessibility-mode rendering active (default in xterm 5.x but version-sensitive — pinned by unit assertion in `terminalHost.test.ts`). Screen-reader users hear terminal buffer content; without this, the chat surface is opaque to AT.
+  - [ ] **Focus on open while disconnected.** Given the chat window opens in Not-Connected state (whether via `Show chat window`, the status-bar popover, or the file-menu prefill), When the view's DOM is rendered, Then keyboard focus lands on the Connect link inside the not-connected state — **not** on the disabled chat input. (The connected-state focus rule above remains: focus on input when state is Connected.)
 
 #### F5: Chat Window — Status Indicator and Force Reconnect
 - **User Story:** As the PKM Author, I want the chat window to show the current connection status and give me a Force Reconnect button, so that I can recover from a stuck connection without leaving the chat view.
@@ -117,8 +122,9 @@ None in v0.1. Multi-user, remote Tomo, and mobile users are out of scope for v0.
   - [ ] Given I click Force Reconnect while Disconnected or Reconnecting, When the action runs, Then the plugin closes any existing stream and immediately re-attaches to the currently chosen instance.
   - [ ] Given I click Force Reconnect and the currently chosen instance no longer exists (container stopped or removed), When the reconnect attempt fails for that reason, Then state stays Disconnected and an error surfaces naming the cause — **the picker does NOT open**. To choose a different instance, the user opens Settings → Connect.
   - [ ] Given Force Reconnect succeeds, When the chat window updates, Then prior message history remains visible and the user is informed a continuity gap may have occurred.
-  - [ ] The indicator conveys severity through icon + text, never color alone, and respects `prefers-reduced-motion`.
-  - [ ] Screen readers announce status-indicator changes (ARIA live region, `polite` for transitional, `assertive` for Disconnected/error).
+  - [ ] The indicator conveys severity through icon + text, never color alone, and respects `prefers-reduced-motion`. (Streaming xterm output is exempt from reduced-motion handling — xterm has no reduced-motion mode; the streaming character render is the primary interaction surface, not chrome animation.)
+  - [ ] Screen readers announce status-indicator changes (ARIA live region, `polite` for transitional, `assertive` for Disconnected/error). Both `aria-live` and `aria-label` attributes are unit-asserted on the chat-view indicator element.
+  - [ ] **Force Reconnect keyboard reach.** When the chat view is Disconnected or Reconnecting, the Force Reconnect button is reachable in **≤ 3 Tab presses** from the chat input (DOM order: input → terminal-host (skip-tab) → header zoom buttons → Force Reconnect).
 
 #### F6: Command Palette — Reconnect to Tomo
 - **User Story:** As the PKM Author, I want a reconnect command in the palette that only attempts to reconnect (never opens the picker), so I can retry from the keyboard without changing instances.
@@ -143,7 +149,7 @@ None in v0.1. Multi-user, remote Tomo, and mobile users are out of scope for v0.
   - [ ] The reconnect policy is: up to 5 attempts, exponential backoff starting at 500 ms (0.5s / 1s / 2s / 4s / 8s — total ≈ 15.5 s before giving up).
   - [ ] Given a reconnect attempt succeeds, When the stream re-establishes, Then state transitions back to Connected, the input re-enables, and prior message history remains visible.
   - [ ] Given the reconnect bound is exhausted, When the last attempt fails, Then state transitions to Disconnected with an error message naming the cause; automatic retries STOP; only user-initiated Force Reconnect resumes attempts.
-  - [ ] Given a successful reconnect, When the user's next interaction begins, Then they are informed (via the in-view indicator state) that a disconnection occurred — output produced during the disconnected window is not retroactively replayed.
+  - [ ] Given a successful reconnect after a transient disconnect, When the indicator transitions `reconnecting → connected`, Then the indicator transiently displays **"Reconnected (gap)"** alongside the instance name. The gap notice clears on the next user input (typed character or Enter). Output produced during the disconnected window is not retroactively replayed — the gap notice is the only continuity signal. Verified by `TomoChatView.test.ts` ("indicator shows reconnected-gap after recovery, clears on next user input"); same indicator is exercised by F5/AC5.
 
 #### F9: Error Surfacing
 - **User Story:** As the PKM Author, I want connection-related errors to surface in places I will see, so that I never wonder why something is broken.

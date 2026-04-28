@@ -42,7 +42,7 @@ version: "1.0"
 | phases | 5 |
 | totalTasks | 30 (T5.5b added 2026-04-25 to mirror spec 002's T6.4) |
 | parallelTasks | 4 (Phase 4 UI surfaces) |
-| specReferences | 64 PRD ACs + SDD sections |
+| specReferences | 70 PRD ACs + SDD sections (bumped from 64 in 2026-04-28 review-fix pass) |
 | clarificationsRemaining | 0 |
 
 ### Phase Status

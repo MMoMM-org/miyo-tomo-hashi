@@ -28,7 +28,7 @@ Three orphan ACs tracked in `plan/traceability.md`:
 
 | Document | Status | Notes |
 |----------|--------|-------|
-| requirements.md | draft | PRD v2.2 — brainstorm pivot + refinement round + 2026-04-28 review-fix pass; 0 open questions; 64 ACs (T5.4 grep-verified; in-PRD gate banner aligned 2026-04-28) |
+| requirements.md | draft | PRD v2.2 — brainstorm pivot + refinement round + 2026-04-28 review-fix pass; 0 open questions; 70 ACs (T5.4 grep-verified; bumped from 64 in the 2026-04-28 review-fix when 6 a11y/lifecycle ACs were added) |
 | solution.md | draft | SDD v1.2 — all 10 ADRs confirmed; 4 drifts patched during implementation; 2026-04-28 review-fix pass added attach-lifecycle state machine table, PTY resize ordering, single-flight invariant, dispose timeout bound, store re-entrancy invariant |
 | plan/ | complete | 5-phase TDD plan (30 tasks across 5 phases — all completed; T5.5b added 2026-04-25); phase-1..phase-5.md + README.md + traceability.md (T5.4) + manual-qa-checklist.md (T5.5b) |
 
@@ -38,7 +38,7 @@ Hashi v0.1 delivers **two independent features**; this spec covers feature 1 onl
 
 **Feature 1 (this spec): Tomo Connection & Chat Window.** The plugin-managed connection to a local Tomo container and the chat surface that exposes it. Connection is a plugin-level state (not per-file, not per-view). Chat is a singleton Obsidian view placeable in sidebar or main pane.
 
-**Feature 2 (spec 002): Instruction Executor.** Standalone execution of `_instructions.json` files — does NOT require an active Tomo connection and does NOT share state with feature 1.
+**Feature 2 (spec 002): Instruction Executor.** Standalone execution of `_instructions.json` files — does NOT require an active Tomo connection and does NOT share state with feature 1. The tri-state preview modal (Preview on / off / No confirmation) referenced in `~/Kouzou/projects/miyo/miyo-architecture.md` is owned by spec 002; its focus, Escape, and shortcut behavior are specified there. Spec 001 has no responsibility for that modal beyond the pane context that hosts the chat view.
 
 Feature 1 covers:
 - **Docker discovery by label `miyo.component=tomo`** — picker-based, explicit user action only (no ambient scanning)
