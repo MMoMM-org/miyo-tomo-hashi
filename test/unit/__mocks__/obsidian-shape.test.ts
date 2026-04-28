@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import * as obs from "../../__mocks__/obsidian";
+import type { TFile } from "../../__mocks__/obsidian";
 
 describe("obsidian mock shape", () => {
 	it("exports ItemView class", () => {
@@ -84,5 +85,62 @@ describe("obsidian mock shape", () => {
 		expect(vi.isMockFunction(app.workspace.revealLeaf)).toBe(true);
 		expect(vi.isMockFunction(app.workspace.setActiveLeaf)).toBe(true);
 		expect(vi.isMockFunction(app.workspace.on)).toBe(true);
+	});
+});
+
+describe("002 surface (T1.5 mock extensions)", () => {
+	it("Modal exposes open / close / contentEl / onOpen / onClose", () => {
+		const modal = new obs.Modal(new obs.App());
+		expect(typeof modal.open).toBe("function");
+		expect(typeof modal.close).toBe("function");
+		expect(modal.contentEl).toBeInstanceOf(HTMLElement);
+		expect(typeof modal.onOpen).toBe("function");
+		expect(typeof modal.onClose).toBe("function");
+	});
+
+	it("vault.process is vi.fn returning Promise<void>", async () => {
+		const app = new obs.App();
+		const result = app.vault.process({} as TFile, (x: string) => x);
+		expect(result).toBeInstanceOf(Promise);
+		await expect(result).resolves.toBeUndefined();
+		expect(vi.isMockFunction(app.vault.process)).toBe(true);
+	});
+
+	it("vault.trash is vi.fn returning Promise<void>", async () => {
+		const app = new obs.App();
+		const result = app.vault.trash({} as TFile, true);
+		expect(result).toBeInstanceOf(Promise);
+		await expect(result).resolves.toBeUndefined();
+		expect(vi.isMockFunction(app.vault.trash)).toBe(true);
+	});
+
+	it("vault.createFolder is vi.fn returning Promise<void> (swallows already-exists)", async () => {
+		const app = new obs.App();
+		const result = app.vault.createFolder("some/path");
+		expect(result).toBeInstanceOf(Promise);
+		await expect(result).resolves.toBeUndefined();
+		expect(vi.isMockFunction(app.vault.createFolder)).toBe(true);
+	});
+
+	it("fileManager.renameFile is vi.fn returning Promise<void>", async () => {
+		const app = new obs.App();
+		const result = app.fileManager.renameFile({} as TFile, "new/path.md");
+		expect(result).toBeInstanceOf(Promise);
+		await expect(result).resolves.toBeUndefined();
+		expect(vi.isMockFunction(app.fileManager.renameFile)).toBe(true);
+	});
+
+	it("metadataCache.getFileCache returns { headings: [], sections: [] } by default", () => {
+		const app = new obs.App();
+		const cache = app.metadataCache.getFileCache({} as TFile);
+		expect(cache).not.toBeNull();
+		expect(cache).toMatchObject({ headings: [], sections: [] });
+		expect(vi.isMockFunction(app.metadataCache.getFileCache)).toBe(true);
+	});
+
+	it("Plugin has registerEvent and addStatusBarItem as vi.fn", () => {
+		const plugin = new obs.Plugin();
+		expect(vi.isMockFunction(plugin.registerEvent)).toBe(true);
+		expect(vi.isMockFunction(plugin.addStatusBarItem)).toBe(true);
 	});
 });

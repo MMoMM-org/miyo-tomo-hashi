@@ -138,6 +138,13 @@ export class App {
 		delete: vi.fn(),
 		getMarkdownFiles: vi.fn(() => []),
 		adapter: { read: vi.fn(), write: vi.fn(), exists: vi.fn() },
+		process: vi.fn<(file: TFile, fn: (data: string) => string) => Promise<void>>(
+			async () => {},
+		),
+		trash: vi.fn<(file: TFile, useSystemTrash: boolean) => Promise<void>>(
+			async () => {},
+		),
+		createFolder: vi.fn<(path: string) => Promise<void>>(async () => {}),
 	};
 	workspace = {
 		getActiveViewOfType: vi.fn(),
@@ -150,8 +157,15 @@ export class App {
 		setActiveLeaf: vi.fn(),
 	};
 	metadataCache = {
-		getFileCache: vi.fn(() => null),
+		getFileCache: vi.fn<(file: TFile) => { headings: unknown[]; sections: unknown[] }>(
+			() => ({ headings: [], sections: [] }),
+		),
 		on: vi.fn(),
+	};
+	fileManager = {
+		renameFile: vi.fn<(file: TFile, newPath: string) => Promise<void>>(
+			async () => {},
+		),
 	};
 }
 
