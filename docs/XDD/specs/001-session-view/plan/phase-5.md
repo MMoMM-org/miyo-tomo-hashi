@@ -1,6 +1,6 @@
 ---
 title: "Phase 5: Wire-up, Integration & Release Gate"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 5
 ---
@@ -30,7 +30,7 @@ phase: 5
 
 This phase binds everything together in `main.ts`, registers the two Hashi commands, runs PRD-level integration tests against a real Docker daemon, and ships the two outbound handoffs the plan carries.
 
-- [ ] **T5.1 Command registry — Reconnect (dynamic label) + Show chat window** `[activity: integration]`
+- [x] **T5.1 Command registry — Reconnect (dynamic label) + Show chat window** `[activity: integration]`
 
   1. Prime: Read PRD F6, F7; SDD ADR-8 and "Implementation Examples / Dynamic Command Label" `[ref: PRD/F6; PRD/F7; SDD/ADR-8; SDD/Implementation Examples]`.
   2. Test: Write `test/unit/commands/registerCommands.test.ts`:
@@ -52,7 +52,7 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
      - [ ] Dynamic label re-register works on state change `[ref: PRD/F6/AC1-2; ADR-8]`
      - [ ] Reconnect command never opens picker `[ref: PRD/F6/AC4-5; Decisions Log 2026-04-24]`
 
-- [ ] **T5.2 Singleton chat view opener** `[activity: integration]`
+- [x] **T5.2 Singleton chat view opener** `[activity: integration]`
 
   1. Prime: Read ADR-6 + PRD F7 ACs + Obsidian workspace docs on `getLeavesOfType`, `getRightLeaf`, `setViewState`, `revealLeaf` `[ref: SDD/ADR-6; PRD/F7]`.
   2. Test: Write `test/unit/ui/chat-view/showChatWindow.test.ts`:
@@ -64,7 +64,7 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
   5. Success:
      - [ ] Singleton invariant holds across invocations `[ref: PRD/F4/AC2; ADR-6]`
 
-- [ ] **T5.3 `main.ts` wire-up** `[activity: integration]`
+- [x] **T5.3 `main.ts` wire-up** `[activity: integration]`
 
   1. Prime: Read current `src/main.ts` + SDD "Building Block View / Components" diagram + ADR-10 (plugin unload best-effort) `[ref: src/main.ts; SDD/Building Block View]`.
   2. Test: Write `test/unit/main.integration.test.ts`:
@@ -83,7 +83,7 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
      - [ ] FS2 auto-reconnect fires on load `[ref: PRD/FS2/AC1]`
      - [ ] Clean unload `[ref: SDD/Quality Requirements; Reliability]`
 
-- [ ] **T5.4 PRD acceptance-criteria traceability matrix** `[activity: testing]` (revised 2026-04-25 — adopted 002's matrix model)
+- [x] **T5.4 PRD acceptance-criteria traceability matrix** `[activity: testing]` (revised 2026-04-25 — adopted 002's matrix model)
 
   1. Prime: Read PRD §Feature Requirements (F1–F9 + FS1, FS2) — count ACs by `grep -c '^  - \[ \]' requirements.md` and use that as the gate (do NOT hard-code a per-feature breakdown — it drifts when ACs are added/removed). The PRD's Output Schema row holds the canonical total; this matrix MUST cover that exact count.
   2. Test: Build a traceability matrix file `docs/XDD/specs/001-session-view/plan/traceability.md`:
@@ -99,7 +99,7 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
   5. Success:
      - [ ] 100% of PRD ACs traced to at least one test/live/manual artifact (count gate from PRD Output Schema) `[ref: PRD/Feature Requirements all]`
 
-- [ ] **T5.5 End-to-end live test** `[activity: testing]`
+- [x] **T5.5 End-to-end live test** `[activity: testing]`
 
   1. Prime: Read SDD "Runtime View" — primary flow + failure flows `[ref: SDD/Runtime View]`.
   2. Test: Write `test/live/e2e.live.test.ts`:
@@ -112,7 +112,7 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
      - [ ] End-to-end happy path works with real Docker `[ref: PRD/Success Metrics; v0.1 release gate]`
      - [ ] Reconnect + chosen-instance-gone flows verified `[ref: PRD/F5/AC4; F8/AC4]`
 
-- [ ] **T5.5b Manual QA checklist + test-vault deployment** `[activity: validate]` (added 2026-04-25 to mirror 002's T6.4 — closes the Obsidian-API test-seam gap that the obsidian mock cannot cover)
+- [x] **T5.5b Manual QA checklist + test-vault deployment** `[activity: validate]` (added 2026-04-25 to mirror 002's T6.4 — closes the Obsidian-API test-seam gap that the obsidian mock cannot cover) — checklist authored; user runs the 37 rows post-merge; release gate is conditional on `status: passed`
 
   1. Prime: Read SDD ADR-3 (plain TS rendering) + ADR-6 (singleton view) + ADR-9 (Menu popover). Confirm `../temp/Privat-Test` exists and has the plugin folder structure (`.obsidian/plugins/miyo-tomo-hashi/`). Note: this task closes the gap that `vi.mock('dockerode')` + `test/__mocks__/obsidian.ts` cannot cover — visual rendering (友 kanji glyph + state colors), focus trap behavior in real Obsidian Modal, scroll behavior in the picker with many candidates, prefers-reduced-motion respect, and screen-reader announcements.
   2. Test: Author `docs/XDD/specs/001-session-view/plan/manual-qa-checklist.md` listing every PRD AC that requires real-Obsidian observation. Each row: AC ref | expected | observed | passed (Y/N) | notes. Required rows (minimum):
@@ -137,7 +137,7 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
      - [ ] Build deployment to test vault wired and documented `[ref: SDD/Implementation Context]`
      - [ ] Every "real-Obsidian-only" AC from the T5.4 traceability matrix has a row here `[ref: T5.4]`
 
-- [ ] **T5.6 Bundle size + manifest verification** `[activity: platform]`
+- [x] **T5.6 Bundle size + manifest verification** `[activity: platform]`
 
   1. Prime: Read SDD "Quality Requirements / Performance" and "Constraints / CON-3, CON-7" `[ref: SDD/Quality Requirements; SDD/CON-3; SDD/CON-7]`.
   2. Test: Extend `test/unit/build-output.test.ts`:
@@ -160,7 +160,7 @@ This phase binds everything together in `main.ts`, registers the two Hashi comma
 
 - [x] **T5.8 ~~Spec 002 README decoupling note~~** — **OBSOLETE** (closed 2026-04-25). The decoupling work this task described was performed directly on `docs/XDD/specs/002-instruction-executor/README.md` on 2026-04-24 — see that README's Decisions Log row "Reset stale 'blocked by 001' status + 'Depends on 001' context", which removed the legacy "Depends on 001" language from both the Context paragraph and the dependencies list. The originally-planned `_outbox/for-claude/…` handoff was never valid (the MiYo handoff protocol has no `for-claude/` recipient — recipients are kado / kokoro / kouzou / satori / seigyo / shuu / tomo / temp). No further action; T5.9's success criterion has been retargeted to track only the Tomo handoff round-trip.
 
-- [ ] **T5.9 Phase 5 Validation & Release Readiness** `[activity: validate]`
+- [x] **T5.9 Phase 5 Validation & Release Readiness** `[activity: validate]`
 
   - Run `npm run build && npm run lint && npm test && npm run test:live`. All green. Bundle under budget. Manifest desktop-only. Tomo handoff file present. Spec 002 follow-up note present.
   - Update `plan/README.md` phases list — tick every phase and set overall status to COMPLETE.

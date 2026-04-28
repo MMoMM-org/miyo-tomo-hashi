@@ -5,16 +5,16 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-04-24 |
-| **Current Phase** | Ready for implementation — PRD, SDD, and 5-phase Plan complete; readiness HIGH |
-| **Last Updated** | 2026-04-24 |
+| **Current Phase** | Implementation complete — Release Gate verified (code) · manual-QA + CI live-test pending |
+| **Last Updated** | 2026-04-28 |
 
 ## Documents
 
 | Document | Status | Notes |
 |----------|--------|-------|
-| requirements.md | draft | PRD v2.1 — brainstorm pivot + refinement round; 0 open questions |
-| solution.md | draft | SDD v1.1 — all 10 ADRs confirmed |
-| plan/ | draft | 5-phase TDD plan (29 tasks); phase-1..phase-5.md + README.md |
+| requirements.md | draft | PRD v2.1 — brainstorm pivot + refinement round; 0 open questions; 64 ACs (T5.4 grep-verified — drift from in-PRD "61" header is logged) |
+| solution.md | draft | SDD v1.1 — all 10 ADRs confirmed; 3 drifts patched during implementation (ADR-4 v3 Readable<T>, ADR-4 v3 Dynamic Command Label subscribe, FS2 chosenInstanceId not cleared on Disconnect) |
+| plan/ | complete | 5-phase TDD plan (29 tasks across 5 phases — all completed); phase-1..phase-5.md + README.md + traceability.md (T5.4) + manual-qa-checklist.md (T5.5b) |
 
 ## Scope (post-brainstorm pivot, 2026-04-24)
 
@@ -86,6 +86,7 @@ Explicitly NOT in 001:
 | 2026-04-24 | Spec 001 readiness = HIGH. Ready for implementation. | All nine spec files present (README, requirements, solution, plan/README, plan/phase-1..5). Zero open questions. All ADRs confirmed. Full PRD→SDD→PLAN traceability. |
 | 2026-04-24 | Tomo handoff (T5.7) created ahead of implementation: `_outbox/for-tomo/2026-04-24_hashi-to-tomo_instance-name-label.md` | Tomo needs lead time to ship the `miyo.tomo.instance-name` label; creating the handoff at plan-time (rather than waiting until Phase 5 of implementation) maximizes parallel work. Phase 5 T5.7 marked completed in `plan/phase-5.md`. |
 | 2026-04-25 | Multi-batch review pass: security re-triage, drift, simplification, testing | Four review batches landed: (1) Security — dropped Tomo identity pinning / vault-pairing fingerprint / preview-execute TOCTOU as Won't Have (Hashi is local + outbound-only; no named threat actor); kept Docker-socket pinning (no DOCKER_HOST follow), xterm.js OSC 8/52 disabled, no chat content in logs. (2) Drift — manifest/peerDep/PRD all aligned at minAppVersion 1.5.0; AC count = 61; Svelte residue swept after ADR-3/4 v2 plain-TS pivot; `src/settings/` path pinned. (3) Simplification — ADR-4 v3 `Store<T>` only (no `derived<T,U>`, no `connectionStoreWrite` read/write split); ADR-5 v2 use dockerode directly via `src/connection/docker.ts` (no `DockerClient` port, no `FakeDockerClient` — `vi.mock('dockerode')` at unit-test boundary); `ConnectionError` collapsed 7→4 codes. (4) Testing — RED-GREEN-REFACTOR canonical task shape in plan/README; T5.5b manual-QA mirroring 002's T6.4 (closes Obsidian-API test-seam gap); T5.4 traceability matrix file replaces silent `test.todo`; PRD F1 multi-Tomo edge-case ACs (duplicate names, >20 containers, vanish-mid-pick); F2/AC3 quantified to "≤16 ms p95 in jsdom" (was "visible interval"); edge-case→tests matrix in plan/README. SDD bumped to v1.1; PRD acceptanceCriteria=61. |
+| 2026-04-28 | **Implementation complete — all 5 phases shipped + Release Gate code-side passed.** Phase 1 Foundation (PR #1, commit b974885), Phase 2 Docker Boundary (PR #3, commit 70a65fa), Phase 3 Connection Service (PR #4, commit c6fc8f0), Phase 4 UI Surfaces (PR #5, commit caa67b7), Phase 5 Wire-up + Release Gate (PR #6, this branch). Build clean, 203/203 unit tests, lint clean, bundle ~304 KB (well under 500 KB SDD CON-7 ceiling), manifest desktop-only verified. T5.4 traceability matrix: 61/64 ACs covered automatically (3 orphans — F1.10 + F4.5 closed by T5.5 e2e; F8.5 deferred as a known-likely-fail row in T5.5b). T5.5 e2e live test authored (CI-only — no Docker in dev environment). T5.5b manual-QA checklist (37 rows) authored — pending user run in real Obsidian against a live Tomo container. SDD drifts patched during implementation: ADR-4 v3 `Readable<T>` removal (T1.3), ADR-4 v3 dynamic-command-label subscribe target (T5.1), FS2 `chosenInstanceId` not cleared on Disconnect (T3.4). T5.7 Tomo instance-name label handoff returned status:done 2026-04-24. T5.8 obsoleted (decoupling done in 002 README directly). | Release-readiness gate per PRD Success Metrics has two remaining checks: CI must run `npm run test:live` against real Docker; user must walk the T5.5b manual-QA checklist. Code is ready to ship pending those two operational gates. |
 
 ## Context
 
