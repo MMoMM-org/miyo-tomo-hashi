@@ -4,7 +4,11 @@
 	"version": "0.0.0",
 	"minAppVersion": "1.5.0",
 	"description": "Direct integration with Tomo (Claude Code) sessions for session interaction and automated vault updates",
-	"author": "Marcus Breiden",
-	"authorUrl": "https://github.com/MMoMM-org",
+	"author": "Marcus Breiden <marcus@mmomm.org>",
+	"authorUrl": "https://www.mmomm.org",
+	"fundingUrl": {
+		"Buy Me a Coffee": "https://ko-fi.com/mmomm",
+		"GitHub Sponsor": "https://github.com/sponsors/MMoMM-org"
+	},
 	"isDesktopOnly": true
 }
