@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 import process from "node:process";
 import esbuild from "esbuild";
@@ -36,13 +36,23 @@ const copyAssets = {
 				copyFileSync("manifest.json", "build/manifest.json");
 				bundleStylesCss("build");
 
-				// Uncomment and adjust to copy build output to your test vault:
-				// const VAULT_PLUGIN_DIR = "test/MyVault/.obsidian/plugins/miyo-tomo-hashi";
-				// if (existsSync(VAULT_PLUGIN_DIR)) {
-				// 	copyFileSync(`${outdir}/main.js`, `${VAULT_PLUGIN_DIR}/main.js`);
-				// 	copyFileSync("manifest.json", `${VAULT_PLUGIN_DIR}/manifest.json`);
-				// 	bundleStylesCss(VAULT_PLUGIN_DIR);
-				// }
+				// Optional deployment to the in-repo test vault for manual QA
+				// (T5.5b). Set `HASHI_DEPLOY_VAULT=1 npm run build` to enable.
+				// Default OFF so CI builds don't trip on a missing vault.
+				if (process.env.HASHI_DEPLOY_VAULT) {
+					const VAULT_PLUGIN_DIR = "test/Hashi/.obsidian/plugins/miyo-tomo-hashi";
+					if (existsSync("test/Hashi/.obsidian")) {
+						mkdirSync(VAULT_PLUGIN_DIR, { recursive: true });
+						copyFileSync(`${outdir}/main.js`, `${VAULT_PLUGIN_DIR}/main.js`);
+						copyFileSync("manifest.json", `${VAULT_PLUGIN_DIR}/manifest.json`);
+						bundleStylesCss(VAULT_PLUGIN_DIR);
+						console.log(`[deploy] Plugin copied to ${VAULT_PLUGIN_DIR}`);
+					} else {
+						console.warn(
+							"[deploy] HASHI_DEPLOY_VAULT set but test/Hashi/.obsidian missing — skipped",
+						);
+					}
+				}
 			}
 		});
 	},
