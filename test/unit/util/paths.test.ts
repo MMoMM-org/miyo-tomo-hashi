@@ -136,6 +136,20 @@ describe("denyListMatch", () => {
 			expect(denyListMatch("normal/path.md", hooksDir)).toBe(false);
 		});
 	});
+
+	describe("hooksDir normalization (defensive)", () => {
+		it("matches when hooksDir has a trailing slash", () => {
+			expect(denyListMatch(".tomo-hashi/hooks/evil.js", ".tomo-hashi/hooks/")).toBe(true);
+		});
+
+		it("matches when hooksDir has a leading ./", () => {
+			expect(denyListMatch(".tomo-hashi/hooks/evil.js", "./.tomo-hashi/hooks")).toBe(true);
+		});
+
+		it("matches when hooksDir has both ./ prefix and trailing slash", () => {
+			expect(denyListMatch(".tomo-hashi/hooks/evil.js", "./.tomo-hashi/hooks/")).toBe(true);
+		});
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -172,6 +186,80 @@ describe("verifyRealpathContainment", () => {
 
 		expect(result.ok).toBe(false);
 		if (!result.ok) expect(result.reason).toBe("path-symlink-escape");
+	});
+
+	it("rejects sibling-vault realpath (defends startsWith without separator)", async () => {
+		// Without the trailing-separator check, "/Users/marcus/vault-evil/..."
+		// would falsely pass startsWith("/Users/marcus/vault") — a real escape.
+		const vaultRoot = "/Users/marcus/vault";
+		const realpathStub = vi
+			.fn()
+			.mockResolvedValue("/Users/marcus/vault-evil/secret.txt");
+
+		const result = await verifyRealpathContainment(
+			vaultRoot,
+			"symlink-to-sibling.md",
+			realpathStub,
+		);
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.reason).toBe("path-symlink-escape");
+	});
+
+	it("normalizes vaultRoot trailing slash before resolving", async () => {
+		// vaultRoot with trailing slash must not produce // in the joined path,
+		// and the resolved-prefix check must still recognize containment.
+		const realpathStub = vi
+			.fn()
+			.mockResolvedValue("/Users/marcus/vault/Atlas/foo.md");
+
+		const result = await verifyRealpathContainment(
+			"/Users/marcus/vault/",
+			"Atlas/foo.md",
+			realpathStub,
+		);
+
+		expect(result.ok).toBe(true);
+		// Confirm the join did not produce a double-slash. The stub captured the
+		// invocation arg; it should be the single-slash form.
+		expect(realpathStub).toHaveBeenCalledWith("/Users/marcus/vault/Atlas/foo.md");
+	});
+
+	it("returns ok on ENOENT (a not-yet-existing path cannot symlink-escape)", async () => {
+		const enoent = Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+		const realpathStub = vi.fn().mockRejectedValue(enoent);
+
+		const result = await verifyRealpathContainment(
+			"/Users/marcus/vault",
+			"will-be-created.md",
+			realpathStub,
+		);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.vaultRelativePath).toBe("will-be-created.md");
+	});
+
+	it("rethrows non-ENOENT realpath errors (EPERM, ELOOP, etc.)", async () => {
+		const eperm = Object.assign(new Error("EPERM"), { code: "EPERM" });
+		const realpathStub = vi.fn().mockRejectedValue(eperm);
+
+		await expect(
+			verifyRealpathContainment("/Users/marcus/vault", "foo.md", realpathStub),
+		).rejects.toThrow("EPERM");
+	});
+
+	it("uses the injected realpath function (does not call real fs)", async () => {
+		const realpathStub = vi
+			.fn()
+			.mockResolvedValue("/Users/marcus/vault/Atlas/foo.md");
+
+		await verifyRealpathContainment(
+			"/Users/marcus/vault",
+			"Atlas/foo.md",
+			realpathStub,
+		);
+
+		expect(realpathStub).toHaveBeenCalledTimes(1);
 	});
 });
 

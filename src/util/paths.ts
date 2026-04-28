@@ -97,8 +97,12 @@ export function denyListMatch(
 	}
 
 	// Inject runtime hooksDir as a prefix pattern (with separator boundary).
-	if (hooksDir !== "") {
-		const escaped = hooksDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	// Strip leading `./` and trailing `/` so user settings like ".tomo-hashi/hooks/"
+	// or "./.tomo-hashi/hooks" still match correctly — otherwise the regex would
+	// silently fail to deny writes into the hooksDir.
+	const normalizedHooksDir = hooksDir.replace(/^\.\//, "").replace(/\/+$/, "");
+	if (normalizedHooksDir !== "") {
+		const escaped = normalizedHooksDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 		const hooksDirPattern = new RegExp(`^${escaped}(\\/|$)`);
 		if (hooksDirPattern.test(vaultRelativePath)) return true;
 	}
@@ -114,8 +118,15 @@ export function denyListMatch(
  * `realpath` is injectable for testing — production callers pass nothing
  * and the function uses node's `fs/promises.realpath`.
  *
- * Returns `{ ok: false; reason: "path-symlink-escape" }` on escape.
- * All other failures (e.g. ENOENT) bubble.
+ * Returns:
+ * - `{ ok: true; vaultRelativePath }` when the realpath is under vault root,
+ *   OR when the path doesn't yet exist (ENOENT — a not-yet-created file
+ *   cannot be a symlink-escape).
+ * - `{ ok: false; reason: "path-symlink-escape" }` when the realpath escapes
+ *   the vault root.
+ *
+ * Other I/O errors (EPERM, ELOOP, etc.) bubble — those are real failures
+ * that callers should surface as errors, not silently mask as "safe".
  */
 export async function verifyRealpathContainment(
 	vaultRoot: string,
@@ -129,13 +140,28 @@ export async function verifyRealpathContainment(
 			return fsRealpath(p);
 		});
 
-	const fullPath = `${vaultRoot}/${vaultRelativePath}`;
-	const resolved = await resolveRealpath(fullPath);
+	// Normalize root to never have a trailing slash — makes the join below
+	// produce a single separator, and the prefix check unambiguous.
+	const root = vaultRoot.replace(/\/+$/, "");
+	const fullPath = `${root}/${vaultRelativePath}`;
 
-	// Ensure vault root ends with / for reliable prefix check.
-	const rootWithSep = vaultRoot.endsWith("/") ? vaultRoot : `${vaultRoot}/`;
+	let resolved: string;
+	try {
+		resolved = await resolveRealpath(fullPath);
+	} catch (err) {
+		// A not-yet-existing path cannot be a symlink-escape — this is the
+		// "create new file" path in Phase 4 and must be safe by construction.
+		const code = (err as { code?: string } | null)?.code;
+		if (code === "ENOENT") {
+			return { ok: true, vaultRelativePath };
+		}
+		throw err;
+	}
 
-	if (!resolved.startsWith(rootWithSep) && resolved !== vaultRoot) {
+	// Prefix check uses `root + "/"` to guarantee separator boundary —
+	// `/vault-evil/foo` must NOT pass when root is `/vault`.
+	const rootWithSep = `${root}/`;
+	if (!resolved.startsWith(rootWithSep) && resolved !== root) {
 		return { ok: false, reason: "path-symlink-escape" };
 	}
 
