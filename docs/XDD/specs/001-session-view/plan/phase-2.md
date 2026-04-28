@@ -1,6 +1,6 @@
 ---
 title: "Phase 2: Docker Boundary"
-status: pending
+status: completed
 version: "1.0"
 phase: 2
 ---
@@ -28,7 +28,7 @@ phase: 2
 
 This phase produces a fully-tested Docker edge that the connection service in Phase 3 consumes. Unit tests use `vi.mock('dockerode')`; live tests exercise dockerode against a running Docker daemon.
 
-- [ ] **T2.1 Define `AttachSession` contract + thin dockerode helper module** `[activity: domain-modeling]`
+- [x] **T2.1 Define `AttachSession` contract + thin dockerode helper module** `[activity: domain-modeling]`
 
   1. Prime: Read SDD "Docker Helpers (no port — use dockerode directly)" `[ref: SDD/Interface Specifications; Docker Helpers]` and "Integration Points / Docker_Engine". Note: ADR-5 was revised 2026-04-25 to drop the previously-planned `DockerClient` port + `DockerodeAdapter` + `FakeDockerClient` triple — a single production implementation never benefits from a port.
   2. Test: Write `test/unit/connection/docker.test.ts` using `vi.mock('dockerode')`:
@@ -41,7 +41,7 @@ This phase produces a fully-tested Docker edge that the connection service in Ph
      - [ ] Helper module matches SDD contract; `vi.mock('dockerode')` covers all four helpers `[ref: SDD/Docker Helpers]`
      - [ ] `socketPath` is explicit; env-driven redirection refused `[ref: PRD/F1 Docker socket pinning AC]`
 
-- [ ] **T2.2 Live test — discovery against real Docker** `[activity: integration]`
+- [x] **T2.2 Live test — discovery against real Docker** `[activity: integration]`
 
   1. Prime: Read [dockerode docs](https://github.com/apocas/dockerode) on `listContainers({ filters })` and `getContainer(id).inspect()`; review SDD "Docker discovery result mapping" algorithm `[ref: SDD/Runtime View; Complex Logic - Discovery result mapping]`.
   2. Test: Write `test/live/docker-discovery.live.test.ts`:
@@ -56,7 +56,7 @@ This phase produces a fully-tested Docker edge that the connection service in Ph
      - [ ] Missing instance-name label → `name: null` graceful fallback `[ref: PRD/F1/AC5]`
      - [ ] Inspect returns null (not throws) for missing containers `[ref: SDD/Docker Helpers]`
 
-- [ ] **T2.3 Live test — attach with TTY demux detection** `[activity: integration]`
+- [x] **T2.3 Live test — attach with TTY demux detection** `[activity: integration]`
 
   1. Prime: Read SDD "Implementation Gotchas / Attach stream demuxing" `[ref: SDD/Implementation Gotchas]` and dockerode's `container.attach({ stream, stdout, stderr, stdin, logs })` docs.
   2. Test: Write `test/live/docker-attach.live.test.ts`:
@@ -70,7 +70,7 @@ This phase produces a fully-tested Docker edge that the connection service in Ph
      - [ ] TTY and non-TTY containers both supported `[ref: SDD/Implementation Gotchas]`
      - [ ] Clean teardown `[ref: SDD/Deployment View; Rollback]`
 
-- [ ] **T2.4 Phase 2 Validation** `[activity: validate]`
+- [x] **T2.4 Phase 2 Validation** `[activity: validate]`
 
   - Run `npm test && npm run test:live`. Unit tests green. Live tests green against a local Docker daemon. Lint clean. Tick Phase 2 checkbox in `plan/README.md`.
   - If `test:live` cannot run (no Docker on dev machine), the developer MUST state that in their commit message and rely on CI for live coverage. CI MUST run `test:live` for every PR.
