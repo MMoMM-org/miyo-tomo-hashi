@@ -31,6 +31,18 @@ export function openPopover(evt: MouseEvent, actions: PopoverActions): Menu {
 	// UI text uses Obsidian sentence-case (enforced by obsidianmd/ui/sentence-case).
 	// The spec drafts these as Title-Case but Obsidian's community style guide
 	// — which the eslint plugin codifies — is sentence-case.
+	//
+	// Order: Open chat → Force reconnect → Go to settings. The most-frequent
+	// user action (resume the chat session) sits at the top; force-reconnect
+	// is mid because it's a recovery action; settings is last as it's
+	// configuration, not workflow.
+	menu.addItem((item) => {
+		item.setTitle("Open chat window").setIcon("message-square");
+		item.onClick(() => {
+			actions.onOpenChat();
+		});
+	});
+
 	menu.addItem((item) => {
 		item.setTitle("Force reconnect").setIcon("refresh-ccw");
 		if (!actions.forceReconnectEnabled) {
@@ -39,13 +51,6 @@ export function openPopover(evt: MouseEvent, actions: PopoverActions): Menu {
 		}
 		item.onClick(() => {
 			actions.onForceReconnect();
-		});
-	});
-
-	menu.addItem((item) => {
-		item.setTitle("Open chat window").setIcon("message-square");
-		item.onClick(() => {
-			actions.onOpenChat();
 		});
 	});
 

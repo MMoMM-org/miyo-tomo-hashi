@@ -14,7 +14,10 @@
  * 1. `chosenInstanceId` is dependency-injected as a `() => string | null`
  *    callback rather than reading the settings object directly. Mirrors
  *    `StatusBarIcon` (T4.2) and keeps the view decoupled from the plugin
- *    settings shape; Phase 5 wires it to `() => plugin.settings.chosenInstanceId`.
+ *    settings shape; main.ts wires it to the persisted instance NAME (label
+ *    `miyo.tomo.instance-name`), which survives container stop+start.
+ *    Receivers treat the value as an opaque "anything chosen?" check, so
+ *    the historical parameter name is preserved.
  *
  * 2. The store subscription is established AFTER the DOM skeleton is built
  *    so the initial `render(state)` callback (Store fires immediately on

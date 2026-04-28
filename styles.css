@@ -5,6 +5,36 @@
 	font-size: var(--font-small);
 }
 
+/* --- Status-bar 友 kanji connection indicator --- */
+
+/* The kanji itself is the primary connection-state visual: color +
+ * opacity drift across the three states. The hashi-status-bar-indicator
+ * sibling (hidden visually, kept for `aria-hidden=true` text), exists
+ * only to satisfy PRD F3/AC2 ("conveyed by something beyond color
+ * alone"); screen readers get the state via the `aria-label`/`title`
+ * already set by StatusBarIcon.mount(). */
+
+.hashi-status-bar-glyph {
+	font-weight: 600;
+	font-size: 1.05em;
+	transition: color 120ms ease, opacity 120ms ease;
+}
+
+.hashi-status-bar.is-connected .hashi-status-bar-glyph {
+	color: var(--color-green);
+	opacity: 1;
+}
+
+.hashi-status-bar.is-reconnecting .hashi-status-bar-glyph {
+	color: var(--color-yellow);
+	opacity: 0.85;
+}
+
+.hashi-status-bar.is-disconnected .hashi-status-bar-glyph {
+	color: var(--text-muted);
+	opacity: 0.6;
+}
+
 /* --- Chat-view zoom controls (ADR-6 — theme-bound CSS vars only) --- */
 
 .hashi-chat-view-zoom-group {

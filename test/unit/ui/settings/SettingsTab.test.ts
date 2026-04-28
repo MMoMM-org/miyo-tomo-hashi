@@ -71,11 +71,11 @@ function asConnection(fake: FakeConnection): TomoConnection {
 // and reads no fields off it directly. The cast funnel mirrors `asConnection`
 // — narrow shape now, full TomoHashiPlugin in Phase-5 wire-up.
 interface PluginStub {
-	settings: { chosenInstanceId: string | null };
+	settings: { chosenInstanceName: string | null };
 }
 
 function makePlugin(): PluginStub {
-	return { settings: { chosenInstanceId: null } };
+	return { settings: { chosenInstanceName: null } };
 }
 
 function asPlugin(stub: PluginStub): TomoHashiPlugin {

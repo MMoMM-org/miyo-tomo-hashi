@@ -14,10 +14,13 @@ export type ZoomLevel = (typeof ZOOM_LEVELS)[number];
 
 export interface PluginSettings {
 	/**
-	 * Full Docker container ID of the Tomo instance the user last connected to.
-	 * `null` if the user has never successfully connected.
+	 * Tomo instance name (from the `miyo.tomo.instance-name` Docker label,
+	 * set by begin-tomo.sh per Tomo install). Stable across container
+	 * stop+start, unlike the container ID — that's why we persist by name.
+	 * `null` if the user has never successfully connected, or if the chosen
+	 * instance had no name label (rare; production Tomo always sets it).
 	 */
-	chosenInstanceId: string | null;
+	chosenInstanceName: string | null;
 	/**
 	 * Font-size multiplier for the chat view's xterm. Persisted so the user
 	 * doesn't re-pick on every reload.
@@ -26,6 +29,6 @@ export interface PluginSettings {
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
-	chosenInstanceId: null,
+	chosenInstanceName: null,
 	zoomLevel: 1,
 };

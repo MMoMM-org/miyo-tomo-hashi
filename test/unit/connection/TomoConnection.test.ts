@@ -47,6 +47,9 @@ vi.mock("../../../src/connection/docker", async (importActual) => {
 	return {
 		...actual,
 		listTomoInstances: vi.fn<() => Promise<TomoInstance[]>>(),
+		findInstanceByName: vi.fn<
+			(name: string) => Promise<TomoInstance | null>
+		>(),
 		inspectContainer: vi.fn<(id: string) => Promise<InspectStub | null>>(),
 		attach: vi.fn<(id: string) => Promise<docker.AttachSession>>(),
 	};
@@ -58,6 +61,7 @@ import { TomoConnection } from "../../../src/connection/TomoConnection";
 // --- helpers -----------------------------------------------------------------
 
 const mockedList = vi.mocked(docker.listTomoInstances);
+const mockedFindByName = vi.mocked(docker.findInstanceByName);
 const mockedAttach = vi.mocked(docker.attach);
 
 // inspectContainer's production return type is dockerode's
@@ -171,7 +175,7 @@ function recordStates(): { states: ConnectionState[]; unsub: () => void } {
 }
 
 function settings(initial: Partial<PluginSettings> = {}): PluginSettings {
-	return { chosenInstanceId: null, zoomLevel: 1, ...initial };
+	return { chosenInstanceName: null, zoomLevel: 1, ...initial };
 }
 
 // --- suite -------------------------------------------------------------------
@@ -202,7 +206,7 @@ describe("TomoConnection.openPicker()", () => {
 });
 
 describe("TomoConnection.connect()", () => {
-	it("transitions Disconnected → Attaching → Connected and persists chosenInstanceId", async () => {
+	it("transitions Disconnected → Attaching → Connected and persists chosenInstanceName", async () => {
 		const target = inst();
 		const fake = makeFakeSession();
 		mockedAttach.mockResolvedValue(fake.session);
@@ -226,7 +230,10 @@ describe("TomoConnection.connect()", () => {
 		expect(attaching.target.containerId).toBe(target.containerId);
 		expect(connected.instance.containerId).toBe(target.containerId);
 
-		expect(s.chosenInstanceId).toBe(target.containerId);
+		// FS2 now persists by stable instance name (target.name), not the
+		// container ID — survives docker stop+start. Container ID would be
+		// regenerated on every restart, breaking auto-reconnect.
+		expect(s.chosenInstanceName).toBe(target.name);
 		expect(conn.state.kind).toBe("connected");
 		expect(conn.instanceName).toBe(target.name);
 
@@ -247,7 +254,7 @@ describe("TomoConnection.connect()", () => {
 
 		expect(persist).toHaveBeenCalledTimes(1);
 		expect(persist).toHaveBeenCalledWith({
-			chosenInstanceId: target.containerId,
+			chosenInstanceName: target.name,
 			zoomLevel: 1,
 		});
 		// Must reference the live settings object (mutation visible to caller).
@@ -256,7 +263,7 @@ describe("TomoConnection.connect()", () => {
 		await conn.dispose();
 	});
 
-	it("disconnect() does NOT clear chosenInstanceId nor invoke persist with null (FS2 semantics)", async () => {
+	it("disconnect() does NOT clear chosenInstanceName nor invoke persist with null (FS2 semantics)", async () => {
 		const target = inst();
 		const fake = makeFakeSession();
 		mockedAttach.mockResolvedValueOnce(fake.session);
@@ -266,15 +273,15 @@ describe("TomoConnection.connect()", () => {
 		const conn = new TomoConnection(s, persist);
 
 		await conn.connect(target);
-		expect(s.chosenInstanceId).toBe(target.containerId);
+		expect(s.chosenInstanceName).toBe(target.name);
 
 		await conn.disconnect();
 
 		// Disconnect path leaves settings untouched and never re-persists.
 		expect(conn.state.kind).toBe("disconnected");
-		expect(s.chosenInstanceId).toBe(target.containerId);
+		expect(s.chosenInstanceName).toBe(target.name);
 		expect(persist).toHaveBeenCalledTimes(1); // only the connect call
-		expect(persist).not.toHaveBeenCalledWith({ chosenInstanceId: null });
+		expect(persist).not.toHaveBeenCalledWith({ chosenInstanceName: null });
 	});
 
 	it("on daemon-unreachable error transitions to Disconnected{daemon-unreachable}; does not persist", async () => {
@@ -295,7 +302,7 @@ describe("TomoConnection.connect()", () => {
 		expect(state.kind).toBe("disconnected");
 		if (state.kind !== "disconnected") throw new Error("expected disconnected");
 		expect(state.reason?.code).toBe("daemon-unreachable");
-		expect(s.chosenInstanceId).toBeNull();
+		expect(s.chosenInstanceName).toBeNull();
 	});
 
 	it("on socket-permission-denied error transitions to Disconnected{socket-permission-denied}", async () => {
@@ -316,7 +323,7 @@ describe("TomoConnection.connect()", () => {
 		expect(state.kind).toBe("disconnected");
 		if (state.kind !== "disconnected") throw new Error("expected disconnected");
 		expect(state.reason?.code).toBe("socket-permission-denied");
-		expect(s.chosenInstanceId).toBeNull();
+		expect(s.chosenInstanceName).toBeNull();
 	});
 });
 
@@ -346,12 +353,16 @@ describe("TomoConnection.disconnect()", () => {
 });
 
 describe("TomoConnection.forceReconnect()", () => {
-	it("while Connected: closes existing stream, re-attaches, stays Connected on success", async () => {
+	it("while Connected: closes existing stream, re-attaches via name lookup, stays Connected", async () => {
+		// After the FS2 rework, force-reconnect resolves the live container
+		// by instance-name label (not the cached ID) so a stop+start in
+		// between produces a fresh attach against whatever ID is now running.
 		const target = inst();
+		const restarted = inst({ name: target.name }); // same name, different ID
 		const first = makeFakeSession();
 		const second = makeFakeSession();
 		mockedAttach.mockResolvedValueOnce(first.session);
-		mockedInspect.mockResolvedValueOnce(makeInspectInfo(target.containerId));
+		mockedFindByName.mockResolvedValueOnce(restarted);
 		mockedAttach.mockResolvedValueOnce(second.session);
 
 		const conn = new TomoConnection(settings());
@@ -362,10 +373,12 @@ describe("TomoConnection.forceReconnect()", () => {
 
 		expect(first.closedByUser()).toBe(true);
 		expect(mockedAttach).toHaveBeenCalledTimes(2);
+		// Second attach uses the freshly-resolved ID, not the original.
+		expect(mockedAttach).toHaveBeenLastCalledWith(restarted.containerId);
 		expect(conn.state.kind).toBe("connected");
 		const after = conn.state;
 		if (after.kind !== "connected") throw new Error("expected connected");
-		expect(after.instance.containerId).toBe(target.containerId);
+		expect(after.instance.containerId).toBe(restarted.containerId);
 
 		await conn.dispose();
 	});
@@ -374,8 +387,8 @@ describe("TomoConnection.forceReconnect()", () => {
 		const target = inst();
 		const first = makeFakeSession();
 		mockedAttach.mockResolvedValueOnce(first.session);
-		// Second pass: inspect returns null → container vanished.
-		mockedInspect.mockResolvedValueOnce(null);
+		// Name no longer resolves — the container is gone.
+		mockedFindByName.mockResolvedValueOnce(null);
 
 		const conn = new TomoConnection(settings());
 		await conn.connect(target);
@@ -401,7 +414,9 @@ describe("TomoConnection — stream close auto-reconnect", () => {
 		const first = makeFakeSession();
 		const second = makeFakeSession();
 		mockedAttach.mockResolvedValueOnce(first.session);
-		mockedInspect.mockResolvedValue(makeInspectInfo(target.containerId));
+		// Name resolution returns the same target (or a new ID if container
+		// was restarted) — both are valid post-FS2-rework scenarios.
+		mockedFindByName.mockResolvedValue(target);
 		mockedAttach.mockResolvedValueOnce(second.session);
 
 		const conn = new TomoConnection(settings());
@@ -436,8 +451,8 @@ describe("TomoConnection — stream close auto-reconnect", () => {
 		const target = inst();
 		const first = makeFakeSession();
 		mockedAttach.mockResolvedValueOnce(first.session);
-		// Five reconnect attempts: each inspect resolves OK but attach rejects.
-		mockedInspect.mockResolvedValue(makeInspectInfo(target.containerId));
+		// Five reconnect attempts: each name lookup resolves OK but attach rejects.
+		mockedFindByName.mockResolvedValue(target);
 		mockedAttach.mockRejectedValue(
 			new docker.ConnectionFailure({
 				code: "attach-failed",
@@ -470,27 +485,46 @@ describe("TomoConnection — stream close auto-reconnect", () => {
 });
 
 describe("TomoConnection.autoReconnectIfRemembered()", () => {
-	it("auto-reconnects when settings.chosenInstanceId is set and container exists", async () => {
+	it("auto-reconnects when settings.chosenInstanceName is set and a container with that name is running", async () => {
 		const target = inst();
 		const fake = makeFakeSession();
-		mockedInspect.mockResolvedValueOnce(makeInspectInfo(target.containerId));
-		// listTomoInstances called to find the TomoInstance descriptor for the id.
-		mockedList.mockResolvedValueOnce([target]);
+		mockedFindByName.mockResolvedValueOnce(target);
 		mockedAttach.mockResolvedValueOnce(fake.session);
 
-		const s = settings({ chosenInstanceId: target.containerId });
+		const s = settings({ chosenInstanceName: target.name });
 		const conn = new TomoConnection(s);
 
 		await conn.autoReconnectIfRemembered();
 
 		expect(conn.state.kind).toBe("connected");
+		expect(mockedAttach).toHaveBeenCalledWith(target.containerId);
 		await conn.dispose();
 	});
 
-	it("stays Disconnected{chosen-instance-gone} when container is missing; does NOT open picker", async () => {
-		mockedInspect.mockResolvedValueOnce(null);
+	it("survives docker stop+start: the same name resolves to a fresh container ID", async () => {
+		// FS2's whole point post-rework: persisting the stable instance-name
+		// label (not the container ID) means a `docker stop && docker run`
+		// in between sessions doesn't force the user back into the picker.
+		const restarted = inst({ name: "tomo-instance" });
+		const fake = makeFakeSession();
+		mockedFindByName.mockResolvedValueOnce(restarted);
+		mockedAttach.mockResolvedValueOnce(fake.session);
 
-		const s = settings({ chosenInstanceId: "z".repeat(64) });
+		const s = settings({ chosenInstanceName: "tomo-instance" });
+		const conn = new TomoConnection(s);
+
+		await conn.autoReconnectIfRemembered();
+
+		expect(mockedFindByName).toHaveBeenCalledWith("tomo-instance");
+		expect(mockedAttach).toHaveBeenCalledWith(restarted.containerId);
+		expect(conn.state.kind).toBe("connected");
+		await conn.dispose();
+	});
+
+	it("stays Disconnected{chosen-instance-gone} when no container has that name; does NOT open picker", async () => {
+		mockedFindByName.mockResolvedValueOnce(null);
+
+		const s = settings({ chosenInstanceName: "tomo-instance" });
 		const conn = new TomoConnection(s);
 
 		await conn.autoReconnectIfRemembered();
@@ -504,11 +538,11 @@ describe("TomoConnection.autoReconnectIfRemembered()", () => {
 		expect(mockedAttach).not.toHaveBeenCalled();
 	});
 
-	it("no-ops when settings.chosenInstanceId is null", async () => {
+	it("no-ops when settings.chosenInstanceName is null", async () => {
 		const conn = new TomoConnection(settings());
 		await conn.autoReconnectIfRemembered();
 		expect(conn.state.kind).toBe("disconnected");
-		expect(mockedInspect).not.toHaveBeenCalled();
+		expect(mockedFindByName).not.toHaveBeenCalled();
 		expect(mockedAttach).not.toHaveBeenCalled();
 		expect(mockedList).not.toHaveBeenCalled();
 	});

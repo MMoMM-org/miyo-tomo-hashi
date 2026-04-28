@@ -70,6 +70,7 @@ beforeEach(() => {
 
 import {
 	attach,
+	findInstanceByName,
 	inspectContainer,
 	listTomoInstances,
 	type AttachSession,
@@ -163,6 +164,89 @@ describe("listTomoInstances()", () => {
 		expect(opts).toBeDefined();
 		expect(typeof opts?.socketPath).toBe("string");
 		expect(opts?.socketPath?.length).toBeGreaterThan(0);
+	});
+});
+
+// --- findInstanceByName ------------------------------------------------------
+
+describe("findInstanceByName()", () => {
+	// Persisting by container ID breaks across docker stop+start because the
+	// container gets a fresh ID. The miyo.tomo.instance-name label IS stable
+	// across restarts (begin-tomo.sh always sets it to the same INSTANCE_NAME).
+	// findInstanceByName lets the FS2 auto-reconnect path resolve a stable
+	// name back to whatever container ID is currently running.
+
+	it("returns the instance whose miyo.tomo.instance-name label matches", async () => {
+		handles.listContainers.mockResolvedValue([
+			{
+				Id: `a${"0".repeat(63)}`,
+				Image: "miyo/tomo:0.7.0",
+				Created: 1_714_300_000,
+				Labels: {
+					"miyo.component": "tomo",
+					"miyo.tomo.instance-name": "tomo-other",
+				},
+			},
+			{
+				Id: `b${"0".repeat(63)}`,
+				Image: "miyo/tomo:0.7.0",
+				Created: 1_714_400_000,
+				Labels: {
+					"miyo.component": "tomo",
+					"miyo.tomo.instance-name": "tomo-instance",
+				},
+			},
+		]);
+
+		const result = await findInstanceByName("tomo-instance");
+		expect(result).not.toBeNull();
+		expect(result?.name).toBe("tomo-instance");
+		expect(result?.containerId).toBe(`b${"0".repeat(63)}`);
+	});
+
+	it("returns null when no running tomo container has that name", async () => {
+		handles.listContainers.mockResolvedValue([
+			{
+				Id: `a${"0".repeat(63)}`,
+				Image: "miyo/tomo:0.7.0",
+				Created: 1_714_300_000,
+				Labels: {
+					"miyo.component": "tomo",
+					"miyo.tomo.instance-name": "tomo-other",
+				},
+			},
+		]);
+
+		const result = await findInstanceByName("tomo-instance");
+		expect(result).toBeNull();
+	});
+
+	it("when multiple containers share the same name, returns the most-recent (sorted DESC)", async () => {
+		// Edge case: a stop+start race could briefly leave a stopped container
+		// with the same name visible. We resolve to the newest by Created.
+		handles.listContainers.mockResolvedValue([
+			{
+				Id: `a${"0".repeat(63)}`,
+				Image: "miyo/tomo:0.7.0",
+				Created: 1_714_300_000, // older
+				Labels: {
+					"miyo.component": "tomo",
+					"miyo.tomo.instance-name": "tomo-instance",
+				},
+			},
+			{
+				Id: `b${"0".repeat(63)}`,
+				Image: "miyo/tomo:0.7.0",
+				Created: 1_714_500_000, // newer
+				Labels: {
+					"miyo.component": "tomo",
+					"miyo.tomo.instance-name": "tomo-instance",
+				},
+			},
+		]);
+
+		const result = await findInstanceByName("tomo-instance");
+		expect(result?.containerId).toBe(`b${"0".repeat(63)}`);
 	});
 });
 
@@ -336,6 +420,29 @@ describe("attach()", () => {
 
 		const session = await attach(VALID_ID);
 		await expect(session.resize(24, 80)).rejects.toBe(boom);
+
+		await session.close();
+	});
+
+	it("attach options carry _body:{} so docker-modem skips writing the JSON body to the hijacked socket", async () => {
+		// docker-modem 4.0.12 (modem.js:208) JSON-stringifies POST opts as the
+		// request body. With hijack:true the connection upgrades to a raw
+		// socket and (modem.js:367) writes that body straight into the
+		// container's stdin — the user sees `{"stream":true,"stdout":true,…}`
+		// echoed in the Tomo terminal on every connect. Setting `_body: {}`
+		// makes modem JSON-stringify {} → "{}" → matches the empty-data
+		// branch (modem.js:212-216) and the body is dropped.
+		handles.inspect.mockResolvedValue(inspectStub(true));
+		handles.attach.mockResolvedValue(new PassThrough());
+
+		const session = await attach(VALID_ID);
+
+		expect(handles.attach).toHaveBeenCalledTimes(1);
+		const passedOpts = handles.attach.mock.calls[0]?.[0] as
+			| Record<string, unknown>
+			| undefined;
+		expect(passedOpts).toBeDefined();
+		expect(passedOpts?._body).toEqual({});
 
 		await session.close();
 	});

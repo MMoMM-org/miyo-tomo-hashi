@@ -144,6 +144,30 @@ export async function listTomoInstances(): Promise<TomoInstance[]> {
 	return mapped;
 }
 
+// --- findInstanceByName ------------------------------------------------------
+
+/**
+ * Resolve a stable Tomo instance name (the `miyo.tomo.instance-name` label
+ * value, set by begin-tomo.sh per Tomo install) to whatever container ID is
+ * currently running for it.
+ *
+ * Why a name lookup exists: docker stop+start gives the container a fresh ID,
+ * so persisting the chosen instance by ID (FS2) used to break across Tomo
+ * restarts — the user had to re-pick from the settings every time. The
+ * instance-name label IS stable across restarts, so we persist that and
+ * resolve through this helper on every reconnect attempt.
+ *
+ * Returns the most recently created match when multiple containers share the
+ * same name (e.g. brief stop+start race). Returns null when nothing matches.
+ */
+export async function findInstanceByName(
+	name: string,
+): Promise<TomoInstance | null> {
+	const all = await listTomoInstances();
+	const hit = all.find((x) => x.name === name);
+	return hit ?? null;
+}
+
 // --- inspectContainer --------------------------------------------------------
 
 /**
@@ -187,6 +211,16 @@ export async function attach(id: string): Promise<AttachSession> {
 	// Without it, output may still flow (initial response chunks) but writes
 	// to stdin are dropped — the connection isn't hijacked, it's just an
 	// HTTP response body. User-reported runtime bug 2026-04-28.
+	//
+	// `_body: {}` works around a docker-modem 4.0.12 bug: for any POST it
+	// JSON.stringifies the opts object as the request body (modem.js:208),
+	// then with hijack:true writes that body straight into the upgraded
+	// socket — i.e. into the container's stdin. The user sees
+	// `{"stream":true,"stdout":true,...}` echoed in the Tomo terminal on
+	// every connect. modem.js:212 has an explicit "{}" / '""' shortcut that
+	// drops the body when the JSON is empty; `_body: {}` triggers that path.
+	// (modem prefers `opts._body || opts` at line 208, so a truthy empty
+	// object wins over the full opts.)
 	const raw = (await container.attach({
 		stream: true,
 		stdout: true,
@@ -194,7 +228,8 @@ export async function attach(id: string): Promise<AttachSession> {
 		stdin: true,
 		hijack: true,
 		logs: false,
-	})) as Duplex;
+		_body: {},
+	} as unknown as Parameters<typeof container.attach>[0])) as Duplex;
 
 	let stdoutStream: Readable;
 	if (tty) {

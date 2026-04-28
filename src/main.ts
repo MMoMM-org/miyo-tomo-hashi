@@ -88,7 +88,8 @@ export default class TomoHashiPlugin extends Plugin {
 		this.connection = new TomoConnection(this.settings, persist);
 		const conn = this.connection;
 
-		const chosenInstanceId = (): string | null => this.settings.chosenInstanceId;
+		const chosenInstanceId = (): string | null =>
+			this.settings.chosenInstanceName;
 
 		// 1. Chat view registration (T4.3).
 		const onZoomChange = async (level: ZoomLevel): Promise<void> => {
