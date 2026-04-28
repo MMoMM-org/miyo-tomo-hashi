@@ -1,10 +1,10 @@
-import type MyPlugin from "main";
+import type TomoHashiPlugin from "main";
 import { type App, PluginSettingTab, Setting } from "obsidian";
 
 export class SettingsTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: TomoHashiPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: TomoHashiPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
