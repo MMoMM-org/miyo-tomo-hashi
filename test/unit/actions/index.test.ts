@@ -261,10 +261,10 @@ describe("HANDLERS — dispatch smoke", () => {
 
 describe("HANDLERS — type narrowing", () => {
 	it("HANDLERS['create_moc'] parameter type is CreateMocAction", () => {
-		expectTypeOf<Parameters<typeof HANDLERS["create_moc"]>[0]>().toMatchTypeOf<CreateMocAction>();
+		expectTypeOf<Parameters<typeof HANDLERS["create_moc"]>[0]>().toExtend<CreateMocAction>();
 	});
 
 	it("HANDLERS['move_note'] parameter type is MoveNoteAction", () => {
-		expectTypeOf<Parameters<typeof HANDLERS["move_note"]>[0]>().toMatchTypeOf<MoveNoteAction>();
+		expectTypeOf<Parameters<typeof HANDLERS["move_note"]>[0]>().toExtend<MoveNoteAction>();
 	});
 });
