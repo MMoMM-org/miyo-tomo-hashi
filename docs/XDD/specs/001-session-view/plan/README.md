@@ -49,7 +49,7 @@ version: "1.0"
 
 | Phase | Name | Status | Tasks | File |
 |-------|------|--------|-------|------|
-| 1 | Foundation | pending | 6 | [phase-1.md](phase-1.md) |
+| 1 | Foundation | completed | 6 | [phase-1.md](phase-1.md) |
 | 2 | Docker Boundary | pending | 4 | [phase-2.md](phase-2.md) |
 | 3 | Connection Service | pending | 5 | [phase-3.md](phase-3.md) |
 | 4 | UI Surfaces | pending | 5 | [phase-4.md](phase-4.md) |
@@ -161,7 +161,7 @@ Phase intros may abbreviate the steps as "Prime → RED → GREEN → REFACTOR �
 
 Each phase is defined in a separate file.
 
-- [ ] [Phase 1: Foundation](phase-1.md)
+- [x] [Phase 1: Foundation](phase-1.md)
 - [ ] [Phase 2: Docker Boundary](phase-2.md)
 - [ ] [Phase 3: Connection Service](phase-3.md)
 - [ ] [Phase 4: UI Surfaces](phase-4.md)
