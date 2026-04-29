@@ -63,12 +63,16 @@
  *    Each invocation gets a new modal instance per ADR-5 (modal lifecycle
  *    matches one run). Silent mode never opens a modal.
  *
- * 7. (002 / T6.2) `HookLoader` is implemented inline as `createHookLoader`
- *    below. The production loader scans the configured hooks directory
- *    once per `resolve()` call via the vault adapter's `list`. SDD ADR-3
- *    only mandates `createRequire` cache eviction (which `HookRunner`
- *    owns); the resolution mechanism is implementation-private. Inlining
- *    avoids a new module for ~20 lines of glue.
+ * 7. (002 / T6.2-fix) `HookLoader` is implemented as `FsHookLoader` — a
+ *    synchronous filesystem-backed loader that scans the configured hooks
+ *    directory on every `resolve()` call via `fs.readdirSync`. Obsidian
+ *    desktop runs in Electron with full Node access; the directory listing
+ *    is microseconds for a small hooks dir, so no caching is needed. SDD
+ *    ADR-3 mandates sync `createRequire` + cache evict (HookRunner owns
+ *    that); the loader contract is sync to match, which `vault.adapter.list`
+ *    (async) cannot satisfy without a pre-warmed cache. The original T6.2
+ *    inline stub returned null unconditionally — replaced here so hooks
+ *    actually load in production.
  */
 
 import { Plugin, type WorkspaceLeaf } from "obsidian";
@@ -79,12 +83,9 @@ import { TomoConnection } from "./connection/TomoConnection";
 import { loadSettings, saveSettings } from "./connection/settingsPersistence";
 import { executionStore } from "./executor/executionStore";
 import { InstructionExecutor } from "./executor/InstructionExecutor";
+import { FsHookLoader } from "./hooks/FsHookLoader";
 import { HookDisclosureModal } from "./hooks/HookDisclosureModal";
-import {
-	HookRunner,
-	type HookKey,
-	type HookLoader,
-} from "./hooks/HookRunner";
+import { HookRunner } from "./hooks/HookRunner";
 import type { HookLogger } from "./hooks/HookContext";
 import { validate } from "./schema/validator";
 import { SettingsTab } from "./settings/SettingsTab";
@@ -116,15 +117,9 @@ interface AdapterStat {
 	mtime: number;
 }
 
-interface AdapterListResult {
-	files: string[];
-	folders: string[];
-}
-
 interface VaultAdapterShape {
-	exists(path: string): Promise<boolean>;
 	stat(path: string): Promise<AdapterStat | null>;
-	list(path: string): Promise<AdapterListResult>;
+	getBasePath?(): string;
 }
 
 export default class TomoHashiPlugin extends Plugin {
@@ -284,7 +279,19 @@ export default class TomoHashiPlugin extends Plugin {
 			},
 		};
 
-		const hookLoader = createHookLoader(adapter, () => this.settings.hooksDir);
+		// Per header decision (7) — sync filesystem-backed loader. Obsidian
+		// desktop's `FileSystemAdapter.getBasePath()` gives us the absolute
+		// vault root (manifest is `isDesktopOnly: true`, so the call is safe);
+		// we fall back to `""` for the unrealistic case where the API is
+		// missing (older Obsidian builds), in which case the loader's
+		// `readdirSync` will resolve a relative path against `process.cwd()`
+		// and almost certainly return null — which is the safe failure mode.
+		const vaultBasePath =
+			typeof adapter.getBasePath === "function" ? adapter.getBasePath() : "";
+		const hookLoader = new FsHookLoader(
+			vaultBasePath,
+			() => this.settings.hooksDir,
+		);
 
 		const hookRunner = new HookRunner(this.app, hookLoader, hookLogger, {
 			askCallback,
@@ -386,40 +393,6 @@ export default class TomoHashiPlugin extends Plugin {
 
 		this.loaded = false;
 	}
-}
-
-// ---------------------------------------------------------------------------
-// HookLoader — production stub for v0.1 (T6.2)
-//
-// HookRunner's `HookLoader` interface is SYNCHRONOUS (`resolve(key) →
-// {absolutePath, duplicates} | null`). A correct production loader needs to
-// answer "does <hooksDir>/<phase>-<kind>.{js,cjs} exist?" — but Obsidian's
-// `vault.adapter.exists` / `list` are async. Resolving that mismatch
-// (pre-warmed cache, sync stat via node fs) is non-trivial and out of scope
-// for T6.2.
-//
-// v0.1 stub: always return null. HookRunner treats null as "no hook
-// configured" and returns `{ kind: "ok" }` — the run proceeds without
-// invoking any hook, regardless of the user's `hooksPolicy` setting. This
-// is the safe failure mode: a misconfigured stub cannot turn an action
-// failure into a phantom hook invocation.
-//
-// A follow-up (logged as deviation) builds the proper loader with a
-// pre-warmed listing of the hooks directory at start-of-run. Until then,
-// hook execution is effectively gated off in production. Test coverage of
-// the hook flow lives in `test/unit/hooks/HookRunner.test.ts` via the
-// fixture loader.
-// ---------------------------------------------------------------------------
-
-function createHookLoader(
-	_adapter: VaultAdapterShape,
-	_getHooksDir: () => string,
-): HookLoader {
-	return {
-		resolve(_key: HookKey): null {
-			return null;
-		},
-	};
 }
 
 function toVaultRelative(absolutePath: string, hooksDir: string): string {
