@@ -53,7 +53,7 @@ version: "1.0"
 | 2 | Vault Boundary & Schema | completed | 5 | [phase-2.md](phase-2.md) |
 | 3 | Action Handlers | completed | 6 | [phase-3.md](phase-3.md) |
 | 4 | Orchestrator, Hooks, Run Log | completed | 5 | [phase-4.md](phase-4.md) |
-| 5 | UI Surfaces | pending | 4 | [phase-5.md](phase-5.md) |
+| 5 | UI Surfaces | completed | 4 | [phase-5.md](phase-5.md) |
 | 6 | Wire-up, Integration & Release Gate | pending | 5 | [phase-6.md](phase-6.md) |
 
 ---
@@ -197,7 +197,7 @@ Each phase is defined in a separate file.
 - [x] [Phase 2: Vault Boundary & Schema](phase-2.md)
 - [x] [Phase 3: Action Handlers](phase-3.md)
 - [x] [Phase 4: Orchestrator, Hooks, Run Log](phase-4.md)
-- [ ] [Phase 5: UI Surfaces](phase-5.md)
+- [x] [Phase 5: UI Surfaces](phase-5.md)
 - [ ] [Phase 6: Wire-up, Integration & Release Gate](phase-6.md)
 
 ---
