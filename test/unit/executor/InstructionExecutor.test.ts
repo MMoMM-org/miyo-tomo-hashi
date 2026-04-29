@@ -26,7 +26,7 @@ import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import { InstructionExecutor } from "../../../src/executor/InstructionExecutor.js";
 import { executionStore, selectKind, selectProgress } from "../../../src/executor/executionStore.js";
 import { Store } from "../../../src/util/store.js";
-import type { RunState, Clock, ActionOutcome, ValidationOutcome } from "../../../src/executor/state.js";
+import type { RunState, Clock, ValidationOutcome } from "../../../src/executor/state.js";
 import type { InstructionSet, Action } from "../../../src/schema/types.js";
 import type { PluginSettings } from "../../../src/types/index.js";
 import type { HookOutcome } from "../../../src/hooks/HookRunner.js";
@@ -110,42 +110,6 @@ function makeLinkToMoc(id: string, targetMoc: string, targetMocPath: string, app
 		target_moc_path: targetMocPath,
 		...(applied !== undefined ? { applied } : {}),
 	};
-}
-
-function makeDeleteSource(id: string, sourcePath: string, applied?: boolean): Action {
-	return {
-		action: "delete_source",
-		id,
-		source_path: sourcePath,
-		reason: "cleanup",
-		...(applied !== undefined ? { applied } : {}),
-	};
-}
-
-/** Seed a FakeVaultFS with a _instructions.json file at path, containing the given InstructionSet. */
-function seedInstructionFile(vault: FakeVaultFS, path: string, set: InstructionSet): void {
-	(vault as unknown as { content: Map<string, string> });
-	// FakeVaultFS has no direct write; use create via the raw map approach:
-	// Actually FakeVaultFS exposes `create(path, content)` publicly
-	void vault.create(path, JSON.stringify(set, null, 2) + "\n");
-}
-
-/** Helper to seed inbox folder in vault. */
-async function seedVault(
-	vault: FakeVaultFS,
-	files: Array<{ path: string; set: InstructionSet }>,
-): Promise<void> {
-	await vault.createFolder(INBOX);
-	for (const { path, set } of files) {
-		await vault.create(path, JSON.stringify(set, null, 2) + "\n");
-	}
-}
-
-/** Capture store state transitions via subscription. */
-function captureStates(store: Store<RunState>): RunState["kind"][] {
-	const kinds: RunState["kind"][] = [];
-	store.subscribe((s) => kinds.push(s.kind));
-	return kinds;
 }
 
 // ---------------------------------------------------------------------------
@@ -274,19 +238,7 @@ describe("InstructionExecutor — single-run lock", () => {
 		const notify = vi.fn();
 		const store = new Store<RunState>({ kind: "idle" });
 
-		let callCount = 0;
-		const blockingValidator = {
-			validate: (_raw: unknown): ValidationOutcome => {
-				callCount++;
-				if (callCount === 1) {
-					// First call blocks — we'll use a hook to introduce the hold
-				}
-				const set = makeInstructionSet([]);
-				return { ok: true, data: set };
-			},
-		};
-
-		// Use a hook that blocks the first run
+		// Use a hook that blocks the first run via the blockPromise gate
 		const blockingHookRunner = {
 			run: vi.fn().mockImplementation(async () => {
 				await blockPromise;
@@ -804,7 +756,6 @@ describe("executionStore singleton", () => {
 	});
 
 	it("selectProgress returns current/total when running", () => {
-		const set = makeInstructionSet([]);
 		executionStore.set({
 			kind: "running",
 			mode: "silent",
