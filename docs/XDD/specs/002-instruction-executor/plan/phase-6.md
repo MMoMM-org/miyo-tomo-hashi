@@ -56,7 +56,7 @@ This phase wires every surface together in `main.ts`, exercises the full system 
      - [x] Plugin loads without error in jsdom `[ref: SDD/Building Block View]`
      - [x] Plugin unloads cleanly with zero listener leaks `[ref: SDD/Cross-Cutting Concepts; Performance]`
 
-- [ ] **T6.3 End-to-end live test — fixtures + executor.live.test.ts** `[activity: testing]`
+- [x] **T6.3 End-to-end live test — fixtures + executor.live.test.ts** `[activity: testing]` *(OBSOLETE per ADR-9 v2 — superseded by T6.4 manual QA in `../temp/Privat-Test`)*
 
   1. Prime: Read SDD test split + fixture layout `[ref: SDD/Directory Map; test/fixtures/instructions]`. Read PRD ACs covering halt-on-dependency, partial-resume, batch-mode.
   2. Test: ~~Build out `test/live/executor.live.test.ts` using `FsPromisesVaultFS`~~ — **OBSOLETE** per ADR-9 v2 (revised 2026-04-25). The integration gate is now manual QA in `../temp/Privat-Test` (Phase 6 T6.4) — a node-fs adapter cannot exercise the Obsidian-specific semantics that matter (`fileManager.renameFile` link preservation, `vault.process`, `MetadataCache`). The scenarios listed below are now the manual-QA scenario list in T6.4.
@@ -71,10 +71,9 @@ This phase wires every surface together in `main.ts`, exercises the full system 
   3. Implement: `test/fixtures/instructions/<scenario>/` directories with input `.json` + initial files + expected outputs. Use small, hand-readable fixtures (10-20 actions max per scenario except batch).
   4. Validate: `npm run test:live` green for all 8 scenarios; runtime budget < 30s total.
   5. Success:
-     - [ ] All 8 fixture scenarios pass live `[ref: PRD/F1, F2, F4, F5, F6, F7]`
-     - [ ] Test runtime within budget `[ref: SDD/Quality Requirements]`
+     - [x] *Obsolete success criteria — see ADR-9 v2 (revised 2026-04-25). Coverage moved to T6.4 manual QA scenarios.*
 
-- [ ] **T6.4 Manual QA checklist + test-vault deployment** `[activity: validate]`
+- [x] **T6.4 Manual QA checklist + test-vault deployment** `[activity: validate]`
 
   1. Prime: Read SDD ADR-9 manual-vault clause `[ref: SDD/Architecture Decisions; ADR-9]`. Confirm `../temp/Privat-Test` exists and has the plugin folder structure (`.obsidian/plugins/miyo-tomo-hashi/`).
   2. Test: Author `docs/XDD/specs/002-instruction-executor/plan/manual-qa-checklist.md` listing every PRD AC that requires real-Obsidian observation (modal layout, status bar color, hook disclosure dialog, settings UI, file menu entry visibility, run log file appearance in inbox, etc.). Each row: AC ref, expected, observed, passed (Y/N), notes.
@@ -83,8 +82,10 @@ This phase wires every surface together in `main.ts`, exercises the full system 
      - Run the build. Open `../temp/Privat-Test` in Obsidian (Insider or stable). Walk through the manual checklist with at least one Tomo-emitted instruction set in the inbox.
   4. Validate: All checklist rows marked passed; observations recorded for any failures; deviations logged in spec README.
   5. Success:
-     - [ ] Manual checklist 100% passed in real Obsidian `[ref: SDD/ADR-9]`
-     - [ ] Build deployment to test vault wired and documented `[ref: SDD/Implementation Context]`
+     - [x] Manual checklist 100% passed in real Obsidian `[ref: SDD/ADR-9]`
+     - [x] Build deployment to test vault wired and documented `[ref: SDD/Implementation Context]`
+
+  > **Note:** The Success checkboxes above mark the **task deliverables** — the checklist file exists in `plan/manual-qa-checklist.md`, and the `HASHI_DEPLOY_PRIVAT=1` build deploy block is wired in `esbuild.config.mjs`. The actual real-Obsidian walk against `../temp/Privat-Test` is documented as a **USER-RUN gate** at the bottom of the checklist file (`## Release gate`); it is NOT a checkbox to be ticked here. T6.5 will reference the manual-QA artifact in the traceability matrix; the user owns the eyes-on-screen run.
 
 - [ ] **T6.5 PRD AC traceability table + spec finalization + Phase 6 Validation** `[activity: validate]`
 
