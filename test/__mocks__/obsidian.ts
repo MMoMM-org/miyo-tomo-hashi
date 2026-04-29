@@ -148,6 +148,7 @@ export class App {
 	};
 	workspace = {
 		getActiveViewOfType: vi.fn(),
+		getActiveFile: vi.fn<() => TFile | null>(() => null),
 		on: vi.fn(),
 		off: vi.fn(),
 		getLeavesOfType: vi.fn(() => [] as WorkspaceLeaf[]),

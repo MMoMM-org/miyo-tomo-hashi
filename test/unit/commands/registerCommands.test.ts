@@ -277,3 +277,362 @@ describe("registerCommands", () => {
 		});
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 002 spec — Execute instructions document command (T6.1)
+// ---------------------------------------------------------------------------
+//
+// Spec refs: spec 002-instruction-executor phase-6 T6.1; PRD F1 (invocation
+// rules); SDD "Directory Map / src/commands/registerCommands.ts" — extends
+// 001's command registry with an instruction-executor command + file-menu
+// entry without disturbing the 001 surface.
+
+import {
+	registerExecutorCommands,
+	type ExecutorCommandDeps,
+} from "../../../src/commands/registerCommands";
+import type { Invocation } from "../../../src/executor/InstructionExecutor";
+import { DEFAULT_SETTINGS } from "../../../src/types/index";
+import type { PluginSettings } from "../../../src/types/index";
+import { TFile } from "../../__mocks__/obsidian";
+
+const EXECUTE_ID = "execute-instructions-document";
+const EXECUTE_LABEL = "Execute instructions document";
+
+interface ExecutorOnly {
+	execute: ReturnType<typeof vi.fn>;
+}
+
+interface ExistsVault {
+	exists: ReturnType<typeof vi.fn>;
+}
+
+function fakeTFile(path: string): TFile {
+	const f = new TFile();
+	f.path = path;
+	const lastSlash = path.lastIndexOf("/");
+	const fname = lastSlash === -1 ? path : path.slice(lastSlash + 1);
+	f.name = fname;
+	const dot = fname.lastIndexOf(".");
+	if (dot === -1) {
+		f.basename = fname;
+		f.extension = "";
+	} else {
+		f.basename = fname.slice(0, dot);
+		f.extension = fname.slice(dot + 1);
+	}
+	return f;
+}
+
+describe("registerExecutorCommands (002)", () => {
+	let pluginMock: PluginMock;
+	let plugin: Plugin;
+	let executor: ExecutorOnly;
+	let vault: ExistsVault;
+	let settings: PluginSettings;
+	let deps: ExecutorCommandDeps;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		pluginMock = new PluginMock();
+		plugin = asPlugin(pluginMock);
+		executor = { execute: vi.fn(async () => ({})) };
+		vault = { exists: vi.fn(async () => false) };
+		settings = { ...DEFAULT_SETTINGS, tomoInboxFolder: "inbox" };
+		deps = {
+			executor: executor as unknown as ExecutorCommandDeps["executor"],
+			vault: vault as unknown as ExecutorCommandDeps["vault"],
+			settings,
+		};
+	});
+
+	describe("command registration", () => {
+		it("registers the 'Execute instructions document' command", () => {
+			registerExecutorCommands(plugin, deps);
+
+			const cmds = commandsForId(plugin, EXECUTE_ID);
+			expect(cmds).toHaveLength(1);
+			expect(cmds[0]?.name).toBe(EXECUTE_LABEL);
+		});
+	});
+
+	describe("invocation resolution", () => {
+		it("active .md peer (sibling .json exists) → single-file invocation with .json path", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
+				() => fakeTFile("inbox/2026-04-22_inbox-review_instructions.md"),
+			);
+			vault.exists = vi.fn(async (path: string) =>
+				path === "inbox/2026-04-22_inbox-review_instructions.json",
+			);
+
+			registerExecutorCommands(plugin, deps);
+			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
+			cmd?.callback?.();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(executor.execute).toHaveBeenCalledTimes(1);
+			const arg = executor.execute.mock.calls[0]?.[0] as Invocation;
+			expect(arg).toEqual({
+				kind: "single-file",
+				sourcePath: "inbox/2026-04-22_inbox-review_instructions.json",
+			});
+		});
+
+		it("active _instructions.json → single-file invocation with that .json path", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
+				() => fakeTFile("inbox/2026-04-22_inbox-review_instructions.json"),
+			);
+			vault.exists = vi.fn(async () => true);
+
+			registerExecutorCommands(plugin, deps);
+			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
+			cmd?.callback?.();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(executor.execute).toHaveBeenCalledTimes(1);
+			expect(executor.execute.mock.calls[0]?.[0]).toEqual({
+				kind: "single-file",
+				sourcePath: "inbox/2026-04-22_inbox-review_instructions.json",
+			});
+		});
+
+		it("active .md whose sibling .json does NOT exist → batch invocation", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
+				() => fakeTFile("notes/random.md"),
+			);
+			vault.exists = vi.fn(async () => false);
+
+			registerExecutorCommands(plugin, deps);
+			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
+			cmd?.callback?.();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(executor.execute).toHaveBeenCalledWith({ kind: "batch" });
+		});
+
+		it("active non-md, non-json file → batch invocation", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
+				() => fakeTFile("attachments/diagram.png"),
+			);
+
+			registerExecutorCommands(plugin, deps);
+			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
+			cmd?.callback?.();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(executor.execute).toHaveBeenCalledWith({ kind: "batch" });
+		});
+
+		it("no active file → batch invocation", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
+				() => null,
+			);
+
+			registerExecutorCommands(plugin, deps);
+			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
+			cmd?.callback?.();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(executor.execute).toHaveBeenCalledWith({ kind: "batch" });
+		});
+	});
+
+	describe("single-run lock NOT bypassed by command", () => {
+		it("two rapid invocations BOTH dispatch to executor.execute (lock lives in executor)", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
+				() => null,
+			);
+
+			registerExecutorCommands(plugin, deps);
+			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
+			expect(cmd).toBeDefined();
+			// Two rapid clicks. The command must not cache / pre-empt — it
+			// always dispatches; the executor's running flag decides.
+			cmd?.callback?.();
+			cmd?.callback?.();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(executor.execute).toHaveBeenCalledTimes(2);
+		});
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 002 spec — registerExecutorFileMenu: peer-only context-menu entry (T6.1)
+// ---------------------------------------------------------------------------
+
+import {
+	registerExecutorFileMenu,
+	type ExecutorFileMenuDeps,
+} from "../../../src/commands/fileMenu";
+import { Menu, type TAbstractFile } from "obsidian";
+
+const FILE_MENU_LABEL = "Execute instructions…";
+
+type FileMenuHandler = (
+	menu: Menu,
+	file: TAbstractFile,
+	source: string,
+) => void;
+
+interface MenuItemSpy {
+	setTitle: ReturnType<typeof vi.fn>;
+	setIcon: ReturnType<typeof vi.fn>;
+	setDisabled: ReturnType<typeof vi.fn>;
+	onClick: ReturnType<typeof vi.fn>;
+}
+
+interface MenuWithItems extends Menu {
+	items: MenuItemSpy[];
+}
+
+function recoverExecutorFileMenuHandler(
+	pluginMock: PluginMock,
+): FileMenuHandler {
+	// `workspace.on` is overloaded — use unknown[][] then narrow on event name.
+	const calls = vi.mocked(pluginMock.app.workspace.on).mock.calls as unknown[][];
+	// Multiple file-menu registrations may exist; the executor handler is the
+	// last registered. Take the LAST file-menu call.
+	const fileMenuCalls = calls.filter((args) => args[0] === "file-menu");
+	const call = fileMenuCalls.at(-1);
+	if (call === undefined) {
+		throw new Error("registerExecutorFileMenu did not register a 'file-menu' handler");
+	}
+	return call[1] as FileMenuHandler;
+}
+
+function fakeAbstract(path: string): TAbstractFile {
+	const lastSlash = path.lastIndexOf("/");
+	const fname = lastSlash === -1 ? path : path.slice(lastSlash + 1);
+	const dot = fname.lastIndexOf(".");
+	const ext = dot === -1 ? "" : fname.slice(dot + 1);
+	const basename = dot === -1 ? fname : fname.slice(0, dot);
+	return {
+		path,
+		name: fname,
+		basename,
+		extension: ext,
+	} as unknown as TAbstractFile;
+}
+
+describe("registerExecutorFileMenu (002)", () => {
+	let pluginMock: PluginMock;
+	let plugin: Plugin;
+	let executor: ExecutorOnly;
+	let vault: ExistsVault;
+	let settings: PluginSettings;
+	let deps: ExecutorFileMenuDeps;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		pluginMock = new PluginMock();
+		plugin = asPlugin(pluginMock);
+		executor = { execute: vi.fn(async () => ({})) };
+		vault = { exists: vi.fn(async () => false) };
+		settings = { ...DEFAULT_SETTINGS, tomoInboxFolder: "inbox" };
+		deps = {
+			executor: executor as unknown as ExecutorFileMenuDeps["executor"],
+			vault: vault as unknown as ExecutorFileMenuDeps["vault"],
+			settings,
+		};
+	});
+
+	it("registers a file-menu handler", () => {
+		registerExecutorFileMenu(plugin, deps);
+
+		const calls = vi.mocked(pluginMock.app.workspace.on).mock.calls as unknown[][];
+		const fileMenuCalls = calls.filter((args) => args[0] === "file-menu");
+		expect(fileMenuCalls.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("injects 'Execute instructions…' on .md peer files (sibling .json exists)", async () => {
+		vault.exists = vi.fn(async (path: string) =>
+			path === "inbox/foo_instructions.json",
+		);
+
+		registerExecutorFileMenu(plugin, deps);
+		const handler = recoverExecutorFileMenuHandler(pluginMock);
+		const menu = new Menu() as MenuWithItems;
+		handler(menu, fakeAbstract("inbox/foo_instructions.md"), "src");
+		// addItem may register its callback async if the handler awaits a
+		// vault.exists check — wait microtasks before asserting.
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(menu.items.length).toBeGreaterThanOrEqual(1);
+		const titles = menu.items.map(
+			(item) => item.setTitle.mock.calls[0]?.[0] as string,
+		);
+		expect(titles).toContain(FILE_MENU_LABEL);
+	});
+
+	it("does NOT inject the entry on .md files whose sibling .json does NOT exist", async () => {
+		vault.exists = vi.fn(async () => false);
+
+		registerExecutorFileMenu(plugin, deps);
+		const handler = recoverExecutorFileMenuHandler(pluginMock);
+		const menu = new Menu() as MenuWithItems;
+		handler(menu, fakeAbstract("notes/random.md"), "src");
+		await Promise.resolve();
+		await Promise.resolve();
+
+		const titles = menu.items.map(
+			(item) => item.setTitle.mock.calls[0]?.[0] as string,
+		);
+		expect(titles).not.toContain(FILE_MENU_LABEL);
+	});
+
+	it("does NOT inject the entry on .json files (PRD F1 explicit rule)", async () => {
+		// Even when the .json exists, right-clicking the JSON itself must NOT
+		// surface the executor entry — the user does not normally interact
+		// with the JSON directly.
+		vault.exists = vi.fn(async () => true);
+
+		registerExecutorFileMenu(plugin, deps);
+		const handler = recoverExecutorFileMenuHandler(pluginMock);
+		const menu = new Menu() as MenuWithItems;
+		handler(menu, fakeAbstract("inbox/foo_instructions.json"), "src");
+		await Promise.resolve();
+		await Promise.resolve();
+
+		const titles = menu.items.map(
+			(item) => item.setTitle.mock.calls[0]?.[0] as string,
+		);
+		expect(titles).not.toContain(FILE_MENU_LABEL);
+	});
+
+	it("clicking the entry dispatches single-file invocation to executor.execute", async () => {
+		vault.exists = vi.fn(async (path: string) =>
+			path === "inbox/foo_instructions.json",
+		);
+
+		registerExecutorFileMenu(plugin, deps);
+		const handler = recoverExecutorFileMenuHandler(pluginMock);
+		const menu = new Menu() as MenuWithItems;
+		handler(menu, fakeAbstract("inbox/foo_instructions.md"), "src");
+		await Promise.resolve();
+		await Promise.resolve();
+
+		const item = menu.items.find(
+			(i) => i.setTitle.mock.calls[0]?.[0] === FILE_MENU_LABEL,
+		);
+		expect(item).toBeDefined();
+		const onClick = item!.onClick.mock.calls[0]?.[0] as
+			| (() => Promise<void> | void)
+			| undefined;
+		expect(onClick).toBeDefined();
+		await onClick!();
+
+		expect(executor.execute).toHaveBeenCalledTimes(1);
+		expect(executor.execute.mock.calls[0]?.[0]).toEqual({
+			kind: "single-file",
+			sourcePath: "inbox/foo_instructions.json",
+		});
+	});
+});
