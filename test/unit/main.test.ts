@@ -130,6 +130,7 @@ vi.mock("../../src/ui/statusBar", async (importOriginal) => {
 
 import { TomoConnection } from "../../src/connection/TomoConnection";
 import { executionStore } from "../../src/executor/executionStore";
+import { FsHookLoader } from "../../src/hooks/FsHookLoader";
 import TomoHashiPlugin from "../../src/main";
 import { SettingsTab } from "../../src/settings/SettingsTab";
 
@@ -323,6 +324,17 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 			expect(typeof options?.askCallback).toBe("function");
 			// Policy comes from settings.hooksPolicy ("ask" by default).
 			expect(options?.policy).toBe("ask");
+		});
+
+		it("passes a real FsHookLoader as the loader (not a null-returning stub)", async () => {
+			// T6.2-fix: replaces the inline `createHookLoader` stub with a
+			// real sync filesystem-backed loader. The loader must be an
+			// instance of FsHookLoader so hooks actually load in production.
+			await plugin.onload();
+			const call = callLog.hookRunner[0];
+			expect(call).toBeDefined();
+			const loader = call?.[1];
+			expect(loader).toBeInstanceOf(FsHookLoader);
 		});
 	});
 });
