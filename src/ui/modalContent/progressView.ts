@@ -55,16 +55,20 @@ export function renderProgressView(
 	}
 
 	const body = contentEl.createDiv({ cls: "hashi-execution-modal-body" });
+	// Build a record→index map once so the per-file render loop knows which
+	// row is currently executing without an O(n) indexOf per row.
+	const indexByRecord = new Map<ActionRecord, number>();
+	state.records.forEach((r, i) => indexByRecord.set(r, i));
+
 	for (const [fileId, records] of groupByFile(state.records)) {
 		body.createEl("h3", {
 			cls: "hashi-execution-modal-file-heading",
 			text: fileId,
 		});
-		for (let i = 0; i < records.length; i += 1) {
-			const record = records[i] as ActionRecord;
+		for (const record of records) {
 			const isCurrent =
 				record.outcome === null &&
-				state.records.indexOf(record) === state.currentIndex;
+				indexByRecord.get(record) === state.currentIndex;
 			const cls: string[] = ["hashi-execution-modal-row"];
 			if (record.outcome?.kind === "applied") cls.push("is-applied");
 			else if (record.outcome?.kind === "failed") cls.push("is-failed");

@@ -79,21 +79,21 @@ export class ExecutionModal extends Modal {
 		switch (state.kind) {
 			case "previewing":
 				renderPreviewView(this.contentEl, state, wrappedCallbacks);
-				break;
+				return;
 			case "running":
 				renderProgressView(this.contentEl, state, wrappedCallbacks);
-				break;
+				return;
 			case "summary":
 			case "validation-failed":
 				renderSummaryView(this.contentEl, state, wrappedCallbacks);
-				break;
+				return;
 			case "idle":
 			case "preparing":
-				// Transient phases — render nothing useful but keep the
-				// container class so styles apply if the modal is shown.
+				// Transient phases — leave a blank container so the modal
+				// can stay open between runs without flashing stale content.
 				this.contentEl.empty();
 				this.contentEl.addClass("hashi-execution-modal");
-				break;
+				return;
 		}
 	}
 
