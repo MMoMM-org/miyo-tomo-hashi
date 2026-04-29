@@ -75,6 +75,8 @@
  *    actually load in production.
  */
 
+import { createRequire } from "node:module";
+
 import { Plugin, type WorkspaceLeaf } from "obsidian";
 
 import { registerCommands, registerExecutorCommands } from "./commands/registerCommands";
@@ -85,7 +87,7 @@ import { executionStore } from "./executor/executionStore";
 import { InstructionExecutor } from "./executor/InstructionExecutor";
 import { FsHookLoader } from "./hooks/FsHookLoader";
 import { HookDisclosureModal } from "./hooks/HookDisclosureModal";
-import { HookRunner } from "./hooks/HookRunner";
+import { HookRunner, type RequireFn } from "./hooks/HookRunner";
 import type { HookLogger } from "./hooks/HookContext";
 import { validate } from "./schema/validator";
 import { SettingsTab } from "./settings/SettingsTab";
@@ -293,9 +295,16 @@ export default class TomoHashiPlugin extends Plugin {
 			() => this.settings.hooksDir,
 		);
 
+		// `import.meta.url` is empty in the CJS bundle (esbuild target=es2018,
+		// format=cjs). Anchor at `__filename` (CJS global) — at runtime this
+		// is the bundled main.js path; createRequire uses it as resolution
+		// origin for `require()` calls into the hooks directory.
+		// eslint-disable-next-line no-undef -- `__filename` is a CJS global; valid at runtime in our esbuild CJS bundle.
+		const cjsRequire = createRequire(__filename);
 		const hookRunner = new HookRunner(this.app, hookLoader, hookLogger, {
 			askCallback,
 			policy: this.settings.hooksPolicy,
+			requireFn: cjsRequire as unknown as RequireFn,
 		});
 
 		// 10. InstructionExecutor — singleton per plugin load.

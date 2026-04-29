@@ -19,7 +19,6 @@
  * [ref: PRD/F8; ADR-3; ADR-10 v2; T4.4]
  */
 
-import { createRequire } from "node:module";
 import type { App } from "obsidian";
 import type { Action, ActionKind } from "../schema/types.js";
 import type { HookContext, HookLogger } from "./HookContext.js";
@@ -102,13 +101,13 @@ export class HookRunner {
 		private readonly logger: HookLogger,
 		options: {
 			timeoutMs?: number;
-			requireFn?: RequireFn;
+			requireFn: RequireFn;
 			askCallback?: AskCallback;
 			policy: HookPolicy;
 		},
 	) {
 		this.timeoutMs = options.timeoutMs ?? 30_000;
-		this.requireFn = options.requireFn ?? createRequire(import.meta.url);
+		this.requireFn = options.requireFn;
 		this.askCallback =
 			options.askCallback ??
 			(() => Promise.resolve<AskDecision>("disable"));
