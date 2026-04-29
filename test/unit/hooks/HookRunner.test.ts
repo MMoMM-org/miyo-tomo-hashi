@@ -19,6 +19,7 @@ import { createRequire } from "node:module";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { App } from "obsidian";
 
@@ -33,7 +34,7 @@ import type { Action } from "../../../src/schema/types.js";
 const requireFn = createRequire(import.meta.url);
 
 const fixturesDir = path.resolve(
-	new URL(import.meta.url).pathname,
+	path.dirname(fileURLToPath(import.meta.url)),
 	"../../fixtures/hooks",
 );
 
@@ -121,11 +122,11 @@ function makeFixtureLoader(
 describe("HookRunner — discovery", () => {
 	it("resolves before-create_moc to the fixture path", () => {
 		const loader = makeFixtureLoader({
-			"before-create_moc": path.join(fixturesDir, "before-create_moc-returns-errors.js"),
+			"before-create_moc": path.join(fixturesDir, "before-create_moc-returns-errors.cjs"),
 		});
 		const result = loader.resolve("before-create_moc");
 		expect(result).not.toBeNull();
-		expect(result?.absolutePath).toMatch(/before-create_moc-returns-errors\.js$/);
+		expect(result?.absolutePath).toMatch(/before-create_moc-returns-errors\.cjs$/);
 	});
 
 	it("returns null for a key with no matching fixture", () => {
@@ -251,7 +252,7 @@ describe("HookRunner — invocation context shape", () => {
 		// fixture which accesses ctx.app.vault
 		const action = makeAction("skip");
 		const loader = makeFixtureLoader({
-			"before-skip": path.join(fixturesDir, "before-skip-uses-app.js"),
+			"before-skip": path.join(fixturesDir, "before-skip-uses-app.cjs"),
 		});
 		const logger = makeLogger();
 		const runner = new HookRunner(fakeApp, loader, logger, {
@@ -272,7 +273,7 @@ describe("HookRunner — invocation context shape", () => {
 		const logger = makeLogger();
 		const action = makeAction("move_note");
 		const loader = makeFixtureLoader({
-			"after-move_note": path.join(fixturesDir, "after-move_note-returns-info.js"),
+			"after-move_note": path.join(fixturesDir, "after-move_note-returns-info.cjs"),
 		});
 		const runner = new HookRunner(fakeApp, loader, logger, {
 			policy: "enabled",
@@ -292,7 +293,7 @@ describe("HookRunner — invocation context shape", () => {
 describe("HookRunner — return shapes", () => {
 	it("returns ok when hook returns undefined (async resolves fixture)", async () => {
 		const loader = makeFixtureLoader({
-			"after-link_to_moc": path.join(fixturesDir, "after-link_to_moc-async-resolves.js"),
+			"after-link_to_moc": path.join(fixturesDir, "after-link_to_moc-async-resolves.cjs"),
 		});
 		const logger = makeLogger();
 		const runner = new HookRunner(fakeApp, loader, logger, { policy: "enabled", requireFn });
@@ -302,7 +303,7 @@ describe("HookRunner — return shapes", () => {
 
 	it("returns messages.info and logs when hook returns { info: [...] }", async () => {
 		const loader = makeFixtureLoader({
-			"after-move_note": path.join(fixturesDir, "after-move_note-returns-info.js"),
+			"after-move_note": path.join(fixturesDir, "after-move_note-returns-info.cjs"),
 		});
 		const logger = makeLogger();
 		const runner = new HookRunner(fakeApp, loader, logger, { policy: "enabled", requireFn });
@@ -317,7 +318,7 @@ describe("HookRunner — return shapes", () => {
 
 	it("returns messages.warnings and logs when hook returns { warnings: [...] }", async () => {
 		const loader = makeFixtureLoader({
-			"after-move_note": path.join(fixturesDir, "after-move_note-returns-warnings.js"),
+			"after-move_note": path.join(fixturesDir, "after-move_note-returns-warnings.cjs"),
 		});
 		const logger = makeLogger();
 		const runner = new HookRunner(fakeApp, loader, logger, { policy: "enabled", requireFn });
@@ -332,7 +333,7 @@ describe("HookRunner — return shapes", () => {
 
 	it("returns failed when hook returns { errors: [...] }", async () => {
 		const loader = makeFixtureLoader({
-			"before-create_moc": path.join(fixturesDir, "before-create_moc-returns-errors.js"),
+			"before-create_moc": path.join(fixturesDir, "before-create_moc-returns-errors.cjs"),
 		});
 		const logger = makeLogger();
 		const runner = new HookRunner(fakeApp, loader, logger, { policy: "enabled", requireFn });
@@ -345,7 +346,7 @@ describe("HookRunner — return shapes", () => {
 
 	it("substitutes noopHook (ok) for malformed exports (non-function)", async () => {
 		const loader = makeFixtureLoader({
-			"before-update_tracker": path.join(fixturesDir, "before-update_tracker-malformed.js"),
+			"before-update_tracker": path.join(fixturesDir, "before-update_tracker-malformed.cjs"),
 		});
 		const logger = makeLogger();
 		const runner = new HookRunner(fakeApp, loader, logger, { policy: "enabled", requireFn });
@@ -361,7 +362,7 @@ describe("HookRunner — return shapes", () => {
 describe("HookRunner — throw semantics", () => {
 	it("pre-hook throws → outcome is failed with throw message", async () => {
 		const loader = makeFixtureLoader({
-			"before-create_moc": path.join(fixturesDir, "before-create_moc-throws.js"),
+			"before-create_moc": path.join(fixturesDir, "before-create_moc-throws.cjs"),
 		});
 		const logger = makeLogger();
 		const runner = new HookRunner(fakeApp, loader, logger, { policy: "enabled", requireFn });
@@ -375,7 +376,7 @@ describe("HookRunner — throw semantics", () => {
 
 	it("post-hook throws → outcome is failed (vault already committed; reason contains after-hook threw)", async () => {
 		const loader = makeFixtureLoader({
-			"after-move_note": path.join(fixturesDir, "before-create_moc-throws.js"),
+			"after-move_note": path.join(fixturesDir, "before-create_moc-throws.cjs"),
 		});
 		const logger = makeLogger();
 		const runner = new HookRunner(fakeApp, loader, logger, { policy: "enabled", requireFn });
@@ -396,7 +397,7 @@ describe("HookRunner — timeout", () => {
 		const loader = makeFixtureLoader({
 			"before-update_tracker": path.join(
 				fixturesDir,
-				"before-update_tracker-infinite-loop.js",
+				"before-update_tracker-infinite-loop.cjs",
 			),
 		});
 		const logger = makeLogger();
@@ -421,7 +422,7 @@ describe("HookRunner — timeout", () => {
 describe("HookRunner — kill-switch (disabled policy)", () => {
 	it("returns ok without loading or invoking any hook when disabled", async () => {
 		const loadSpy = vi.fn(() => ({
-			absolutePath: path.join(fixturesDir, "before-create_moc-throws.js"),
+			absolutePath: path.join(fixturesDir, "before-create_moc-throws.cjs"),
 			duplicates: [],
 		}));
 		const loader: HookLoader = { resolve: loadSpy };
@@ -445,7 +446,7 @@ describe("HookRunner — kill-switch (disabled policy)", () => {
 describe("HookRunner — ask-mode", () => {
 	it("calls askCallback on first use; enable-session means no re-prompt on second call", async () => {
 		const loader = makeFixtureLoader({
-			"before-create_moc": path.join(fixturesDir, "before-create_moc-returns-errors.js"),
+			"before-create_moc": path.join(fixturesDir, "before-create_moc-returns-errors.cjs"),
 		});
 		const logger = makeLogger();
 		const askCallback = vi.fn().mockResolvedValue("enable-session");
@@ -465,8 +466,8 @@ describe("HookRunner — ask-mode", () => {
 
 	it("calls askCallback again for a different hook key", async () => {
 		const loader = makeFixtureLoader({
-			"before-create_moc": path.join(fixturesDir, "before-create_moc-returns-errors.js"),
-			"after-move_note": path.join(fixturesDir, "after-move_note-returns-info.js"),
+			"before-create_moc": path.join(fixturesDir, "before-create_moc-returns-errors.cjs"),
+			"after-move_note": path.join(fixturesDir, "after-move_note-returns-info.cjs"),
 		});
 		const logger = makeLogger();
 		const askCallback = vi.fn().mockResolvedValue("enable-session");
@@ -485,7 +486,7 @@ describe("HookRunner — ask-mode", () => {
 
 	it("enable-once: invokes hook but does not remember; re-prompts on next call", async () => {
 		const loader = makeFixtureLoader({
-			"before-create_moc": path.join(fixturesDir, "after-link_to_moc-async-resolves.js"),
+			"before-create_moc": path.join(fixturesDir, "after-link_to_moc-async-resolves.cjs"),
 		});
 		const logger = makeLogger();
 		const askCallback = vi.fn().mockResolvedValue("enable-once");
@@ -504,7 +505,7 @@ describe("HookRunner — ask-mode", () => {
 
 	it("disable: returns ok without invoking; does not re-prompt for session", async () => {
 		const loadSpy = vi.fn(() => ({
-			absolutePath: path.join(fixturesDir, "before-create_moc-throws.js"),
+			absolutePath: path.join(fixturesDir, "before-create_moc-throws.cjs"),
 			duplicates: [],
 		}));
 		const loader: HookLoader = { resolve: loadSpy };
@@ -527,7 +528,7 @@ describe("HookRunner — ask-mode", () => {
 
 	it("resetSessionDecisions clears the map so next run re-prompts", async () => {
 		const loader = makeFixtureLoader({
-			"before-create_moc": path.join(fixturesDir, "after-link_to_moc-async-resolves.js"),
+			"before-create_moc": path.join(fixturesDir, "after-link_to_moc-async-resolves.cjs"),
 		});
 		const logger = makeLogger();
 		const askCallback = vi.fn().mockResolvedValue("enable-session");
@@ -548,7 +549,7 @@ describe("HookRunner — ask-mode", () => {
 	// ADR-3 transitive-import caveat documented
 	it("transitive-import fixture runs without error (helper module may stay cached — ADR-3 caveat)", async () => {
 		const loader = makeFixtureLoader({
-			"before-create_moc": path.join(fixturesDir, "before-create_moc-transitive-import.js"),
+			"before-create_moc": path.join(fixturesDir, "before-create_moc-transitive-import.cjs"),
 		});
 		const logger = makeLogger();
 		const runner = new HookRunner(fakeApp, loader, logger, {
