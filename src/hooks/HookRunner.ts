@@ -33,7 +33,7 @@ export type HookKey = `${HookPhase}-${ActionKind}`;
 export type HookPolicy = "enabled" | "disabled" | "ask";
 export type AskDecision = "enable-session" | "enable-once" | "disable";
 
-export type HookFn = (ctx: HookContext) =>
+export type Hook = (ctx: HookContext) =>
 	| undefined
 	| { info?: string[]; warnings?: string[]; errors?: string[] }
 	| Promise<undefined | { info?: string[]; warnings?: string[]; errors?: string[] }>;
@@ -60,15 +60,15 @@ export interface RequireFn {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-const noopHook: HookFn = () => undefined;
+const noopHook: Hook = () => undefined;
 
-function loadHookFresh(absolutePath: string, requireFn: RequireFn): HookFn {
+function loadHookFresh(absolutePath: string, requireFn: RequireFn): Hook {
 	const resolved = requireFn.resolve(absolutePath);
 	delete requireFn.cache[resolved];
-	const mod = requireFn(absolutePath) as { default?: HookFn } | HookFn;
+	const mod = requireFn(absolutePath) as { default?: Hook } | Hook;
 	if (typeof mod === "function") return mod;
-	if (typeof (mod as { default?: HookFn }).default === "function") {
-		return (mod as { default: HookFn }).default;
+	if (typeof (mod as { default?: Hook }).default === "function") {
+		return (mod as { default: Hook }).default;
 	}
 	return noopHook;
 }
@@ -166,10 +166,10 @@ export class HookRunner {
 
 	private async invoke(
 		phase: HookPhase,
-		hookFn: HookFn,
+		hookFn: Hook,
 		ctx: HookContext,
 	): Promise<HookOutcome> {
-		let result: Awaited<ReturnType<HookFn>>;
+		let result: Awaited<ReturnType<Hook>>;
 		try {
 			result = await withTimeout(
 				Promise.resolve(hookFn(ctx)),
