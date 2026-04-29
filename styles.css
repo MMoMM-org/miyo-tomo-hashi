@@ -230,3 +230,50 @@
 	clip-path: inset(50%);
 	white-space: nowrap;
 }
+
+/* --- Hook disclosure modal (ask-mode) ---
+ *
+ * Shown by HookRunner on first detection of a hook in a session when the
+ * Hooks policy is *ask*. Three buttons (Enable / Enable once / Disable)
+ * resolve a Promise<AskDecision>; Esc resolves to "disable".
+ *
+ * Spec refs: 002-instruction-executor PRD F8; SDD HookDisclosureModal;
+ *   phase-5 T5.3.
+ */
+
+.hashi-hook-disclosure-modal-title {
+	font-size: var(--font-ui-large);
+	font-weight: 600;
+	margin: 0 0 8px;
+}
+
+.hashi-hook-disclosure-modal-meta {
+	margin-bottom: 12px;
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+}
+
+.hashi-hook-disclosure-modal-path {
+	font-family: var(--font-monospace);
+	word-break: break-all;
+}
+
+.hashi-hook-disclosure-modal-size {
+	margin-top: 2px;
+}
+
+.hashi-hook-disclosure-modal-disclosure {
+	background: var(--background-secondary);
+	border-left: 3px solid var(--text-warning);
+	padding: 8px 10px;
+	margin: 0 0 12px;
+	font-size: var(--font-smaller);
+	color: var(--text-normal);
+}
+
+.hashi-hook-disclosure-modal-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 12px;
+}
