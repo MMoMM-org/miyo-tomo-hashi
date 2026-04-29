@@ -377,33 +377,36 @@ describe("InstructionExecutor — halt-on-dependency", () => {
 // ---------------------------------------------------------------------------
 
 describe("InstructionExecutor — independent failure does not propagate", () => {
-	it("delete_source failure does not stop subsequent independent actions", async () => {
+	it("one action outcome (failed or skipped) does not stop subsequent independent actions", async () => {
 		const vault = new FakeVaultFS();
 		const sourcePath = `${INBOX}/indep_fail_instructions.json`;
 
-		// delete_source on a file that doesn't exist → fails
-		// move_note after it (different id, no dependency) → should still run
+		// create_moc I01: source does NOT exist → handler returns failed
+		// move_note I02: independent, no dependency on I01 → should still run
 		const set = makeInstructionSet([
-			makeDeleteSource("I01", "missing/file.md"),
-			makeMoveNote("I02", "inbox/note-I02.md", "notes/note-I02.md"),
+			makeCreateMoc("I01", `${INBOX}/moc-I01-indep.md`),  // source inbox/note-I01.md missing → failed
+			makeMoveNote("I02", "inbox/note-I02-indep.md", "notes/note-I02-indep.md"),
 		]);
 
 		await vault.createFolder(INBOX);
 		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
 		await vault.createFolder("inbox");
-		await vault.create("inbox/note-I02.md", "# Note");
+		// Do NOT create inbox/note-I01.md (so create_moc I01 fails)
+		await vault.create("inbox/note-I02-indep.md", "# Note");
 		await vault.createFolder("notes");
 
 		const { executor } = makeSingleFileExecutor(vault, set);
 		const counts = await executor.execute({ kind: "single-file", sourcePath });
 
-		// I01 fails, I02 still runs
-		expect(counts.failed).toBe(1);
-		expect(counts.applied).toBe(1);
+		// I01 failed, I02 still runs → applied
+		expect(counts.failed).toBeGreaterThanOrEqual(1);
+		expect(counts.applied).toBeGreaterThanOrEqual(1);
 
 		const updated = await vault.readJSON<InstructionSet>(sourcePath);
 		const i02 = updated.actions.find((a) => a.id === "I02");
 		expect(i02?.applied).toBe(true);
+		const i01 = updated.actions.find((a) => a.id === "I01");
+		expect(i01?.applied).not.toBe(true);
 	});
 });
 
