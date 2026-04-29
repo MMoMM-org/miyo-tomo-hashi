@@ -3,7 +3,10 @@
  *
  * Covers 3 sub-modes (inline_field / callout_body / checkbox),
  * idempotency (field already at target value → skipped-already),
- * conflict (field at different value → failed), and
+ * overwrite-on-differ (Tomo's intent wins; existing value rewritten),
+ * `inline_field` matcher across 3 Dataview positions (line-anchored
+ * with bullet/indent tolerance, inline-bracketed `[f:: v]`, inline-
+ * parenthesized `(f:: v)`), multi-word field names, and
  * daily-note missing → failed.
  *
  * [ref: PRD/F4]
@@ -96,7 +99,7 @@ describe("updateTracker — inline_field", () => {
 		expect(await vault.read(DAILY_PATH)).toBe(content);
 	});
 
-	it("field at different value → failed 'Tracker field differs from target — not overwriting'", async () => {
+	it("field at different value → applied; existing value overwritten (Tomo's intent wins)", async () => {
 		const content = "# Daily note\n\nmood:: bad\n\nmore content\n";
 		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
@@ -105,12 +108,80 @@ describe("updateTracker — inline_field", () => {
 
 		const outcome = await updateTracker(action, ctx);
 
-		expect(outcome.kind).toBe("failed");
-		if (outcome.kind === "failed") {
-			expect(outcome.reason).toBe("Tracker field differs from target — not overwriting");
-		}
-		// No mutation
-		expect(await vault.read(DAILY_PATH)).toBe(content);
+		expect(outcome.kind).toBe("applied");
+		const result = await vault.read(DAILY_PATH);
+		expect(result).toBe("# Daily note\n\nmood:: good\n\nmore content\n");
+	});
+
+	it("bullet-prefixed line `- field:: value` → matched and overwritten in place; bullet preserved", async () => {
+		const content = "# Daily note\n\n- Sport:: false\n\nmore content\n";
+		const vault = new FakeVaultFS();
+		await vault.create(DAILY_PATH, content);
+		const action = makeAction({ syntax: "inline_field", field: "Sport", value: true });
+		const ctx = makeCtx(vault);
+
+		const outcome = await updateTracker(action, ctx);
+
+		expect(outcome.kind).toBe("applied");
+		const result = await vault.read(DAILY_PATH);
+		expect(result).toBe("# Daily note\n\n- Sport:: true\n\nmore content\n");
+	});
+
+	it("inline-bracketed form `[field:: value]` mid-prose → matched and rewritten; brackets preserved", async () => {
+		const content = "# Daily\n\nHeute Workout. [Sport:: false] Mehr Text.\n";
+		const vault = new FakeVaultFS();
+		await vault.create(DAILY_PATH, content);
+		const action = makeAction({ syntax: "inline_field", field: "Sport", value: true });
+		const ctx = makeCtx(vault);
+
+		const outcome = await updateTracker(action, ctx);
+
+		expect(outcome.kind).toBe("applied");
+		const result = await vault.read(DAILY_PATH);
+		expect(result).toBe("# Daily\n\nHeute Workout. [Sport:: true] Mehr Text.\n");
+	});
+
+	it("inline-parenthesized form `(field:: value)` mid-prose → matched and rewritten; parens preserved", async () => {
+		const content = "# Daily\n\nBewegt heute (Sport:: false). Mehr.\n";
+		const vault = new FakeVaultFS();
+		await vault.create(DAILY_PATH, content);
+		const action = makeAction({ syntax: "inline_field", field: "Sport", value: true });
+		const ctx = makeCtx(vault);
+
+		const outcome = await updateTracker(action, ctx);
+
+		expect(outcome.kind).toBe("applied");
+		const result = await vault.read(DAILY_PATH);
+		expect(result).toBe("# Daily\n\nBewegt heute (Sport:: true). Mehr.\n");
+	});
+
+	it("priority: line-anchored beats inline forms when both present", async () => {
+		const content = "# Daily\n\nmood:: bad\n\n[mood:: bad] note.\n";
+		const vault = new FakeVaultFS();
+		await vault.create(DAILY_PATH, content);
+		const action = makeAction({ syntax: "inline_field", field: "mood", value: "good" });
+		const ctx = makeCtx(vault);
+
+		const outcome = await updateTracker(action, ctx);
+
+		expect(outcome.kind).toBe("applied");
+		const result = await vault.read(DAILY_PATH);
+		// Only the line-anchored occurrence is rewritten
+		expect(result).toBe("# Daily\n\nmood:: good\n\n[mood:: bad] note.\n");
+	});
+
+	it("multi-word field name `For Me` → matched verbatim and rewritten", async () => {
+		const content = "# Daily\n\nFor Me:: alt-text-one\n";
+		const vault = new FakeVaultFS();
+		await vault.create(DAILY_PATH, content);
+		const action = makeAction({ syntax: "inline_field", field: "For Me", value: "morgen früh aufstehen" });
+		const ctx = makeCtx(vault);
+
+		const outcome = await updateTracker(action, ctx);
+
+		expect(outcome.kind).toBe("applied");
+		const result = await vault.read(DAILY_PATH);
+		expect(result).toBe("# Daily\n\nFor Me:: morgen früh aufstehen\n");
 	});
 
 	it("field present with numeric value at target → skipped-already", async () => {
@@ -171,7 +242,7 @@ describe("updateTracker — callout_body", () => {
 		expect(await vault.read(DAILY_PATH)).toBe(content);
 	});
 
-	it("field in callout body at different value → failed 'Tracker field differs from target'", async () => {
+	it("field in callout body at different value → applied; existing value overwritten", async () => {
 		const content = [
 			"> [!tracker] Daily Tracker",
 			"> mood:: bad",
@@ -193,12 +264,44 @@ describe("updateTracker — callout_body", () => {
 
 		const outcome = await updateTracker(action, ctx);
 
-		expect(outcome.kind).toBe("failed");
-		if (outcome.kind === "failed") {
-			expect(outcome.reason).toBe("Tracker field differs from target — not overwriting");
-		}
-		// No mutation
-		expect(await vault.read(DAILY_PATH)).toBe(content);
+		expect(outcome.kind).toBe("applied");
+		const expected = [
+			"> [!tracker] Daily Tracker",
+			"> mood:: good",
+			"> energy:: high",
+			">",
+		].join("\n") + "\n";
+		expect(await vault.read(DAILY_PATH)).toBe(expected);
+	});
+
+	it("multi-word field name `For Me` in callout body → matched verbatim and rewritten", async () => {
+		const content = [
+			"> [!tracker] Daily Tracker",
+			"> For Me:: alt",
+			">",
+		].join("\n") + "\n";
+		const metaMap = new Map<string, FileMetadata | null>([
+			[DAILY_PATH, makeCalloutMetadata()],
+		]);
+		const vault = new FakeVaultFS(metaMap);
+		await vault.create(DAILY_PATH, content);
+		const action = makeAction({
+			syntax: "callout_body",
+			field: "For Me",
+			value: "Tee mit Yuki",
+			section: "Daily Tracker",
+		});
+		const ctx = makeCtx(vault);
+
+		const outcome = await updateTracker(action, ctx);
+
+		expect(outcome.kind).toBe("applied");
+		const expected = [
+			"> [!tracker] Daily Tracker",
+			"> For Me:: Tee mit Yuki",
+			">",
+		].join("\n") + "\n";
+		expect(await vault.read(DAILY_PATH)).toBe(expected);
 	});
 
 	it("field not found in callout body → failed 'Tracker field not found'", async () => {

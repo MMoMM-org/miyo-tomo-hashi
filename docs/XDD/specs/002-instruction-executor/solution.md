@@ -884,7 +884,7 @@ sequenceDiagram
 | Source file missing (move-style) | Sticky banner + run log | Action fails; subsequent actions continue |
 | Both source AND destination present | Sticky banner + run log | Action fails (no overwrite); subsequent continue |
 | Section/MOC not resolvable for `link_to_moc` | Sticky banner + run log | Action fails; halt-on-dependency does not apply (this MOC was created in-set or pre-existing — already-resolved) |
-| Tracker field exists with different value | Sticky banner + run log | Action fails (no overwrite) |
+| Tracker field exists with different value | Run log only (no banner — `applied` outcome) | Existing value is overwritten with target value (Tomo's intent wins; PRD F4 revised 2026-04-29) |
 | Pre-hook throws / returns errors | Sticky banner + run log | Action skipped; `applied` stays false |
 | Post-hook throws / returns errors | Sticky banner + run log | `applied: true` is still written; hook failure recorded separately |
 | Hook timeout (30s) | Sticky banner + run log | Treated as hook throw per phase |

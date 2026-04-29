@@ -6,10 +6,13 @@
  *   - before_first_line: insert before the first line of the section
  *   - at_time HH:MM:     insert chronologically by time prefix using logPosition helper
  *
- * When position === "at_time", the inserted line is prefixed with `HH:MM - ` where
- * HH:MM is taken from `action.time`.
+ * Hashi-composed line shape (per Tomo contract 2026-04-29):
+ *   - after_last_line / before_first_line: `- <content>` (verbatim trigger-phrase prose)
+ *   - at_time:                              `- <time>: <content>`
+ * Tomo emits `content` as bare prose (no bullet, no time prefix); Hashi composes the
+ * bullet and time prefix at execute time.
  *
- * Idempotency: if an identical line already exists in the section → skipped-already (no mutation).
+ * Idempotency: if an identical composed line already exists in the section → skipped-already (no mutation).
  *
  * Failure cases:
  *   - Daily note missing → failed "Daily note missing: <path>"
@@ -47,10 +50,10 @@ export async function updateLogEntry(
 		return { kind: "failed", reason: `Section not found: ${section}` };
 	}
 
-	// Build the line to insert
+	// Build the line to insert (Hashi composes bullet + optional time prefix)
 	const lineToInsert = position === "at_time" && time
-		? `${time} - ${lineContent}`
-		: lineContent;
+		? `- ${time}: ${lineContent}`
+		: `- ${lineContent}`;
 
 	// Idempotency check: scan section for exact match
 	const fileLines = fileContent.split("\n");

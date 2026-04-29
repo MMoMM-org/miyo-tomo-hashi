@@ -8,7 +8,9 @@
 
 export type LogPositionKind = "after_last_line" | "before_first_line" | "at_time";
 
-const TIME_PREFIX = /^(\d{2}:\d{2})\s/;
+// Matches Hashi-composed time-prefix lines: `- HH:MM: …`
+// (Old `HH:MM …` shape retired by 2026-04-29 Tomo contract update.)
+const TIME_PREFIX = /^-\s+(\d{2}:\d{2}):/;
 
 /**
  * Insert `line` into `content` at the specified `position`.

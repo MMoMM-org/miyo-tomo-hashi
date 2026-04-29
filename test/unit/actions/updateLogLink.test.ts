@@ -2,13 +2,9 @@
  * updateLogLink handler tests.
  *
  * Covers 3 positions (after_last_line / before_first_line / at_time),
- * format `- [[stem]]`, at_time prefix `HH:MM - ` (producing `HH:MM - - [[stem]]`),
- * and idempotency on identical link line.
- *
- * DEVIATION NOTE: The PRD says wikilink line is `- [[stem]]` and the at_time prefix
- * is `HH:MM - `. This yields `HH:MM - - [[stem]]` (two hyphens). This is locked in
- * as the canonical format per verbatim PRD wording. It is visually consistent with
- * how update_log_entry handles at_time (time prefix + content line).
+ * format `- [[stem]]` for after/before; format `- HH:MM: [[stem]]` for at_time
+ * (aligned with `update_log_entry` since they coexist in the same Daily Log
+ * section), and idempotency on identical link line.
  *
  * [ref: PRD/F4]
  */
@@ -156,12 +152,12 @@ describe("updateLogLink — link line format", () => {
 		expect(newLinkIdx).toBeLessThan(existingIdx);
 	});
 
-	it("at_time → inserts 'HH:MM - - [[stem]]' line (time prefix + wikilink bullet)", async () => {
+	it("at_time → inserts `- HH:MM: [[stem]]` line, aligned with update_log_entry shape", async () => {
 		const content = [
 			"# Daily Note",
 			"## Links",
-			"09:00 - - [[morning-note]]",
-			"11:00 - - [[noon-note]]",
+			"- 09:00: [[morning-note]]",
+			"- 11:00: [[noon-note]]",
 		].join("\n") + "\n";
 		const metaMap = new Map<string, FileMetadata | null>([
 			[DAILY_PATH, makeHeadingMetadata()],
@@ -179,8 +175,14 @@ describe("updateLogLink — link line format", () => {
 
 		expect(outcome.kind).toBe("applied");
 		const result = await vault.read(DAILY_PATH);
-		// at_time format: "HH:MM - " prefix + "- [[stem]]"
-		expect(result).toContain("10:00 - - [[Notes/my-project]]");
+		expect(result).toContain("- 10:00: [[Notes/my-project]]");
+		// Sort by HH:MM
+		const lines = result.split("\n");
+		const morningIdx = lines.indexOf("- 09:00: [[morning-note]]");
+		const newIdx = lines.indexOf("- 10:00: [[Notes/my-project]]");
+		const noonIdx = lines.indexOf("- 11:00: [[noon-note]]");
+		expect(morningIdx).toBeLessThan(newIdx);
+		expect(newIdx).toBeLessThan(noonIdx);
 	});
 });
 
@@ -217,9 +219,9 @@ describe("updateLogLink — idempotency", () => {
 		const content = [
 			"# Daily Note",
 			"## Links",
-			"09:00 - - [[morning-note]]",
-			"10:00 - - [[Notes/my-project]]",
-			"11:00 - - [[noon-note]]",
+			"- 09:00: [[morning-note]]",
+			"- 10:00: [[Notes/my-project]]",
+			"- 11:00: [[noon-note]]",
 		].join("\n") + "\n";
 		const metaMap = new Map<string, FileMetadata | null>([
 			[DAILY_PATH, makeHeadingMetadata()],

@@ -2,13 +2,24 @@
  * updateTracker handler — set a tracker field in a daily note.
  *
  * Three sub-modes determined by `action.syntax`:
- *   - inline_field: `field:: value` (Dataview-style inline field anywhere in file)
- *   - callout_body: `> field:: value` (Dataview double-colon) inside a named callout section
+ *   - inline_field: Dataview inline field anywhere in file. Matches three positions:
+ *       (1) line-anchored `<field>:: <value>` — with optional bullet/whitespace prefix
+ *       (2) inline-bracketed `[<field>:: <value>]` mid-prose
+ *       (3) inline-parenthesized `(<field>:: <value>)` mid-prose
+ *     Match priority: line-anchored > bracketed > parenthesized; first occurrence wins
+ *     within a position class. The matched form is preserved byte-for-byte on
+ *     overwrite — only the value portion is rewritten. Insertion of a new field is
+ *     line-anchored only (Hashi never writes new bracketed/parenthesized forms).
+ *   - callout_body: `> <field>:: <value>` (double-colon only) inside a named callout
+ *     section. Single-colon `> field:` is not a supported variant.
  *   - checkbox:     `- [x] field` / `- [ ] field` — truthy value → checked; falsy → unchecked
  *
- * Idempotency + conflict semantics (PRD F4):
+ * Multi-word field names (`For Me`, `Learned Words`) are matched literally.
+ *
+ * Semantics (PRD F4 — revised 2026-04-29 per Tomo format-spec contract):
  *   - Field already at target value → skipped-already (no mutation)
- *   - Field at a different value → failed "Tracker field differs from target — not overwriting"
+ *   - Field at a different value → applied (overwritten — Tomo's intent wins;
+ *     the upstream review step is the approval gate, not Hashi)
  *   - Field not found → failed "Tracker field not found: <field>"
  *   - Daily note missing → failed "Daily note missing: <path>"
  *
@@ -44,8 +55,18 @@ export async function updateTracker(
 }
 
 // ---------------------------------------------------------------------------
-// inline_field — `field:: value` anywhere in the file
+// inline_field — Dataview inline field, 3 positions:
+//   line-anchored: `<bullet/indent?><field>:: <value>` (insertion target)
+//   bracketed:     `[<field>:: <value>]` mid-prose (read-only overwrite)
+//   parenthesized: `(<field>:: <value>)` mid-prose (read-only overwrite)
+// Priority: line-anchored > bracketed > parenthesized; first occurrence wins.
 // ---------------------------------------------------------------------------
+
+interface InlineMatch {
+	readonly lineIdx: number;
+	readonly value: string;
+	rewrite(line: string, newValue: string): string;
+}
 
 async function handleInlineField(
 	action: UpdateTrackerAction,
@@ -55,31 +76,86 @@ async function handleInlineField(
 	const { daily_note_path, field, value } = action;
 
 	const content = await vault.read(daily_note_path);
-	const prefix = `${field}::`;
-	const lineIdx = content.split("\n").findIndex((l) => l.startsWith(prefix));
+	const lines = content.split("\n");
+	const match = findInlineMatch(lines, field);
 
-	if (lineIdx === -1) {
+	if (!match) {
 		return { kind: "failed", reason: `Tracker field not found: ${field}` };
 	}
 
-	const currentValue = extractInlineValue(content.split("\n")[lineIdx] ?? "", field);
 	const targetStr = String(value);
-
-	if (currentValue === targetStr) {
+	if (match.value === targetStr) {
 		return { kind: "skipped-already" };
 	}
 
-	// Different value → fail per PRD
-	return { kind: "failed", reason: "Tracker field differs from target — not overwriting" };
+	// Overwrite — Tomo's intent wins (PRD F4 revised 2026-04-29).
+	await vault.process(daily_note_path, (current) => {
+		const currentLines = current.split("\n");
+		const replaced = match.rewrite(currentLines[match.lineIdx] ?? "", targetStr);
+		currentLines[match.lineIdx] = replaced;
+		return currentLines.join("\n");
+	});
+	return { kind: "applied" };
 }
 
-function extractInlineValue(line: string, field: string): string {
-	const prefix = `${field}::`;
-	return line.startsWith(prefix) ? line.slice(prefix.length).trim() : "";
+/** Find the first matching inline field across the 3 priority classes. */
+function findInlineMatch(lines: readonly string[], field: string): InlineMatch | null {
+	const escaped = escapeRegExp(field);
+	const lineAnchored = new RegExp(`^(\\s*(?:[-*]\\s+)?(?:>\\s+)?)${escaped}::\\s*(.*)$`);
+	const bracketed = new RegExp(`\\[${escaped}::\\s*([^\\]]*)\\]`);
+	const parenthesized = new RegExp(`\\(${escaped}::\\s*([^)]*)\\)`);
+
+	// Pass 1: line-anchored (highest priority)
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i] ?? "";
+		const m = lineAnchored.exec(line);
+		if (m) {
+			const prefix = m[1] ?? "";
+			return {
+				lineIdx: i,
+				value: (m[2] ?? "").trim(),
+				rewrite: (_l, v) => `${prefix}${field}:: ${v}`,
+			};
+		}
+	}
+
+	// Pass 2: bracketed
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i] ?? "";
+		const m = bracketed.exec(line);
+		if (m) {
+			const inner = m[0]; // full `[field:: value]`
+			return {
+				lineIdx: i,
+				value: (m[1] ?? "").trim(),
+				rewrite: (l, v) => l.replace(inner, `[${field}:: ${v}]`),
+			};
+		}
+	}
+
+	// Pass 3: parenthesized
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i] ?? "";
+		const m = parenthesized.exec(line);
+		if (m) {
+			const inner = m[0]; // full `(field:: value)`
+			return {
+				lineIdx: i,
+				value: (m[1] ?? "").trim(),
+				rewrite: (l, v) => l.replace(inner, `(${field}:: ${v})`),
+			};
+		}
+	}
+
+	return null;
+}
+
+function escapeRegExp(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // ---------------------------------------------------------------------------
-// callout_body — `> field:: value` or `> field: value` inside named section
+// callout_body — `> <field>:: <value>` (double-colon only) inside named section
 // ---------------------------------------------------------------------------
 
 async function handleCalloutBody(
@@ -102,12 +178,11 @@ async function handleCalloutBody(
 
 	const lines = content.split("\n");
 	const end = range.endLine === -1 ? lines.length - 1 : range.endLine;
+	const prefix = `> ${field}::`;
 
-	// Find the field line within the section. Match `> field::` or `> field:`
 	let fieldLineIdx = -1;
 	for (let i = range.startLine; i <= end; i++) {
-		const line = lines[i] ?? "";
-		if (isCalloutFieldLine(line, field)) {
+		if ((lines[i] ?? "").startsWith(prefix)) {
 			fieldLineIdx = i;
 			break;
 		}
@@ -117,28 +192,20 @@ async function handleCalloutBody(
 		return { kind: "failed", reason: `Tracker field not found: ${field}` };
 	}
 
-	const currentValue = extractCalloutFieldValue(lines[fieldLineIdx] ?? "", field);
+	const currentValue = (lines[fieldLineIdx] ?? "").slice(prefix.length).trim();
 	const targetStr = String(value);
 
 	if (currentValue === targetStr) {
 		return { kind: "skipped-already" };
 	}
 
-	return { kind: "failed", reason: "Tracker field differs from target — not overwriting" };
-}
-
-/** Returns true if the line is a callout body line for the given field. */
-function isCalloutFieldLine(line: string, field: string): boolean {
-	// Match `> field::` or `> field:` (not followed by another colon for field::)
-	return line.startsWith(`> ${field}::`);
-}
-
-function extractCalloutFieldValue(line: string, field: string): string {
-	const prefixDouble = `> ${field}::`;
-	if (line.startsWith(prefixDouble)) {
-		return line.slice(prefixDouble.length).trim();
-	}
-	return "";
+	// Overwrite — Tomo's intent wins (PRD F4 revised 2026-04-29).
+	await vault.process(daily_note_path, (current) => {
+		const currentLines = current.split("\n");
+		currentLines[fieldLineIdx] = `${prefix} ${targetStr}`;
+		return currentLines.join("\n");
+	});
+	return { kind: "applied" };
 }
 
 // ---------------------------------------------------------------------------

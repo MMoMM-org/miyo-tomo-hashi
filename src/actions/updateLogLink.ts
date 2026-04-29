@@ -1,13 +1,13 @@
 /**
  * updateLogLink handler — insert a wikilink line into a named section of a daily note.
  *
- * The wikilink line format is `- [[target_stem]]`.
- * When position === "at_time", the line is prefixed with `HH:MM - `, yielding:
- *   `HH:MM - - [[target_stem]]`
- * (time prefix separator + wikilink bullet — per verbatim PRD wording: "wikilink line
- *  `- [[stem]]`; if `at_time`, prefix is `HH:MM - `")
+ * Hashi-composed line shape (per Tomo contract 2026-04-29):
+ *   - after_last_line / before_first_line: `- [[target_stem]]`
+ *   - at_time:                              `- <time>: [[target_stem]]`
+ * The two log-targeting kinds (update_log_entry + update_log_link) share the same
+ * time-prefix shape since they coexist in the same Daily Log section.
  *
- * Idempotency: if an identical line already exists in the section → skipped-already (no mutation).
+ * Idempotency: if an identical composed line already exists in the section → skipped-already (no mutation).
  *
  * Failure cases:
  *   - Daily note missing → failed "Daily note missing: <path>"
@@ -45,11 +45,10 @@ export async function updateLogLink(
 		return { kind: "failed", reason: `Section not found: ${section}` };
 	}
 
-	// Build the wikilink line
-	const wikilinkLine = `- [[${target_stem}]]`;
+	// Build the wikilink line (at_time aligns with update_log_entry: `- HH:MM: <payload>`)
 	const lineToInsert = position === "at_time" && time
-		? `${time} - ${wikilinkLine}`
-		: wikilinkLine;
+		? `- ${time}: [[${target_stem}]]`
+		: `- [[${target_stem}]]`;
 
 	// Idempotency check: scan section for exact match
 	const fileLines = fileContent.split("\n");

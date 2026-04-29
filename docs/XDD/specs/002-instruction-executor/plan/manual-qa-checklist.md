@@ -127,9 +127,13 @@ target_vault: ../temp/Privat-Test
 | F4.link_to_moc.missing-moc | MOC target missing → action fails with "MOC target missing" | | | |
 | F4.update_tracker.set | `update_tracker`: target field is set to target value (verify in tracker file) | | | |
 | F4.update_tracker.idempotent | Re-run with same value: no-op | | | |
-| F4.update_tracker.differs | Existing field has DIFFERENT value: fails "Tracker field differs from target — not overwriting" | | | |
-| F4.update_log_entry.insert | `update_log_entry`: prose line inserted at specified position | | | |
-| F4.update_log_link.insert | `update_log_link`: wikilink line `- [[stem]]` inserted; with at_time prefix `HH:MM - ` | | | |
+| F4.update_tracker.differs | Existing field has DIFFERENT value: applied; field overwritten to target value (Tomo's intent wins on overwrite) | | | |
+| F4.update_tracker.inline-bracketed | `inline_field` matcher recognises bracketed form `[Sport:: true]` mid-prose; matched form preserved byte-for-byte on overwrite | | | |
+| F4.update_tracker.inline-paren | `inline_field` matcher recognises parenthesized form `(Sport:: true)` mid-prose; matched form preserved byte-for-byte on overwrite | | | |
+| F4.update_tracker.inline-bullet | `inline_field` matcher recognises bullet-prefixed line `- Sport:: true`; bullet/indent preserved on overwrite | | | |
+| F4.update_tracker.multi-word | `inline_field` + `callout_body` match multi-word field names verbatim (`For Me`, `Learned Words`) | | | |
+| F4.update_log_entry.insert | `update_log_entry`: line shape `- <content>` for after/before; `- HH:MM: <content>` for at_time | | | |
+| F4.update_log_link.insert | `update_log_link`: line shape `- [[stem]]` for after/before; `- HH:MM: [[stem]]` for at_time (aligned with `update_log_entry`) | | | |
 | F4.delete_source.trash | `delete_source`: source goes to Obsidian trash (system trash where available, else `.trash/`) — never hard-deleted | | | |
 | F4.delete_source.idempotent | Re-run when source already gone: no-op | | | |
 | F4.skip.no-op | `skip` action: ticks `applied: true`, contributes to count, no other side effect | | | |

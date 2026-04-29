@@ -99,12 +99,12 @@ describe("updateLogEntry — section not found", () => {
 // ---------------------------------------------------------------------------
 
 describe("updateLogEntry — after_last_line", () => {
-	it("section has existing lines → new line appended after last line of section", async () => {
+	it("appends `- <content>` line after last line of section (Hashi composes bullet)", async () => {
 		const content = [
 			"# Daily Note",
 			"## Log",
-			"09:00 - Morning standup",
-			"10:30 - Team meeting",
+			"- 09:00: Morning standup",
+			"- 10:30: Team meeting",
 		].join("\n") + "\n";
 		const metaMap = new Map<string, FileMetadata | null>([
 			[DAILY_PATH, makeHeadingMetadata()],
@@ -121,15 +121,15 @@ describe("updateLogEntry — after_last_line", () => {
 
 		expect(outcome.kind).toBe("applied");
 		const result = await vault.read(DAILY_PATH);
-		expect(result).toContain("Completed the refactor task");
+		expect(result).toContain("- Completed the refactor task");
 	});
 
-	it("identical line already in section → skipped-already; content unchanged", async () => {
+	it("identical `- <content>` line already in section → skipped-already; content unchanged", async () => {
 		const content = [
 			"# Daily Note",
 			"## Log",
-			"09:00 - Morning standup",
-			"Completed the refactor task",
+			"- 09:00: Morning standup",
+			"- Completed the refactor task",
 		].join("\n") + "\n";
 		const metaMap = new Map<string, FileMetadata | null>([
 			[DAILY_PATH, makeHeadingMetadata()],
@@ -154,11 +154,11 @@ describe("updateLogEntry — after_last_line", () => {
 // ---------------------------------------------------------------------------
 
 describe("updateLogEntry — before_first_line", () => {
-	it("section has content → new line inserted before first content line", async () => {
+	it("inserts `- <content>` line before first content line of section", async () => {
 		const content = [
 			"# Daily Note",
 			"## Log",
-			"09:00 - Morning standup",
+			"- 09:00: Morning standup",
 		].join("\n") + "\n";
 		const metaMap = new Map<string, FileMetadata | null>([
 			[DAILY_PATH, makeHeadingMetadata()],
@@ -176,21 +176,18 @@ describe("updateLogEntry — before_first_line", () => {
 		expect(outcome.kind).toBe("applied");
 		const result = await vault.read(DAILY_PATH);
 		const lines = result.split("\n");
-		// "## Log" is at index 1; section starts at line 2 (startLine = heading.line + 1 = 2)
-		// before_first_line means the new line appears before the current first content line
-		expect(result).toContain("Early entry");
-		// Early entry should come before 09:00
-		const earlyIdx = lines.indexOf("Early entry");
-		const standupIdx = lines.indexOf("09:00 - Morning standup");
+		expect(result).toContain("- Early entry");
+		const earlyIdx = lines.indexOf("- Early entry");
+		const standupIdx = lines.indexOf("- 09:00: Morning standup");
 		expect(earlyIdx).toBeLessThan(standupIdx);
 	});
 
-	it("identical line already at before_first position → skipped-already; content unchanged", async () => {
+	it("identical `- <content>` line already at before_first position → skipped-already; content unchanged", async () => {
 		const content = [
 			"# Daily Note",
 			"## Log",
-			"Early entry",
-			"09:00 - Morning standup",
+			"- Early entry",
+			"- 09:00: Morning standup",
 		].join("\n") + "\n";
 		const metaMap = new Map<string, FileMetadata | null>([
 			[DAILY_PATH, makeHeadingMetadata()],
@@ -215,12 +212,12 @@ describe("updateLogEntry — before_first_line", () => {
 // ---------------------------------------------------------------------------
 
 describe("updateLogEntry — at_time", () => {
-	it("at_time inserts line with HH:MM prefix after last <= time entry", async () => {
+	it("at_time inserts `- HH:MM: <content>` line, sort-positioned by HH:MM", async () => {
 		const content = [
 			"# Daily Note",
 			"## Log",
-			"09:00 - Morning standup",
-			"11:00 - Design review",
+			"- 09:00: Morning standup",
+			"- 11:00: Design review",
 		].join("\n") + "\n";
 		const metaMap = new Map<string, FileMetadata | null>([
 			[DAILY_PATH, makeHeadingMetadata()],
@@ -238,16 +235,23 @@ describe("updateLogEntry — at_time", () => {
 
 		expect(outcome.kind).toBe("applied");
 		const result = await vault.read(DAILY_PATH);
-		expect(result).toContain("10:00 - Coffee break");
+		expect(result).toContain("- 10:00: Coffee break");
+		// Sort: 09:00 < 10:00 < 11:00
+		const lines = result.split("\n");
+		const standupIdx = lines.indexOf("- 09:00: Morning standup");
+		const coffeeIdx = lines.indexOf("- 10:00: Coffee break");
+		const designIdx = lines.indexOf("- 11:00: Design review");
+		expect(standupIdx).toBeLessThan(coffeeIdx);
+		expect(coffeeIdx).toBeLessThan(designIdx);
 	});
 
-	it("at_time identical line already in section → skipped-already; content unchanged", async () => {
+	it("at_time identical `- HH:MM: <content>` line already in section → skipped-already; content unchanged", async () => {
 		const content = [
 			"# Daily Note",
 			"## Log",
-			"09:00 - Morning standup",
-			"10:00 - Coffee break",
-			"11:00 - Design review",
+			"- 09:00: Morning standup",
+			"- 10:00: Coffee break",
+			"- 11:00: Design review",
 		].join("\n") + "\n";
 		const metaMap = new Map<string, FileMetadata | null>([
 			[DAILY_PATH, makeHeadingMetadata()],

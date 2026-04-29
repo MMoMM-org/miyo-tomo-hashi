@@ -81,9 +81,9 @@ total_acs: 97
 | F4.4 | `create_moc`: src+!dst → move; !src+dst → no-op; both → fail | `test/unit/actions/createMoc.test.ts` | F4.create_moc.move, F4.create_moc.idempotent, F4.create_moc.both-present | ✅ |
 | F4.5 | `move_note`: same semantics | `test/unit/actions/moveNote.test.ts` | F4.move_note.preserves-links | ✅ |
 | F4.6 | `link_to_moc`: append in section; duplicate no-op; missing-MOC fail | `test/unit/actions/linkToMoc.test.ts`, `test/unit/actions/sectionLocator.test.ts` | F4.link_to_moc.append, F4.link_to_moc.duplicate, F4.link_to_moc.missing-moc | ✅ |
-| F4.7 | `update_tracker`: set field; idempotent; differs → fail | `test/unit/actions/updateTracker.test.ts` | F4.update_tracker.set, F4.update_tracker.idempotent, F4.update_tracker.differs | ✅ |
-| F4.8 | `update_log_entry`: insert at position; idempotent | `test/unit/actions/updateLogEntry.test.ts`, `test/unit/actions/logPosition.test.ts` | F4.update_log_entry.insert | ✅ |
-| F4.9 | `update_log_link`: insert wikilink; at_time prefix; idempotent | `test/unit/actions/updateLogLink.test.ts`, `test/unit/actions/logPosition.test.ts` | F4.update_log_link.insert | ✅ |
+| F4.7 | `update_tracker`: set field; idempotent; differs → overwrite (Tomo's intent wins); `inline_field` matches 3 Dataview positions + multi-word field names | `test/unit/actions/updateTracker.test.ts` | F4.update_tracker.set, F4.update_tracker.idempotent, F4.update_tracker.differs, F4.update_tracker.inline-bracketed, F4.update_tracker.inline-paren, F4.update_tracker.inline-bullet, F4.update_tracker.multi-word | ✅ |
+| F4.8 | `update_log_entry`: insert at position with line shape `- <content>` (after/before) or `- HH:MM: <content>` (at_time); idempotent | `test/unit/actions/updateLogEntry.test.ts`, `test/unit/actions/logPosition.test.ts` | F4.update_log_entry.insert | ✅ |
+| F4.9 | `update_log_link`: insert wikilink with line shape `- [[stem]]` (after/before) or `- HH:MM: [[stem]]` (at_time, aligned with `update_log_entry`); idempotent | `test/unit/actions/updateLogLink.test.ts`, `test/unit/actions/logPosition.test.ts` | F4.update_log_link.insert | ✅ |
 | F4.10 | `delete_source`: trash (system or vault); idempotent | `test/unit/actions/deleteSource.test.ts` | F4.delete_source.trash, F4.delete_source.idempotent | ✅ |
 | F4.11 | `skip`: no-op; ticks `applied: true`; counts | `test/unit/actions/skip.test.ts` | F4.skip.no-op | ✅ |
 | F4.12 | Auto-create destination folder before move | `test/unit/actions/createMoc.test.ts`, `test/unit/actions/moveNote.test.ts` | F4.dest-folder-create | ✅ |
