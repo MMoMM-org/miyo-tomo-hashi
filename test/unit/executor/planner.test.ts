@@ -146,6 +146,7 @@ describe("resolveSingle", () => {
 describe("resolveBatch", () => {
 	it("returns all _instructions.json files in alphabetical order", async () => {
 		const vault = new FakeVaultFS();
+		await vault.createFolder("inbox");
 		await seedInstructionSet(vault, "inbox/2026-04-28_instructions.json");
 		await seedInstructionSet(vault, "inbox/2026-04-22_instructions.json");
 		await seedInstructionSet(vault, "inbox/2026-04-25_instructions.json");
@@ -164,6 +165,7 @@ describe("resolveBatch", () => {
 
 	it("returns empty array when inbox folder exists but contains no _instructions.json files", async () => {
 		const vault = new FakeVaultFS();
+		await vault.createFolder("inbox");
 		await vault.create("inbox/some-log.md", "# log");
 		await vault.create("inbox/notes.json", '{"not": "instructions"}');
 

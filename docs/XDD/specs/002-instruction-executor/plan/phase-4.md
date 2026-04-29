@@ -30,7 +30,7 @@ phase: 4
 
 This phase wires the orchestrator that drives a run: source resolution, schema validation, action dispatch, JSON applied-flag write, peer best-effort tick, run log, hook invocation. The orchestrator owns the single-run lock, the cancellation flag, halt-on-dependency, and `executionStore` state transitions.
 
-- [ ] **T4.1 Planner — source resolution + canonical order + applied filter** `[activity: domain-modeling]`
+- [x] **T4.1 Planner — source resolution + canonical order + applied filter** `[activity: domain-modeling]`
 
   1. Prime: Read PRD F1 (invocation rules), F6 (partial-resume) `[ref: PRD/F1, F6]`. Read SDD "Planner" directory entry `[ref: SDD/Directory Map]` and Primary Flow `[ref: SDD/Runtime View; Primary Flow]`.
   2. Test: `test/unit/executor/planner.test.ts`:
@@ -41,9 +41,9 @@ This phase wires the orchestrator that drives a run: source resolution, schema v
   3. Implement: `src/executor/planner.ts`.
   4. Validate: Test suite green; types clean.
   5. Success:
-     - [ ] PRD F1 resolution matrix covered `[ref: PRD/F1]`
-     - [ ] PRD F6 partial-resume drives off `applied` field `[ref: PRD/F6]`
-     - [ ] Dependency graph available for halt-on-dependency in T4.4 `[ref: PRD/F4; SDD/Acceptance Criteria; F4 Action kinds]`
+     - [x] PRD F1 resolution matrix covered `[ref: PRD/F1]`
+     - [x] PRD F6 partial-resume drives off `applied` field `[ref: PRD/F6]`
+     - [x] Dependency graph available for halt-on-dependency in T4.4 `[ref: PRD/F4; SDD/Acceptance Criteria; F4 Action kinds]`
 
 - [ ] **T4.2 JsonAppliedWriter + PeerCheckboxSync** `[activity: domain-modeling]`
 
