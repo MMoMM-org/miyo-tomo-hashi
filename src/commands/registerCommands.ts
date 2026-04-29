@@ -40,6 +40,12 @@ import {
 	displayInstanceName,
 } from "../connection/connectionStore";
 import type { TomoConnection } from "../connection/TomoConnection";
+import type {
+	InstructionExecutor,
+	Invocation,
+} from "../executor/InstructionExecutor";
+import type { VaultFS } from "../vault/VaultFS";
+import type { PluginSettings } from "../types/index";
 
 const RECONNECT_ID = "reconnect-to-tomo";
 const SHOW_CHAT_ID = "show-chat-window";
@@ -107,4 +113,113 @@ function registerReconnectCommand(plugin: Plugin, deps: CommandDeps): void {
 			install(displayInstanceName(state));
 		}),
 	);
+}
+
+// ---------------------------------------------------------------------------
+// 002 spec — instruction-executor command
+// ---------------------------------------------------------------------------
+//
+// Spec refs: 002-instruction-executor phase-6 T6.1; PRD F1 (invocation
+// rules); SDD "Directory Map / src/commands/registerCommands.ts".
+//
+// Decisions:
+//
+// 1. Invocation resolution lives in `resolveActiveInvocation` so both the
+//    palette command (this module) and the file-menu entry (`fileMenu.ts`)
+//    can call the same logic with different active-file inputs.
+//
+// 2. The command callback ALWAYS calls `executor.execute(invocation)`.
+//    The single-run lock lives in `InstructionExecutor` (T4.5) — the command
+//    must not pre-empt or cache a "busy" state, otherwise a double-click
+//    would be silently swallowed before reaching the executor's lock.
+//
+// 3. Returns a Promise but the command callback fires-and-forgets — the
+//    `ExecutionModal` subscribes to `executionStore` for live status, so
+//    awaiting here adds no value and would block the command palette.
+
+const EXECUTE_INSTRUCTIONS_ID = "execute-instructions-document";
+const EXECUTE_INSTRUCTIONS_LABEL = "Execute instructions document";
+
+export interface ExecutorCommandDeps {
+	/**
+	 * Narrow surface of `InstructionExecutor` — only `execute()` is needed
+	 * here. Tests pass a `vi.fn`-bag that satisfies this shape; production
+	 * passes the full executor.
+	 */
+	readonly executor: Pick<InstructionExecutor, "execute">;
+	/**
+	 * Vault adapter — used by `resolveActiveInvocation` to check whether the
+	 * sibling `_instructions.json` for an active `.md` exists.
+	 */
+	readonly vault: Pick<VaultFS, "exists">;
+	/**
+	 * Plugin settings — read-only here. The executor itself owns settings;
+	 * the command callback only inspects active-file state, never settings.
+	 * Carried in the deps bag so future extensions (e.g., per-mode message
+	 * gating before invocation) have the surface ready.
+	 */
+	readonly settings: PluginSettings;
+}
+
+/**
+ * Register the 002 "Execute instructions document" palette command.
+ * Called separately from `registerCommands` so that 001 and 002 wiring
+ * stay decoupled — main.ts (T6.2) calls both.
+ */
+export function registerExecutorCommands(
+	plugin: Plugin,
+	deps: ExecutorCommandDeps,
+): void {
+	plugin.addCommand({
+		id: EXECUTE_INSTRUCTIONS_ID,
+		name: EXECUTE_INSTRUCTIONS_LABEL,
+		callback: () => {
+			void dispatchActiveInvocation(plugin, deps);
+		},
+	});
+}
+
+async function dispatchActiveInvocation(
+	plugin: Plugin,
+	deps: ExecutorCommandDeps,
+): Promise<void> {
+	const activePath = plugin.app.workspace.getActiveFile()?.path ?? null;
+	const invocation = await resolveActiveInvocation(deps.vault, activePath);
+	void deps.executor.execute(invocation);
+}
+
+/**
+ * Map an active-file path to the right `Invocation` shape per PRD F1:
+ *
+ *   - Active path is `<stem>_instructions.json` (or any `.json` that exists)
+ *     → `{ kind: "single-file", sourcePath: <that path> }`.
+ *   - Active path is `<stem>.md` AND the sibling `<stem>.json` exists
+ *     → `{ kind: "single-file", sourcePath: <sibling .json> }`.
+ *   - Anything else (regular note, non-peer .md, .png, no active file)
+ *     → `{ kind: "batch" }`.
+ *
+ * The single-vs-batch decision is the only routing logic; whether the
+ * resolved batch is empty or the inbox folder is missing is the executor's
+ * concern (PRD F1 — Notice "Tomo inbox is empty …" / "… not configured").
+ */
+export async function resolveActiveInvocation(
+	vault: Pick<VaultFS, "exists">,
+	activePath: string | null,
+): Promise<Invocation> {
+	if (activePath === null) {
+		return { kind: "batch" };
+	}
+	if (activePath.endsWith(".json")) {
+		if (await vault.exists(activePath)) {
+			return { kind: "single-file", sourcePath: activePath };
+		}
+		return { kind: "batch" };
+	}
+	if (activePath.endsWith(".md")) {
+		const sibling = activePath.slice(0, -3) + ".json";
+		if (await vault.exists(sibling)) {
+			return { kind: "single-file", sourcePath: sibling };
+		}
+	}
+	return { kind: "batch" };
 }
