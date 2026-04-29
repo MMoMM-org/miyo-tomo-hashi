@@ -23,8 +23,8 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { App } from "obsidian";
 
-import { HookRunner, type HookLoader, type HookOutcome } from "../../../src/hooks/HookRunner.js";
-import type { HookContext, HookLogger } from "../../../src/hooks/HookContext.js";
+import { HookRunner, type HookLoader } from "../../../src/hooks/HookRunner.js";
+import type { HookLogger } from "../../../src/hooks/HookContext.js";
 import type { Action } from "../../../src/schema/types.js";
 
 // ---------------------------------------------------------------------------
@@ -107,7 +107,7 @@ function makeFixtureLoader(
 	duplicateLog: string[] = [],
 ): HookLoader {
 	return {
-		resolve(key) {
+		resolve(key: string) {
 			const absolutePath = mapping[key];
 			if (absolutePath === undefined) return null;
 			return { absolutePath, duplicates: duplicateLog };
@@ -208,7 +208,6 @@ describe("HookRunner — multi-file conflict", () => {
 		await fs.writeFile(fileA, `module.exports = function() { return { info: ["from-aaa"] }; };`, "utf8");
 		await fs.writeFile(fileB, `module.exports = function() { return { info: ["from-zzz"] }; };`, "utf8");
 
-		const duplicateLog: string[] = [];
 		// Simulate discovery: first alphabetical is fileA; fileB is a duplicate
 		const loader = makeFixtureLoader(
 			{ "before-create_moc": fileA },
@@ -237,19 +236,10 @@ describe("HookRunner — multi-file conflict", () => {
 
 describe("HookRunner — invocation context shape", () => {
 	it("provides action, app, and logger in the hook context", async () => {
-		let capturedCtx: HookContext | null = null;
-		const captureHook = (ctx: HookContext) => {
-			capturedCtx = ctx;
-			return undefined;
-		};
-
-		// Build a loader that returns a hook via a special in-memory mechanism.
-		// We inject a synthetic hook directly by wrapping the module system.
-		let tmpFile: string;
-		tmpFile = path.join(os.tmpdir(), `hashi-hook-ctx-${Date.now()}.js`);
-		// Write a hook that sets a side-channel via a global to capture ctx.
-		// Since we can't easily pass captureHook into require(), use the app stub
-		// fixture which accesses ctx.app.vault
+		// Verify ctx shape via the before-skip-uses-app fixture which reads
+		// ctx.app.vault. If the app field were missing or shape mismatched,
+		// the fixture would throw on property access and the runner would
+		// surface a failed outcome.
 		const action = makeAction("skip");
 		const loader = makeFixtureLoader({
 			"before-skip": path.join(fixturesDir, "before-skip-uses-app.cjs"),
@@ -260,13 +250,8 @@ describe("HookRunner — invocation context shape", () => {
 			requireFn,
 		});
 
-		// Use a wrapping approach: we verify the hook ran and accessed app.vault
-		// by checking the hook returned undefined (no error) AND app was accessible.
 		const outcome = await runner.run("before", action);
 		expect(outcome.kind).toBe("ok");
-
-		// Cleanup
-		await fs.rm(tmpFile, { force: true });
 	});
 
 	it("provides logger that writes into run log", async () => {
