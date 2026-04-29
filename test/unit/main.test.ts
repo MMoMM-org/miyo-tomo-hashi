@@ -55,14 +55,83 @@ vi.mock("dockerode", () => {
 	return { default: Dockerode };
 });
 
+// Module-level constructor trackers. `vi.mock` factory wraps the real class
+// in a Proxy and records every `construct` call. We do NOT call vi.fn or any
+// out-of-factory closure inside the construct trap (that triggers vitest
+// hoisting / circular module resolution and recurses to a stack overflow).
+// Instead we publish a plain shared `calls` object that the test asserts on.
+
+interface CallLog {
+	executor: unknown[][];
+	hookRunner: unknown[][];
+	vaultFs: unknown[][];
+	mountStatusBar: unknown[][];
+	mountStatusBarTeardown: ReturnType<typeof vi.fn> | null;
+}
+
+const callLog: CallLog = {
+	executor: [],
+	hookRunner: [],
+	vaultFs: [],
+	mountStatusBar: [],
+	mountStatusBarTeardown: null,
+};
+
+vi.mock("../../src/executor/InstructionExecutor", async (importOriginal) => {
+	const actual = await importOriginal<
+		typeof import("../../src/executor/InstructionExecutor")
+	>();
+	const Wrapped = new Proxy(actual.InstructionExecutor, {
+		construct(target, args) {
+			callLog.executor.push(args);
+			return Reflect.construct(target, args);
+		},
+	});
+	return { ...actual, InstructionExecutor: Wrapped };
+});
+
+vi.mock("../../src/hooks/HookRunner", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../src/hooks/HookRunner")>();
+	const Wrapped = new Proxy(actual.HookRunner, {
+		construct(target, args) {
+			callLog.hookRunner.push(args);
+			return Reflect.construct(target, args);
+		},
+	});
+	return { ...actual, HookRunner: Wrapped };
+});
+
+vi.mock("../../src/vault/ObsidianVaultFS", async (importOriginal) => {
+	const actual = await importOriginal<
+		typeof import("../../src/vault/ObsidianVaultFS")
+	>();
+	const Wrapped = new Proxy(actual.ObsidianVaultFS, {
+		construct(target, args) {
+			callLog.vaultFs.push(args);
+			return Reflect.construct(target, args);
+		},
+	});
+	return { ...actual, ObsidianVaultFS: Wrapped };
+});
+
+vi.mock("../../src/ui/statusBar", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../../src/ui/statusBar")>();
+	return {
+		...actual,
+		mountStatusBar: (...args: Parameters<typeof actual.mountStatusBar>) => {
+			callLog.mountStatusBar.push(args);
+			if (callLog.mountStatusBarTeardown !== null) {
+				return callLog.mountStatusBarTeardown;
+			}
+			return actual.mountStatusBar(...args);
+		},
+	};
+});
+
 import { TomoConnection } from "../../src/connection/TomoConnection";
 import { executionStore } from "../../src/executor/executionStore";
-import * as instructionExecutorModule from "../../src/executor/InstructionExecutor";
-import * as hookRunnerModule from "../../src/hooks/HookRunner";
 import TomoHashiPlugin from "../../src/main";
 import { SettingsTab } from "../../src/settings/SettingsTab";
-import * as statusBarModule from "../../src/ui/statusBar";
-import * as obsidianVaultFsModule from "../../src/vault/ObsidianVaultFS";
 
 import type { Store } from "../../src/util/store";
 import type { RunState } from "../../src/executor/state";
@@ -75,14 +144,14 @@ function listenerCount(store: Store<RunState>): number {
 
 describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 	let plugin: TomoHashiPlugin;
-	let executorCtorSpy: ReturnType<typeof vi.spyOn>;
-	let vaultFsCtorSpy: ReturnType<typeof vi.spyOn>;
-	let hookRunnerCtorSpy: ReturnType<typeof vi.spyOn>;
-	let mountStatusBarSpy: ReturnType<typeof vi.spyOn>;
 	let mountStatusBarTeardown: Mock;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		callLog.executor.length = 0;
+		callLog.hookRunner.length = 0;
+		callLog.vaultFs.length = 0;
+		callLog.mountStatusBar.length = 0;
 		dockerHandles.getContainer.mockImplementation(() => ({
 			inspect: dockerHandles.inspect,
 			attach: dockerHandles.attach,
@@ -92,20 +161,9 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 		vi.spyOn(TomoConnection.prototype, "autoReconnectIfRemembered").mockResolvedValue();
 		vi.spyOn(TomoConnection.prototype, "dispose").mockResolvedValue();
 
-		// Constructor-call spies. Chrome around real constructors so the plugin
-		// still gets a working object back; we only assert call counts + args.
-		executorCtorSpy = vi.spyOn(
-			instructionExecutorModule,
-			"InstructionExecutor",
-		);
-		vaultFsCtorSpy = vi.spyOn(obsidianVaultFsModule, "ObsidianVaultFS");
-		hookRunnerCtorSpy = vi.spyOn(hookRunnerModule, "HookRunner");
-
 		// statusBar teardown spy — assert that onunload invokes it.
 		mountStatusBarTeardown = vi.fn();
-		mountStatusBarSpy = vi
-			.spyOn(statusBarModule, "mountStatusBar")
-			.mockReturnValue(mountStatusBarTeardown);
+		callLog.mountStatusBarTeardown = mountStatusBarTeardown;
 
 		const app = new App();
 		const manifest: PluginManifest = {
@@ -133,23 +191,23 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 	describe("onload — 002 surfaces wired", () => {
 		it("instantiates ObsidianVaultFS exactly once", async () => {
 			await plugin.onload();
-			expect(vaultFsCtorSpy).toHaveBeenCalledTimes(1);
+			expect(callLog.vaultFs).toHaveLength(1);
 		});
 
 		it("instantiates HookRunner exactly once", async () => {
 			await plugin.onload();
-			expect(hookRunnerCtorSpy).toHaveBeenCalledTimes(1);
+			expect(callLog.hookRunner).toHaveLength(1);
 		});
 
 		it("instantiates InstructionExecutor exactly once (singleton per load)", async () => {
 			await plugin.onload();
-			expect(executorCtorSpy).toHaveBeenCalledTimes(1);
+			expect(callLog.executor).toHaveLength(1);
 		});
 
 		it("mounts the status bar exactly once with an onActiveModalFocus callback", async () => {
 			await plugin.onload();
-			expect(mountStatusBarSpy).toHaveBeenCalledTimes(1);
-			const callbacks = mountStatusBarSpy.mock.calls[0]?.[1] as
+			expect(callLog.mountStatusBar).toHaveLength(1);
+			const callbacks = callLog.mountStatusBar[0]?.[1] as
 				| { onActiveModalFocus: () => void }
 				| undefined;
 			expect(callbacks).toBeDefined();
@@ -243,7 +301,7 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 			plugin.onunload();
 			await expect(plugin.onload()).resolves.toBeUndefined();
 			// And the executor was constructed twice in total — once per load.
-			expect(executorCtorSpy).toHaveBeenCalledTimes(2);
+			expect(callLog.executor).toHaveLength(2);
 		});
 	});
 
@@ -254,7 +312,7 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 	describe("HookRunner construction args", () => {
 		it("constructs HookRunner with an askCallback in its options bag", async () => {
 			await plugin.onload();
-			const call = hookRunnerCtorSpy.mock.calls[0];
+			const call = callLog.hookRunner[0];
 			expect(call).toBeDefined();
 			// HookRunner constructor signature: (app, loader, logger, options).
 			// options.askCallback is the modal-disclosure adapter.
