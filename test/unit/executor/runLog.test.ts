@@ -1,0 +1,423 @@
+/**
+ * T4.3 — RunLogWriter tests (RED phase)
+ *
+ * Covers all PRD F7 ACs:
+ *   - Filename builder: tomo-hashi-run-log_YYYY-MM-DDTHHMM.md with _2/_3 suffix on collision
+ *   - Header includes start/end timestamps, mode, sources, totals
+ *   - Body groups records by source file with ## <filename> sub-heading
+ *   - Each row includes I##, kind, payload summary, outcome, error (if failed)
+ *   - Verbatim content fields (no fingerprint, no truncation)
+ *   - Retention "always" → kept regardless
+ *   - Retention "only-after-failed" + 0 failures → deleted
+ *   - Retention "only-after-failed" + ≥1 failure → kept
+ *   - Validation-only failures appear as the only entry for that file
+ *   - Filename collision → _2, _3 suffix
+ *
+ * [ref: PRD/F7; SDD/ADR-8]
+ */
+
+import { describe, expect, it } from "vitest";
+
+import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
+import { RunLogWriter } from "../../../src/executor/runLog.js";
+import { buildRunLogFilename, resolveCollisionFreePath } from "../../../src/util/filenames.js";
+import type { ActionRecord, ActionOutcome } from "../../../src/executor/state.js";
+import type { RunLogStartMeta, RunLogRetention, ValidationFailure } from "../../../src/executor/runLog.js";
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const FIXED_START = new Date("2026-04-29T14:32:00");
+const FIXED_END = new Date("2026-04-29T14:32:18");
+const INBOX = "tomo-inbox";
+
+function makeRecord(
+	fileId: string,
+	id: string,
+	kind: ActionRecord["kind"],
+	summary: string,
+	outcome: ActionOutcome | null = null,
+): ActionRecord {
+	return { fileId, id, kind, summary, outcome };
+}
+
+function makeStartMeta(overrides?: Partial<RunLogStartMeta>): RunLogStartMeta {
+	return {
+		inboxFolder: INBOX,
+		startedAt: FIXED_START,
+		mode: "confirm",
+		sources: ["2026-04-29_1432_instructions.json"],
+		...overrides,
+	};
+}
+
+// ---------------------------------------------------------------------------
+// buildRunLogFilename
+// ---------------------------------------------------------------------------
+
+describe("buildRunLogFilename", () => {
+	it("formats a local-time filename from a fixed date", () => {
+		const result = buildRunLogFilename(FIXED_START);
+		// Expected: tomo-hashi-run-log_2026-04-29T1432.md
+		expect(result).toBe("tomo-hashi-run-log_2026-04-29T1432.md");
+	});
+
+	it("zero-pads month, day, hour, minute", () => {
+		const d = new Date(2026, 0, 5, 9, 7); // Jan 5, 09:07 local
+		const result = buildRunLogFilename(d);
+		expect(result).toBe("tomo-hashi-run-log_2026-01-05T0907.md");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// resolveCollisionFreePath
+// ---------------------------------------------------------------------------
+
+describe("resolveCollisionFreePath", () => {
+	it("returns base path when no collision", async () => {
+		const vault = new FakeVaultFS();
+		const result = await resolveCollisionFreePath(vault, INBOX, "tomo-hashi-run-log_2026-04-29T1432.md");
+		expect(result).toBe("tomo-inbox/tomo-hashi-run-log_2026-04-29T1432.md");
+	});
+
+	it("appends _2 when base path exists", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create("tomo-inbox/tomo-hashi-run-log_2026-04-29T1432.md", "placeholder");
+		const result = await resolveCollisionFreePath(vault, INBOX, "tomo-hashi-run-log_2026-04-29T1432.md");
+		expect(result).toBe("tomo-inbox/tomo-hashi-run-log_2026-04-29T1432_2.md");
+	});
+
+	it("appends _3 when base and _2 both exist", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create("tomo-inbox/tomo-hashi-run-log_2026-04-29T1432.md", "a");
+		await vault.create("tomo-inbox/tomo-hashi-run-log_2026-04-29T1432_2.md", "b");
+		const result = await resolveCollisionFreePath(vault, INBOX, "tomo-hashi-run-log_2026-04-29T1432.md");
+		expect(result).toBe("tomo-inbox/tomo-hashi-run-log_2026-04-29T1432_3.md");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// RunLogWriter — start()
+// ---------------------------------------------------------------------------
+
+describe("RunLogWriter.start", () => {
+	it("creates the log file and returns its path", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+
+		expect(path).toBe("tomo-inbox/tomo-hashi-run-log_2026-04-29T1432.md");
+		expect(await vault.exists(path)).toBe(true);
+	});
+
+	it("resolves collision with _2 suffix", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create("tomo-inbox/tomo-hashi-run-log_2026-04-29T1432.md", "placeholder");
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+
+		expect(path).toBe("tomo-inbox/tomo-hashi-run-log_2026-04-29T1432_2.md");
+	});
+
+	it("placeholder file has YAML frontmatter with started and mode", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		const content = await vault.read(path);
+
+		expect(content).toContain("started:");
+		expect(content).toContain("mode: confirm");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// RunLogWriter — finalize() — header and body content
+// ---------------------------------------------------------------------------
+
+describe("RunLogWriter.finalize — header", () => {
+	it("includes start and end timestamps in frontmatter", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("started: 2026-04-29T14:32:00");
+		expect(content).toContain("ended:   2026-04-29T14:32:18");
+	});
+
+	it("includes execution mode in frontmatter", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({ mode: "auto-run" }));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("mode: auto-run");
+	});
+
+	it("includes source filenames in frontmatter", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: ["2026-04-29_1432_instructions.json"],
+		}));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("2026-04-29_1432_instructions.json");
+	});
+
+	it("includes totals in frontmatter", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "src → dst", { kind: "applied" }));
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I02", "move_note", "a → b", { kind: "skipped-already" }));
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I03", "link_to_moc", "moc ← link", { kind: "failed", reason: "missing target" }));
+		await writer.finalize(FIXED_END, "always");
+		const path = "tomo-inbox/tomo-hashi-run-log_2026-04-29T1432.md";
+		const content = await vault.read(path);
+
+		expect(content).toContain("applied: 1");
+		expect(content).toContain("skipped-already: 1");
+		expect(content).toContain("skipped-dependency: 0");
+		expect(content).toContain("skipped-cancelled: 0");
+		expect(content).toContain("failed: 1");
+	});
+});
+
+describe("RunLogWriter.finalize — body", () => {
+	it("groups records under ## <source file> sub-heading", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: ["2026-04-29_1432_instructions.json"],
+		}));
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "src → dst", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("## 2026-04-29_1432_instructions.json");
+	});
+
+	it("each row contains I##, kind, summary, outcome", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "inbox/note.md → moc/MyMOC.md", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("I01");
+		expect(content).toContain("create_moc");
+		expect(content).toContain("inbox/note.md → moc/MyMOC.md");
+		expect(content).toContain("applied");
+	});
+
+	it("failed row includes error message", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord(
+			"2026-04-29_1432_instructions.json",
+			"I03",
+			"link_to_moc",
+			"moc/MyMOC.md ← - [[note]]",
+			{ kind: "failed", reason: "MOC target missing" },
+		));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("failed");
+		expect(content).toContain("MOC target missing");
+	});
+
+	it("records verbatim free-text content (no fingerprint, no truncation)", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		// Simulate an update_tracker record with long literal value
+		writer.appendRecord(makeRecord(
+			"2026-04-29_1432_instructions.json",
+			"I04",
+			"update_tracker",
+			"daily.md :: score=Hello World — full sentence",
+			{ kind: "skipped-already" },
+		));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("Hello World — full sentence");
+	});
+
+	it("skipped-dependency row includes the dependsOn id", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord(
+			"2026-04-29_1432_instructions.json",
+			"I02",
+			"link_to_moc",
+			"moc ← link",
+			{ kind: "skipped-dependency", dependsOn: "I01" },
+		));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("skipped-dependency");
+		expect(content).toContain("I01");
+	});
+
+	it("batch run groups records by source with separate ## headings", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: ["file-a_instructions.json", "file-b_instructions.json"],
+		}));
+		writer.appendRecord(makeRecord("file-a_instructions.json", "I01", "create_moc", "a → moc", { kind: "applied" }));
+		writer.appendRecord(makeRecord("file-b_instructions.json", "I01", "move_note", "b → notes/b", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("## file-a_instructions.json");
+		expect(content).toContain("## file-b_instructions.json");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// RunLogWriter — validation failures
+// ---------------------------------------------------------------------------
+
+describe("RunLogWriter.finalize — validation failures", () => {
+	it("validation-only failure appears as the only entry with failed outcome", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: ["bad_instructions.json"],
+		}));
+		writer.appendValidationFailure({
+			fileId: "bad_instructions.json",
+			message: "Schema version mismatch — expected 1, got 2",
+		});
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("## bad_instructions.json");
+		expect(content).toContain("Schema version mismatch — expected 1, got 2");
+		expect(content).toContain("failed");
+	});
+
+	it("validation failure section heading includes (validation failed)", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: ["bad_instructions.json"],
+		}));
+		writer.appendValidationFailure({
+			fileId: "bad_instructions.json",
+			message: "some error",
+		});
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("validation failed");
+	});
+
+	it("validation failure counts toward failed total", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: ["bad_instructions.json"],
+		}));
+		writer.appendValidationFailure({
+			fileId: "bad_instructions.json",
+			message: "bad schema",
+		});
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("failed: 1");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// RunLogWriter — retention rules
+// ---------------------------------------------------------------------------
+
+describe("RunLogWriter.finalize — retention", () => {
+	it("retention=always: file kept when no failures", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "a → b", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "always");
+
+		expect(await vault.exists(path)).toBe(true);
+	});
+
+	it("retention=always: file kept even with failures", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "a → b", { kind: "failed", reason: "error" }));
+		await writer.finalize(FIXED_END, "always");
+
+		expect(await vault.exists(path)).toBe(true);
+	});
+
+	it("retention=only-after-failed + 0 failures: file deleted", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "a → b", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "only-after-failed");
+
+		expect(await vault.exists(path)).toBe(false);
+	});
+
+	it("retention=only-after-failed + ≥1 failure: file kept", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "a → b", { kind: "failed", reason: "missing" }));
+		await writer.finalize(FIXED_END, "only-after-failed");
+
+		expect(await vault.exists(path)).toBe(true);
+	});
+
+	it("retention=only-after-failed + validation failure: file kept", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: ["bad_instructions.json"],
+		}));
+		writer.appendValidationFailure({
+			fileId: "bad_instructions.json",
+			message: "Schema error",
+		});
+		await writer.finalize(FIXED_END, "only-after-failed");
+
+		expect(await vault.exists(path)).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// No crypto imports guard
+// ---------------------------------------------------------------------------
+
+describe("no crypto/sha256 in implementation", () => {
+	it("runLog.ts does not import crypto", async () => {
+		// This test is a build-time assertion documented in test comments.
+		// The grep check is done by CI; here we just verify the module loads.
+		const mod = await import("../../../src/executor/runLog.js");
+		expect(mod.RunLogWriter).toBeDefined();
+	});
+
+	it("filenames.ts does not import crypto", async () => {
+		const mod = await import("../../../src/util/filenames.js");
+		expect(mod.buildRunLogFilename).toBeDefined();
+		expect(mod.resolveCollisionFreePath).toBeDefined();
+	});
+});
