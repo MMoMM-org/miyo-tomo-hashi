@@ -28,7 +28,7 @@ phase: 6
 
 This phase wires every surface together in `main.ts`, exercises the full system end-to-end against a temp-directory live vault, runs the manual QA checklist against `../temp/Privat-Test`, and produces the release-gate traceability artifact.
 
-- [ ] **T6.1 Command + file-menu registration** `[activity: integration]`
+- [x] **T6.1 Command + file-menu registration** `[activity: integration]`
 
   1. Prime: Read PRD F1 invocation rules `[ref: PRD/F1]`. Read SDD `commands/registerCommands.ts` directory entry `[ref: SDD/Directory Map; commands]`.
   2. Test: `test/unit/commands/registerCommands.test.ts`:
@@ -40,10 +40,10 @@ This phase wires every surface together in `main.ts`, exercises the full system 
   3. Implement: `src/commands/registerCommands.ts` — `addCommand` + `registerEvent('file-menu', handler)`. Helper `resolveActiveFile(workspace, settings)` returns the right `Invocation` shape.
   4. Validate: Tests pass; dry-run command registration in jsdom (mock `Plugin.addCommand`).
   5. Success:
-     - [ ] All PRD F1 invocation paths covered `[ref: PRD/F1]`
-     - [ ] No invocation path on `.json` right-click `[ref: PRD/F1]`
+     - [x] All PRD F1 invocation paths covered `[ref: PRD/F1]`
+     - [x] No invocation path on `.json` right-click `[ref: PRD/F1]`
 
-- [ ] **T6.2 main.ts wire-up** `[activity: integration]`
+- [x] **T6.2 main.ts wire-up** `[activity: integration]`
 
   1. Prime: Read existing `src/main.ts` (after 001 has wired its surfaces). Read SDD "Building Block View" diagram + "Building Block View — Components" `[ref: SDD/Building Block View]`.
   2. Test: `test/unit/main.test.ts` — simulate plugin lifecycle:
@@ -53,8 +53,8 @@ This phase wires every surface together in `main.ts`, exercises the full system 
   3. Implement: Modify `src/main.ts` to wire 002 alongside 001 (do not refactor 001 wiring). Add a `cleanups: Array<() => void>` array used in `onunload`.
   4. Validate: All main.ts tests pass; full unit suite `npm test` green; build `npm run build` clean.
   5. Success:
-     - [ ] Plugin loads without error in jsdom `[ref: SDD/Building Block View]`
-     - [ ] Plugin unloads cleanly with zero listener leaks `[ref: SDD/Cross-Cutting Concepts; Performance]`
+     - [x] Plugin loads without error in jsdom `[ref: SDD/Building Block View]`
+     - [x] Plugin unloads cleanly with zero listener leaks `[ref: SDD/Cross-Cutting Concepts; Performance]`
 
 - [ ] **T6.3 End-to-end live test — fixtures + executor.live.test.ts** `[activity: testing]`
 
