@@ -22,7 +22,7 @@ import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import { RunLogWriter } from "../../../src/executor/runLog.js";
 import { buildRunLogFilename, resolveCollisionFreePath } from "../../../src/util/filenames.js";
 import type { ActionRecord, ActionOutcome } from "../../../src/executor/state.js";
-import type { RunLogStartMeta, RunLogRetention, ValidationFailure } from "../../../src/executor/runLog.js";
+import type { RunLogStartMeta } from "../../../src/executor/runLog.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
