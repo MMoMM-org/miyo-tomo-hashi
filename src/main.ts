@@ -87,7 +87,6 @@ import {
 } from "./hooks/HookRunner";
 import type { HookLogger } from "./hooks/HookContext";
 import { validate } from "./schema/validator";
-import type { ActionKind } from "./schema/types";
 import { SettingsTab } from "./settings/SettingsTab";
 import {
 	DEFAULT_SETTINGS,
@@ -390,97 +389,37 @@ export default class TomoHashiPlugin extends Plugin {
 }
 
 // ---------------------------------------------------------------------------
-// HookLoader — production implementation (T6.2)
+// HookLoader — production stub for v0.1 (T6.2)
 //
-// Resolves a HookKey (e.g. "before-create_moc") to the absolute filesystem
-// path of the matching hook file in the configured hooks directory. Returns
-// null when no file matches; reports duplicates so HookRunner can warn.
+// HookRunner's `HookLoader` interface is SYNCHRONOUS (`resolve(key) →
+// {absolutePath, duplicates} | null`). A correct production loader needs to
+// answer "does <hooksDir>/<phase>-<kind>.{js,cjs} exist?" — but Obsidian's
+// `vault.adapter.exists` / `list` are async. Resolving that mismatch
+// (pre-warmed cache, sync stat via node fs) is non-trivial and out of scope
+// for T6.2.
 //
-// Lookup order: alphabetical within the directory, scanning .js then .cjs
-// (production hook files use either extension per ADR-3 / T4.4 deviation).
-// First match wins; subsequent matches are reported in `duplicates`.
+// v0.1 stub: always return null. HookRunner treats null as "no hook
+// configured" and returns `{ kind: "ok" }` — the run proceeds without
+// invoking any hook, regardless of the user's `hooksPolicy` setting. This
+// is the safe failure mode: a misconfigured stub cannot turn an action
+// failure into a phantom hook invocation.
 //
-// Uses `vault.adapter.list` and `vault.adapter.exists` — no node fs imports
-// in this module. The absolute path is reconstructed from the adapter's
-// basePath via the underlying FileSystemAdapter (Obsidian desktop only;
-// matches manifest.isDesktopOnly per the 001 wiring). The adapter shape is
-// duck-typed because Obsidian's published `obsidian.d.ts` does not expose
-// `getBasePath` on `FileSystemAdapter` directly.
+// A follow-up (logged as deviation) builds the proper loader with a
+// pre-warmed listing of the hooks directory at start-of-run. Until then,
+// hook execution is effectively gated off in production. Test coverage of
+// the hook flow lives in `test/unit/hooks/HookRunner.test.ts` via the
+// fixture loader.
 // ---------------------------------------------------------------------------
 
-interface AdapterWithBasePath {
-	getBasePath?: () => string;
-	basePath?: string;
-}
-
-function adapterBasePath(adapter: VaultAdapterShape): string {
-	const a = adapter as unknown as AdapterWithBasePath;
-	if (typeof a.getBasePath === "function") return a.getBasePath();
-	if (typeof a.basePath === "string") return a.basePath;
-	return "";
-}
-
-function joinPath(...segments: string[]): string {
-	return segments
-		.filter((s) => s.length > 0)
-		.join("/")
-		.replace(/\/+/g, "/");
-}
-
 function createHookLoader(
-	adapter: VaultAdapterShape,
-	getHooksDir: () => string,
+	_adapter: VaultAdapterShape,
+	_getHooksDir: () => string,
 ): HookLoader {
 	return {
-		resolve(key: HookKey): { absolutePath: string; duplicates: string[] } | null {
-			const hooksDir = getHooksDir();
-			if (hooksDir === "") return null;
-			// Synchronous interface; the loader caches nothing per ADR-3, but
-			// `adapter.list` is async. We return null here and rely on the
-			// orchestrator's hook-resolution to be best-effort. A future
-			// iteration may switch to an async loader; for v0.1 we use a
-			// simple path-shape check via `exists` synchronously through a
-			// pre-warmed cache. To keep this minimal and side-effect-free
-			// without over-engineering the loader, we prebuild candidates by
-			// shape only.
-			const [phase, kindSuffix] = splitKey(key);
-			if (phase === null || kindSuffix === null) return null;
-			const candidatesRel = [".js", ".cjs"].map(
-				(ext) => `${hooksDir}/${phase}-${kindSuffix}${ext}`,
-			);
-			const base = adapterBasePath(adapter);
-			// Best-effort: pick the first candidate; HookRunner gracefully
-			// handles a missing file via `requireFn` throwing — but the
-			// duplicates list can't be populated synchronously. v0.1
-			// acceptable: `list`-based duplicate detection is exercised in
-			// T4.4 fixtures; production wiring picks the first existing
-			// candidate.
-			for (const rel of candidatesRel) {
-				const abs = joinPath(base, rel);
-				return { absolutePath: abs, duplicates: [] };
-				// NOTE: returning the first candidate unconditionally relies on
-				// require() failing for non-existent files. The HookRunner
-				// catches throws and records `failed` for the action — but
-				// "no hook present" is supposed to return ok. Until the
-				// loader becomes async, the safer behaviour is to short-circuit
-				// here when the file does not exist — but `adapter.exists` is
-				// itself async. A fully correct production loader is deferred
-				// to a follow-up; for v0.1 the user-authored hooks workflow is
-				// rare and the manual-QA gate (T6.4) is the primary signal.
-			}
+		resolve(_key: HookKey): null {
 			return null;
 		},
 	};
-}
-
-function splitKey(key: HookKey): [string | null, ActionKind | null] {
-	if (key.startsWith("before-")) {
-		return ["before", key.slice("before-".length) as ActionKind];
-	}
-	if (key.startsWith("after-")) {
-		return ["after", key.slice("after-".length) as ActionKind];
-	}
-	return [null, null];
 }
 
 function toVaultRelative(absolutePath: string, hooksDir: string): string {
