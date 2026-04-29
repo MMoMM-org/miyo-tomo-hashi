@@ -1,7 +1,7 @@
 ---
 title: "Instruction Executor — apply Tomo's _instructions.json to the vault"
 status: draft
-version: "2.0"
+version: "2.1"
 ---
 
 # Product Requirements Document
@@ -149,7 +149,7 @@ None in v0.1. Multi-user, cross-vault, and remote-instruction-source scenarios a
   - [ ] Every executor run, regardless of execution mode, produces a Markdown log file at `<tomo-inbox>/tomo-hashi-run-log_YYYY-MM-DDTHHMM.md`. Filename uses the run's start timestamp in local time, minute-precision.
   - [ ] If two runs start in the same minute (rare), a numeric suffix `_N` is appended to disambiguate.
   - [ ] The log file header records: run start timestamp, run end timestamp, execution mode (Confirm / Auto-run / Silent), source(s) (filename(s) of the `_instructions.json`(s) processed), and totals (applied / skipped-already / skipped-dependency / skipped-cancelled / failed).
-  - [ ] The log file body lists every action attempted, in execution order, with `I##`, kind, a one-line payload summary, outcome, and (on failure) the error message. The payload summary includes target paths and action kinds verbatim, but free-text content fields (e.g., `update_tracker.value`, `update_log_entry.line`) are recorded as a content fingerprint (8-char sha256 prefix) — not the literal value. Rationale: the run-log file lives in the vault inbox and travels with vault sync; literal tracker values or note prose may be sensitive while the path/kind metadata is what the user needs to debug.
+  - [ ] The log file body lists every action attempted, in execution order, with `I##`, kind, a one-line payload summary, outcome, and (on failure) the error message. The payload summary records target paths, action kinds, and free-text content fields (e.g., `update_tracker.value`, `update_log_entry.line`) **verbatim** — no fingerprint, no truncation, no redaction. Rationale: the run-log lives in the same `<tomo-inbox>/` folder as the source `_instructions.json` files which already contain those exact values in plain text. Hashing the log while the source sits beside it adds ceremony without protecting anything (revised 2026-04-29).
   - [ ] In a batch run, the body is grouped by source file with `## <filename>` sub-headings.
   - [ ] A plugin setting *Run log retention* with two values controls cleanup: **Always keep** (executor never deletes log files; user manages cleanup) and **Only after failed runs** (executor deletes the log file at run end if the run had zero failures). Default: *Always keep*.
   - [ ] Given retention is *Only after failed runs* and a run completes with zero failures, When the run ends, Then the log file is deleted.

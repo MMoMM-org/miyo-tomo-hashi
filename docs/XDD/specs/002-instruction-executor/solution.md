@@ -1,7 +1,7 @@
 ---
 title: "Instruction Executor — Solution Design"
 status: draft
-version: "1.0"
+version: "1.1"
 ---
 
 # Solution Design Document
@@ -1082,8 +1082,8 @@ stateDiagram-v2
 
 These constraints bind the implementation beyond what the PRD ACs already specify. Each one was carried over from the prior EARS-AC table because it adds a testable detail not visible in the PRD wording.
 
-**F7 Run log payload hashing**:
-- THE SYSTEM SHALL record action paths and kinds verbatim in the per-action payload summary; for free-text content fields (e.g., `update_tracker.value`, `update_log_entry.line`) THE SYSTEM SHALL record an 8-character sha256 fingerprint of the value, NOT the literal value. Rationale: the run-log file lives in the vault inbox and travels with vault sync; literal tracker values or note prose may be sensitive while path/kind metadata is what the user needs to debug.
+**F7 Run log payload contents** (revised 2026-04-29):
+- THE SYSTEM SHALL record action paths, kinds, AND free-text content fields (e.g., `update_tracker.value`, `update_log_entry.line`) verbatim in the per-action payload summary — no fingerprint, no redaction. Rationale: the run-log lives in the same `<tomo-inbox>/` folder as the source `_instructions.json` files which already contain those values in plain text; hashing the log while the source sits beside it adds ceremony without protecting anything.
 
 **F8 Hook context shape and capability disclosure**:
 - THE SYSTEM SHALL pass `{ action, app, logger }` only as `HookContext` (per ADR-10 v2) — no `runState`, no narrowed `vault` facade.
