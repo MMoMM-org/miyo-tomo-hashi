@@ -133,10 +133,11 @@ export function mountStatusBar(
 		attr: { "aria-hidden": "false" },
 	});
 
+	// Initial class so DOM-tests asserting `is-idle` see it before the
+	// store's immediate-subscribe callback fires. `applyVisual` below
+	// reconciles class transitions from this baseline.
 	let currentClass: StateClass = "is-idle";
 	root.addClass(currentClass);
-	root.setAttr("aria-label", "Hashi: idle");
-	root.setAttr("title", "Hashi: idle");
 
 	let errorTimer: ReturnType<typeof setTimeout> | null = null;
 	let visual: VisualState = { kind: "idle" };
