@@ -187,3 +187,46 @@
 	color: var(--text-muted);
 	font-weight: 600;
 }
+
+/* --- Status-bar 橋 indicator (002 instruction executor) ---
+ *
+ * Three mutually-exclusive color states driven by `executionStore`. Per
+ * SDD ADR-6 (revised 2026-04-25) the indicator is color-only — no
+ * animation, no transition, no `prefers-reduced-motion` branch. Colors
+ * are bound to Obsidian theme variables so light/dark themes render
+ * correctly without overrides.
+ *
+ * Spec refs: 002-instruction-executor PRD F10; SDD ADR-6; phase-5 T5.2.
+ */
+
+.hashi-status-bar-bridge {
+	font-weight: 600;
+	font-size: 1.05em;
+	cursor: default;
+}
+
+.hashi-status-bar-bridge.is-idle {
+	color: var(--text-muted);
+}
+
+.hashi-status-bar-bridge.is-running {
+	color: var(--color-green);
+	cursor: pointer;
+}
+
+.hashi-status-bar-bridge.is-error {
+	color: var(--color-red);
+}
+
+/* The screen-reader announcement span carries text-node updates on every
+ * state change. It's visually hidden (clip-path) but kept in the
+ * accessibility tree so the parent `aria-live="polite"` region announces
+ * each transition. */
+.hashi-status-bar-bridge-sr {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
