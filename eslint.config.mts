@@ -34,6 +34,7 @@ export default tseslint.config(
 		"test/**/*.test.ts",
 		"test/**/helpers.ts",
 		"test/*/.obsidian/**",
+		"test/fixtures/**",
 		"claude-docker-home/**",
 	]),
 );
