@@ -1,6 +1,6 @@
 ---
 title: "Phase 6: Wire-up, Integration & Release Gate"
-status: pending
+status: completed
 version: "1.0"
 phase: 6
 ---
@@ -87,7 +87,7 @@ This phase wires every surface together in `main.ts`, exercises the full system 
 
   > **Note:** The Success checkboxes above mark the **task deliverables** — the checklist file exists in `plan/manual-qa-checklist.md`, and the `HASHI_DEPLOY_PRIVAT=1` build deploy block is wired in `esbuild.config.mjs`. The actual real-Obsidian walk against `../temp/Privat-Test` is documented as a **USER-RUN gate** at the bottom of the checklist file (`## Release gate`); it is NOT a checkbox to be ticked here. T6.5 will reference the manual-QA artifact in the traceability matrix; the user owns the eyes-on-screen run.
 
-- [ ] **T6.5 PRD AC traceability table + spec finalization + Phase 6 Validation** `[activity: validate]`
+- [x] **T6.5 PRD AC traceability table + spec finalization + Phase 6 Validation** `[activity: validate]`
 
   1. Prime: Read PRD §Feature Requirements (F1–F11) — count ACs by `grep -c '^  - \[ \]' requirements.md` and use that as the gate (do NOT hard-code a per-feature breakdown — it drifts when ACs are added or removed). The PRD's Output Schema row holds the current canonical total; the traceability matrix MUST cover that exact count.
   2. Test: Build a traceability matrix file `docs/XDD/specs/002-instruction-executor/plan/traceability.md`:
@@ -102,7 +102,9 @@ This phase wires every surface together in `main.ts`, exercises the full system 
      - Append a final entry to the spec README Decisions Log dating Phase 6 close
   4. Validate: Full traceability matrix at 100% coverage; all status rows ✅; spec README reflects ready-for-implementation state.
   5. Success:
-     - [ ] 100% of PRD ACs traced to at least one test/live/manual artifact (count gate from PRD Output Schema) `[ref: PRD/Feature Requirements]`
-     - [ ] Spec readiness assessed by xdd-meta = HIGH `[ref: SDD/Validation Checklist]`
+     - [x] 100% of PRD ACs traced to at least one test/live/manual artifact (count gate from PRD Output Schema) `[ref: PRD/Feature Requirements]`
+     - [x] Spec readiness assessed by xdd-meta = HIGH `[ref: SDD/Validation Checklist]`
 
-  - **Phase 6 Validation**: Final command run `npm run build && npm test && npm run test:live && npm run lint`. All green. Manifest `isDesktopOnly: true` (sanity re-check). Tomo handoff status `done` (it was when we drafted; sanity-check). Outbox/inbox clean. Spec 002 ready for the implement workflow.
+  > **Note (T6.5 deliverables)**: `plan/traceability.md` shipped with 97/97 ACs at 100% coverage (14 tests-only / 1 manual-only / 82 both / 0 uncovered). Spec README `Documents` row for `plan/` flipped to `ready` and a Phase 6 close entry appended to the Decisions Log. PRD line 9 self-reports "98 ACs (2026-04-25)" but the canonical grep returns 97 — flagged as documentation drift; not auto-fixed. `npm run test:live` was NOT in the validation gate per ADR-9 v2 (the executor live-test track was retired); manual QA against `../temp/Privat-Test` is the user-owned release gate at the bottom of `plan/manual-qa-checklist.md`.
+
+  - **Phase 6 Validation**: Final command run `npm run build && npm test && npm run lint` (live-test track dropped per ADR-9 v2). All green: 705 unit tests across 51 files, lint clean, build clean. Manifest `isDesktopOnly: true` (sanity re-check confirmed). Tomo handoff status `done` (sanity-check confirmed — `_outbox/for-tomo/2026-04-25_hashi-to-tomo_applied-field.md` returned done in v0.7.0; remaining outbox entries are advisory). Spec 002 ready for the v0.1 release walk.

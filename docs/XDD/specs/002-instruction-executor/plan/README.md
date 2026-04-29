@@ -1,6 +1,6 @@
 ---
 title: "Implementation Plan — Instruction Executor"
-status: draft
+status: ready
 version: "1.0"
 ---
 
@@ -38,7 +38,7 @@ version: "1.0"
 |-------|-------|
 | specId | 002-instruction-executor |
 | title | Instruction Executor |
-| status | DRAFT |
+| status | READY |
 | phases | 6 |
 | totalTasks | 31 |
 | parallelTasks | 4 (Phase 3 T3.1 helpers; Phase 5 T5.1 / T5.2 / T5.3 UI surfaces) |
@@ -54,7 +54,7 @@ version: "1.0"
 | 3 | Action Handlers | completed | 6 | [phase-3.md](phase-3.md) |
 | 4 | Orchestrator, Hooks, Run Log | completed | 5 | [phase-4.md](phase-4.md) |
 | 5 | UI Surfaces | completed | 4 | [phase-5.md](phase-5.md) |
-| 6 | Wire-up, Integration & Release Gate | pending | 5 | [phase-6.md](phase-6.md) |
+| 6 | Wire-up, Integration & Release Gate | completed | 5 | [phase-6.md](phase-6.md) |
 
 ---
 
@@ -209,7 +209,7 @@ Each phase is defined in a separate file.
 - [x] [Phase 3: Action Handlers](phase-3.md)
 - [x] [Phase 4: Orchestrator, Hooks, Run Log](phase-4.md)
 - [x] [Phase 5: UI Surfaces](phase-5.md)
-- [ ] [Phase 6: Wire-up, Integration & Release Gate](phase-6.md)
+- [x] [Phase 6: Wire-up, Integration & Release Gate](phase-6.md)
 
 ---
 
