@@ -1,7 +1,7 @@
 ---
 title: "Instruction Executor — Solution Design"
 status: draft
-version: "1.1"
+version: "1.2"
 ---
 
 # Solution Design Document
@@ -16,7 +16,7 @@ CON-3 **Desktop-only**: same drift as 001 (`manifest.json` `isDesktopOnly: false
 CON-4 **Testing**: vitest unit (jsdom + obsidian mock) + vitest live (node, real `fs/promises` against a temp vault). Inherits 001's split. **NEW vs 001**: live tests for 002 do NOT need Docker — they exercise an `InMemoryVaultFS`-or-`fs/promises`-backed adapter against a temp directory.
 CON-5 **No external inbound surface**: inherits CON-5 from 001. No ports, no MCP, no webhooks.
 CON-6 **One run at a time**: enforced by a single-run lock at the orchestrator. No queue.
-CON-7 **Bundle budget**: informal target ≤ 1000 KB total `main.js`, inherited from 001's revised CON-7 (the original 500 KB target was set before 001 discovered dockerode + docker-modem must be bundled rather than externalized; combined ~940 KB pre-002). ajv 8.x runtime adds ~2 KB on top of that.
+CON-7 **Bundle budget**: informal target ≤ 1200 KB (raised 2026-04-29 at T6.2; v0.1 mechanical raise — bundle IS the 002 codebase) total `main.js`, inherited from 001's revised CON-7 (the original 500 KB target was set before 001 discovered dockerode + docker-modem must be bundled rather than externalized; combined ~940 KB pre-002). Wiring the 002 surfaces (executor + planner + 8 handlers + run log + hook runner + 3 UI surfaces + ajv runtime) brought the post-002 build to ~1105 KB — the 1000 KB target was set before 002's full surface area was integrated. Follow-up bundle audit task tracked in `plan/README.md` (investigate ajv code-gen per ADR-1 v1, lazy-load xterm).
 CON-8 **Trust boundary**: instruction-set fields are NEVER passed to `eval`, `Function`, `exec`, or shell. Hooks are user-owned Node scripts and run with full plugin privilege (PRD F8) — compensating control is the *enabled / disabled / ask* setting plus the kill-switch.
 CON-9 **Tomo handoff — already integrated**: PRD F5 requires Tomo to emit `applied: false` per action. Tomo shipped this on 2026-04-25 in v0.7.0 (`build_actions()` in `tomo/scripts/instruction-render.py`; shared `$defs/applied_field` in `tomo/schemas/instructions.schema.json` across all 8 variants; round-trip test in `tests/test-008-phase1.py`; consumer doc updated; branch `feat/applied-field-instructions`, commit `f3ad49d`). The graceful-fallback path (treat missing as `false`) is retained as defensive code but is no longer the v0.1 path.
 CON-10 **No cross-spec coupling with 001**: post-pivot, 002 shares only the plugin shell (`main.ts`) and the `Store<T>` helper from `util/store.ts`. No shared services, no shared state, no shared error channel.
