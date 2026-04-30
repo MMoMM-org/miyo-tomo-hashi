@@ -705,6 +705,73 @@ describe("InstructionExecutor — executionStore transitions", () => {
 
 		expect(kinds).toContain("running");
 		expect(kinds).toContain("summary");
+		// Empty-modal regression (2026-04-30): in confirm/auto-run mode the
+		// executor MUST NOT auto-transition to idle after summary — the modal
+		// is subscribed to the store and would re-render blank, hiding the
+		// summary view. Idle is driven by the modal's Close handler.
+		expect(kinds[kinds.length - 1]).toBe("summary");
+	});
+
+	it("auto-run mode: state stays at 'summary' after run (no auto-idle to keep modal visible)", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/autorun_instructions.json`;
+		const set = makeInstructionSet([makeCreateMoc("I01", `${INBOX}/moc-autorun.md`)]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note");
+
+		const store = new Store<RunState>({ kind: "idle" });
+		const kinds: RunState["kind"][] = [];
+		store.subscribe((s) => kinds.push(s.kind));
+
+		const executor = new InstructionExecutor({
+			vault,
+			validator: makeOkValidator(set),
+			hookRunner: makeHookRunner(),
+			settings: makeSettings({ executionMode: "auto-run" }),
+			clock: fixedClock,
+			store,
+			notify: vi.fn(),
+		});
+
+		await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(kinds).toContain("summary");
+		expect(kinds[kinds.length - 1]).toBe("summary");
+	});
+
+	it("silent mode keeps the auto-idle transition (no modal to drive close)", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/silent_idle_instructions.json`;
+		const set = makeInstructionSet([makeCreateMoc("I01", `${INBOX}/moc-silent-idle.md`)]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note");
+
+		const store = new Store<RunState>({ kind: "idle" });
+		const kinds: RunState["kind"][] = [];
+		store.subscribe((s) => kinds.push(s.kind));
+
+		const executor = new InstructionExecutor({
+			vault,
+			validator: makeOkValidator(set),
+			hookRunner: makeHookRunner(),
+			settings: makeSettings({ executionMode: "silent" }),
+			clock: fixedClock,
+			store,
+			notify: vi.fn(),
+		});
+
+		await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(kinds).toContain("summary");
+		// Silent mode has no modal — auto-idle is preserved so the executor
+		// returns to idle ready for the next run without external signal.
+		expect(kinds[kinds.length - 1]).toBe("idle");
 	});
 
 	it("validation-failed branch: idle → preparing → validation-failed → idle", async () => {

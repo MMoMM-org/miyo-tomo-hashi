@@ -172,7 +172,12 @@ export class InstructionExecutor {
 				mode,
 				perFileFailures,
 			});
-			this.state.set({ kind: "idle" });
+			// Silent mode has no modal to drive close → return to idle for next run.
+			// Confirm/auto-run keep the validation-failed state until the modal's
+			// Close handler signals idle (otherwise the modal blanks).
+			if (mode === "silent") {
+				this.state.set({ kind: "idle" });
+			}
 			return buildCounts({}, 0);
 		}
 
@@ -226,7 +231,9 @@ export class InstructionExecutor {
 					counts,
 					logFilePath: null,
 				});
-				this.state.set({ kind: "idle" });
+				// Cancel-during-preview can only happen in confirm mode (modal open),
+				// so the summary view stays visible until the modal's Close handler
+				// drives idle. No auto-idle here.
 				return counts;
 			}
 		}
@@ -362,7 +369,12 @@ export class InstructionExecutor {
 			counts,
 			logFilePath: finalLogPath,
 		});
-		this.state.set({ kind: "idle" });
+		// Confirm/auto-run keep summary visible until modal close drives idle
+		// (otherwise the subscribed modal re-renders blank — the empty-modal
+		// regression of 2026-04-30). Silent mode has no modal — auto-idle.
+		if (mode === "silent") {
+			this.state.set({ kind: "idle" });
+		}
 
 		// Step 11: fire run-end Notice
 		this.notify(`Hashi run complete — ${counts.applied} applied, ${counts.failed} failed`);

@@ -346,7 +346,14 @@ export default class TomoHashiPlugin extends Plugin {
 				const modal = new ExecutionModal(this.app, exec, {
 					onExecute: () => exec.proceed(),
 					onCancel: () => exec.cancel(),
-					onClose: () => modal.close(),
+					// User clicked Close on summary / validation-failed → drive the
+					// idle transition (the executor no longer auto-idles in
+					// confirm/auto-run modes; otherwise the modal would re-render
+					// blank — empty-modal regression of 2026-04-30).
+					onClose: () => {
+						exec.state.set({ kind: "idle" });
+						modal.close();
+					},
 				});
 				activeModal = modal;
 				modal.open();
