@@ -101,6 +101,94 @@ describe("locateSection — callout match", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Callout match — prefixed section_name (Tomo's emission shape)
+// ---------------------------------------------------------------------------
+//
+// Tomo's `link_to_moc.section_name` is emitted with the full `[!type] Title`
+// shape (e.g., `"[!blocks] Key Concepts"`). The locator must match against the
+// matching callout's type AND title — not strip the prefix and match by title
+// only, which previously caused every link_to_moc action to fall through to
+// the first-callout fallback (landed all 13 links of the 2026-04-30 walk in
+// `[!connect] Your way around` instead of `[!blocks] Key Concepts`).
+
+describe("locateSection — callout match with [!type] prefix", () => {
+	it("prefixed `[!blocks] Key Concepts` matches the [!blocks] callout, not [!connect]", () => {
+		const content = [
+			"> [!connect] Your way around",
+			"> up:: ",
+			"> [!blocks] Key Concepts",
+			"> body",
+		].join("\n");
+		const metadata = makeMetadata(
+			[],
+			[
+				{ type: "callout", line: 0, endLine: 1 },
+				{ type: "callout", line: 2, endLine: 3 },
+			],
+		);
+		const result = locateSection(metadata, content, "[!blocks] Key Concepts");
+		expect(result).toEqual({ startLine: 3, endLine: 3, kind: "callout" });
+	});
+
+	it("prefixed type that doesn't match any callout type → null (no fallback to title-only)", () => {
+		const content = [
+			"> [!note] Projects",
+			"> body",
+		].join("\n");
+		const metadata = makeMetadata(
+			[],
+			[{ type: "callout", line: 0, endLine: 1 }],
+		);
+		// User asked for [!blocks] Projects, but only [!note] Projects exists — must NOT match
+		const result = locateSection(metadata, content, "[!blocks] Projects");
+		expect(result).toBeNull();
+	});
+
+	it("prefixed match is case-insensitive on both type and title", () => {
+		const content = [
+			"> [!Compass] Something you should look at perhaps..",
+			"> body",
+		].join("\n");
+		const metadata = makeMetadata(
+			[],
+			[{ type: "callout", line: 0, endLine: 1 }],
+		);
+		const result = locateSection(metadata, content, "[!compass] something YOU should look at perhaps..");
+		expect(result?.kind).toBe("callout");
+		expect(result?.startLine).toBe(1);
+	});
+
+	it("plain title `Projects` (no prefix) still matches callout `[!note] Projects` (backward compat)", () => {
+		const content = [
+			"> [!note] Projects",
+			"> body",
+		].join("\n");
+		const metadata = makeMetadata(
+			[],
+			[{ type: "callout", line: 0, endLine: 1 }],
+		);
+		const result = locateSection(metadata, content, "Projects");
+		expect(result).toEqual({ startLine: 1, endLine: 1, kind: "callout" });
+	});
+
+	it("prefixed section_name skips heading match — even if heading shares the title", () => {
+		const content = [
+			"## Key Concepts",
+			"heading body",
+			"> [!blocks] Key Concepts",
+			"> callout body",
+		].join("\n");
+		const metadata = makeMetadata(
+			[{ heading: "Key Concepts", level: 2, line: 0 }],
+			[{ type: "callout", line: 2, endLine: 3 }],
+		);
+		// Prefix is callout-specific intent — must hit the callout, not the heading
+		const result = locateSection(metadata, content, "[!blocks] Key Concepts");
+		expect(result?.kind).toBe("callout");
+	});
+});
+
+// ---------------------------------------------------------------------------
 // No match
 // ---------------------------------------------------------------------------
 
