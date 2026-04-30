@@ -343,7 +343,8 @@ export default class TomoHashiPlugin extends Plugin {
 				if (mode === "silent") return;
 				if (this.executor === null) return;
 				const exec = this.executor;
-				const modal = new ExecutionModal(this.app, exec, {
+				const app = this.app;
+				const modal = new ExecutionModal(app, exec, {
 					onExecute: () => exec.proceed(),
 					onCancel: () => exec.cancel(),
 					// User clicked Close on summary / validation-failed → drive the
@@ -353,6 +354,14 @@ export default class TomoHashiPlugin extends Plugin {
 					onClose: () => {
 						exec.state.set({ kind: "idle" });
 						modal.close();
+					},
+					// User clicked View errors on the summary → open the run log
+					// file in the active leaf. Modal stays open so the user can
+					// compare counts vs. log content; they Close manually.
+					onViewErrors: (logFilePath: string | null) => {
+						if (logFilePath !== null) {
+							void app.workspace.openLinkText(logFilePath, "", false);
+						}
 					},
 				});
 				activeModal = modal;

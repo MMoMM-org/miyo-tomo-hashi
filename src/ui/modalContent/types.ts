@@ -13,5 +13,12 @@ export interface ModalCallbacks {
 	onExecute?: () => void;
 	onCancel?: () => void;
 	onClose?: () => void;
-	onViewErrors?: () => void;
+	/**
+	 * Fired when the user clicks "View errors" on the summary view. Receives
+	 * the run log's vault-relative path (or null if retention is set to
+	 * `only-after-failed-runs` AND the run had no failures — in practice the
+	 * button is only rendered when failed > 0, but logFilePath can still be
+	 * null in degraded scenarios).
+	 */
+	onViewErrors?: (logFilePath: string | null) => void;
 }

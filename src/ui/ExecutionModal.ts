@@ -117,8 +117,8 @@ export class ExecutionModal extends Modal {
 			onClose: () => {
 				this.callbacks.onClose?.();
 			},
-			onViewErrors: () => {
-				this.callbacks.onViewErrors?.();
+			onViewErrors: (logFilePath: string | null) => {
+				this.callbacks.onViewErrors?.(logFilePath);
 			},
 		};
 	}

@@ -484,6 +484,51 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		expect(labels).toContain("Close");
 	});
 
+	it("clicking View errors invokes onViewErrors with the logFilePath", () => {
+		const onViewErrorsCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, { onViewErrors: onViewErrorsCb });
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [record({ outcome: { kind: "failed", reason: "x" } })],
+			counts: counts({ failed: 1, durationMs: 100 }),
+			logFilePath: "100 Inbox/tomo-hashi-run-log_2026-04-30T1131.md",
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const viewErrorsBtn = Array.from(buttons).find(
+			(b) => (b.textContent ?? "") === "View errors",
+		);
+		expect(viewErrorsBtn).toBeDefined();
+		viewErrorsBtn!.dispatchEvent(new Event("click"));
+		expect(onViewErrorsCb).toHaveBeenCalledWith(
+			"100 Inbox/tomo-hashi-run-log_2026-04-30T1131.md",
+		);
+	});
+
+	it("clicking View errors with null logFilePath still invokes onViewErrors with null", () => {
+		const onViewErrorsCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, { onViewErrors: onViewErrorsCb });
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [record({ outcome: { kind: "failed", reason: "x" } })],
+			counts: counts({ failed: 1, durationMs: 100 }),
+			logFilePath: null,
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const viewErrorsBtn = Array.from(buttons).find(
+			(b) => (b.textContent ?? "") === "View errors",
+		);
+		viewErrorsBtn!.dispatchEvent(new Event("click"));
+		expect(onViewErrorsCb).toHaveBeenCalledWith(null);
+	});
+
 	it("View errors button is absent when failed == 0", () => {
 		const exec = makeExecutor();
 		const modal = new ExecutionModal(app, exec, {});

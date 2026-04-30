@@ -66,7 +66,7 @@ function renderSummary(
 	if (state.counts.failed > 0) {
 		const viewErrorsBtn = btnRow.createEl("button", { text: "View errors" });
 		viewErrorsBtn.addEventListener("click", () => {
-			callbacks.onViewErrors?.();
+			callbacks.onViewErrors?.(state.logFilePath);
 		});
 	}
 
