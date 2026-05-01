@@ -16,6 +16,10 @@
 
 import type { Menu, Plugin, TAbstractFile } from "obsidian";
 
+import type { InstructionExecutor } from "../executor/InstructionExecutor";
+import type { VaultFS } from "../vault/VaultFS";
+import type { PluginSettings } from "../types/index";
+
 export interface FileMenuDeps {
 	/**
 	 * Returns the active TomoChatView's input element if the view is currently
@@ -85,4 +89,96 @@ function insertAtCaret(input: HTMLInputElement, text: string): void {
 	input.value = before + text + after;
 	const newCaret = start + text.length;
 	input.setSelectionRange(newCaret, newCaret);
+}
+
+// ---------------------------------------------------------------------------
+// 002 spec — instruction-executor file-menu entry
+// ---------------------------------------------------------------------------
+//
+// Spec refs: 002-instruction-executor phase-6 T6.1; PRD F1 ACs:
+//   - Right-click on `.md` peer (sibling `_instructions.json` exists) → entry
+//     "Execute instructions…" present.
+//   - Right-click on `_instructions.json` → entry NOT present (user does
+//     not normally interact with the JSON directly).
+//   - Right-click on any other file → entry NOT present.
+//
+// Decisions:
+//
+// 1. The file-menu handler is async-aware: deciding whether the file is a
+//    peer requires `vault.exists` on the sibling `.json`. We register the
+//    entry inside an `addItem` callback only after the existence check
+//    resolves; menus in Obsidian render synchronously, so we run the check
+//    BEFORE addItem. Tests await one or two microtasks before asserting.
+//
+// 2. Click handler uses the SAME `resolveActiveInvocation` rules — by the
+//    time the user clicks the menu item, the file path is known and we
+//    dispatch a deterministic `{ kind: "single-file", sourcePath }`. We do
+//    NOT route through `resolveActiveInvocation` (which reads
+//    workspace.getActiveFile()) because the file-menu target may differ
+//    from the active editor file.
+
+const EXECUTE_INSTRUCTIONS_MENU_LABEL = "Execute instructions…";
+const EXECUTE_INSTRUCTIONS_MENU_ICON = "play-circle";
+
+export interface ExecutorFileMenuDeps {
+	/** Narrow surface of `InstructionExecutor` — only `execute()` is needed. */
+	readonly executor: Pick<InstructionExecutor, "execute">;
+	/** Vault adapter for sibling-file existence check. */
+	readonly vault: Pick<VaultFS, "exists">;
+	/** Plugin settings — carried for parity with the palette command. */
+	readonly settings: PluginSettings;
+}
+
+export function registerExecutorFileMenu(
+	plugin: Plugin,
+	deps: ExecutorFileMenuDeps,
+): void {
+	plugin.registerEvent(
+		plugin.app.workspace.on(
+			"file-menu",
+			(menu: Menu, file: TAbstractFile) => {
+				void maybeAddExecutorEntry(menu, file, deps);
+			},
+		),
+	);
+}
+
+async function maybeAddExecutorEntry(
+	menu: Menu,
+	file: TAbstractFile,
+	deps: ExecutorFileMenuDeps,
+): Promise<void> {
+	const sourcePath = await peerSourcePath(deps.vault, file.path);
+	if (sourcePath === null) return;
+
+	menu.addItem((item) => {
+		item
+			.setTitle(EXECUTE_INSTRUCTIONS_MENU_LABEL)
+			.setIcon(EXECUTE_INSTRUCTIONS_MENU_ICON)
+			.onClick(() => {
+				void deps.executor.execute({
+					kind: "single-file",
+					sourcePath,
+				});
+			});
+	});
+}
+
+/**
+ * Returns the `_instructions.json` path that backs `path`, or null when
+ * `path` is not a `.md` peer of an existing instruction set.
+ *
+ * PRD F1 explicit rules:
+ *   - `.json` files NEVER surface the entry — return null.
+ *   - `.md` files surface the entry iff sibling `<stem>.json` exists.
+ *   - All other extensions return null.
+ */
+async function peerSourcePath(
+	vault: Pick<VaultFS, "exists">,
+	path: string,
+): Promise<string | null> {
+	if (path.endsWith(".json")) return null;
+	if (!path.endsWith(".md")) return null;
+	const sibling = path.slice(0, -3) + ".json";
+	return (await vault.exists(sibling)) ? sibling : null;
 }

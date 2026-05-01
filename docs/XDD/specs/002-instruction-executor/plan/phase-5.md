@@ -1,6 +1,6 @@
 ---
 title: "Phase 5: UI Surfaces"
-status: pending
+status: completed
 version: "1.0"
 phase: 5
 ---
@@ -28,7 +28,7 @@ phase: 5
 
 This phase implements the four UI surfaces — the execution modal (state-machine), the 橋 status bar (color states), the hook disclosure modal, and the run-end Notice helper. The first three are independent files and can be developed in parallel.
 
-- [ ] **T5.1 ExecutionModal — state-machine UI** `[parallel: true]` `[activity: frontend-ui]`
+- [x] **T5.1 ExecutionModal — state-machine UI** `[parallel: true]` `[activity: frontend-ui]`
 
   1. Prime: Read PRD F3 (tri-state behavior + button labels) `[ref: PRD/F3]`. Read PRD F6 (banner) and F7 (sticky error banner during run) `[ref: PRD/F6, F7]`. Read SDD ADR-5 + Component States diagram `[ref: SDD/Architecture Decisions; ADR-5]` `[ref: SDD/Cross-Cutting Concepts; Component States]`.
   2. Test: `test/unit/ui/ExecutionModal.test.ts`:
@@ -52,11 +52,11 @@ This phase implements the four UI surfaces — the execution modal (state-machin
      - `src/ui/ExecutionModal.css` rules added to `styles.css` under `.hashi-execution-modal`.
   4. Validate: All ExecutionModal tests pass; jsdom assertions on DOM structure; lint clean.
   5. Success:
-     - [ ] All 5 PRD F3 ACs covered (button labels, mode-driven start, Cancel semantics) `[ref: PRD/F3]`
-     - [ ] Per-action progress + sticky error banner work `[ref: PRD/F7]`
-     - [ ] Modal stays the same instance across phases (no flash) `[ref: SDD/ADR-5]`
+     - [x] All 5 PRD F3 ACs covered (button labels, mode-driven start, Cancel semantics) `[ref: PRD/F3]`
+     - [x] Per-action progress + sticky error banner work `[ref: PRD/F7]`
+     - [x] Modal stays the same instance across phases (no flash) `[ref: SDD/ADR-5]`
 
-- [ ] **T5.2 Status bar 橋 — color states** `[parallel: true]` `[activity: frontend-ui]`
+- [x] **T5.2 Status bar 橋 — color states** `[parallel: true]` `[activity: frontend-ui]`
 
   1. Prime: Read PRD F10 ACs `[ref: PRD/F10]`. Read SDD ADR-6 (revised; color states only) `[ref: SDD/Architecture Decisions; ADR-6]`. Read 001's status-bar implementation if shipped (`src/ui/status-bar/StatusBarIcon.ts`) for class-naming conventions.
   2. Test: `test/unit/ui/statusBar.test.ts`:
@@ -75,11 +75,11 @@ This phase implements the four UI surfaces — the execution modal (state-machin
      - `styles.css` rules: `.hashi-status-bar-bridge.is-idle { color: var(--text-muted); }`, `.is-running { color: var(--color-green); }`, `.is-error { color: var(--color-red); }`. No animation rules.
   4. Validate: Status bar tests pass; `npm run build` clean; jsdom assertions reliable.
   5. Success:
-     - [ ] Three color states verified `[ref: PRD/F10; SDD/ADR-6]`
-     - [ ] Tooltip text correct per state `[ref: PRD/F10]`
-     - [ ] No animation present `[ref: SDD/ADR-6]`
+     - [x] Three color states verified `[ref: PRD/F10; SDD/ADR-6]`
+     - [x] Tooltip text correct per state `[ref: PRD/F10]`
+     - [x] No animation present `[ref: SDD/ADR-6]`
 
-- [ ] **T5.3 HookDisclosureModal — ask-mode disclosure** `[parallel: true]` `[activity: frontend-ui]`
+- [x] **T5.3 HookDisclosureModal — ask-mode disclosure** `[parallel: true]` `[activity: frontend-ui]`
 
   1. Prime: Read PRD F8 ACs about disclosure modal `[ref: PRD/F8]`. Read SDD `HookDisclosureModal` directory entry `[ref: SDD/Directory Map; hooks]`.
   2. Test: `test/unit/hooks/HookDisclosureModal.test.ts`:
@@ -90,13 +90,13 @@ This phase implements the four UI surfaces — the execution modal (state-machin
   3. Implement: `src/hooks/HookDisclosureModal.ts` — Obsidian `Modal` subclass. Constructor takes `(app, hookInfo): Promise<Decision>`-style callback. Wired into Phase 4's `HookRunner` callback signature.
   4. Validate: Tests pass; modal interaction round-trips.
   5. Success:
-     - [ ] All three decisions returned correctly `[ref: PRD/F8]`
-     - [ ] Esc-as-disable defensive default `[ref: PRD/F8]`
+     - [x] All three decisions returned correctly `[ref: PRD/F8]`
+     - [x] Esc-as-disable defensive default `[ref: PRD/F8]`
 
-- [ ] **T5.4 Phase 5 Validation** `[activity: validate]`
+- [x] **T5.4 Phase 5 Validation** `[activity: validate]`
 
   - Run `npm test && npm run lint && npm run build`. Confirm:
-    - All three UI surfaces pass their own test suites
-    - `executionStore` subscriptions are unsubscribed on modal close / status-bar teardown (no leaked listeners — assert via `Store<T>.listenerCount()` if exposed, or track via test fixture)
-    - jsdom DOM assertions stable
-    - No lint warnings
+    - [x] All three UI surfaces pass their own test suites (671 tests; +62 over Phase 4 baseline)
+    - [x] `executionStore` subscriptions are unsubscribed on modal close / status-bar teardown (asserted via `listenerCount(store)` helper in `test/unit/ui/ExecutionModal.test.ts:76`; dedicated teardown test in `test/unit/ui/statusBar.test.ts:478`)
+    - [x] jsdom DOM assertions stable (671/671 green; no flakes)
+    - [x] No lint warnings

@@ -118,27 +118,33 @@ describe("TomoHashiPlugin integration (T5.3)", () => {
 			expect(plugin.addSettingTab).toHaveBeenCalledTimes(1);
 		});
 
-		it("creates a status bar item via plugin.addStatusBarItem", async () => {
+		it("creates at least one status bar item via plugin.addStatusBarItem", async () => {
 			await plugin.onload();
-			expect(plugin.addStatusBarItem).toHaveBeenCalledTimes(1);
+			// 001 mounts the connection-state icon; 002's T6.2 mounts a second
+			// status-bar 橋 indicator. Both are independent status-bar items —
+			// the integration test only asserts the 001 surface is wired.
+			expect(plugin.addStatusBarItem).toHaveBeenCalled();
 		});
 
-		it("registers a file-menu event listener via plugin.registerEvent", async () => {
+		it("registers at least one file-menu event listener via plugin.registerEvent", async () => {
 			await plugin.onload();
-			// registerEvent is called once by registerFileMenu — file-menu wiring.
-			expect(plugin.registerEvent).toHaveBeenCalledTimes(1);
+			// 001 registers one file-menu listener (@file prefill); 002's T6.2
+			// registers a second one (Execute instructions… peer entry). The
+			// 001 integration test only asserts that the 001 listener is wired.
+			expect(plugin.registerEvent).toHaveBeenCalled();
 		});
 
-		it("registers exactly two commands: reconnect-to-tomo and show-chat-window", async () => {
+		it("registers the 001 commands reconnect-to-tomo and show-chat-window", async () => {
 			await plugin.onload();
 			const ids = vi
 				.mocked(plugin.addCommand)
 				.mock.calls.map((call) => (call[0] as { id: string }).id);
-			// Reconnect may register multiple times if the store transitions before
-			// the asserts run; collapse to a Set for semantic comparison.
-			expect(new Set(ids)).toEqual(
-				new Set(["reconnect-to-tomo", "show-chat-window"]),
-			);
+			// 002 wiring adds a third command (execute-instructions-document)
+			// per T6.2 — the 001 integration test only asserts the 001
+			// commands are present, not the absence of others.
+			const idSet = new Set(ids);
+			expect(idSet.has("reconnect-to-tomo")).toBe(true);
+			expect(idSet.has("show-chat-window")).toBe(true);
 		});
 	});
 

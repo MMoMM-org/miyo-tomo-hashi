@@ -32,6 +32,7 @@ import * as docker from "../../../src/connection/docker";
 import { connectionStore } from "../../../src/connection/connectionStore";
 import type { ConnectionState } from "../../../src/connection/state";
 import type { TomoInstance } from "../../../src/connection/types";
+import { DEFAULT_SETTINGS } from "../../../src/types";
 import type { PluginSettings } from "../../../src/types";
 
 // Same relaxed stand-in for inspectContainer's resolved value as the T3.3
@@ -114,7 +115,7 @@ function makeFakeSession(): FakeSession {
 }
 
 function settings(initial: Partial<PluginSettings> = {}): PluginSettings {
-	return { chosenInstanceName: null, zoomLevel: 1, ...initial };
+	return { ...DEFAULT_SETTINGS, ...initial };
 }
 
 // --- suite -------------------------------------------------------------------

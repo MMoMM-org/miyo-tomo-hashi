@@ -1,6 +1,6 @@
 ---
 title: "Phase 4: Orchestrator, Hooks, Run Log"
-status: pending
+status: completed
 version: "1.0"
 phase: 4
 ---
@@ -30,7 +30,7 @@ phase: 4
 
 This phase wires the orchestrator that drives a run: source resolution, schema validation, action dispatch, JSON applied-flag write, peer best-effort tick, run log, hook invocation. The orchestrator owns the single-run lock, the cancellation flag, halt-on-dependency, and `executionStore` state transitions.
 
-- [ ] **T4.1 Planner — source resolution + canonical order + applied filter** `[activity: domain-modeling]`
+- [x] **T4.1 Planner — source resolution + canonical order + applied filter** `[activity: domain-modeling]`
 
   1. Prime: Read PRD F1 (invocation rules), F6 (partial-resume) `[ref: PRD/F1, F6]`. Read SDD "Planner" directory entry `[ref: SDD/Directory Map]` and Primary Flow `[ref: SDD/Runtime View; Primary Flow]`.
   2. Test: `test/unit/executor/planner.test.ts`:
@@ -41,11 +41,11 @@ This phase wires the orchestrator that drives a run: source resolution, schema v
   3. Implement: `src/executor/planner.ts`.
   4. Validate: Test suite green; types clean.
   5. Success:
-     - [ ] PRD F1 resolution matrix covered `[ref: PRD/F1]`
-     - [ ] PRD F6 partial-resume drives off `applied` field `[ref: PRD/F6]`
-     - [ ] Dependency graph available for halt-on-dependency in T4.4 `[ref: PRD/F4; SDD/Acceptance Criteria; F4 Action kinds]`
+     - [x] PRD F1 resolution matrix covered `[ref: PRD/F1]`
+     - [x] PRD F6 partial-resume drives off `applied` field `[ref: PRD/F6]`
+     - [x] Dependency graph available for halt-on-dependency in T4.4 `[ref: PRD/F4; SDD/Acceptance Criteria; F4 Action kinds]`
 
-- [ ] **T4.2 JsonAppliedWriter + PeerCheckboxSync** `[activity: domain-modeling]`
+- [x] **T4.2 JsonAppliedWriter + PeerCheckboxSync** `[activity: domain-modeling]`
 
   1. Prime: Read PRD F5 (full AC list) `[ref: PRD/F5]`. Read SDD "Atomic JSON Applied-Flag Write" example `[ref: SDD/Implementation Examples; Example: Atomic JSON Applied-Flag Write]`.
   2. Test:
@@ -63,10 +63,10 @@ This phase wires the orchestrator that drives a run: source resolution, schema v
   3. Implement: `src/executor/jsonAppliedWriter.ts` and `src/executor/peerCheckboxSync.ts` per SDD examples.
   4. Validate: Both test suites pass; lint clean.
   5. Success:
-     - [ ] Applied-flag writes are atomic + monotonic `[ref: PRD/F5; SDD/ADR-7]`
-     - [ ] Peer tick is best-effort with all four outcome paths covered `[ref: PRD/F5]`
+     - [x] Applied-flag writes are atomic + monotonic `[ref: PRD/F5; SDD/ADR-7]`
+     - [x] Peer tick is best-effort with all four outcome paths covered `[ref: PRD/F5]`
 
-- [ ] **T4.3 RunLogWriter** `[activity: domain-modeling]`
+- [x] **T4.3 RunLogWriter** `[activity: domain-modeling]`
 
   1. Prime: Read PRD F7 (run log file format + retention) `[ref: PRD/F7]`. Read SDD ADR-8 (Markdown + frontmatter + table) `[ref: SDD/Architecture Decisions; ADR-8]`. Read `src/util/filenames.ts` from T1 plan (or create here if not yet).
   2. Test: `test/unit/executor/runLog.test.ts`:
@@ -81,10 +81,10 @@ This phase wires the orchestrator that drives a run: source resolution, schema v
   3. Implement: `src/executor/runLog.ts` — `RunLogWriter` class with `start(meta)`, `appendRecord(record)`, `finalize(retention)` API. Writes through `VaultFS` only.
   4. Validate: All run-log tests pass.
   5. Success:
-     - [ ] All PRD F7 ACs covered `[ref: PRD/F7]`
-     - [ ] Retention rule applied at finalize `[ref: PRD/F7]`
+     - [x] All PRD F7 ACs covered `[ref: PRD/F7]`
+     - [x] Retention rule applied at finalize `[ref: PRD/F7]`
 
-- [ ] **T4.4.0 Hook fixture set** `[activity: testing]` (added 2026-04-25 — gives T4.4 a concrete file-loaded surface so the production loader's `require.cache` eviction path is actually exercised, not faked)
+- [x] **T4.4.0 Hook fixture set** `[activity: testing]` (added 2026-04-25 — gives T4.4 a concrete file-loaded surface so the production loader's `require.cache` eviction path is actually exercised, not faked)
 
   1. Prime: Read PRD F8 hook semantics (return shape, throw vs errors[], pre/post commit, timeout, kill-switch, cache-eviction). Hooks are loaded from disk via `createRequire(import.meta.url)`; mocking the loader at the test boundary defeats the point.
   2. Test: This task IS the test surface — there is no production code to write here. The fixtures land under `test/fixtures/hooks/` and are imported by HookRunner tests in T4.4 via the production loader, not via `vi.mock`.
@@ -101,10 +101,10 @@ This phase wires the orchestrator that drives a run: source resolution, schema v
      - `test/fixtures/hooks/_helper.js` — single-line module imported by the transitive-import fixture above
   4. Validate: All fixture files exist; each runs without import errors when required directly with Node.
   5. Success:
-     - [ ] Eight hook scenarios + one helper module land under `test/fixtures/hooks/` `[ref: PRD/F8]`
-     - [ ] T4.4's HookRunner test suite consumes these fixtures via the production loader, not via inline mocks `[ref: SDD/ADR-3]`
+     - [x] Eight hook scenarios + one helper module land under `test/fixtures/hooks/` `[ref: PRD/F8]`
+     - [x] T4.4's HookRunner test suite consumes these fixtures via the production loader, not via inline mocks `[ref: SDD/ADR-3]`
 
-- [ ] **T4.4 HookRunner + HookContext + HookDisclosureModal hookup point** `[activity: integration]`
+- [x] **T4.4 HookRunner + HookContext + HookDisclosureModal hookup point** `[activity: integration]`
 
   1. Prime: Read PRD F8 (full AC list) `[ref: PRD/F8]`. Read SDD "Hook Loader with Per-Run Cache Eviction" example + ADR-3, ADR-10 `[ref: SDD/Implementation Examples; Hook Loader]` `[ref: SDD/Architecture Decisions; ADR-3, ADR-10]`. Read T4.4.0 fixture set above — every test in this task loads fixtures via the production loader.
   2. Test: `test/unit/hooks/HookRunner.test.ts`:
@@ -120,11 +120,11 @@ This phase wires the orchestrator that drives a run: source resolution, schema v
   3. Implement: `src/hooks/HookRunner.ts` + `src/hooks/HookContext.ts`. The `HookDisclosureModal` is referenced by `HookRunner` via a callback (Modal class itself is built in Phase 5 T5.3 — Phase 4 stubs the callback signature).
   4. Validate: All hook tests pass; types clean.
   5. Success:
-     - [ ] All PRD F8 ACs except UI ones (F5: disclosure modal — Phase 5) `[ref: PRD/F8]`
-     - [ ] Hook context matches ADR-10 exactly `[ref: SDD/ADR-10]`
-     - [ ] Cache-evict mechanism verified by edit-between-runs test `[ref: SDD/ADR-3]`
+     - [x] All PRD F8 ACs except UI ones (F5: disclosure modal — Phase 5) `[ref: PRD/F8]`
+     - [x] Hook context matches ADR-10 exactly `[ref: SDD/ADR-10]`
+     - [x] Cache-evict mechanism verified by edit-between-runs test `[ref: SDD/ADR-3]`
 
-- [ ] **T4.5 InstructionExecutor + executionStore** `[activity: domain-modeling]`
+- [x] **T4.5 InstructionExecutor + executionStore** `[activity: domain-modeling]`
 
   1. Prime: Read SDD "InstructionExecutor Service Surface" `[ref: SDD/Interface Specifications; InstructionExecutor]`. Read Runtime View Primary Flow + Complex Logic `[ref: SDD/Runtime View]`.
   2. Test: `test/unit/executor/InstructionExecutor.test.ts`. Each test injects `FakeVaultFS` + scripted hook runner + scripted validator:
@@ -145,9 +145,9 @@ This phase wires the orchestrator that drives a run: source resolution, schema v
      - `src/executor/InstructionExecutor.ts` — orchestrator class implementing the full lifecycle from §Complex Logic of the SDD
   4. Validate: Full executor test suite passes; lint clean.
   5. Success:
-     - [ ] Single-run lock prevents concurrent runs `[ref: PRD/F1; SDD/CON-6]`
-     - [ ] Halt-on-dependency rule honored across batch `[ref: PRD/F4]`
-     - [ ] Cancellation safe between actions `[ref: PRD/F3]`
-     - [ ] All PRD F-feature behaviors covered at the executor layer `[ref: PRD/F1, F4, F5, F6, F7, F8]`
+     - [x] Single-run lock prevents concurrent runs `[ref: PRD/F1; SDD/CON-6]`
+     - [x] Halt-on-dependency rule honored across batch `[ref: PRD/F4]`
+     - [x] Cancellation safe between actions `[ref: PRD/F3]`
+     - [x] All PRD F-feature behaviors covered at the executor layer `[ref: PRD/F1, F4, F5, F6, F7, F8]`
 
   - **Phase 4 Validation**: After T4.5, run `npm test && npm run test:live && npm run lint && npm run build`. Confirm orchestrator + planner + applied-writer + peer-sync + run log + hook runner all pass; live tests still green; build clean.

@@ -28,6 +28,7 @@ import * as docker from "../../../src/connection/docker";
 import { connectionStore } from "../../../src/connection/connectionStore";
 import type { ConnectionState } from "../../../src/connection/state";
 import type { TomoInstance } from "../../../src/connection/types";
+import { DEFAULT_SETTINGS } from "../../../src/types";
 import type { PluginSettings } from "../../../src/types";
 
 // The shape our state machine actually consumes from inspectContainer is
@@ -175,7 +176,7 @@ function recordStates(): { states: ConnectionState[]; unsub: () => void } {
 }
 
 function settings(initial: Partial<PluginSettings> = {}): PluginSettings {
-	return { chosenInstanceName: null, zoomLevel: 1, ...initial };
+	return { ...DEFAULT_SETTINGS, ...initial };
 }
 
 // --- suite -------------------------------------------------------------------
@@ -254,8 +255,8 @@ describe("TomoConnection.connect()", () => {
 
 		expect(persist).toHaveBeenCalledTimes(1);
 		expect(persist).toHaveBeenCalledWith({
+			...DEFAULT_SETTINGS,
 			chosenInstanceName: target.name,
-			zoomLevel: 1,
 		});
 		// Must reference the live settings object (mutation visible to caller).
 		expect(persist.mock.calls[0]?.[0]).toBe(s);

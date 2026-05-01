@@ -126,6 +126,33 @@ const copyAssets = {
 						);
 					}
 				}
+
+				// Optional deployment to the user's external test vault for
+				// real-Obsidian manual QA (T6.4 / ADR-9 v2). Set
+				// `HASHI_DEPLOY_PRIVAT=1 npm run build` to enable. Independent
+				// of HASHI_DEPLOY_VAULT — both flags can be set together.
+				if (process.env.HASHI_DEPLOY_PRIVAT) {
+					const PRIVAT_PLUGIN_DIR =
+						"../temp/Privat-Test/.obsidian/plugins/miyo-tomo-hashi";
+					if (existsSync("../temp/Privat-Test/.obsidian")) {
+						mkdirSync(PRIVAT_PLUGIN_DIR, { recursive: true });
+						copyFileSync(`${outdir}/main.js`, `${PRIVAT_PLUGIN_DIR}/main.js`);
+						const stampedManifest = stampManifestForVault();
+						writeFileSync(
+							`${PRIVAT_PLUGIN_DIR}/manifest.json`,
+							JSON.stringify(stampedManifest, null, "\t") + "\n",
+							"utf8",
+						);
+						bundleStylesCss(PRIVAT_PLUGIN_DIR);
+						console.log(
+							`[deploy] Plugin copied to ${PRIVAT_PLUGIN_DIR} (version: ${stampedManifest.version})`,
+						);
+					} else {
+						console.warn(
+							"[deploy] HASHI_DEPLOY_PRIVAT set but ../temp/Privat-Test/.obsidian missing — skipped",
+						);
+					}
+				}
 			}
 		});
 	},

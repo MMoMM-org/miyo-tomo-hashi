@@ -1,6 +1,6 @@
 ---
 title: "Phase 2: Vault Boundary & Schema"
-status: pending
+status: completed
 version: "1.0"
 phase: 2
 ---
@@ -29,7 +29,7 @@ phase: 2
 
 This phase implements the vault edge — the `VaultFS` port + two adapters (Obsidian for production, in-memory fake for unit tests) — plus the schema validator wrapper that compiles ajv against the bundled schema and flattens any error array to a human string.
 
-- [ ] **T2.1 VaultFS port** `[activity: domain-modeling]`
+- [x] **T2.1 VaultFS port** `[activity: domain-modeling]`
 
   1. Prime: Read SDD "VaultFS Port" `[ref: SDD/Interface Specifications; VaultFS Port (port/adapter pattern)]`. Read SDD "Cross-Component Boundaries" for the test-substitution principle `[ref: SDD/Cross-Component Boundaries]`.
   2. Test: Write `test/unit/vault/VaultFS.contract.test.ts`. The contract test exports a function `runContractTests(makeVaultFS: () => VaultFS)` that any adapter implementation can pass. Asserted behaviors:
@@ -47,7 +47,7 @@ This phase implements the vault edge — the `VaultFS` port + two adapters (Obsi
      - [ ] Port interface matches SDD `[ref: SDD/VaultFS Port]`
      - [ ] Contract test runner ready for use by all three adapters `[ref: SDD/ADR-9]`
 
-- [ ] **T2.2 ObsidianVaultFS adapter** `[activity: integration]`
+- [x] **T2.2 ObsidianVaultFS adapter** `[activity: integration]`
 
   1. Prime: Read Obsidian Plugin API docs sections cited in SDD `[ref: SDD/External APIs; Obsidian Plugin API]`. Read SDD "Implementation Gotchas" — note the `vault.process`, `fileManager.renameFile`, MetadataCache lag warnings `[ref: SDD/Implementation Gotchas]`.
   2. Test: Write `test/unit/vault/ObsidianVaultFS.test.ts` that:
@@ -64,7 +64,7 @@ This phase implements the vault edge — the `VaultFS` port + two adapters (Obsi
      - [ ] `fileManager.renameFile` (not `vault.rename`) used for moves `[ref: PRD/F4; SDD/Implementation Gotchas]`
      - [ ] `vault.trash` with system flag used for delete `[ref: PRD/F4]`
 
-- [ ] **T2.3 FakeVaultFS** `[activity: testing]` (FsPromisesVaultFS dropped 2026-04-25 per ADR-9 revision)
+- [x] **T2.3 FakeVaultFS** `[activity: testing]` (FsPromisesVaultFS dropped 2026-04-25 per ADR-9 revision)
 
   1. Prime: Read SDD test split `[ref: SDD/ADR-9 (revised 2026-04-25)]` and the `test/fixtures/instructions/` layout in SDD Directory Map `[ref: SDD/Directory Map]`.
   2. Test:
@@ -76,7 +76,7 @@ This phase implements the vault edge — the `VaultFS` port + two adapters (Obsi
      - [ ] FakeVaultFS passes the contract `[ref: SDD/ADR-9 (revised 2026-04-25)]`
      - [ ] Production confidence comes from manual QA in `../temp/Privat-Test` (Phase 6 T6.4), not from a node-fs adapter `[ref: SDD/ADR-9 (revised 2026-04-25)]`
 
-- [ ] **T2.4 SchemaValidator wrapper** `[activity: domain-modeling]`
+- [x] **T2.4 SchemaValidator wrapper** `[activity: domain-modeling]`
 
   1. Prime: Read PRD F2 (full AC list) `[ref: PRD/F2]`; read SDD "Schema Validator" — `src/schema/validator.ts` imports ajv 8.x and the schema JSON, compiles a validator at module load, flattens ajv's error array to a single human string at the boundary `[ref: SDD/Architecture Decisions; ADR-1 (revised 2026-04-25)]`.
   2. Test: Write `test/unit/schema/validator.test.ts`. Use fixture files from `test/fixtures/instructions/` (created in T2.3 fixture layout):
@@ -103,7 +103,7 @@ This phase implements the vault edge — the `VaultFS` port + two adapters (Obsi
      - [ ] Validation budget met `[ref: PRD/F2; SDD/Quality Requirements]`
      - [ ] Validator output is typed (`InstructionSet` on success) `[ref: SDD/Application Data Models]`
 
-- [ ] **T2.5 Phase 2 Validation** `[activity: validate]`
+- [x] **T2.5 Phase 2 Validation** `[activity: validate]`
 
   - Run `npm run build && npm test && npm run lint`. All green. (Per ADR-1 v2 / ADR-9 v2: no `schema:build` prebuild, no `test:live` for FsPromisesVaultFS — manual QA in `../temp/Privat-Test` is the Phase 6 integration gate.)
   - Confirm:

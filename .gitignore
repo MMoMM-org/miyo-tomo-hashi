@@ -10,8 +10,10 @@ node_modules
 # Build output — uploaded to GitHub releases, not committed
 main.js
 build/
-# Exception: hot-reload plugin ships with the test vault
-!test/*/.obsidian/plugins/hot-reload/main.js
+
+# Local test vault — user notes, audio recordings, Obsidian state
+# Never committed; live data only on the developer's machine.
+test/Hashi/
 
 # Test coverage
 coverage/
@@ -29,6 +31,7 @@ data.json
 temp/
 _inbox/
 _outbox/
+_archive/
 
 # MCP config (may contain API keys)
 .mcp.json

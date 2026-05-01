@@ -64,3 +64,216 @@
 	color: var(--text-on-accent);
 	border-color: var(--interactive-accent);
 }
+
+/* --- Execution modal (state-machine UI) ---
+ *
+ * One Modal class drives preview / progress / summary / validation-failed
+ * via subviews. Layout primitives are intentionally minimal — Obsidian's
+ * theme variables carry colors and spacing.
+ *
+ * Spec refs: 002-instruction-executor PRD F3/F6/F7; SDD ADR-5; phase-5 T5.1.
+ */
+
+.hashi-execution-modal-header {
+	font-weight: 600;
+	font-size: var(--font-ui-large);
+	margin-bottom: 8px;
+}
+
+.hashi-execution-modal-banner {
+	background: var(--background-secondary);
+	border-left: 3px solid var(--interactive-accent);
+	padding: 6px 10px;
+	margin-bottom: 10px;
+	font-size: var(--font-smaller);
+}
+
+.hashi-execution-modal-error-banner {
+	background: var(--background-modifier-error);
+	color: var(--text-error);
+	padding: 6px 10px;
+	margin-bottom: 10px;
+	font-size: var(--font-smaller);
+	border-radius: var(--radius-s);
+}
+
+.hashi-execution-modal-body {
+	max-height: 50vh;
+	overflow-y: auto;
+	padding: 4px 0;
+}
+
+.hashi-execution-modal-file-heading {
+	font-size: var(--font-ui-medium);
+	margin: 10px 0 4px;
+	color: var(--text-muted);
+}
+
+.hashi-execution-modal-row {
+	display: grid;
+	grid-template-columns: 24px 60px 140px 1fr;
+	gap: 8px;
+	align-items: center;
+	padding: 3px 0;
+	font-size: var(--font-smaller);
+}
+
+.hashi-execution-modal-row.is-applied {
+	opacity: 0.55;
+}
+
+.hashi-execution-modal-row.is-failed {
+	color: var(--text-error);
+}
+
+.hashi-execution-modal-row-glyph {
+	text-align: center;
+	font-weight: 600;
+}
+
+.hashi-execution-modal-row-id {
+	font-family: var(--font-monospace);
+	color: var(--text-muted);
+}
+
+.hashi-execution-modal-row-kind {
+	font-family: var(--font-monospace);
+	color: var(--text-accent);
+}
+
+.hashi-execution-modal-footer {
+	margin-top: 12px;
+	padding-top: 8px;
+	border-top: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-smaller);
+	font-style: italic;
+}
+
+.hashi-execution-modal-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.hashi-execution-modal-stats {
+	font-size: var(--font-ui-large);
+	font-weight: 600;
+	margin: 12px 0;
+}
+
+.hashi-execution-modal-log-link {
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+	margin-bottom: 8px;
+}
+
+.hashi-execution-modal-validation-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 12px;
+	font-size: var(--font-smaller);
+}
+
+.hashi-execution-modal-validation-table th,
+.hashi-execution-modal-validation-table td {
+	padding: 4px 8px;
+	text-align: left;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.hashi-execution-modal-validation-table th {
+	color: var(--text-muted);
+	font-weight: 600;
+}
+
+/* --- Status-bar 橋 indicator (002 instruction executor) ---
+ *
+ * Three mutually-exclusive color states driven by `executionStore`. Per
+ * SDD ADR-6 (revised 2026-04-25) the indicator is color-only — no
+ * animation, no transition, no `prefers-reduced-motion` branch. Colors
+ * are bound to Obsidian theme variables so light/dark themes render
+ * correctly without overrides.
+ *
+ * Spec refs: 002-instruction-executor PRD F10; SDD ADR-6; phase-5 T5.2.
+ */
+
+.hashi-status-bar-bridge {
+	font-weight: 600;
+	font-size: 1.05em;
+	cursor: default;
+}
+
+.hashi-status-bar-bridge.is-idle {
+	color: var(--text-muted);
+}
+
+.hashi-status-bar-bridge.is-running {
+	color: var(--color-green);
+	cursor: pointer;
+}
+
+.hashi-status-bar-bridge.is-error {
+	color: var(--color-red);
+}
+
+/* The screen-reader announcement span carries text-node updates on every
+ * state change. It's visually hidden (clip-path) but kept in the
+ * accessibility tree so the parent `aria-live="polite"` region announces
+ * each transition. */
+.hashi-status-bar-bridge-sr {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+/* --- Hook disclosure modal (ask-mode) ---
+ *
+ * Shown by HookRunner on first detection of a hook in a session when the
+ * Hooks policy is *ask*. Three buttons (Enable / Enable once / Disable)
+ * resolve a Promise<AskDecision>; Esc resolves to "disable".
+ *
+ * Spec refs: 002-instruction-executor PRD F8; SDD HookDisclosureModal;
+ *   phase-5 T5.3.
+ */
+
+.hashi-hook-disclosure-modal-title {
+	font-size: var(--font-ui-large);
+	font-weight: 600;
+	margin: 0 0 8px;
+}
+
+.hashi-hook-disclosure-modal-meta {
+	margin-bottom: 12px;
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+}
+
+.hashi-hook-disclosure-modal-path {
+	font-family: var(--font-monospace);
+	word-break: break-all;
+}
+
+.hashi-hook-disclosure-modal-size {
+	margin-top: 2px;
+}
+
+.hashi-hook-disclosure-modal-disclosure {
+	background: var(--background-secondary);
+	border-left: 3px solid var(--text-warning);
+	padding: 8px 10px;
+	margin: 0 0 12px;
+	font-size: var(--font-smaller);
+	color: var(--text-normal);
+}
+
+.hashi-hook-disclosure-modal-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 12px;
+}
