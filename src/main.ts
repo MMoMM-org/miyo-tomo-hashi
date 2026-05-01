@@ -356,12 +356,14 @@ export default class TomoHashiPlugin extends Plugin {
 						modal.close();
 					},
 					// User clicked View errors on the summary → open the run log
-					// file in the active leaf. Modal stays open so the user can
-					// compare counts vs. log content; they Close manually.
+					// file in the active leaf AND close the modal so the log is
+					// actually visible (the modal would otherwise overlay it).
 					onViewErrors: (logFilePath: string | null) => {
 						if (logFilePath !== null) {
 							void app.workspace.openLinkText(logFilePath, "", false);
 						}
+						exec.state.set({ kind: "idle" });
+						modal.close();
 					},
 				});
 				activeModal = modal;

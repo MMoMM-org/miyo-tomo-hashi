@@ -404,6 +404,110 @@ describe("RunLogWriter.finalize — retention", () => {
 });
 
 // ---------------------------------------------------------------------------
+// I## column wikilinks to the .md peer (2026-05-01)
+// ---------------------------------------------------------------------------
+//
+// When a source's .md peer exists and contains `### <id> — <title>` headings,
+// the run log renders each I## column as a wikilink to the matching peer
+// heading. Falls back to plain `I##` text when peer is missing or no heading
+// matches. Format: `[[<peer_stem>#<heading_text>|I##]]`.
+
+describe("RunLogWriter — I## wikilinks to peer headings", () => {
+	const SOURCE = "2026-05-01_1008_instructions.json";
+	const PEER = "2026-05-01_1008_instructions.md";
+
+	const peerContent = [
+		"# Tomo instructions",
+		"",
+		"### I01 — Create MOC: Board Games (MOC)",
+		"- [ ] Applied",
+		"",
+		"### I03 — Move Note: Asahikawa — Hokkaidos zweitgrößte Stadt",
+		"- [ ] Applied",
+		"",
+	].join("\n");
+
+	it("renders I## as wikilink when peer exists with matching heading", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(`${INBOX}/${PEER}`, peerContent);
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: [`${INBOX}/${SOURCE}`],
+		}));
+		writer.appendRecord(makeRecord(`${INBOX}/${SOURCE}`, "I01", "create_moc", "src → dst", { kind: "applied" }));
+		writer.appendRecord(makeRecord(`${INBOX}/${SOURCE}`, "I03", "move_note", "src → dst", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain(
+			"[[2026-05-01_1008_instructions#I01 — Create MOC: Board Games (MOC)|I01]]",
+		);
+		expect(content).toContain(
+			"[[2026-05-01_1008_instructions#I03 — Move Note: Asahikawa — Hokkaidos zweitgrößte Stadt|I03]]",
+		);
+	});
+
+	it("falls back to plain I## when peer file does not exist", async () => {
+		const vault = new FakeVaultFS();
+		// No peer file created
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: [`${INBOX}/${SOURCE}`],
+		}));
+		writer.appendRecord(makeRecord(`${INBOX}/${SOURCE}`, "I01", "create_moc", "src → dst", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).not.toContain("[[2026-05-01_1008_instructions#");
+		// Plain I01 still appears in the row
+		expect(content).toContain("| I01 |");
+	});
+
+	it("falls back to plain I## when peer exists but heading for that id is missing", async () => {
+		const partialPeer = [
+			"# Tomo instructions",
+			"",
+			"### I01 — Create MOC: Board Games (MOC)",
+			"- [ ] Applied",
+			"",
+		].join("\n");
+		const vault = new FakeVaultFS();
+		await vault.create(`${INBOX}/${PEER}`, partialPeer);
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: [`${INBOX}/${SOURCE}`],
+		}));
+		// I01 has a heading; I99 does not
+		writer.appendRecord(makeRecord(`${INBOX}/${SOURCE}`, "I01", "create_moc", "src → dst", { kind: "applied" }));
+		writer.appendRecord(makeRecord(`${INBOX}/${SOURCE}`, "I99", "skip", "x", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("[[2026-05-01_1008_instructions#I01 — Create MOC: Board Games (MOC)|I01]]");
+		expect(content).toContain("| I99 |");
+		expect(content).not.toContain("#I99");
+	});
+
+	it("validation-failure rows do not get wikilinks (I## column is `—`)", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(`${INBOX}/${PEER}`, peerContent);
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: [`${INBOX}/${SOURCE}`],
+		}));
+		writer.appendValidationFailure({
+			fileId: `${INBOX}/${SOURCE}`,
+			message: "Schema error",
+		});
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		// Row contains the dash placeholder, not a wikilink
+		expect(content).toMatch(/\|\s*—\s*\|/);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // No crypto imports guard
 // ---------------------------------------------------------------------------
 

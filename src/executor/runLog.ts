@@ -75,13 +75,65 @@ export class RunLogWriter {
 			throw new Error("RunLogWriter.finalize called before start");
 		}
 
-		const content = renderLog(this.meta, endedAt, this.entries);
+		const peerHeadings = await loadPeerHeadings(this.vault, this.meta.sources);
+		const content = renderLog(this.meta, endedAt, this.entries, peerHeadings);
 		await this.vault.process(this.logPath, () => content);
 
 		if (retention === "only-after-failed" && countFailures(this.entries) === 0) {
 			await this.vault.trash(this.logPath);
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Peer-heading map — read each source's `.md` peer once, extract `### I##`
+// headings so the run log can wikilink each row's I## column to the matching
+// peer heading. Soft-fail on missing peer or unreadable file.
+// ---------------------------------------------------------------------------
+
+interface PeerHeading {
+	readonly headingText: string; // full heading text after `### `, e.g. "I01 — Create MOC: Board Games (MOC)"
+	readonly peerStem: string;    // peer filename without path/.md, e.g. "2026-05-01_1008_instructions"
+}
+
+const HEADING_RE = /^### ((I\d+)(?:\s.*)?)$/;
+
+async function loadPeerHeadings(
+	vault: VaultFS,
+	sources: readonly string[],
+): Promise<Map<string, Map<string, PeerHeading>>> {
+	const out = new Map<string, Map<string, PeerHeading>>();
+
+	for (const sourcePath of sources) {
+		if (!sourcePath.endsWith(".json")) continue;
+		const peerPath = sourcePath.slice(0, -".json".length) + ".md";
+		if (!(await vault.exists(peerPath))) continue;
+
+		let raw: string;
+		try {
+			raw = await vault.read(peerPath);
+		} catch {
+			continue;
+		}
+
+		const peerStem = basename(peerPath).slice(0, -".md".length);
+		const inner = new Map<string, PeerHeading>();
+		for (const line of raw.split("\n")) {
+			const m = HEADING_RE.exec(line);
+			if (m === null) continue;
+			const headingText = m[1]!;
+			const actionId = m[2]!;
+			inner.set(actionId, { headingText, peerStem });
+		}
+		out.set(sourcePath, inner);
+	}
+
+	return out;
+}
+
+function basename(path: string): string {
+	const slash = path.lastIndexOf("/");
+	return slash === -1 ? path : path.slice(slash + 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -96,10 +148,11 @@ function renderLog(
 	meta: RunLogStartMeta,
 	endedAt: Date,
 	entries: readonly BufferedEntry[],
+	peerHeadings: Map<string, Map<string, PeerHeading>>,
 ): string {
 	const totals = computeTotals(entries);
 	const front = renderFrontmatter(meta, endedAt, totals);
-	const body = renderBody(meta.sources, entries);
+	const body = renderBody(meta.sources, entries, peerHeadings);
 	return `${front}\n# Hashi run log\n\n${body}`;
 }
 
@@ -139,12 +192,13 @@ function renderFrontmatter(
 function renderBody(
 	sources: readonly string[],
 	entries: readonly BufferedEntry[],
+	peerHeadings: Map<string, Map<string, PeerHeading>>,
 ): string {
 	const sections: string[] = [];
 
 	for (const fileId of sources) {
 		const fileEntries = entries.filter((e) => entryFileId(e) === fileId);
-		sections.push(renderFileSection(fileId, fileEntries));
+		sections.push(renderFileSection(fileId, fileEntries, peerHeadings.get(fileId)));
 	}
 
 	// Files that appear in entries but not in sources list (edge case guard)
@@ -152,13 +206,17 @@ function renderBody(
 	const extra = new Set(entries.map(entryFileId).filter((id) => !covered.has(id)));
 	for (const fileId of extra) {
 		const fileEntries = entries.filter((e) => entryFileId(e) === fileId);
-		sections.push(renderFileSection(fileId, fileEntries));
+		sections.push(renderFileSection(fileId, fileEntries, peerHeadings.get(fileId)));
 	}
 
 	return sections.join("\n");
 }
 
-function renderFileSection(fileId: string, entries: readonly BufferedEntry[]): string {
+function renderFileSection(
+	fileId: string,
+	entries: readonly BufferedEntry[],
+	peerHeadings: Map<string, PeerHeading> | undefined,
+): string {
 	const hasValidationFailure = entries.some((e) => e.kind === "validation");
 	const heading = hasValidationFailure
 		? `## ${fileId} (validation failed)`
@@ -166,12 +224,15 @@ function renderFileSection(fileId: string, entries: readonly BufferedEntry[]): s
 
 	const header = "| I##  | kind | summary | outcome | error |";
 	const divider = "|------|------|---------|---------|-------|";
-	const rows = entries.map(renderEntryRow);
+	const rows = entries.map((e) => renderEntryRow(e, peerHeadings));
 
 	return [heading, "", header, divider, ...rows, ""].join("\n");
 }
 
-function renderEntryRow(entry: BufferedEntry): string {
+function renderEntryRow(
+	entry: BufferedEntry,
+	peerHeadings: Map<string, PeerHeading> | undefined,
+): string {
 	if (entry.kind === "validation") {
 		const msg = entry.failure.message;
 		return `| — | — | (validation failure) | failed | ${msg} |`;
@@ -185,7 +246,17 @@ function renderEntryRow(entry: BufferedEntry): string {
 			? ` (dependsOn: ${outcome.dependsOn})`
 			: "";
 
-	return `| ${id} | ${kind} | ${summary} | ${outcomeStr}${depNote} | ${error} |`;
+	const idCell = renderIdCell(id, peerHeadings);
+	return `| ${idCell} | ${kind} | ${summary} | ${outcomeStr}${depNote} | ${error} |`;
+}
+
+function renderIdCell(
+	id: string,
+	peerHeadings: Map<string, PeerHeading> | undefined,
+): string {
+	const heading = peerHeadings?.get(id);
+	if (heading === undefined) return id;
+	return `[[${heading.peerStem}#${heading.headingText}|${id}]]`;
 }
 
 function entryFileId(entry: BufferedEntry): string {
