@@ -439,11 +439,13 @@ describe("RunLogWriter — I## wikilinks to peer headings", () => {
 		await writer.finalize(FIXED_END, "always");
 		const content = await vault.read(path);
 
+		// Pipe in alias separator is escaped (\|) so the wikilink survives
+		// the markdown table cell — Obsidian renders \| as the alias separator.
 		expect(content).toContain(
-			"[[2026-05-01_1008_instructions#I01 — Create MOC: Board Games (MOC)|I01]]",
+			"[[2026-05-01_1008_instructions#I01 — Create MOC: Board Games (MOC)\\|I01]]",
 		);
 		expect(content).toContain(
-			"[[2026-05-01_1008_instructions#I03 — Move Note: Asahikawa — Hokkaidos zweitgrößte Stadt|I03]]",
+			"[[2026-05-01_1008_instructions#I03 — Move Note: Asahikawa — Hokkaidos zweitgrößte Stadt\\|I03]]",
 		);
 	});
 
@@ -483,7 +485,7 @@ describe("RunLogWriter — I## wikilinks to peer headings", () => {
 		await writer.finalize(FIXED_END, "always");
 		const content = await vault.read(path);
 
-		expect(content).toContain("[[2026-05-01_1008_instructions#I01 — Create MOC: Board Games (MOC)|I01]]");
+		expect(content).toContain("[[2026-05-01_1008_instructions#I01 — Create MOC: Board Games (MOC)\\|I01]]");
 		expect(content).toContain("| I99 |");
 		expect(content).not.toContain("#I99");
 	});

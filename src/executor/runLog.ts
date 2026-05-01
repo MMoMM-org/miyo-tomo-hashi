@@ -256,7 +256,11 @@ function renderIdCell(
 ): string {
 	const heading = peerHeadings?.get(id);
 	if (heading === undefined) return id;
-	return `[[${heading.peerStem}#${heading.headingText}|${id}]]`;
+	// Inside a markdown table cell, `|` ends the column. Escape both the
+	// wikilink's alias separator and any pipes that happen to appear in
+	// the heading text so the table row stays well-formed.
+	const escapedHeading = heading.headingText.replace(/\|/g, "\\|");
+	return `[[${heading.peerStem}#${escapedHeading}\\|${id}]]`;
 }
 
 function entryFileId(entry: BufferedEntry): string {
