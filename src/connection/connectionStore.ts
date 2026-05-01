@@ -18,11 +18,11 @@ export const connectionStore = new Store<ConnectionState>({
 
 /**
  * The label to show for the currently-targeted Tomo instance, or `null` when
- * there is nothing to display (disconnected or error).
+ * there is nothing to display (disconnected).
  *
  * - `connected` → `instance.name ?? instance.shortId`
  * - `attaching` / `reconnecting` → `target.name ?? target.shortId`
- * - `disconnected` / `error` → `null`
+ * - `disconnected` → `null`
  */
 export function displayInstanceName(state: ConnectionState): string | null {
 	if (state.kind === "connected") {

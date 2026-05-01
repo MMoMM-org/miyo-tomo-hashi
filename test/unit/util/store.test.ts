@@ -57,6 +57,41 @@ describe("Store<T>", () => {
 		expect(objListener).toHaveBeenCalledTimes(1);
 	});
 
+	it("snapshots listeners before iteration: a listener added during set() does NOT fire until the next set() (review-fix H13)", () => {
+		// Without the snapshot, a subscriber that subscribes a new listener
+		// from inside its own callback would have the new listener fire on
+		// the same set() — confusing (depends on Set insertion order) and
+		// easy to misuse. Snapshot semantics: each set() notifies exactly
+		// the listeners present when set() was called.
+		const store = new Store<number>(0);
+		const lateListener = vi.fn();
+		const earlyListener = vi.fn((value: number) => {
+			if (value === 1) {
+				// Subscribe lateListener mid-iteration. Snapshot must hide it
+				// from this set() — the listener fires immediately (subscribe
+				// always fires immediately) but NOT a second time as part of
+				// the in-flight set().
+				store.subscribe(lateListener);
+			}
+		});
+
+		store.subscribe(earlyListener); // immediate fire with 0
+		store.set(1); // earlyListener fires; lateListener subscribes mid-iter
+
+		// earlyListener: initial 0 + set 1 = 2
+		expect(earlyListener).toHaveBeenCalledTimes(2);
+		// lateListener: subscribe-immediate fire only (with current value 1).
+		// Did NOT fire as part of the in-flight set().
+		expect(lateListener).toHaveBeenCalledTimes(1);
+		expect(lateListener).toHaveBeenCalledWith(1);
+
+		// Next set() — both listeners fire.
+		store.set(2);
+		expect(earlyListener).toHaveBeenCalledTimes(3);
+		expect(lateListener).toHaveBeenCalledTimes(2);
+		expect(lateListener).toHaveBeenLastCalledWith(2);
+	});
+
 	it("subscribe returns an unsubscribe function; disposed listener no longer fires", () => {
 		const store = new Store<number>(0);
 		const listener = vi.fn();

@@ -123,6 +123,39 @@ describe("StatusBarIcon", () => {
 		expect(h.getRoot().getAttribute("tabindex")).toBe("0");
 	});
 
+	it("element has aria-live attribute (polite by default) for state-change announcements (PRD F3/AC9)", () => {
+		const h = mountIcon();
+		// On initial subscribe the disconnected state escalates to assertive
+		// (a fresh app-load disconnected state isn't a transient — see test
+		// below). The presence of the attribute is what matters here.
+		expect(h.getRoot().getAttribute("aria-live")).not.toBeNull();
+	});
+
+	it("aria-live escalates to 'assertive' on disconnected, polite on transitional states", () => {
+		const h = mountIcon();
+		// Walk through transitional → disconnected to observe the escalation,
+		// not just the initial value.
+		connectionStore.set({ kind: "connected", instance: inst() });
+		expect(h.getRoot().getAttribute("aria-live")).toBe("polite");
+
+		connectionStore.set({
+			kind: "reconnecting",
+			target: inst(),
+			attempt: 1,
+			nextDelayMs: 500,
+		});
+		expect(h.getRoot().getAttribute("aria-live")).toBe("polite");
+
+		connectionStore.set({ kind: "attaching", target: inst() });
+		expect(h.getRoot().getAttribute("aria-live")).toBe("polite");
+
+		connectionStore.set({
+			kind: "disconnected",
+			reason: { code: "attach-failed", detail: "stream error" },
+		});
+		expect(h.getRoot().getAttribute("aria-live")).toBe("assertive");
+	});
+
 	it("contains the 友 kanji glyph", () => {
 		const h = mountIcon();
 		const glyph = h.getRoot().querySelector(".hashi-status-bar-glyph");

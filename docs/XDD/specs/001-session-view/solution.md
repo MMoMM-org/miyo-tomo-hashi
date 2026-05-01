@@ -1,12 +1,12 @@
 ---
 title: "Tomo Connection & Chat Window — Solution Design"
 status: draft
-version: "1.1"
+version: "1.2"
 ---
 
 # Solution Design Document
 
-> **Architecture pattern**: Layered plugin with singleton connection service + event-subscribed UI. Key components: TomoConnection (uses dockerode directly), TomoChatView (ItemView), StatusBarIcon, SettingsTab, InstancePickerModal, FileMenuHandler, CommandRegistry, Store helper. External integrations: Docker Engine API (local socket), Obsidian Plugin API. 10 ADRs (5 revised in 2026-04-25 simplification — see §Architecture Decisions).
+> **Architecture pattern**: Layered plugin with singleton connection service + event-subscribed UI. Key components: TomoConnection (uses dockerode directly), TomoChatView (ItemView), StatusBarIcon, SettingsTab, InstancePickerModal, fileMenu (registerFileMenu), CommandRegistry, Store helper. External integrations: Docker Engine API (local socket), Obsidian Plugin API. 10 ADRs (5 revised in 2026-04-25 simplification — see §Architecture Decisions).
 
 ## Constraints
 
@@ -201,6 +201,46 @@ data:
     data_flow: "File-menu handler receives TFile; we only read its path (`file.path`) to build the `@`-mention. No content is read."
 ```
 
+### Attach-Lifecycle State Machine
+
+The `ConnectionState` discriminated union plus the four sequence diagrams in §Runtime View describe individual flows; this table is the **closed contract** that fixes valid event handling for every (state × event) pair. `TomoConnection` consults it implicitly — every public method and every stream-event handler checks the current state before mutating. Two implementers reading this table must produce the same guard logic.
+
+Events are: `connect()`, `disconnect()`, `forceReconnect()`, `autoReconnectIfRemembered()`, `dispose()`, `streamData`, `streamClose(remote|error)`, `streamClose(user)`, `attempt → ok`, `attempt → fail`, `loop → exhausted`, `cancelToken (epoch bumped)`.
+
+| Current state \\ Event | `connect(t)` | `forceReconnect()` | `autoRecon…()` | `disconnect()` | `dispose()` | `streamClose(remote\|error)` | `streamClose(user)` | `attempt→ok` | `attempt→fail` | `loop→exhausted` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `disconnected{reason?}` | → `attaching{t}` | → `attaching` (uses `currentTarget`) or no-op if none | → `attaching` (uses persisted name) or no-op if none | no-op | → disposed/no-state-write | n/a (no live stream) | n/a | n/a | n/a | n/a |
+| `attaching{t}` | no-op (single-flight: only one `attach()` may be in flight; the second `connect()` is dropped via epoch) | no-op (single-flight) | no-op | bump epoch → `disconnected` (in-flight `attach` resolves on stale epoch and is closed silently) | bump epoch → disposed | n/a | n/a | → `connected{t}` (epoch matches) | → `disconnected{reason}` (epoch matches) | n/a |
+| `connected{i}` | no-op (no second connection) | bump epoch → `attaching{i}` (closes existing session first) | no-op | bump epoch → `disconnected` | bump epoch → disposed | bump epoch → `reconnecting{i, attempt:1, nextDelayMs:500}` | → `disconnected` | n/a | n/a | n/a |
+| `reconnecting{t,n,d}` | no-op (single-flight) | bump epoch → `attaching{t}` (cancels loop) | no-op | bump epoch → `disconnected` (cancels loop) | bump epoch → disposed (cancels loop) | n/a (no live stream) | n/a | → `connected{t}` (loop returns "success") | stays `reconnecting{t,n+1,d×2}` | → `disconnected{reason: reconnect-exhausted}` |
+
+**Rules made explicit by this table:**
+
+1. **Single-flight attach.** Calls to `connect`, `forceReconnect`, or `autoReconnectIfRemembered` while the state is `attaching` or `reconnecting` are **no-ops** — the in-flight `attach()` is not interrupted, and a second concurrent `attach()` is never started against the same container. Implementation: epoch is bumped on entry to each of these methods; on resolution, the captured-vs-current epoch comparison drops the stale result. (If a future contributor adds a third entry point, it must follow the same epoch pattern.)
+2. **Cancel-after-success preserves success.** If `dispose()` (or another epoch bump) fires between the moment `attempt()` resolves with `true` inside `ReconnectLoop.run` and the moment `TomoConnection` reads the `"success"` return, the captured-vs-current epoch comparison in `TomoConnection.startAutoReconnect` discards the just-installed session and lands the user in `disconnected`/`disposed` — the `"success"` return is not allowed to overwrite a later cancel. (Concretely: `ReconnectLoop.run` returns `"success"`; `TomoConnection` checks `epoch !== this.epoch` and returns silently if so, having already closed the new session via `teardownSession`.)
+3. **Re-entrant store writes are forbidden.** Subscribers to `connectionStore` MUST NOT call `connectionStore.set(...)` from inside their handlers. The store iterates its listener set synchronously; a re-entrant `set` causes nested iteration. Implementation defends with a snapshot copy of `listeners` at iteration start (see §State Store), but the convention remains: subscribers compute and emit; they don't write.
+4. **`streamClose(user)` is silent.** A close event whose reason is `"user"` (the user clicked Disconnect; `teardownSession` initiated the close) does not auto-transition. Only `"remote"` and `"error"` close reasons trigger auto-reconnect.
+5. **Stale stream events are dropped.** `handleSessionClose` checks `this.session === session` before reacting; a close event arriving from a session that has already been replaced (e.g., by a `forceReconnect`) is ignored.
+
+### PTY Resize Ordering
+
+xterm.js drives container PTY size via `POST /containers/{id}/resize?h=&w=`. The session view chains this through `TomoChatView → terminalHost.fit() → connection.resize(rows, cols) → AttachSession.resize()`. The branch `fix/pty-resize` already produced bugs around this surface; this subsection makes the ordering invariants explicit so future edits don't reintroduce them.
+
+1. **`fit()` is the sole resize trigger.** The `ResizeObserver` on the terminal host element calls `fit()` (debounced, 150 ms trailing — see §Streaming Coalescing); xterm internally fires `onResize` with the new geometry, which `TomoChatView` forwards to `connection.resize(rows, cols)`. **No other code path computes geometry.** No code path other than `TomoChatView`'s `onResize` listener calls `connection.resize` — pane drag → ResizeObserver → fit → onResize → resize is the only chain.
+2. **Resize is cached on `TomoConnection`.** `connection.resize(rows, cols)` updates `this.lastTerminalSize` even when no live session exists. On every new `installSession` (initial connect, force-reconnect, auto-reconnect after remote close), the cached size is re-applied to the new `AttachSession` before the first `onData` chunk is forwarded. This is what prevents the `docker run -it` default 80×24 from silently showing under the user's actual viewport after a reconnect — the bug `8f59987 fix(connection): bypass dockerode attach with raw HTTP upgrade` partially addressed.
+3. **Resize is best-effort.** A transient `docker resize` failure is swallowed. The next genuine resize event will reapply; `installSession` also reapplies on every new session, so a brief failure cannot strand the geometry. (No retry loop, no error surface — the user has nothing actionable to do mid-resize.)
+4. **No data forwarding before post-attach resize.** When `installSession` runs, the `lastTerminalSize` apply is fire-and-forget. The first `onData` callback is bound on the same call. There is therefore a tiny window (typically < 5 ms) where `onData` chunks could arrive before the resize-to-current-viewport is acknowledged by the daemon. Empirically this is invisible (the new container's PTY default 80×24 reflows the few stray bytes correctly); we do not introduce a barrier promise because the cost would exceed the symptom.
+
+### Lifecycle Invariants
+
+These invariants are the contract `TomoConnection` and the `Store<T>` helper meet. They are checked by unit tests and supplement the state-machine table above.
+
+1. **`dispose()` cancels the reconnect loop.** When `dispose()` is called during a reconnect backoff window, the in-flight `setTimeout` MUST not fire `attempt()` after disposal. Implementation: `dispose()` calls `cancelReconnect()` (which calls `loop.cancel()`, clearing both the timer and resolving the pending wait promise) before `teardownSession()`. A `setTimeout`-fires-after-dispose bug would orphan a Docker stream against an unloaded plugin.
+2. **`dispose()` is bounded.** Best-effort `teardownSession` issues a close on the active stream. Obsidian's `onunload` is synchronous; the spec accepts that the stream's TCP teardown may continue after the function returns. **The plugin SHALL NOT block the unload.** If the daemon hangs, OS keepalive (~75 s on macOS without explicit close-timeout tuning) will reclaim the socket — that's acceptable v0.1 behavior. (Tightening this with a watchdog timeout is post-v0.1 — would require a behavior change in `dockerode`'s close, not just a wrapper.)
+3. **`SettingsTab.display()` is idempotent under double-call.** Obsidian's contract is `display()` then `hide()` then `display()` again, with the `containerEl` cleared between. The implementation MUST defend against `display()` being called twice without an intervening `hide()` (workspace reload edge case): unsubscribe any prior `connectionStore` listener before subscribing the new one. Implementation: `if (this.unsubscribe !== null) { this.unsubscribe(); this.unsubscribe = null; }` before resubscribing — already present in `src/settings/SettingsTab.ts`.
+4. **`Store<T>.set` snapshots its listener set before iteration.** Calling `set` snapshots `Array.from(this.listeners)` so that listener-during-set additions or removals are deferred to the next `set`. (Without the snapshot, the well-defined Set iteration order would still allow listener-added-mid-iteration to fire on the same `set` — confusing and easy to misuse. With the snapshot, each `set` notifies exactly the listeners present when `set` was called.) This tightens the existing convention "listeners must not call `set`."
+5. **Reconnect non-transient errors short-circuit.** The auto-reconnect loop's `attempt` function returns `false` for any error, including non-transient ones (`socket-permission-denied`, `daemon-unreachable`). Re-attempting a permission-denied 5 times across 15.5 s is a poor user experience. Implementation: the `attempt` function inspects the rejected `ConnectionError.code`; for `socket-permission-denied` and `daemon-unreachable` it sets `disconnected{reason}` directly and calls `loop.cancel()` (returning `false` so the loop terminates). The user sees the named error within ~500 ms instead of waiting for full backoff exhaustion. (Transient `attach-failed` continues through the full schedule.)
+
 ### Cross-Component Boundaries
 
 - **API Contract (internal, 001 ↔ 002)**: **None.** Per PRD brainstorm pivot, spec 002 runs standalone. The only shared artifact is the Tomo Docker label contract (`miyo.component=tomo`, `miyo.tomo.instance-name=...`), and even that is consumed only by 001.
@@ -250,7 +290,7 @@ graph TB
         ChatView[TomoChatView : ItemView]
         SettingsUI[SettingsTab : PluginSettingTab]
         Picker[InstancePickerModal : Modal]
-        FileMenu[FileMenuHandler]
+        FileMenu[fileMenu/registerFileMenu]
         Commands[CommandRegistry]
     end
 
@@ -289,14 +329,13 @@ graph TB
 │   ├── main.ts                              # MODIFY: plugin entry; wire everything on onload
 │   ├── types/
 │   │   └── index.ts                         # MODIFY: PluginSettings (chosenInstanceId)
-│   ├── connection/                          # NEW: core service + types
+│   ├── connection/                          # NEW: core service + types + Docker boundary
 │   │   ├── TomoConnection.ts                # NEW: the service (state machine, reconnect orchestration, stream plumbing)
 │   │   ├── connectionStore.ts               # NEW: `Store<ConnectionState>` instance + derived slices (displayInstanceName, kind)
 │   │   ├── state.ts                         # NEW: ConnectionState discriminated union + transition helpers
 │   │   ├── reconnectLoop.ts                 # NEW: cancellable backoff loop (extracted from service for testability)
+│   │   ├── docker.ts                        # NEW: thin dockerode helpers used by TomoConnection (NO port — see ADR-5 v2). Exports listTomoInstances, attach, inspect helpers and the AttachSession type. Unit tests use vi.mock('dockerode').
 │   │   └── types.ts                         # NEW: TomoInstance, ConnectionError
-│   ├── docker/                              # NEW: Docker boundary (port + adapter)
-│   │   └── docker.ts                        # NEW: thin dockerode wrapper used by TomoConnection (no port); exports listTomoInstances, attach, inspect helpers and the AttachSession type. Unit tests use vi.mock('dockerode').
 │   ├── ui/
 │   │   ├── chat-view/
 │   │   │   ├── TomoChatView.ts              # NEW: Obsidian ItemView subclass; builds DOM in onOpen; owns xterm.js instance; subscribes to connectionStore
@@ -369,6 +408,12 @@ export type ConnectionError =
   | { code: "attach-failed"; detail: string };  // covers chosen-instance-gone, stream-error, reconnect-exhausted
 
 // Note: picker cancel is NOT an error — `openPicker()` resolves to `null` instead.
+
+// (The previous v1.1 SDD also exported a `{ kind: "error"; error; lastKnown? }`
+// variant alongside `disconnected{reason}`. The error variant was unused — every
+// failure path the Runtime View describes lands in `disconnected{reason}` —
+// and was removed in the 2026-04-28 review-fix pass to keep the exhaustive
+// switch over `kind` minimal.)
 
 // src/types/index.ts (extended)
 export interface PluginSettings {
@@ -519,6 +564,36 @@ Obsidian:
 ```
 
 ### Implementation Examples
+
+#### Example: Streaming Coalescing
+
+**Why this example**: PRD F4 mandates that container output stream into the chat view, and the realistic upper bound is a high-volume burst (e.g., a `cargo build` flood produces hundreds of small chunks per second). Routing each chunk straight into `xterm.write(chunk)` would queue one microtask per chunk on Obsidian's main thread; xterm batches its renderer internally, but the per-chunk write-call cost is unbounded. The coalescer collapses arrival rate to one `xterm.write` per RAF frame regardless of chunk count.
+
+```typescript
+// src/ui/chat-view/terminalHost.ts (sketch)
+let pending: (Uint8Array | string)[] = [];
+let scheduled = false;
+
+export function writeChunk(session: TerminalSession, chunk: Uint8Array | string): void {
+  pending.push(chunk);
+  if (scheduled) return;
+  scheduled = true;
+  requestAnimationFrame(() => {
+    scheduled = false;
+    if (pending.length === 0) return;
+    const drain = pending;
+    pending = [];
+    // xterm's `write` accepts a single string|Uint8Array; we concatenate so
+    // the renderer sees one operation per frame regardless of arrival rate.
+    session.terminal.write(joinChunks(drain));
+  });
+}
+```
+
+**Implementation gotchas**:
+- The `pending` buffer lives at module scope (single chat view instance — singleton per ADR-6); a per-session buffer is unnecessary in v0.1.
+- The `ResizeObserver`'s `fit()` call is debounced 150 ms (trailing) so a pane drag does not thrash xterm's renderer between frames.
+- On `dispose()`, drain `pending` synchronously to ensure no queued bytes leak past view close. (Test: write three chunks, immediately dispose, assert all three rendered.)
 
 #### Example: Reconnect Backoff
 
@@ -730,7 +805,7 @@ OUTPUT: TomoInstance[]
 - **Environment**: Obsidian Desktop plugin, loaded from the vault's `.obsidian/plugins/miyo-tomo-hashi/` directory.
 - **Configuration**: No environment variables. Plugin data stored via `saveData()` (JSON blob in the vault-local plugin data file).
 - **Dependencies**: Local Docker daemon reachable via socket. No network dependencies. No outbound HTTP other than Docker socket.
-- **Performance**: Idle CPU near-zero (one attached TCP-over-socket stream, Node event loop). Memory proportional to xterm scrollback buffer (default ~1000 lines; ~100 KB for typical sessions). Plugin bundle ≤ 500 KB minified.
+- **Performance**: Idle CPU near-zero (one attached TCP-over-socket stream, Node event loop). Memory bounded by xterm scrollback cap (`scrollback: 5000` lines configured in `terminalHost.ts`; ~500 KB for typical sessions, hard-bounded for floods). Plugin bundle ≤ 1000 KB minified (CON-7 revised 2026-04-28).
 - **Distribution**: Community plugin listing (post-v0.1 release) + manual + BRAT (beta), per `README.md`.
 
 ### Rollback Strategy
@@ -766,10 +841,13 @@ Plugin disable via Obsidian Settings → Community Plugins is sufficient. No mig
 
 **Accessibility:**
 - Status bar icon, chat view status indicator, and in-view banner all convey state via shape + text (never color alone).
-- Force Reconnect, Connect, Disconnect all keyboard-reachable (Tab order).
-- Reduced motion: `@media (prefers-reduced-motion: reduce)` disables transitional animations in status bar icon and chat view indicator.
-- ARIA live regions: `role="status"` with `aria-live="polite"` for transitional states (Reconnecting); `aria-live="assertive"` for Disconnected with an error.
-- xterm.js ships with ARIA support for the terminal buffer; we keep its default a11y rendering on.
+- **Status bar icon keyboard activation.** The status bar element has `role="button"` and `tabindex="0"`; Space/Enter triggers the same popover handler as `click`. Reachable via Obsidian's status-bar Tab order.
+- **InstancePickerModal keyboard contract.** Obsidian's `Modal` provides Escape-to-close and focus-trap-while-open by default; the spec relies on those defaults and asserts only the application-level invariant: focus returns to the Settings Connect button when the modal closes (Modal default behavior; verified in T5.5b row).
+- **Chat view focus on open.** When the view opens while Connected, focus lands on the chat input (F4/AC3). When the view opens while Disconnected (including via the file-menu prefill, FS1/AC4), focus lands on the Connect link inside the not-connected state — not on the disabled input. This avoids "focus stuck on a disabled control" UX.
+- **Force Reconnect keyboard reach.** The chat-view Force Reconnect button is reachable in ≤ 3 Tab presses from the chat input (DOM order: input → terminal-host (skip-tab) → header zoom buttons → Force Reconnect). Verified in T5.5b row 24.
+- Reduced motion: `@media (prefers-reduced-motion: reduce)` disables transitional animations in status bar icon and chat view indicator. **Streaming output through xterm.js is not subject to reduced-motion** — xterm has no reduced-motion mode and the streaming character render is the primary interaction surface, not chrome animation. Documented decision; not a defect.
+- ARIA live regions: `role="status"` with `aria-live="polite"` for transitional states (Reconnecting); `aria-live="assertive"` for Disconnected with an error. **Both `aria-live` and `aria-label` are unit-asserted** on StatusBarIcon, the chat-view indicator, and the error banner (added 2026-04-28; previously only `aria-label` was checked).
+- **xterm.js a11y mode**: `terminalHost.createTerminal` MUST configure xterm's accessibility mode on (default in xterm 5.x but version-sensitive). `terminalHost.test.ts` regex-asserts the constructor option to prevent a silent regression on xterm version bumps.
 
 #### UI Visualization
 
@@ -821,7 +899,7 @@ stateDiagram-v2
 
 ### System-Wide Patterns
 
-- **Security**: Hashi v0.1 is local-only and outbound-only — no inbound surface, no remote endpoint resolution. Trust derives from (a) OS file permissions on the Docker socket, (b) the user explicitly choosing the container in the Settings picker, and (c) `DockerodeAdapter` pinning the connection to the platform-default local socket (no `DOCKER_HOST`/`DOCKER_CONTEXT` follow). No credentials are stored. Container output is rendered through xterm.js as terminal text; the renderer is configured with `allowProposedApi: false`, hyperlink handling disabled (no OSC 8 link activation), and OSC 52 clipboard writes ignored — bytes from the container can never trigger a clipboard write or open a URI without explicit user copy/paste. Chat input is opaque bytes from the user — sent to stdin as-is (claude interprets it). Cryptographic identity controls (image-digest pinning, vault↔container fingerprinting, preview-to-execute hash-pinning) are explicitly out of scope per PRD Won't Have — the user has no out-of-band reference value to verify against, so such controls would be ceremony, not protection.
+- **Security**: Hashi v0.1 is local-only and outbound-only — no inbound surface, no remote endpoint resolution. Trust derives from (a) OS file permissions on the Docker socket, (b) the user explicitly choosing the container in the Settings picker, and (c) `src/connection/docker.ts` helpers pinning the connection to the platform-default local socket (no `DOCKER_HOST`/`DOCKER_CONTEXT` follow — verified by both positive and negative unit tests in `docker.test.ts`). No credentials are stored. Container output is rendered through xterm.js as terminal text; the renderer is configured with `allowProposedApi: false`, hyperlink handling disabled (no OSC 8 link activation), and OSC 52 clipboard writes ignored — bytes from the container can never trigger a clipboard write or open a URI without explicit user copy/paste. Chat input is opaque bytes from the user — sent to stdin as-is (claude interprets it). Cryptographic identity controls (image-digest pinning, vault↔container fingerprinting, preview-to-execute hash-pinning) are explicitly out of scope per PRD Won't Have — the user has no out-of-band reference value to verify against, so such controls would be ceremony, not protection.
 - **Error Handling**: One `ConnectionError` discriminated union normalizes all error sources. Surface selection (banner vs Notice vs Settings inline) is the UI layer's job; `TomoConnection` just publishes state.
 - **Performance**: Discovery is on-demand only. No polling. Stream reads flow through xterm.js directly — no per-byte allocation in our code. Reconnect backoff bounded at ~15.5 s; cancellable.
 - **Logging**: `logger.ts` wraps `console.debug` tagged `[miyo-tomo-hashi]`. Logs state transitions and connection-error categories. **No chat content is logged.** Enforced by a grep-based assertion in tests: no `logger.*(chunk|data|stdout|stderr` call is permitted in `src/connection/**` or `src/ui/chat-view/**`. Log level is compile-time fixed to `debug` in v0.1 (no setting).
@@ -892,11 +970,10 @@ stateDiagram-v2
 ## Quality Requirements
 
 - **Performance**:
-  - Plugin load → chat view ready to receive input: ≤ 500 ms p95 on a warm Obsidian start (measured from `onload` return to first xterm frame).
-  - Discovery `listTomoInstances` p95: ≤ 300 ms against a local daemon with ≤ 20 containers total.
-  - Attach to first byte from container: ≤ 500 ms p95.
-  - Reconnect after transient disconnect: ≤ 15.5 s total before giving up (matches F8 AC).
-  - Plugin bundle `main.js`: ≤ 500 KB minified.
+  - Reconnect after transient disconnect: ≤ 15.5 s total before giving up (matches F8 AC; verified by `reconnectLoop.test.ts` exhaustion case).
+  - Plugin bundle `main.js`: ≤ 1000 KB minified (per CON-7, revised 2026-04-28; verified by `build-output.test.ts`).
+  - Streaming output through xterm.js does not block the main thread: chunks are coalesced per RAF frame in `terminalHost.ts` (one `xterm.write` per frame regardless of arrival rate). See §Implementation Examples / Streaming Coalescing.
+  - Note: load-time / discovery / attach p95 budgets were considered (≤500ms, ≤300ms, ≤500ms) and dropped in the 2026-04-28 review pass — no measurement harness exists for v0.1, no CI gate enforces them, and unmeasured budgets are aspiration rather than spec. If a perf regression surfaces, add an instrumented test then.
 - **Usability**:
   - All interactive controls reachable via Tab/Shift+Tab.
   - All state transitions announced to screen readers via ARIA live regions.

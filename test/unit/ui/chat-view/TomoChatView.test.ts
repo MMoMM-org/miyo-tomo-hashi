@@ -663,6 +663,211 @@ describe("TomoChatView — input accessors (T5.3 file-menu wiring)", () => {
 	});
 });
 
+describe("TomoChatView — accessibility (PRD F5/AC7)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	afterEach(() => {
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	it("indicator has role=\"status\" and aria-live attributes", async () => {
+		const h = await mountView();
+		const ind = h.root.querySelector(".hashi-chat-view-indicator");
+		expect(ind).not.toBeNull();
+		expect(ind!.getAttribute("role")).toBe("status");
+		expect(ind!.getAttribute("aria-live")).not.toBeNull();
+	});
+
+	it("aria-live is polite for transitional states (connected, attaching, reconnecting)", async () => {
+		const h = await mountView();
+		const ind = h.root.querySelector(".hashi-chat-view-indicator");
+
+		connectionStore.set({ kind: "connected", instance: inst() });
+		expect(ind!.getAttribute("aria-live")).toBe("polite");
+
+		connectionStore.set({ kind: "attaching", target: inst() });
+		expect(ind!.getAttribute("aria-live")).toBe("polite");
+
+		connectionStore.set({
+			kind: "reconnecting",
+			target: inst(),
+			attempt: 1,
+			nextDelayMs: 500,
+		});
+		expect(ind!.getAttribute("aria-live")).toBe("polite");
+	});
+
+	it("aria-live escalates to assertive for disconnected/error states", async () => {
+		const h = await mountView();
+		const ind = h.root.querySelector(".hashi-chat-view-indicator");
+
+		// Drive through a transitional state first so the polite→assertive
+		// transition is observable, not just the initial value.
+		connectionStore.set({ kind: "connected", instance: inst() });
+		expect(ind!.getAttribute("aria-live")).toBe("polite");
+
+		connectionStore.set({
+			kind: "disconnected",
+			reason: { code: "attach-failed", detail: "stream error" },
+		});
+		expect(ind!.getAttribute("aria-live")).toBe("assertive");
+	});
+});
+
+describe("TomoChatView — continuity-gap indicator (PRD F5/AC5 + F8/AC5)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	afterEach(() => {
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	it("indicator shows reconnected-gap suffix after reconnecting → connected transition", async () => {
+		const h = await mountView();
+		// Walk the actual transient-disconnect path: connected → reconnecting → connected.
+		connectionStore.set({ kind: "connected", instance: inst({ name: "qa-test" }) });
+		connectionStore.set({
+			kind: "reconnecting",
+			target: inst({ name: "qa-test" }),
+			attempt: 2,
+			nextDelayMs: 1000,
+		});
+		connectionStore.set({ kind: "connected", instance: inst({ name: "qa-test" }) });
+
+		const ind = h.root.querySelector(".hashi-chat-view-indicator");
+		expect(ind!.textContent).toContain("Reconnected (gap)");
+		expect(ind!.textContent).toContain("qa-test");
+	});
+
+	it("does NOT show gap suffix on the initial connect (no prior reconnecting state)", async () => {
+		const h = await mountView();
+		// Direct disconnected → connected (e.g. first-time connect, no gap).
+		connectionStore.set({ kind: "connected", instance: inst({ name: "first" }) });
+		const ind = h.root.querySelector(".hashi-chat-view-indicator");
+		expect(ind!.textContent).not.toContain("Reconnected (gap)");
+		expect(ind!.textContent).toBe("Connected — first");
+	});
+
+	it("clears the gap suffix when the user types and submits a message", async () => {
+		const h = await mountView();
+		document.body.appendChild(h.root);
+
+		connectionStore.set({ kind: "connected", instance: inst({ name: "qa-test" }) });
+		connectionStore.set({
+			kind: "reconnecting",
+			target: inst({ name: "qa-test" }),
+			attempt: 1,
+			nextDelayMs: 500,
+		});
+		connectionStore.set({ kind: "connected", instance: inst({ name: "qa-test" }) });
+
+		const ind = h.root.querySelector(".hashi-chat-view-indicator");
+		expect(ind!.textContent).toContain("Reconnected (gap)");
+
+		const input = h.root.querySelector<HTMLInputElement>(
+			".hashi-chat-view-input",
+		);
+		input!.value = "hi";
+		input!.dispatchEvent(
+			new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+		);
+
+		expect(ind!.textContent).not.toContain("Reconnected (gap)");
+		expect(ind!.textContent).toBe("Connected — qa-test");
+	});
+});
+
+describe("TomoChatView — ResizeObserver debounce (review-fix H8)", () => {
+	let RealRO: typeof ResizeObserver | undefined;
+	let lastObserverCb: ResizeObserverCallback | null = null;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		connectionStore.set({ kind: "disconnected" });
+		// Install a controllable ResizeObserver mock — jsdom doesn't ship one.
+		// Saving the original (typically undefined under jsdom) so we can
+		// restore in afterEach without leaking the mock to sibling test files.
+		RealRO = (globalThis as { ResizeObserver?: typeof ResizeObserver })
+			.ResizeObserver;
+		(globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver =
+			class MockResizeObserver {
+				constructor(cb: ResizeObserverCallback) {
+					lastObserverCb = cb;
+				}
+				observe(): void {}
+				unobserve(): void {}
+				disconnect(): void {}
+			} as unknown as typeof ResizeObserver;
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		if (RealRO === undefined) {
+			delete (globalThis as { ResizeObserver?: typeof ResizeObserver })
+				.ResizeObserver;
+		} else {
+			(globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver =
+				RealRO;
+		}
+		lastObserverCb = null;
+	});
+
+	it("rapid resize callbacks coalesce into a single fit() call after 150ms", async () => {
+		const fitMock = vi.mocked(
+			(await import("../../../../src/ui/chat-view/terminalHost")).fit,
+		);
+		await mountView();
+		fitMock.mockClear();
+
+		expect(lastObserverCb).not.toBeNull();
+		// Fire 5 callbacks in rapid succession — pixel-by-pixel pane drag.
+		for (let i = 0; i < 5; i++) {
+			lastObserverCb!([] as unknown as ResizeObserverEntry[], {} as ResizeObserver);
+		}
+
+		// Before the debounce window elapses, no fit() yet.
+		vi.advanceTimersByTime(149);
+		expect(fitMock).not.toHaveBeenCalled();
+
+		vi.advanceTimersByTime(2);
+		expect(fitMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("a fresh resize callback after a flush schedules a new fit", async () => {
+		const fitMock = vi.mocked(
+			(await import("../../../../src/ui/chat-view/terminalHost")).fit,
+		);
+		await mountView();
+		fitMock.mockClear();
+		lastObserverCb!([] as unknown as ResizeObserverEntry[], {} as ResizeObserver);
+		vi.advanceTimersByTime(150);
+		expect(fitMock).toHaveBeenCalledTimes(1);
+
+		lastObserverCb!([] as unknown as ResizeObserverEntry[], {} as ResizeObserver);
+		vi.advanceTimersByTime(150);
+		expect(fitMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("onClose clears the pending debounce timer (no late fit after view tear-down)", async () => {
+		const fitMock = vi.mocked(
+			(await import("../../../../src/ui/chat-view/terminalHost")).fit,
+		);
+		const h = await mountView();
+		fitMock.mockClear();
+		lastObserverCb!([] as unknown as ResizeObserverEntry[], {} as ResizeObserver);
+		// Tear down BEFORE the 150ms window elapses.
+		await h.view.onClose();
+		vi.advanceTimersByTime(500);
+		expect(fitMock).not.toHaveBeenCalled();
+	});
+});
+
 describe("terminalHost module surface", () => {
 	it("exports createTerminal, writeChunk, fit, dispose", async () => {
 		// xterm's static module init touches HTMLCanvasElement.getContext (its

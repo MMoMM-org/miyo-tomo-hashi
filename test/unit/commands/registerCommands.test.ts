@@ -172,6 +172,48 @@ describe("registerCommands", () => {
 			expect(reconnectCmds.at(-1)?.name).toBe("Reconnect to second");
 		});
 
+		it("5 reconnecting-attempt updates with the same display name → removeCommand called exactly once total (review-fix M9)", () => {
+			// During a transient disconnect, connectionStore fires once per
+			// attempt: reconnecting{attempt:1} → reconnecting{attempt:2} → … →
+			// reconnecting{attempt:5}. displayInstanceName(state) is the same
+			// across all five (target.name doesn't change). Without the dedup
+			// guard, we'd remove+add the command 5 times — Obsidian's command
+			// index rebuilds on each call, and the user's palette flickers.
+			registerCommands(plugin, deps);
+
+			// Land in a known starting label so the dedup branch can be
+			// exercised. (First subscribe-fire installs the disconnected
+			// "Reconnect to Tomo" label.)
+			connectionStore.set({
+				kind: "connected",
+				instance: inst({ name: "alpha" }),
+			});
+			const removeBefore = vi.mocked(plugin.removeCommand).mock.calls.length;
+			const addBefore = vi.mocked(plugin.addCommand).mock.calls.length;
+
+			// Burst: 5 reconnect-attempt updates, all carrying the same
+			// `target.name = "alpha"`. The `connected → reconnecting` initial
+			// transition is one removeCommand+addCommand pair (label unchanged
+			// — dedup catches it). Subsequent attempt-only transitions must
+			// also dedup.
+			for (let attempt = 1; attempt <= 5; attempt++) {
+				connectionStore.set({
+					kind: "reconnecting",
+					target: inst({ name: "alpha" }),
+					attempt,
+					nextDelayMs: 500 * 2 ** (attempt - 1),
+				});
+			}
+
+			// All 5 carry the same display name as the prior state — dedup
+			// guard short-circuits, so neither removeCommand nor addCommand
+			// fired.
+			expect(vi.mocked(plugin.removeCommand).mock.calls.length).toBe(
+				removeBefore,
+			);
+			expect(vi.mocked(plugin.addCommand).mock.calls.length).toBe(addBefore);
+		});
+
 		it("state change with the same display name does NOT re-register (dedup)", () => {
 			registerCommands(plugin, deps);
 			const initial = commandsForId(plugin, RECONNECT_ID).length;

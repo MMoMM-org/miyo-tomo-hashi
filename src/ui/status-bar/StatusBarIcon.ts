@@ -80,6 +80,11 @@ export class StatusBarIcon {
 		root.addClass("hashi-status-bar");
 		root.setAttr("role", "button");
 		root.setAttr("tabindex", "0");
+		// PRD F3/AC9 — screen-reader announcement contract. `aria-live` lives
+		// on the root so the announcement attaches to the same element whose
+		// `aria-label` changes; the live politeness is updated per state in
+		// the subscribe handler below (assertive for disconnected/error).
+		root.setAttr("aria-live", "polite");
 
 		root.createSpan({ cls: "hashi-status-bar-glyph", text: "友" });
 		root.createSpan({
@@ -119,6 +124,13 @@ export class StatusBarIcon {
 			const tooltip = tooltipFor(state);
 			this.el.setAttr("aria-label", tooltip);
 			this.el.setAttr("title", tooltip);
+			// PRD F3/AC9 — politeness escalates for disconnected (an
+			// unexpected drop is the only case the user must hear about
+			// immediately); transitional states stay polite.
+			this.el.setAttr(
+				"aria-live",
+				cls === "is-disconnected" ? "assertive" : "polite",
+			);
 		});
 	}
 

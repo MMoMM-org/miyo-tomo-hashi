@@ -292,6 +292,33 @@ describe("registerFileMenu", () => {
 		);
 	});
 
+	it("strips newline/carriage-return/NUL from file.path before insertion (review-fix M3)", async () => {
+		// macOS / Linux filesystems allow \n, \r, \0 in filenames. A
+		// pathological filename `foo\nrm -rf /` would otherwise inject a
+		// newline + second command into the chat-input → container stdin
+		// pipeline. Strip is correct here (not escape) because the inserted
+		// text is shown to the user as @<path>; an escape sequence would
+		// render visibly and confuse the preview.
+		registerFileMenu(asPlugin(plugin), deps);
+		const menu = driveMenu(
+			plugin,
+			fakeFile("foo\nrm -rf /\rcat\0eviction.md"),
+		);
+		await recoverOnClick(menu)();
+		expect(deps.openChatViewAndPrefill).toHaveBeenCalledWith(
+			"@foorm -rf /cateviction.md ",
+		);
+	});
+
+	it("strip is targeted — does NOT touch tabs, ordinary punctuation, or spaces", async () => {
+		registerFileMenu(asPlugin(plugin), deps);
+		const menu = driveMenu(plugin, fakeFile("a/b\twith\ttabs.md"));
+		await recoverOnClick(menu)();
+		expect(deps.openChatViewAndPrefill).toHaveBeenCalledWith(
+			"@a/b\twith\ttabs.md ",
+		);
+	});
+
 	it("handles input with null selectionStart/End (treats as end-of-value)", async () => {
 		const input = document.createElement("input");
 		input.value = "tail";

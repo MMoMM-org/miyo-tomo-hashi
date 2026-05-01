@@ -38,11 +38,11 @@ version: "1.0"
 |-------|-------|
 | specId | 001-session-view |
 | title | Tomo Connection & Chat Window |
-| status | COMPLETE (release gate passed for code; manual-QA pending) |
+| status | COMPLETE (release gate passed for code; manual-QA + CI live-test still pending — see spec README "Release Gate Status") |
 | phases | 5 |
-| totalTasks | 29 |
+| totalTasks | 30 (T5.5b added 2026-04-25 to mirror spec 002's T6.4) |
 | parallelTasks | 4 (Phase 4 UI surfaces) |
-| specReferences | 60+ across PRD/AC + SDD sections |
+| specReferences | 70 PRD ACs + SDD sections (bumped from 64 in 2026-04-28 review-fix pass; matrix at 68/70 ✅, 2 intentional manual+live orphans documented in traceability.md) |
 | clarificationsRemaining | 0 |
 
 ### Phase Status
@@ -53,7 +53,7 @@ version: "1.0"
 | 2 | Docker Boundary | completed | 4 | [phase-2.md](phase-2.md) |
 | 3 | Connection Service | completed | 5 | [phase-3.md](phase-3.md) |
 | 4 | UI Surfaces | completed | 5 | [phase-4.md](phase-4.md) |
-| 5 | Wire-up, Integration & Release Gate | completed | 9 | [phase-5.md](phase-5.md) |
+| 5 | Wire-up, Integration & Release Gate | completed | 10 | [phase-5.md](phase-5.md) |
 
 ---
 

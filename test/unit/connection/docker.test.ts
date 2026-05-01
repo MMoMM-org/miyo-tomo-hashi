@@ -177,6 +177,46 @@ describe("listTomoInstances()", () => {
 		expect(typeof opts?.socketPath).toBe("string");
 		expect(opts?.socketPath?.length).toBeGreaterThan(0);
 	});
+
+	it("ignores DOCKER_HOST in the environment (negative — locks ADR-1 against env-driven redirection)", async () => {
+		// Spec 001 requirements.md F1/AC7: "The plugin SHALL NOT honor
+		// `DOCKER_HOST`, `DOCKER_CONTEXT`, or Docker config context files."
+		// The positive case above proves we pass an explicit socketPath; this
+		// negative case proves a stale DOCKER_HOST in the user's shell profile
+		// CANNOT redirect the constructed dockerode to a TCP endpoint, even if
+		// a future refactor accidentally introduces `process.env.DOCKER_HOST`
+		// into the construction path. We assert the constructor's socketPath
+		// is the platform-default value, not the env-supplied one.
+
+		const previous = process.env.DOCKER_HOST;
+		process.env.DOCKER_HOST = "tcp://should-not-be-used.example.invalid:9999";
+
+		try {
+			vi.resetModules();
+			handles.listContainers.mockResolvedValue([]);
+			const fresh = (await import("../../../src/connection/docker")) as typeof import("../../../src/connection/docker");
+			await fresh.listTomoInstances();
+
+			expect(handles.dockerodeCtor).toHaveBeenCalled();
+			const opts = handles.dockerodeCtor.mock.calls[0]?.[0] as
+				| { socketPath?: string; host?: string }
+				| undefined;
+			expect(opts).toBeDefined();
+			// The platform-default socket on darwin/linux is /var/run/docker.sock;
+			// on win32 it's the named pipe. Neither contains "tcp://" or "evil".
+			expect(opts?.socketPath).toBeDefined();
+			expect(opts?.socketPath).not.toContain("tcp://");
+			expect(opts?.socketPath).not.toContain("should-not-be-used");
+			// Defense-in-depth: no `host` field either (would let dockerode dial TCP).
+			expect(opts?.host).toBeUndefined();
+		} finally {
+			if (previous === undefined) {
+				delete process.env.DOCKER_HOST;
+			} else {
+				process.env.DOCKER_HOST = previous;
+			}
+		}
+	});
 });
 
 // --- findInstanceByName ------------------------------------------------------
