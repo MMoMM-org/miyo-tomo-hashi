@@ -24,10 +24,14 @@ import type { VaultFS } from "../vault/VaultFS.js";
 // Canonical order — PRD F4
 // ---------------------------------------------------------------------------
 
+// Canonical action order. add_relationship runs after link_to_moc since both
+// modify the same MOC and relationships are typically navigation links on the
+// just-linked MOC. Update kinds and source cleanup follow.
 const KIND_ORDER: readonly ActionKind[] = [
 	"create_moc",
 	"move_note",
 	"link_to_moc",
+	"add_relationship",
 	"update_tracker",
 	"update_log_entry",
 	"update_log_link",
@@ -225,6 +229,8 @@ function buildSummary(action: Action): string {
 			return `${action.source} → ${action.destination}`;
 		case "link_to_moc":
 			return `${action.target_moc} ← ${action.line_to_add}`;
+		case "add_relationship":
+			return `${action.target_moc_path} :: ${action.marker} ← ${action.line}`;
 		case "update_tracker":
 			return `${action.daily_note_path} :: ${action.field}=${String(action.value)}`;
 		case "update_log_entry":

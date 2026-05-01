@@ -82,6 +82,8 @@ function makeLinkToMoc(id: string, targetMoc: string, lineToAdd: string, targetM
 		id,
 		target_moc: targetMoc,
 		line_to_add: lineToAdd,
+		anchor: { type: "callout", value: "[!blocks] Key Concepts" },
+		placement: "inside",
 		...(targetMocPath !== undefined ? { target_moc_path: targetMocPath } : {}),
 		...(applied !== undefined ? { applied } : {}),
 	};

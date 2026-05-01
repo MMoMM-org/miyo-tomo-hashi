@@ -42,12 +42,37 @@ export interface MoveNoteAction extends ActionBase {
 	readonly tags?: string[];
 }
 
+/**
+ * Anchor — where in a target MOC to find the insertion point for a
+ * `link_to_moc`. Three types:
+ *   - `callout`: match the callout opening line (e.g., `[!blocks] Key Concepts`).
+ *   - `heading`: match heading text without `#` prefix (any heading level).
+ *   - `line`: match a body line by literal content (substring/exact).
+ *
+ * `value` is `null` only at emission time when the renderer cannot resolve
+ * a concrete value yet — Hashi receiving null is a runtime fail.
+ */
+export interface Anchor {
+	readonly type: "callout" | "heading" | "line";
+	readonly value: string | null;
+}
+
 export interface LinkToMocAction extends ActionBase {
 	readonly action: "link_to_moc";
 	readonly target_moc: string;
 	readonly line_to_add: string;
+	readonly anchor: Anchor;
+	readonly placement: "inside" | "after";
 	readonly target_moc_path?: string | null;
-	readonly section_name?: string | null;
+	readonly source_note_title?: string | null;
+}
+
+export interface AddRelationshipAction extends ActionBase {
+	readonly action: "add_relationship";
+	readonly target_moc_path: string;
+	readonly marker: string;
+	readonly line: string;
+	readonly target_moc?: string | null;
 	readonly source_note_title?: string | null;
 }
 
@@ -108,6 +133,7 @@ export type Action =
 	| CreateMocAction
 	| MoveNoteAction
 	| LinkToMocAction
+	| AddRelationshipAction
 	| UpdateTrackerAction
 	| UpdateLogEntryAction
 	| UpdateLogLinkAction

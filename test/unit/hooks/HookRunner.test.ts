@@ -67,6 +67,8 @@ function makeAction(kind: Action["action"] = "create_moc"): Action {
 			id: "a3",
 			target_moc: "mocs/index-moc.md",
 			line_to_add: "- [[note]]",
+			anchor: { type: "callout", value: "[!blocks] Key Concepts" },
+			placement: "inside",
 		};
 	}
 	if (kind === "update_tracker") {

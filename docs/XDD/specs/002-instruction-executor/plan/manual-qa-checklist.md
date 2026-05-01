@@ -122,9 +122,20 @@ target_vault: ../temp/Privat-Test
 | F4.create_moc.idempotent | Re-run create_moc on already-applied state: no-op, no error | | | |
 | F4.create_moc.both-present | Both source AND target on disk → fail "Inconsistent state — both source and destination present"; no overwrite | | | |
 | F4.move_note.preserves-links | `move_note`: incoming links to the note still resolve after move (use Ctrl+click to verify) | | | |
-| F4.link_to_moc.append | `link_to_moc`: bullet appended inside the matched callout in the MOC | | | |
-| F4.link_to_moc.duplicate | Re-run with identical bullet already present: no-op | | | |
+| F4.link_to_moc.callout-inside | `link_to_moc` with anchor.type=callout + placement=inside: `> <line_to_add>` appended as last line inside the matched callout body | | | |
+| F4.link_to_moc.callout-after | `link_to_moc` with anchor.type=callout + placement=after: `<line_to_add>` (no `> ` prefix) inserted immediately after the callout's closing `>` line | | | |
+| F4.link_to_moc.heading-after | `link_to_moc` with anchor.type=heading + placement=after: `<line_to_add>` inserted immediately after the heading line itself (NOT at end of heading section content) | | | |
+| F4.link_to_moc.line-after | `link_to_moc` with anchor.type=line + placement=after: `<line_to_add>` inserted immediately after the body line whose stripped content matches `anchor.value` | | | |
+| F4.link_to_moc.duplicate | Re-run with identical bullet already at anchor target: no-op (skipped-already) | | | |
+| F4.link_to_moc.anchor-missing | anchor cannot be resolved in the MOC (no matching callout/heading/line) → action fails with "anchor not found: <value>"; no fallback to first editable callout | | | |
+| F4.link_to_moc.inside-non-callout | placement=inside on anchor.type ≠ callout → action fails with "placement: inside requires callout anchor" | | | |
 | F4.link_to_moc.missing-moc | MOC target missing → action fails with "MOC target missing" | | | |
+| F4.add_relationship.up-marker | `add_relationship` with marker=`"up::"` + line=`"up:: [[X]]"`: located line in target MOC replaced by `line`; if matched line was inside a callout, the new line keeps a normalised `> ` prefix | | | |
+| F4.add_relationship.related-marker | `add_relationship` with marker=`"related::"`: same behaviour; multi-link aggregation (`related:: [[A]], [[B]]`) is supplied by Tomo verbatim — Hashi does no aggregation | | | |
+| F4.add_relationship.first-match-wins | If multiple lines start with the marker, only the first is replaced; subsequent occurrences untouched | | | |
+| F4.add_relationship.idempotent | Re-run with marker line already equal to target `line` → no-op (skipped-already) | | | |
+| F4.add_relationship.missing-marker | No line in the MOC starts with `marker` → action fails with "Marker not found: <marker>" | | | |
+| F4.add_relationship.missing-moc | Target MOC missing → action fails with "Relationship target missing" | | | |
 | F4.update_tracker.set | `update_tracker`: target field is set to target value (verify in tracker file) | | | |
 | F4.update_tracker.idempotent | Re-run with same value: no-op | | | |
 | F4.update_tracker.differs | Existing field has DIFFERENT value: applied; field overwritten to target value (Tomo's intent wins on overwrite) | | | |

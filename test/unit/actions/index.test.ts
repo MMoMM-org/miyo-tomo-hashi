@@ -45,11 +45,12 @@ const makeCtx = (vault: FakeVaultFS) => ({
 // ---------------------------------------------------------------------------
 
 describe("HANDLERS — key coverage", () => {
-	it("has exactly the 8 ActionKind keys", () => {
+	it("has exactly the 9 ActionKind keys", () => {
 		const expectedKeys: ActionKind[] = [
 			"create_moc",
 			"move_note",
 			"link_to_moc",
+			"add_relationship",
 			"update_tracker",
 			"update_log_entry",
 			"update_log_link",
@@ -146,7 +147,8 @@ describe("HANDLERS — dispatch smoke", () => {
 			id: "smoke-ltm",
 			target_moc: mocPath,
 			line_to_add: "- [[Notes/x|X]]",
-			section_name: "Projects",
+			anchor: { type: "heading" as const, value: "Projects" },
+			placement: "after" as const,
 		};
 		const handler = HANDLERS[action.action];
 		const outcome = await handler(action, makeCtx(vault));

@@ -19,11 +19,12 @@ import type {
 // ---------------------------------------------------------------------------
 
 describe("ActionKind", () => {
-	it("is the exact 8-element string-literal union", () => {
+	it("is the exact 9-element string-literal union", () => {
 		expectTypeOf<ActionKind>().toEqualTypeOf<
 			| "create_moc"
 			| "move_note"
 			| "link_to_moc"
+			| "add_relationship"
 			| "update_tracker"
 			| "update_log_entry"
 			| "update_log_link"
@@ -32,19 +33,20 @@ describe("ActionKind", () => {
 		>();
 	});
 
-	it("all 8 literals are assignable to ActionKind", () => {
+	it("all 9 literals are assignable to ActionKind", () => {
 		const allKinds: ActionKind[] = [
 			"create_moc",
 			"move_note",
 			"link_to_moc",
+			"add_relationship",
 			"update_tracker",
 			"update_log_entry",
 			"update_log_link",
 			"delete_source",
 			"skip",
 		];
-		// Runtime check: exactly 8
-		expect(allKinds).toHaveLength(8);
+		// Runtime check: exactly 9
+		expect(allKinds).toHaveLength(9);
 	});
 });
 
@@ -120,6 +122,8 @@ describe("Action discriminated union", () => {
 			action: "link_to_moc",
 			target_moc: "Brettspiele (MOC)",
 			line_to_add: "- [[Some Note]]",
+			anchor: { type: "callout", value: "[!blocks] Key Concepts" },
+			placement: "inside",
 		};
 		if (a.action === "link_to_moc") {
 			const _moc: string = a.target_moc;
@@ -218,6 +222,8 @@ describe("Action discriminated union", () => {
 					return `move_note:${a.title}`;
 				case "link_to_moc":
 					return `link_to_moc:${a.target_moc}`;
+				case "add_relationship":
+					return `add_relationship:${a.marker}`;
 				case "update_tracker":
 					return `update_tracker:${a.field}`;
 				case "update_log_entry":
@@ -271,8 +277,9 @@ describe("Action discriminated union", () => {
 			action: "link_to_moc",
 			target_moc: "MOC",
 			line_to_add: "- [[x]]",
+			anchor: { type: "callout", value: null },
+			placement: "inside",
 			target_moc_path: null,
-			section_name: null,
 			source_note_title: null,
 		};
 		expectTypeOf(a.target_moc_path).toEqualTypeOf<string | null | undefined>();
