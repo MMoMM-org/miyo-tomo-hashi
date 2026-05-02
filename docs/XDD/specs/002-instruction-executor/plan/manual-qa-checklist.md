@@ -17,6 +17,16 @@ target_vault: ../temp/Privat-Test
 > requires real-Obsidian eyes-on-screen verification has a row here. ACs
 > that are pure unit-testable (data validation, schema parsing, return
 > values) are NOT in this file — they are covered by the unit suite.
+>
+> **Live E2E coverage of spec-002 lives here, not in `test/live/`.** The
+> spec-002 review (2026-05-02) raised L12 — "live E2E covers only
+> spec-001 Docker connection, not instruction execution." A scripted
+> live E2E for the instruction executor is intentionally out of scope:
+> the test matrix is open-ended (any Tomo-emitted JSON × any vault
+> state) and an automated harness can never enumerate it. The right
+> gate is a human walking this checklist against a real vault,
+> eyeballing the diff between the source `_instructions.json` and the
+> resulting vault state, and feeding regressions back as unit tests.
 
 ## Setup
 
