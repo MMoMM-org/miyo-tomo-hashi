@@ -153,7 +153,11 @@ export class InstructionExecutor {
 		startedAt: Date,
 		mode: ExecutionMode,
 	): Promise<RunCounts> {
-		const { vault, settings } = this;
+		// `vault` is a stable construction-time reference. `settings` is read
+		// through `this.settings` on every site below — destructuring it would
+		// snapshot the object and defeat the live-getter introduced by M4
+		// (review round 2 / M1).
+		const { vault } = this;
 
 		// Step 2: resolve sources
 		const sourcePaths = await this.resolveSources(invocation);
@@ -256,7 +260,7 @@ export class InstructionExecutor {
 		// Step 7: create run log
 		const logWriter = new RunLogWriter(vault);
 		const logPath = await logWriter.start({
-			inboxFolder: settings.tomoInboxFolder,
+			inboxFolder: this.settings.tomoInboxFolder,
 			startedAt,
 			mode,
 			sources: resolvedSources.map((s) => s.sourcePath),
@@ -342,13 +346,19 @@ export class InstructionExecutor {
 
 			if (handlerOutcome.kind !== "failed") {
 				// Step 8f: queue applied:true write (flushed in one batch
-				// after the loop — review H5).
+				// after the loop — review H5). Peer-checkbox sync also
+				// deferred to post-loop (review round 2 / M3): pre-fix
+				// peer .md was ticked here, BEFORE the source JSON's
+				// applied flag was written. A crash between the tick and
+				// the post-loop flush left peer .md showing `[x] Applied`
+				// while source JSON still had `applied: false` — the
+				// next run re-enqueued the action while the user saw it
+				// as done. Now: source JSON wins; peer ticks fire only
+				// after their corresponding markActionsApplied succeeds.
 				if (handlerOutcome.kind === "applied") {
 					const list = appliedByFile.get(record.fileId) ?? [];
 					list.push(record.id);
 					appliedByFile.set(record.fileId, list);
-					// Step 8g: best-effort tick peer .md
-					await tickPeerCheckbox(vault, record.fileId, record.id);
 				}
 			}
 
@@ -376,19 +386,27 @@ export class InstructionExecutor {
 			logWriter.appendRecord(record, opts);
 		}
 
-		// Step 8.5 (H5): flush batched applied-flag writes — one processJSON
-		// call per source, regardless of how many actions in that source
-		// were applied.
+		// Step 8.5 (H5 + M3): flush batched applied-flag writes — one
+		// processJSON call per source, regardless of how many actions in
+		// that source were applied. Peer .md checkboxes are ticked AFTER
+		// the JSON write succeeds, preserving the "source JSON is the
+		// truth, peer .md mirrors it" invariant. If markActionsApplied
+		// throws, peer ticks for that file are skipped (the throw
+		// propagates and aborts the run); peer .md being slightly stale
+		// is recoverable, peer .md being ahead of truth is not.
 		for (const [fileId, ids] of appliedByFile) {
 			await markActionsApplied(vault, fileId, ids);
+			for (const id of ids) {
+				await tickPeerCheckbox(vault, fileId, id);
+			}
 		}
 
 		// Step 9: finalize run log per retention policy
 		const endedAt = this.clock.now();
-		await logWriter.finalize(endedAt, settings.runLogRetention);
+		await logWriter.finalize(endedAt, this.settings.runLogRetention);
 
 		// Determine final log path (may have been trashed)
-		const finalLogPath = settings.runLogRetention === "always" ? logPath : null;
+		const finalLogPath = this.settings.runLogRetention === "always" ? logPath : null;
 		const counts = tallyCounts(records, startedAt, endedAt);
 
 		// Step 10: set store → summary

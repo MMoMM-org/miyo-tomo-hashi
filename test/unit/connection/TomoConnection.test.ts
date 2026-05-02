@@ -525,6 +525,45 @@ describe("TomoConnection — stream close auto-reconnect", () => {
 		expect(state.reason?.code).toBe("daemon-unreachable");
 	});
 
+	it("auto-reconnect short-circuits on no-instances (review round 2 / M2 — defensive)", async () => {
+		// `no-instances` is not currently thrown into the reconnect path by
+		// any in-tree code, but the short-circuit lists it alongside
+		// socket-permission-denied / daemon-unreachable so that if a future
+		// caller ever throws ConnectionFailure({code:"no-instances"}) the
+		// loop will not waste 15 s waiting for containers that are not
+		// coming back. This test pins the contract.
+		vi.useFakeTimers();
+		const target = inst();
+		const first = makeFakeSession();
+		mockedAttach.mockResolvedValueOnce(first.session);
+		mockedFindByName.mockResolvedValue(target);
+		mockedAttach.mockRejectedValueOnce(
+			new docker.ConnectionFailure({
+				code: "no-instances",
+				detail: "No Tomo instance seems to be running — start one and try again.",
+			}),
+		);
+
+		const conn = new TomoConnection(settings());
+		await conn.connect(target);
+		first.fireError();
+		await Promise.resolve();
+		expect(conn.state.kind).toBe("reconnecting");
+
+		await vi.advanceTimersByTimeAsync(500);
+		await vi.advanceTimersByTimeAsync(0);
+
+		const state = conn.state;
+		expect(state.kind).toBe("disconnected");
+		if (state.kind !== "disconnected") throw new Error("expected disconnected");
+		expect(state.reason?.code).toBe("no-instances");
+
+		// Definitive: no further attempts after the first short-circuit.
+		const callsAfterShort = mockedAttach.mock.calls.length;
+		await vi.advanceTimersByTimeAsync(15_000);
+		expect(mockedAttach.mock.calls.length).toBe(callsAfterShort);
+	});
+
 	it("error close while Connected → all 5 attempts fail → Disconnected{reconnect-exhausted}", async () => {
 		vi.useFakeTimers();
 		const target = inst();
