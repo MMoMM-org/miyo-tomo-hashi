@@ -223,6 +223,10 @@ export class TomoChatView extends ItemView {
 				text: this.formatZoomLabel(level),
 			});
 			btn.setAttr("aria-label", `Zoom ${this.formatZoomLabel(level)}`);
+			// H5 (review/spec-001): SR users can't tell which zoom is
+			// active without aria-pressed — the .is-active CSS class is
+			// invisible to AT.
+			btn.setAttr("aria-pressed", level === this.currentZoom ? "true" : "false");
 			btn.addEventListener("click", () => {
 				void this.handleZoomClick(level);
 			});
@@ -397,8 +401,12 @@ export class TomoChatView extends ItemView {
 
 	private refreshZoomButtons(): void {
 		for (const [level, btn] of this.zoomButtons) {
-			if (level === this.currentZoom) btn.addClass("is-active");
+			const isActive = level === this.currentZoom;
+			if (isActive) btn.addClass("is-active");
 			else btn.removeClass("is-active");
+			// H5: keep aria-pressed in sync on every zoom change so SR
+			// users hear the new selection.
+			btn.setAttr("aria-pressed", isActive ? "true" : "false");
 		}
 	}
 

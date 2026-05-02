@@ -42,6 +42,13 @@ export class InstancePickerModal extends Modal {
 		contentEl.createEl("h2", { text: "Tomo instance" });
 
 		const listEl = contentEl.createDiv({ cls: "hashi-instance-picker-list" });
+		// H6: announce async state transitions to assistive tech. The
+		// loading→list / loading→empty / loading→error swaps happen via
+		// listEl.empty() + new child append; without aria-live they are
+		// silent in screen readers. polite + atomic rebuilds the announcement
+		// each time the contents change.
+		listEl.setAttr("aria-live", "polite");
+		listEl.setAttr("aria-atomic", "true");
 		listEl.createDiv({
 			cls: "hashi-instance-picker-loading",
 			text: "Loading…",

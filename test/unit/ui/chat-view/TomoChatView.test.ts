@@ -620,6 +620,35 @@ describe("TomoChatView — zoom (magnify) controls", () => {
 		expect(fitMock).toHaveBeenCalled();
 	});
 
+	it("zoom buttons carry aria-pressed reflecting active state (H5)", async () => {
+		const h = await mountView({ initialZoom: 1 });
+		const buttons = Array.from(
+			h.root.querySelectorAll<HTMLButtonElement>(".hashi-chat-view-zoom-btn"),
+		);
+		// 3 zoom levels: 0.5×, 1×, 1.5× — middle (1×) is initial active.
+		expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual([
+			"false",
+			"true",
+			"false",
+		]);
+	});
+
+	it("aria-pressed updates when zoom changes (H5)", async () => {
+		const h = await mountView({ initialZoom: 1 });
+		const buttons = Array.from(
+			h.root.querySelectorAll<HTMLButtonElement>(".hashi-chat-view-zoom-btn"),
+		);
+		// Click 1.5× (last button)
+		buttons[2]?.click();
+		// Wait one microtask for the async click handler to finish
+		await Promise.resolve();
+		expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual([
+			"false",
+			"false",
+			"true",
+		]);
+	});
+
 	it("active class moves to the newly clicked button", async () => {
 		const h = await mountView({ initialZoom: 1 });
 		const buttons = h.root.querySelectorAll<HTMLButtonElement>(
