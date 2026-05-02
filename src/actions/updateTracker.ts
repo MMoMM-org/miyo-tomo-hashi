@@ -101,6 +101,24 @@ async function handleInlineField(
 // Per-field RegExp cache (review M7). Pre-fix the three patterns were
 // reconstructed on every call. Field cardinality in real instruction
 // sets is small, so a Map keyed by field name is the right shape.
+//
+// review round 2 / L48: this Map is intentionally unbounded. Field names
+// in real instruction sets come from the renderer's small, fixed
+// vocabulary (energy, mood, weight, etc.) and the practical ceiling per
+// vault is ~50 distinct fields across years of use. Module-scope means
+// the cache survives plugin disable/enable through Obsidian's CJS module
+// cache; that survivorship is also intentional (the regexes are pure
+// functions of the field name and never change). If a future
+// instruction-set version introduces user-supplied free-text field
+// names, swap to a bounded LRU.
+//
+// review round 2 / L49: the bracketed/parenthesized patterns use
+// `[^\]]*` / `[^)]*` which silently truncate values containing the
+// matching closer (e.g. `[score:: a)b]` matches "a)b]" wrongly because
+// `)` is allowed inside the bracketed value class). Real Tomo-emitted
+// values do not carry these characters today; documenting the
+// limitation rather than introducing a more permissive grammar that
+// might capture across legitimate field boundaries.
 interface InlineMatchers {
 	readonly lineAnchored: RegExp;
 	readonly bracketed: RegExp;

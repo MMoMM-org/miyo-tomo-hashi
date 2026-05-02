@@ -314,9 +314,13 @@ describe("InstructionExecutor — halt-on-dependency", () => {
 		const { executor } = makeSingleFileExecutor(vault, set);
 		const counts = await executor.execute({ kind: "single-file", sourcePath });
 
-		expect(counts.failed).toBeGreaterThanOrEqual(1);      // I03 failed
+		// review round 2 / L13: tightened from toBeGreaterThanOrEqual to
+		// toBe — the exact counts are knowable from the fixture (one
+		// failed, one skipped-dependency, one applied), and the loose
+		// bound would silently accept a regression that double-counts.
+		expect(counts.failed).toBe(1);                        // I03 failed
 		expect(counts["skipped-dependency"]).toBe(1);         // I04 skipped-dependency
-		expect(counts.applied).toBeGreaterThanOrEqual(1);     // I05 applied
+		expect(counts.applied).toBe(1);                       // I05 applied
 
 		// applied:true written for I05 only
 		const updated = await vault.readJSON<InstructionSet>(sourcePath);
@@ -353,9 +357,10 @@ describe("InstructionExecutor — independent failure does not propagate", () =>
 		const { executor } = makeSingleFileExecutor(vault, set);
 		const counts = await executor.execute({ kind: "single-file", sourcePath });
 
-		// I01 failed, I02 still runs → applied
-		expect(counts.failed).toBeGreaterThanOrEqual(1);
-		expect(counts.applied).toBeGreaterThanOrEqual(1);
+		// I01 failed, I02 still runs → applied (exact counts knowable;
+		// review round 2 / L13).
+		expect(counts.failed).toBe(1);
+		expect(counts.applied).toBe(1);
 
 		const updated = await vault.readJSON<InstructionSet>(sourcePath);
 		const i02 = updated.actions.find((a) => a.id === "I02");
@@ -667,9 +672,13 @@ describe("InstructionExecutor — validation failure in batch", () => {
 
 		const counts = await executor.execute({ kind: "batch" });
 
-		// validSet's action should have run (applied or failed based on handler)
-		// The invalid file's contribution is 0 applied
-		expect(counts.applied + counts.failed + counts["skipped-already"]).toBeGreaterThanOrEqual(1);
+		// validSet's I01 ran. The invalid file contributes 0 because the
+		// schema validator rejects it before action enumeration. Tighter
+		// than `>= 1` so a regression that swallows the I01 outcome
+		// fails this assertion (review round 2 / L13).
+		expect(counts.applied).toBe(1);
+		expect(counts.failed).toBe(0);
+		expect(counts["skipped-already"]).toBe(0);
 
 		// Valid file's action should be applied (source file exists)
 		const updated = await vault.readJSON<InstructionSet>(validPath);

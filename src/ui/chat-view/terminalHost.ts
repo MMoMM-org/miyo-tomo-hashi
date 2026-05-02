@@ -46,9 +46,21 @@ const SCROLLBACK_LINES = 5000;
 interface CoalescerState {
 	pending: (Uint8Array | string)[];
 	scheduled: boolean;
+	// review round 2 / L31: track whether a binary chunk has ever been
+	// pushed to this coalescer in the current frame. The all-string
+	// fast-path branch in `joinChunks` was previously a `chunks.every`
+	// scan + closure allocation per multi-chunk frame. Tracking it as a
+	// boolean during enqueue is O(1) and avoids the per-flush O(N) scan.
+	hasBinary: boolean;
 }
 
 const coalescers = new WeakMap<TerminalSession, CoalescerState>();
+
+// review round 2 / L32: TextEncoder is stateless per the Web spec —
+// hoist to module scope so the mixed-chunks branch in `joinChunks` does
+// not allocate a fresh encoder on every flush. Constructed exactly once
+// per module load.
+const sharedEncoder = new TextEncoder();
 
 export function createTerminal(
 	container: HTMLElement,
@@ -90,10 +102,11 @@ export function writeChunk(
 ): void {
 	let state = coalescers.get(session);
 	if (state === undefined) {
-		state = { pending: [], scheduled: false };
+		state = { pending: [], scheduled: false, hasBinary: false };
 		coalescers.set(session, state);
 	}
 	state.pending.push(bytes);
+	if (typeof bytes !== "string") state.hasBinary = true;
 	if (state.scheduled) return;
 	state.scheduled = true;
 	requestAnimationFrame(() => {
@@ -112,10 +125,15 @@ export function flushPending(session: TerminalSession): void {
 	if (state.pending.length === 0) return;
 	const drain = state.pending;
 	state.pending = [];
-	session.terminal.write(joinChunks(drain));
+	const wasAllStrings = !state.hasBinary;
+	state.hasBinary = false;
+	session.terminal.write(joinChunks(drain, wasAllStrings));
 }
 
-function joinChunks(chunks: (Uint8Array | string)[]): string | Uint8Array {
+function joinChunks(
+	chunks: (Uint8Array | string)[],
+	allStrings: boolean,
+): string | Uint8Array {
 	// M11 (review/spec-001): single-chunk fast path. The dominant frame on
 	// a steady chat-output stream is one chunk; pre-fix code still
 	// allocated a fresh Uint8Array(total) and copied bytes into it. xterm's
@@ -123,17 +141,20 @@ function joinChunks(chunks: (Uint8Array | string)[]): string | Uint8Array {
 	// return removes the wasted copy.
 	if (chunks.length === 1) return chunks[0]!;
 	// All-string fast path — common for terminal escape sequences and ASCII
-	// chat output, avoids a TextEncoder round-trip.
-	if (chunks.every((c): c is string => typeof c === "string")) {
+	// chat output, avoids a TextEncoder round-trip. The `allStrings` flag is
+	// tracked during writeChunk so this branch does not need an O(N) scan
+	// (review round 2 / L31).
+	if (allStrings) {
 		return chunks.join("");
 	}
 	// Mixed or all-binary — concatenate into a single Uint8Array so xterm's
-	// renderer sees one operation per frame.
-	const encoder = new TextEncoder();
+	// renderer sees one operation per frame. Uses the module-scope
+	// sharedEncoder (review round 2 / L32) instead of a per-flush new
+	// TextEncoder allocation.
 	const arrs: Uint8Array[] = [];
 	let total = 0;
 	for (const c of chunks) {
-		const arr = typeof c === "string" ? encoder.encode(c) : c;
+		const arr = typeof c === "string" ? sharedEncoder.encode(c) : c;
 		arrs.push(arr);
 		total += arr.length;
 	}

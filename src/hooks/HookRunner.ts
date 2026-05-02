@@ -76,7 +76,22 @@ const noopHook: Hook = () => undefined;
 
 function loadHookFresh(absolutePath: string, requireFn: RequireFn): Hook {
 	const resolved = requireFn.resolve(absolutePath);
-	delete requireFn.cache[resolved];
+	// review round 2 / L22: evict the entry file AND every other cached
+	// CJS module that shares its directory prefix. Pre-fix only the
+	// entry was evicted, so a hook doing `require("./_helper")` kept
+	// the helper cached across runs; a user editing the helper between
+	// two enable-session runs executed the OLD helper while believing
+	// they had approved the fresh code. Targeted prefix eviction
+	// (same-directory) is safer than a full cache flush — node_modules
+	// stays warm.
+	const dirPrefix = resolved.endsWith(".js") || resolved.endsWith(".cjs")
+		? resolved.slice(0, resolved.lastIndexOf("/") + 1)
+		: resolved;
+	for (const key of Object.keys(requireFn.cache)) {
+		if (key.startsWith(dirPrefix)) {
+			delete requireFn.cache[key];
+		}
+	}
 	const mod = requireFn(absolutePath) as { default?: Hook } | Hook;
 	if (typeof mod === "function") return mod;
 	if (typeof (mod as { default?: Hook }).default === "function") {

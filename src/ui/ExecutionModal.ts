@@ -86,10 +86,16 @@ export class ExecutionModal extends Modal {
 
 		if (needCancel) {
 			this.executor.cancel();
-			// Drive the post-cancel idle transition through the consumer's
-			// onClose hook so the executor doesn't park at `summary` with
-			// no modal to surface it. Treats native dismiss as equivalent
-			// to clicking Close on the summary view.
+			// review round 2 / L42: fires the consumer's onClose hook
+			// IF one was registered, so the executor doesn't park at
+			// `summary` with no modal to surface it. The optional call
+			// is intentional — `callbacks` is the most recently
+			// captured wrapCallbacks(state) result, which means a
+			// modal closed before the first render() (e.g. user opens
+			// then immediately dismisses) sees the empty initial
+			// callbacks object. The cancel above is unconditional and
+			// idempotent, so the lock is released either way; the
+			// consumer's idle transition is best-effort here.
 			this.callbacks.onClose?.();
 		}
 	}

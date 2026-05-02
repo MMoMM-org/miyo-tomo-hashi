@@ -48,9 +48,27 @@ export class FsHookLoader implements HookLoader {
 		// on disk; without this guard, FsHookLoader would happily load
 		// hook code from arbitrary FS locations. Allow only paths that
 		// resolve inside the vault tree (or equal the vault root).
+		//
+		// review round 2 / L25: realpath both sides before the prefix
+		// check so a symlinked hooksDir cannot pass the string compare
+		// while resolving outside the vault. Common macOS pitfall:
+		// /var/folders/ is a symlink to /private/var/folders/ — a vault
+		// or hooksDir on such a path would otherwise mismatch under
+		// path.resolve (which normalises but does NOT resolve symlinks).
+		// Soft-fail to the pre-realpath comparison if either realpath
+		// throws (e.g. directory does not exist yet) — the readdirSync
+		// below will then fail naturally and return null.
+		let canonicalDir = absoluteDir;
+		let canonicalBase = this.vaultBasePath;
+		try {
+			canonicalDir = fs.realpathSync(absoluteDir);
+			canonicalBase = fs.realpathSync(this.vaultBasePath);
+		} catch {
+			// keep the unrealpathed values for the comparison below
+		}
 		if (
-			absoluteDir !== this.vaultBasePath &&
-			!absoluteDir.startsWith(this.vaultBasePath + path.sep)
+			canonicalDir !== canonicalBase &&
+			!canonicalDir.startsWith(canonicalBase + path.sep)
 		) {
 			return null;
 		}
