@@ -221,6 +221,10 @@ export class InstructionExecutor {
 		// Cast to mutable array — ActionRecord.outcome is intentionally mutable per state.ts
 		const { records: readonlyRecords, dependencies } = computeRemaining(resolvedSources);
 		const records = readonlyRecords as ActionRecord[];
+		// M6: index dependencies once (O(E)) so findDependencyFailure does
+		// O(d_record) lookup per record instead of O(E) scan. Pre-fix was
+		// O(N*E); now O(N+E).
+		const depMap = buildDepMap(dependencies);
 
 		// Step 5: set store → preparing → previewing/running
 		this.state.set({
@@ -313,7 +317,7 @@ export class InstructionExecutor {
 			}
 
 			// Step 8b: dependency check
-			const depFailure = findDependencyFailure(record, dependencies, failedIds);
+			const depFailure = findDependencyFailure(record, depMap, failedIds);
 			if (depFailure !== null) {
 				record.outcome = { kind: "skipped-dependency", dependsOn: depFailure };
 				logWriter.appendRecord(record);
@@ -454,15 +458,27 @@ function buildActionLookup(
 	return map;
 }
 
+function buildDepMap(
+	dependencies: readonly DependencyEdge[],
+): ReadonlyMap<string, ReadonlyArray<string>> {
+	const map = new Map<string, string[]>();
+	for (const edge of dependencies) {
+		const list = map.get(edge.dependent) ?? [];
+		list.push(edge.dependsOn);
+		map.set(edge.dependent, list);
+	}
+	return map;
+}
+
 function findDependencyFailure(
 	record: ActionRecord,
-	dependencies: readonly DependencyEdge[],
+	depMap: ReadonlyMap<string, ReadonlyArray<string>>,
 	failedIds: ReadonlySet<string>,
 ): string | null {
-	for (const edge of dependencies) {
-		if (edge.dependent === record.id && failedIds.has(edge.dependsOn)) {
-			return edge.dependsOn;
-		}
+	const dependsOnIds = depMap.get(record.id);
+	if (dependsOnIds === undefined) return null;
+	for (const dependsOn of dependsOnIds) {
+		if (failedIds.has(dependsOn)) return dependsOn;
 	}
 	return null;
 }

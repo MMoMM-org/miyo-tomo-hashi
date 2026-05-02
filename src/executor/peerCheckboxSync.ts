@@ -46,6 +46,11 @@ export async function tickPeerCheckbox(
 		}
 
 		const content = await vault.read(peerPath);
+		// M8: scan once on the read content so we know lineIdx +
+		// already-ticked status. The vault.process callback then targets
+		// the known line directly instead of re-scanning + rebuilding the
+		// whole file. Pre-fix did 2 full scans + 2 RegExp allocations per
+		// applied action.
 		const result = findCheckboxInSection(content, actionId);
 
 		if (result === null) {
@@ -56,9 +61,15 @@ export async function tickPeerCheckbox(
 			return "already-ticked";
 		}
 
-		await vault.process(peerPath, (raw) =>
-			flipCheckbox(raw, actionId),
-		);
+		const targetIdx = result.lineIdx;
+		await vault.process(peerPath, (raw) => {
+			const lines = raw.split("\n");
+			const target = lines[targetIdx];
+			if (target !== undefined && target.trim() === "- [ ] Applied") {
+				lines[targetIdx] = target.replace("- [ ] Applied", "- [x] Applied");
+			}
+			return lines.join("\n");
+		});
 
 		return "ticked";
 	} catch {
@@ -80,7 +91,7 @@ function derivePeerPath(jsonSourcePath: string): string {
 	return jsonSourcePath.slice(0, -".json".length) + ".md";
 }
 
-type CheckboxResult = { state: "ticked" | "unticked" };
+type CheckboxResult = { state: "ticked" | "unticked"; lineIdx: number };
 
 /**
  * Find the Applied checkbox under the heading for `actionId`.
@@ -88,6 +99,9 @@ type CheckboxResult = { state: "ticked" | "unticked" };
  *
  * Heading match: `### <actionId>` optionally followed by em-dash, hyphen,
  * colon, or any other continuation (tolerant). Em-dash is the documented form.
+ *
+ * lineIdx (review M8) lets the caller target the exact line in vault.process
+ * without re-scanning the whole file.
  */
 function findCheckboxInSection(
 	content: string,
@@ -98,7 +112,8 @@ function findCheckboxInSection(
 
 	let inSection = false;
 
-	for (const line of lines) {
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i] ?? "";
 		if (!inSection) {
 			if (headingPattern.test(line)) {
 				inSection = true;
@@ -112,51 +127,15 @@ function findCheckboxInSection(
 		}
 
 		if (line.trim() === "- [x] Applied") {
-			return { state: "ticked" };
+			return { state: "ticked", lineIdx: i };
 		}
 
 		if (line.trim() === "- [ ] Applied") {
-			return { state: "unticked" };
+			return { state: "unticked", lineIdx: i };
 		}
 	}
 
 	return null;
-}
-
-/**
- * Return new content with the first `- [ ] Applied` under `### <actionId>`
- * replaced by `- [x] Applied`. Preserves all other content verbatim.
- */
-function flipCheckbox(content: string, actionId: string): string {
-	const lines = content.split("\n");
-	const headingPattern = new RegExp(`^### ${escapeRegExp(actionId)}(\\s|$)`);
-
-	let inSection = false;
-	let flipped = false;
-
-	const result = lines.map((line) => {
-		if (flipped) return line;
-
-		if (!inSection) {
-			if (headingPattern.test(line)) {
-				inSection = true;
-			}
-			return line;
-		}
-
-		if (/^###/.test(line)) {
-			return line;
-		}
-
-		if (line.trim() === "- [ ] Applied") {
-			flipped = true;
-			return line.replace("- [ ] Applied", "- [x] Applied");
-		}
-
-		return line;
-	});
-
-	return result.join("\n");
 }
 
 function escapeRegExp(s: string): string {

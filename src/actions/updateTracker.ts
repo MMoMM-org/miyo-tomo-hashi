@@ -98,56 +98,83 @@ async function handleInlineField(
 	return { kind: "applied" };
 }
 
-/** Find the first matching inline field across the 3 priority classes. */
-function findInlineMatch(lines: readonly string[], field: string): InlineMatch | null {
-	const escaped = escapeRegExp(field);
-	const lineAnchored = new RegExp(`^(\\s*(?:[-*]\\s+)?(?:>\\s+)?)${escaped}::\\s*(.*)$`);
-	const bracketed = new RegExp(`\\[${escaped}::\\s*([^\\]]*)\\]`);
-	const parenthesized = new RegExp(`\\(${escaped}::\\s*([^)]*)\\)`);
+// Per-field RegExp cache (review M7). Pre-fix the three patterns were
+// reconstructed on every call. Field cardinality in real instruction
+// sets is small, so a Map keyed by field name is the right shape.
+interface InlineMatchers {
+	readonly lineAnchored: RegExp;
+	readonly bracketed: RegExp;
+	readonly parenthesized: RegExp;
+}
+const inlineMatcherCache = new Map<string, InlineMatchers>();
 
-	// Pass 1: line-anchored (highest priority)
+function getInlineMatchers(field: string): InlineMatchers {
+	const cached = inlineMatcherCache.get(field);
+	if (cached !== undefined) return cached;
+	const escaped = escapeRegExp(field);
+	const matchers: InlineMatchers = {
+		lineAnchored: new RegExp(`^(\\s*(?:[-*]\\s+)?(?:>\\s+)?)${escaped}::\\s*(.*)$`),
+		bracketed: new RegExp(`\\[${escaped}::\\s*([^\\]]*)\\]`),
+		parenthesized: new RegExp(`\\(${escaped}::\\s*([^)]*)\\)`),
+	};
+	inlineMatcherCache.set(field, matchers);
+	return matchers;
+}
+
+/**
+ * Find the first matching inline field across the 3 priority classes.
+ *
+ * Priority is line-anchored > bracketed > parenthesized. The walk is a
+ * single pass (review M7); we eagerly return on line-anchored (highest
+ * priority — no later line can outrank it) and otherwise track the
+ * earliest bracketed and parenthesized hits, returning the
+ * highest-priority survivor at the end.
+ */
+function findInlineMatch(lines: readonly string[], field: string): InlineMatch | null {
+	const { lineAnchored, bracketed, parenthesized } = getInlineMatchers(field);
+
+	let bracketedMatch: InlineMatch | null = null;
+	let parenthesizedMatch: InlineMatch | null = null;
+
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i] ?? "";
-		const m = lineAnchored.exec(line);
-		if (m) {
-			const prefix = m[1] ?? "";
+
+		const la = lineAnchored.exec(line);
+		if (la) {
+			const prefix = la[1] ?? "";
 			return {
 				lineIdx: i,
-				value: (m[2] ?? "").trim(),
+				value: (la[2] ?? "").trim(),
 				rewrite: (_l, v) => `${prefix}${field}:: ${v}`,
 			};
 		}
-	}
 
-	// Pass 2: bracketed
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i] ?? "";
-		const m = bracketed.exec(line);
-		if (m) {
-			const inner = m[0]; // full `[field:: value]`
-			return {
-				lineIdx: i,
-				value: (m[1] ?? "").trim(),
-				rewrite: (l, v) => l.replace(inner, `[${field}:: ${v}]`),
-			};
+		if (bracketedMatch === null) {
+			const b = bracketed.exec(line);
+			if (b) {
+				const inner = b[0];
+				bracketedMatch = {
+					lineIdx: i,
+					value: (b[1] ?? "").trim(),
+					rewrite: (l, v) => l.replace(inner, `[${field}:: ${v}]`),
+				};
+			}
+		}
+
+		if (parenthesizedMatch === null) {
+			const p = parenthesized.exec(line);
+			if (p) {
+				const inner = p[0];
+				parenthesizedMatch = {
+					lineIdx: i,
+					value: (p[1] ?? "").trim(),
+					rewrite: (l, v) => l.replace(inner, `(${field}:: ${v})`),
+				};
+			}
 		}
 	}
 
-	// Pass 3: parenthesized
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i] ?? "";
-		const m = parenthesized.exec(line);
-		if (m) {
-			const inner = m[0]; // full `(field:: value)`
-			return {
-				lineIdx: i,
-				value: (m[1] ?? "").trim(),
-				rewrite: (l, v) => l.replace(inner, `(${field}:: ${v})`),
-			};
-		}
-	}
-
-	return null;
+	return bracketedMatch ?? parenthesizedMatch;
 }
 
 function escapeRegExp(s: string): string {

@@ -194,18 +194,29 @@ function renderBody(
 	entries: readonly BufferedEntry[],
 	peerHeadings: Map<string, Map<string, PeerHeading>>,
 ): string {
+	// M9: pre-group entries once (O(E)). Pre-fix did entries.filter per
+	// source (O(S*E)) plus another full scan for "extra" file ids. Map
+	// preserves insertion order so the orphan loop stays deterministic.
+	const byFile = new Map<string, BufferedEntry[]>();
+	for (const e of entries) {
+		const id = entryFileId(e);
+		const list = byFile.get(id) ?? [];
+		list.push(e);
+		byFile.set(id, list);
+	}
+
 	const sections: string[] = [];
+	const seen = new Set<string>();
 
 	for (const fileId of sources) {
-		const fileEntries = entries.filter((e) => entryFileId(e) === fileId);
+		seen.add(fileId);
+		const fileEntries = byFile.get(fileId) ?? [];
 		sections.push(renderFileSection(fileId, fileEntries, peerHeadings.get(fileId)));
 	}
 
-	// Files that appear in entries but not in sources list (edge case guard)
-	const covered = new Set(sources);
-	const extra = new Set(entries.map(entryFileId).filter((id) => !covered.has(id)));
-	for (const fileId of extra) {
-		const fileEntries = entries.filter((e) => entryFileId(e) === fileId);
+	// Edge-case guard: files that appear in entries but not in sources.
+	for (const [fileId, fileEntries] of byFile) {
+		if (seen.has(fileId)) continue;
 		sections.push(renderFileSection(fileId, fileEntries, peerHeadings.get(fileId)));
 	}
 
