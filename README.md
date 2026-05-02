@@ -172,8 +172,39 @@ run with full plugin privilege (same trust model as Templater).
   before first run; you choose Enable / Enable once / Disable
 - **Enabled** — hooks run without per-invocation prompts
 
+### Hook function signature
+
+Each hook file exports a single async function that takes one
+`ctx` argument and returns a result object (or `void`):
+
+```js
+// .tomo-hashi/hooks/before-create_moc.cjs
+module.exports = async (ctx) => {
+  // ctx.action  — the Action variant being executed (immutable);
+  //               check ctx.action.action for the kind, then access
+  //               kind-specific fields.
+  // ctx.app     — Obsidian's App instance. Treat as a stable surface;
+  //               read access is broad (vault, metadataCache, workspace,
+  //               vault.adapter), so handle it with the same care as
+  //               any in-process plugin code.
+  // ctx.logger  — { info, warn, error } — each takes a string and writes
+  //               into the run log. Prefer these over console for
+  //               messages the user should see in the run-log UI.
+
+  if (ctx.action.action === "create_moc") {
+    ctx.logger.info(`will create MOC at ${ctx.action.destination}`);
+  }
+  return { info: ["pre-flight ok"] };
+};
+```
+
 Hook return shape: `{ info?: string[], warnings?: string[], errors?: string[] }`.
-A non-empty `errors` array fails the action.
+A non-empty `errors` array fails the action; `before-` hooks short-circuit
+the handler, `after-` hooks are recorded as a separate log entry.
+
+The `ctx` shape is the **stable v0.1 hook API**. Future Hashi versions
+will only add fields (additive, non-breaking). Removing or renaming a
+`ctx` field would be a breaking change and ride a major version bump.
 
 ## Path safety
 
