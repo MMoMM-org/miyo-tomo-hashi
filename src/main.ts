@@ -77,7 +77,7 @@
 
 import { createRequire } from "node:module";
 
-import { Plugin, type WorkspaceLeaf } from "obsidian";
+import { Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 
 import { registerCommands, registerExecutorCommands } from "./commands/registerCommands";
 import { registerFileMenu, registerExecutorFileMenu } from "./commands/fileMenu";
@@ -238,6 +238,19 @@ export default class TomoHashiPlugin extends Plugin {
 		// 6. FS2 auto-reconnect on load. Fire-and-forget — onload must not
 		//    block on a Docker round-trip; the connection store carries any
 		//    failure to the UI surfaces.
+		//
+		//    M7 (review/spec-001): when a `chosenInstanceName` is found,
+		//    surface a Notice before the silent re-attach. Obsidian Sync
+		//    propagates `data.json` across devices; on a second device the
+		//    auto-attach lands on whichever local container matches the
+		//    synced label name — potentially unrelated to what the user
+		//    saved on the original device. The Notice gives the user a
+		//    visible signal of which instance they were just connected to,
+		//    so a wrong-container attach is detectable rather than silent.
+		const remembered = this.settings.chosenInstanceName;
+		if (remembered !== null) {
+			new Notice(`Auto-connecting to '${remembered}' from saved session`);
+		}
 		void conn.autoReconnectIfRemembered();
 
 		// =========================================================================
