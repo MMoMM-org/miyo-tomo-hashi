@@ -25,6 +25,14 @@ function isRunning(
 	return state.kind === "running";
 }
 
+// review round 2 / L38: cache the per-row HTMLElement list on the
+// contentEl via a WeakMap so updateProgressView can index directly into
+// the array instead of re-running querySelectorAll on every store tick.
+// renderProgressView populates the array; updateProgressView reads it.
+// WeakMap entry is dropped naturally when the modal's contentEl is
+// garbage-collected.
+const rowCache = new WeakMap<HTMLElement, HTMLElement[]>();
+
 export function renderProgressView(
 	contentEl: HTMLElement,
 	state: RunState,
@@ -41,16 +49,16 @@ export function renderProgressView(
 	);
 	// H11: announce progress changes to assistive tech. The fast-path
 	// updateProgressView only swaps text via setText, which preserves
-	// these attributes — so announcements continue across in-place ticks.
+	// the aria-live attribute. review round 2 / L36: aria-atomic was
+	// dropped — `setText` replaces the entire text node, so the polite
+	// region naturally announces the full new text without aria-atomic
+	// forcing the entire subtree to be re-spoken.
 	header.setAttr("aria-live", "polite");
-	header.setAttr("aria-atomic", "true");
 
-	// Sticky error banner — accumulates every failure outcome seen so far
-	const failures = state.records
-		.map((r) => r.outcome)
-		.filter((o): o is { kind: "failed"; reason: string } =>
-			o !== null && o.kind === "failed",
-		);
+	// Sticky error banner — accumulates every failure outcome seen so far.
+	// review round 2 / L37: replaced two-pass map+filter with a single
+	// for-loop accumulating into a pre-sized array.
+	const failures = collectFailures(state.records);
 	if (failures.length > 0) {
 		const banner = contentEl.createDiv({
 			cls: "hashi-execution-modal-error-banner",
@@ -65,6 +73,12 @@ export function renderProgressView(
 	// row is currently executing without an O(n) indexOf per row.
 	const indexByRecord = new Map<ActionRecord, number>();
 	state.records.forEach((r, i) => indexByRecord.set(r, i));
+
+	// review round 2 / L38: build the row array in render order (same
+	// order as state.records) so updateProgressView can index by record
+	// position. The grouping by file changes the visual nesting but
+	// preserves the action sequence, so rows[i] === records[i].
+	const rows: HTMLElement[] = new Array<HTMLElement>(state.records.length);
 
 	for (const [fileId, records] of groupByFile(state.records)) {
 		body.createEl("h3", {
@@ -100,8 +114,11 @@ export function renderProgressView(
 				cls: "hashi-execution-modal-row-summary",
 				text: record.summary,
 			});
+			const idx = indexByRecord.get(record);
+			if (idx !== undefined) rows[idx] = row;
 		}
 	}
+	rowCache.set(contentEl, rows);
 
 	const btnRow = createButtonRow(contentEl);
 	const cancelBtn = btnRow.createEl("button", { text: "Cancel" });
@@ -137,12 +154,24 @@ export function updateProgressView(
 
 	updateErrorBanner(contentEl, state);
 
-	const rows = contentEl.querySelectorAll<HTMLElement>(
-		".hashi-execution-modal-row",
-	);
+	// review round 2 / L38: read the cached row array populated by
+	// renderProgressView instead of re-running querySelectorAll on every
+	// tick. Falls back to a one-time DOM query if the cache is missing
+	// (defensive — in practice updateProgressView is only called between
+	// a render and the next render).
+	let rows = rowCache.get(contentEl);
+	if (rows === undefined) {
+		rows = Array.from(
+			contentEl.querySelectorAll<HTMLElement>(
+				".hashi-execution-modal-row",
+			),
+		);
+		rowCache.set(contentEl, rows);
+	}
+	const rowList = rows;
 	state.records.forEach((record, i) => {
-		const row = rows.item(i);
-		if (row === null) return;
+		const row = rowList[i];
+		if (row === undefined) return;
 		row.classList.toggle("is-applied", record.outcome?.kind === "applied");
 		row.classList.toggle("is-failed", record.outcome?.kind === "failed");
 		const isCurrent =
@@ -164,11 +193,8 @@ function updateErrorBanner(
 	contentEl: HTMLElement,
 	state: Extract<RunState, { kind: "running" }>,
 ): void {
-	const failures = state.records
-		.map((r) => r.outcome)
-		.filter((o): o is { kind: "failed"; reason: string } =>
-			o !== null && o.kind === "failed",
-		);
+	// review round 2 / L37: single-pass collect, no intermediate map array.
+	const failures = collectFailures(state.records);
 	let banner = contentEl.querySelector<HTMLElement>(
 		".hashi-execution-modal-error-banner",
 	);
@@ -176,18 +202,47 @@ function updateErrorBanner(
 		if (banner !== null) banner.remove();
 		return;
 	}
+	const lines = failures.map((f) => f.reason).join(" · ");
+	const text = `${failures.length} failed: ${lines}`;
 	if (banner === null) {
-		banner = contentEl.createDiv({
-			cls: "hashi-execution-modal-error-banner",
-		});
-		banner.setAttr("aria-live", "assertive");
+		// review round 2 / L35: build the banner with text + aria-live
+		// already set BEFORE inserting into the live region. Inserting an
+		// empty assertive region first and then setting text after caused
+		// some AT to announce the empty insertion before the actual
+		// failure text on first failure.
+		banner = document.createElement("div");
+		banner.classList.add("hashi-execution-modal-error-banner");
+		banner.setAttribute("aria-live", "assertive");
+		banner.textContent = text;
 		const headerEl = contentEl.querySelector(
 			".hashi-execution-modal-header",
 		);
 		if (headerEl !== null && headerEl.nextSibling !== null) {
 			contentEl.insertBefore(banner, headerEl.nextSibling);
+		} else {
+			contentEl.appendChild(banner);
+		}
+		return;
+	}
+	banner.setText(text);
+}
+
+/**
+ * Single-pass collector for failed-outcome records (review round 2 /
+ * L37). Pre-fix used a chained `.map(r => r.outcome).filter(...)` which
+ * allocated an intermediate array of N outcomes per call; for a 50-row
+ * progress view this fired on every store tick (one per action
+ * completion) so the wasted allocations added up across a full run.
+ */
+function collectFailures(
+	records: readonly ActionRecord[],
+): { kind: "failed"; reason: string }[] {
+	const failures: { kind: "failed"; reason: string }[] = [];
+	for (const r of records) {
+		const o = r.outcome;
+		if (o !== null && o.kind === "failed") {
+			failures.push(o);
 		}
 	}
-	const lines = failures.map((f) => f.reason).join(" · ");
-	banner.setText(`${failures.length} failed: ${lines}`);
+	return failures;
 }

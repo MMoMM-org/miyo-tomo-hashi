@@ -17,6 +17,14 @@
 
 const DELAYS_MS = [500, 1000, 2000, 4000, 8000] as const;
 
+/**
+ * Initial backoff delay for the first reconnect attempt. Exported so
+ * callers (TomoConnection's first reconnecting-state transition)
+ * advertise the same value the loop will actually wait, instead of
+ * silently drifting if DELAYS_MS is ever retuned (review round 2 / L3).
+ */
+export const INITIAL_RECONNECT_DELAY_MS = DELAYS_MS[0];
+
 export class ReconnectLoop {
 	private cancelled = false;
 	private currentTimer: ReturnType<typeof setTimeout> | null = null;

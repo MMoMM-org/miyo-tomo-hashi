@@ -516,9 +516,13 @@ describe("ExecutionModal — progress subview (state=running)", () => {
 		expect(rows[1]?.getAttribute("aria-label")).toContain("running");
 	});
 
-	it("progress header is an aria-live region (H11)", () => {
+	it("progress header is an aria-live region (H11 + review round 2 / L36)", () => {
 		// Per-tick text changes ("3 of 10" → "4 of 10") must be announced.
-		// The header element acts as the live region (polite + atomic).
+		// review round 2 / L36: aria-atomic was dropped — `setText`
+		// replaces the entire text node, so polite-region semantics
+		// re-announce the full string without aria-atomic forcing the
+		// subtree to be re-spoken (which can produce duplicate
+		// announcements on some AT).
 		const records = [record({ id: "I01" }), record({ id: "I02" })];
 		const exec = makeExecutor();
 		const modal = new ExecutionModal(app, exec, {});
@@ -529,7 +533,7 @@ describe("ExecutionModal — progress subview (state=running)", () => {
 			".hashi-execution-modal-header",
 		);
 		expect(header?.getAttribute("aria-live")).toBe("polite");
-		expect(header?.getAttribute("aria-atomic")).toBe("true");
+		expect(header?.getAttribute("aria-atomic")).toBeNull();
 	});
 
 	it("running→running with same records updates DOM in place (H4)", () => {

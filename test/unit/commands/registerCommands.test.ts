@@ -72,7 +72,7 @@ describe("registerCommands", () => {
 	let plugin: Plugin;
 	let connection: ForceReconnectOnly;
 	let showChatWindow: ReturnType<typeof vi.fn>;
-	let chosenInstanceId: ReturnType<typeof vi.fn>;
+	let getChosenInstanceName: ReturnType<typeof vi.fn>;
 	let deps: CommandDeps;
 
 	beforeEach(() => {
@@ -84,11 +84,11 @@ describe("registerCommands", () => {
 		plugin = asPlugin(pluginMock);
 		connection = { forceReconnect: vi.fn(async () => {}) };
 		showChatWindow = vi.fn(async () => {});
-		chosenInstanceId = vi.fn<() => string | null>(() => null);
+		getChosenInstanceName = vi.fn<() => string | null>(() => null);
 		deps = {
 			connection,
 			showChatWindow,
-			chosenInstanceId,
+			getChosenInstanceName,
 		};
 	});
 
@@ -248,8 +248,8 @@ describe("registerCommands", () => {
 	});
 
 	describe("Reconnect onInvoke", () => {
-		it("with chosenInstanceId set: calls connection.forceReconnect()", async () => {
-			chosenInstanceId.mockReturnValue("some-id");
+		it("with getChosenInstanceName set: calls connection.forceReconnect()", async () => {
+			getChosenInstanceName.mockReturnValue("some-id");
 			registerCommands(plugin, deps);
 
 			const cmd = commandsForId(plugin, RECONNECT_ID).at(-1);
@@ -263,8 +263,8 @@ describe("registerCommands", () => {
 			expect(vi.mocked(Notice)).not.toHaveBeenCalled();
 		});
 
-		it("with chosenInstanceId set while Connected/Reconnecting: still calls forceReconnect", async () => {
-			chosenInstanceId.mockReturnValue("some-id");
+		it("with getChosenInstanceName set while Connected/Reconnecting: still calls forceReconnect", async () => {
+			getChosenInstanceName.mockReturnValue("some-id");
 			registerCommands(plugin, deps);
 			connectionStore.set({
 				kind: "connected",
@@ -279,8 +279,8 @@ describe("registerCommands", () => {
 			expect(connection.forceReconnect).toHaveBeenCalledTimes(1);
 		});
 
-		it("with chosenInstanceId=null: shows Notice with PRD F6/AC5 message and does NOT call forceReconnect", async () => {
-			chosenInstanceId.mockReturnValue(null);
+		it("with getChosenInstanceName=null: shows Notice with PRD F6/AC5 message and does NOT call forceReconnect", async () => {
+			getChosenInstanceName.mockReturnValue(null);
 			registerCommands(plugin, deps);
 
 			const cmd = commandsForId(plugin, RECONNECT_ID).at(-1);

@@ -45,38 +45,55 @@ const terminalHooks: TerminalHooks = {
 	options: { fontSize: 14 },
 };
 
+// Track focus-mock instances per-test so assertions can target the latest
+// terminal that the view holds. Refreshed on every createTerminal call.
+const terminalFocusSpies: ReturnType<typeof vi.fn>[] = [];
+
 vi.mock("../../../../src/ui/chat-view/terminalHost", () => ({
-	createTerminal: vi.fn(() => ({
-		terminal: {
-			write: vi.fn(),
-			dispose: vi.fn(),
-			// xterm-onData wiring (T7 fix): TomoChatView subscribes via
-			// terminal.onData to forward keystrokes typed inside the xterm
-			// area to the container's stdin. Mock returns a disposable.
-			onData: vi.fn((cb: (data: string) => void) => {
-				terminalHooks.onDataCb = cb;
-				return { dispose: vi.fn() };
-			}),
-			onResize: vi.fn(
-				(cb: (dims: { rows: number; cols: number }) => void) => {
-					terminalHooks.onResizeCb = cb;
+	createTerminal: vi.fn(() => {
+		const focusSpy = vi.fn();
+		terminalFocusSpies.push(focusSpy);
+		return {
+			terminal: {
+				write: vi.fn(),
+				dispose: vi.fn(),
+				// L8/C1: focus delegated to xterm so the chat view becomes
+				// keyboard-active without a click.
+				focus: focusSpy,
+				// xterm-onData wiring (T7 fix): TomoChatView subscribes via
+				// terminal.onData to forward keystrokes typed inside the xterm
+				// area to the container's stdin. Mock returns a disposable.
+				onData: vi.fn((cb: (data: string) => void) => {
+					terminalHooks.onDataCb = cb;
 					return { dispose: vi.fn() };
+				}),
+				onResize: vi.fn(
+					(cb: (dims: { rows: number; cols: number }) => void) => {
+						terminalHooks.onResizeCb = cb;
+						return { dispose: vi.fn() };
+					},
+				),
+				get rows() {
+					return terminalHooks.rows;
 				},
-			),
-			get rows() {
-				return terminalHooks.rows;
+				get cols() {
+					return terminalHooks.cols;
+				},
+				options: terminalHooks.options,
 			},
-			get cols() {
-				return terminalHooks.cols;
-			},
-			options: terminalHooks.options,
-		},
-		fitAddon: { fit: vi.fn() },
-	})),
+			fitAddon: { fit: vi.fn() },
+		};
+	}),
 	writeChunk: vi.fn(),
 	fit: vi.fn(),
 	dispose: vi.fn(),
 }));
+
+const lastTerminalFocusSpy = (): ReturnType<typeof vi.fn> => {
+	const last = terminalFocusSpies[terminalFocusSpies.length - 1];
+	if (last === undefined) throw new Error("no terminal created yet");
+	return last;
+};
 
 // --- factories ---------------------------------------------------------------
 
@@ -132,7 +149,7 @@ function asConnection(c: FakeConnection): TomoConnection {
 interface Harness {
 	view: TomoChatView;
 	connection: FakeConnection;
-	chosenInstanceId: ReturnType<typeof vi.fn>;
+	getChosenInstanceName: ReturnType<typeof vi.fn>;
 	onZoomChange: ReturnType<typeof vi.fn>;
 	root: HTMLElement;
 }
@@ -145,7 +162,7 @@ interface MountOptions {
 const mountView = async (opts: MountOptions = {}): Promise<Harness> => {
 	const leaf = new WorkspaceLeaf();
 	const connection = makeConnection();
-	const chosenInstanceId = vi.fn(() => opts.chosenId ?? null);
+	const getChosenInstanceName = vi.fn(() => opts.chosenId ?? null);
 	const onZoomChange = vi.fn(
 		async (
 			_level: import("../../../../src/types/index").ZoomLevel,
@@ -154,12 +171,12 @@ const mountView = async (opts: MountOptions = {}): Promise<Harness> => {
 	const view = new TomoChatView(
 		leaf,
 		asConnection(connection),
-		chosenInstanceId,
+		getChosenInstanceName,
 		opts.initialZoom ?? 1,
 		onZoomChange,
 	);
 	await view.onOpen();
-	return { view, connection, chosenInstanceId, onZoomChange, root: view.contentEl };
+	return { view, connection, getChosenInstanceName, onZoomChange, root: view.contentEl };
 };
 
 describe("TomoChatView — view-type metadata", () => {
@@ -276,6 +293,77 @@ describe("TomoChatView — input enabled/disabled gating", () => {
 			".hashi-chat-view-input",
 		);
 		expect(document.activeElement).toBe(input);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// C1 — Focus-on-open (review/spec-001 critical a11y)
+// ---------------------------------------------------------------------------
+
+describe("TomoChatView — focus on open (C1)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		terminalFocusSpies.length = 0;
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	afterEach(() => {
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	it("focuses the chat input on open when state is already connected", async () => {
+		// Pre-fix: onOpen built DOM, subscribed, render() saw connected on
+		// first tick — but `wasDisabled && !shouldBeDisabled` was
+		// `false && false` so no focus fired. Keyboard user opened the view
+		// and had to click before any keystroke registered.
+		connectionStore.set({ kind: "connected", instance: inst() });
+		const leaf = new WorkspaceLeaf();
+		const view = new TomoChatView(
+			leaf,
+			asConnection(makeConnection()),
+			vi.fn(() => null),
+			1,
+			vi.fn(async () => {}),
+		);
+		// Attach BEFORE onOpen so the bootstrap focus in onOpen actually
+		// moves activeElement (jsdom no-ops focus on detached elements).
+		document.body.appendChild(view.contentEl);
+		await view.onOpen();
+		const input = view.contentEl.querySelector<HTMLInputElement>(
+			".hashi-chat-view-input",
+		);
+		expect(document.activeElement).toBe(input);
+		await view.onClose();
+		document.body.removeChild(view.contentEl);
+	});
+
+	it("focuses the xterm terminal on open when state is not connected", async () => {
+		// Open + disconnected → terminal owns focus so AT users at least
+		// land inside the chat view's primary surface, not the modal root.
+		const leaf = new WorkspaceLeaf();
+		const view = new TomoChatView(
+			leaf,
+			asConnection(makeConnection()),
+			vi.fn(() => null),
+			1,
+			vi.fn(async () => {}),
+		);
+		document.body.appendChild(view.contentEl);
+		await view.onOpen();
+		expect(lastTerminalFocusSpy()).toHaveBeenCalled();
+		await view.onClose();
+		document.body.removeChild(view.contentEl);
+	});
+
+	it("focus() override delegates to xterm terminal (Obsidian focus contract)", async () => {
+		const h = await mountView();
+		document.body.appendChild(h.root);
+		// Obsidian's workspace focus system calls ItemView.focus() when the
+		// view becomes active. Without this override, focus lands on the
+		// content container rather than the terminal.
+		const before = lastTerminalFocusSpy().mock.calls.length;
+		h.view.focus();
+		expect(lastTerminalFocusSpy().mock.calls.length).toBeGreaterThan(before);
 	});
 });
 
@@ -399,7 +487,7 @@ describe("TomoChatView — force reconnect button", () => {
 		expect(h.connection.forceReconnect).toHaveBeenCalledTimes(1);
 	});
 
-	it("is disabled when chosenInstanceId() returns null", async () => {
+	it("is disabled when getChosenInstanceName() returns null", async () => {
 		const h = await mountView();
 		const btn = h.root.querySelector<HTMLButtonElement>(
 			".hashi-chat-view-force-reconnect",
@@ -407,7 +495,7 @@ describe("TomoChatView — force reconnect button", () => {
 		expect(btn!.disabled).toBe(true);
 	});
 
-	it("is enabled when chosenInstanceId() returns a string", async () => {
+	it("is enabled when getChosenInstanceName() returns a string", async () => {
 		const h = await mountView({ chosenId: "instance-id-123" });
 		const btn = h.root.querySelector<HTMLButtonElement>(
 			".hashi-chat-view-force-reconnect",
@@ -530,6 +618,35 @@ describe("TomoChatView — zoom (magnify) controls", () => {
 		fitMock.mockClear();
 		buttons[0]!.dispatchEvent(new MouseEvent("click"));
 		expect(fitMock).toHaveBeenCalled();
+	});
+
+	it("zoom buttons carry aria-pressed reflecting active state (H5)", async () => {
+		const h = await mountView({ initialZoom: 1 });
+		const buttons = Array.from(
+			h.root.querySelectorAll<HTMLButtonElement>(".hashi-chat-view-zoom-btn"),
+		);
+		// 3 zoom levels: 0.5×, 1×, 1.5× — middle (1×) is initial active.
+		expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual([
+			"false",
+			"true",
+			"false",
+		]);
+	});
+
+	it("aria-pressed updates when zoom changes (H5)", async () => {
+		const h = await mountView({ initialZoom: 1 });
+		const buttons = Array.from(
+			h.root.querySelectorAll<HTMLButtonElement>(".hashi-chat-view-zoom-btn"),
+		);
+		// Click 1.5× (last button)
+		buttons[2]?.click();
+		// Wait one microtask for the async click handler to finish
+		await Promise.resolve();
+		expect(buttons.map((b) => b.getAttribute("aria-pressed"))).toEqual([
+			"false",
+			"false",
+			"true",
+		]);
 	});
 
 	it("active class moves to the newly clicked button", async () => {
@@ -673,11 +790,15 @@ describe("TomoChatView — accessibility (PRD F5/AC7)", () => {
 		connectionStore.set({ kind: "disconnected" });
 	});
 
-	it("indicator has role=\"status\" and aria-live attributes", async () => {
+	it("indicator has aria-live attribute (no role=status — review M12)", async () => {
+		// M12: removed role="status" because its implicit aria-live=polite
+		// overrode the dynamic assertive escalation in some AT (JAWS,
+		// older VoiceOver), silently downgrading the "Disconnected"
+		// announcement that needs to interrupt.
 		const h = await mountView();
 		const ind = h.root.querySelector(".hashi-chat-view-indicator");
 		expect(ind).not.toBeNull();
-		expect(ind!.getAttribute("role")).toBe("status");
+		expect(ind!.getAttribute("role")).toBeNull();
 		expect(ind!.getAttribute("aria-live")).not.toBeNull();
 	});
 

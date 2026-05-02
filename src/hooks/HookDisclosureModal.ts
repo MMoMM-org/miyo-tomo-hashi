@@ -44,10 +44,6 @@ const DISCLOSURE_TEXT =
 	"variables. Only enable hooks from sources you trust.";
 
 export class HookDisclosureModal extends Modal {
-	// Per-instance counter ensures unique aria-labelledby ids across
-	// simultaneously-open modals (review C2).
-	private static labelledByCounter = 0;
-
 	private resolver: ((decision: AskDecision) => void) | null = null;
 	private readonly escHandler: (evt: KeyboardEvent) => void;
 
@@ -81,10 +77,24 @@ export class HookDisclosureModal extends Modal {
 		contentEl.addEventListener("keydown", this.escHandler);
 
 		const filename = this.deriveFilename(this.hookInfo.vaultRelativePath);
-		const counter = ++HookDisclosureModal.labelledByCounter;
-		const titleId = `hashi-hook-disclosure-title-${counter}`;
-		const disclosureId = `hashi-hook-disclosure-text-${counter}`;
+		// Per-modal unique IDs for aria-labelledby / aria-describedby
+		// targets. Was a static counter (review C2 / first round); the
+		// counter survived plugin disable/enable via Obsidian's CJS
+		// module cache and quietly accumulated across reloads. UUID v4
+		// gives uniqueness without that survivorship hazard
+		// (review round 2 / L27).
+		const uid = crypto.randomUUID();
+		const titleId = `hashi-hook-disclosure-title-${uid}`;
+		const disclosureId = `hashi-hook-disclosure-text-${uid}`;
 
+		// review round 2 / L26 (deferred): aria-labelledby is set on
+		// contentEl rather than the dialog root (.modal). The cleaner
+		// fix is to use this.titleEl.setText("…") so Obsidian wires
+		// aria-labelledby on the modal root automatically — but that
+		// relocates the title to Obsidian's modal-title bar, drops the
+		// custom hashi-hook-disclosure-modal-title styling, and changes
+		// the visible header layout. Defer to v0.2 with the broader
+		// modal-styling pass.
 		contentEl.setAttribute("aria-labelledby", titleId);
 
 		contentEl.createEl("h2", {

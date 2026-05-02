@@ -11,7 +11,6 @@
  * + Runtime View sequence diagrams; PRD F1, F2, F5, F8, FS2.
  */
 
-import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 
 import {
@@ -117,12 +116,30 @@ interface FakeSessionExtras {
 function makeFakeSession(): FakeSession & FakeSessionExtras {
 	const stdout = new PassThrough();
 	const stdin = new PassThrough();
-	const emitter = new EventEmitter();
 	let closed = false;
 	let closeByUser = false;
 	let closeCalls = 0;
 	const resizeCalls: Array<{ rows: number; cols: number }> = [];
 	let resizeReject: Error | null = null;
+	// M9: match the real AttachSession contract — onClose stores a SINGLE
+	// listener (last cb wins). Pre-fix the fake used EventEmitter.on which
+	// accumulated callbacks; a divergent fake silently masked any
+	// production regression that started firing every registered cb.
+	let listener: ((reason: "user" | "remote" | "error") => void) | null = null;
+
+	function fire(reason: "user" | "remote" | "error"): void {
+		if (closed) return;
+		closed = true;
+		if (listener !== null) {
+			const cb = listener;
+			listener = null;
+			try {
+				cb(reason);
+			} catch {
+				// swallow — match real session behavior
+			}
+		}
+	}
 
 	const session: docker.AttachSession = {
 		stdout,
@@ -130,12 +147,11 @@ function makeFakeSession(): FakeSession & FakeSessionExtras {
 		async close(): Promise<void> {
 			closeCalls += 1;
 			if (closed) return;
-			closed = true;
 			closeByUser = true;
-			emitter.emit("close", "user");
+			fire("user");
 		},
 		onClose(cb): void {
-			emitter.on("close", cb);
+			listener = cb;
 		},
 		async resize(rows: number, cols: number): Promise<void> {
 			if (closed) return;
@@ -148,16 +164,8 @@ function makeFakeSession(): FakeSession & FakeSessionExtras {
 		session,
 		stdout,
 		stdin,
-		fireRemoteClose: (): void => {
-			if (closed) return;
-			closed = true;
-			emitter.emit("close", "remote");
-		},
-		fireError: (): void => {
-			if (closed) return;
-			closed = true;
-			emitter.emit("close", "error");
-		},
+		fireRemoteClose: (): void => fire("remote"),
+		fireError: (): void => fire("error"),
 		closedByUser: (): boolean => closeByUser,
 		closeCalls: (): number => closeCalls,
 		resizeCalls: (): Array<{ rows: number; cols: number }> => resizeCalls,
@@ -517,6 +525,45 @@ describe("TomoConnection — stream close auto-reconnect", () => {
 		expect(state.reason?.code).toBe("daemon-unreachable");
 	});
 
+	it("auto-reconnect short-circuits on no-instances (review round 2 / M2 — defensive)", async () => {
+		// `no-instances` is not currently thrown into the reconnect path by
+		// any in-tree code, but the short-circuit lists it alongside
+		// socket-permission-denied / daemon-unreachable so that if a future
+		// caller ever throws ConnectionFailure({code:"no-instances"}) the
+		// loop will not waste 15 s waiting for containers that are not
+		// coming back. This test pins the contract.
+		vi.useFakeTimers();
+		const target = inst();
+		const first = makeFakeSession();
+		mockedAttach.mockResolvedValueOnce(first.session);
+		mockedFindByName.mockResolvedValue(target);
+		mockedAttach.mockRejectedValueOnce(
+			new docker.ConnectionFailure({
+				code: "no-instances",
+				detail: "No Tomo instance seems to be running — start one and try again.",
+			}),
+		);
+
+		const conn = new TomoConnection(settings());
+		await conn.connect(target);
+		first.fireError();
+		await Promise.resolve();
+		expect(conn.state.kind).toBe("reconnecting");
+
+		await vi.advanceTimersByTimeAsync(500);
+		await vi.advanceTimersByTimeAsync(0);
+
+		const state = conn.state;
+		expect(state.kind).toBe("disconnected");
+		if (state.kind !== "disconnected") throw new Error("expected disconnected");
+		expect(state.reason?.code).toBe("no-instances");
+
+		// Definitive: no further attempts after the first short-circuit.
+		const callsAfterShort = mockedAttach.mock.calls.length;
+		await vi.advanceTimersByTimeAsync(15_000);
+		expect(mockedAttach.mock.calls.length).toBe(callsAfterShort);
+	});
+
 	it("error close while Connected → all 5 attempts fail → Disconnected{reconnect-exhausted}", async () => {
 		vi.useFakeTimers();
 		const target = inst();
@@ -737,6 +784,148 @@ describe("TomoConnection.resize()", () => {
 		await conn.connect(target);
 
 		await expect(conn.resize(24, 80)).resolves.toBeUndefined();
+		await conn.dispose();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// M8 — Epoch race: disconnect mid-attach must close the in-flight session.
+// ---------------------------------------------------------------------------
+
+describe("TomoConnection — epoch race during attach (M8)", () => {
+	it("disconnect() while attach() is mid-flight closes the late session and lands disconnected", async () => {
+		// Pre-fix the epoch guard was the documented motivating scenario for
+		// the whole epoch design (see TomoConnection source comments) but no
+		// test drove it. A regression that removed or mis-ordered the
+		// `epoch !== this.epoch` check would merge silently.
+		const target = inst();
+		const fake = makeFakeSession();
+
+		// Hold attach() open with a controlled promise so disconnect() can
+		// fire while it's still pending.
+		let releaseAttach!: (s: docker.AttachSession) => void;
+		mockedAttach.mockImplementationOnce(
+			() =>
+				new Promise<docker.AttachSession>((resolve) => {
+					releaseAttach = resolve;
+				}),
+		);
+
+		const conn = new TomoConnection(settings());
+		const connectPromise = conn.connect(target);
+
+		// Yield once so connect() runs through to the awaited attach()
+		// boundary; state is now `attaching`.
+		await Promise.resolve();
+		expect(conn.state.kind).toBe("attaching");
+
+		// Fire disconnect — bumps epoch and lands state at disconnected.
+		await conn.disconnect();
+		expect(conn.state.kind).toBe("disconnected");
+
+		// Now release the in-flight attach. The session was created AFTER
+		// the epoch bump, so the post-attach epoch check must close it
+		// quietly without restoring connected.
+		releaseAttach(fake.session);
+		await connectPromise;
+
+		expect(conn.state.kind).toBe("disconnected");
+		// The late session is closed exactly once (close() called by the
+		// stale-epoch branch in attemptAttach).
+		expect(fake.closeCalls()).toBeGreaterThanOrEqual(1);
+		// And it was NOT installed — write() should reject.
+		expect(() => conn.write("oops")).toThrow();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// M9 — AttachSession contract: onClose is one-shot (latest cb wins).
+// ---------------------------------------------------------------------------
+
+describe("AttachSession contract — onClose semantics (M9)", () => {
+	it("only the most-recently-registered onClose callback fires (latest wins)", async () => {
+		// The real AttachSession in src/connection/docker.ts stores onClose
+		// as a SINGLE listener (`listener = cb` overwrites). The test fake
+		// must match — a divergent fake (e.g., emitter accumulation) would
+		// silently mask a regression where the production code starts
+		// firing every registered callback.
+		const fake = makeFakeSession();
+		const cb1 = vi.fn();
+		const cb2 = vi.fn();
+
+		fake.session.onClose(cb1);
+		fake.session.onClose(cb2); // overwrites cb1
+		fake.fireRemoteClose();
+
+		// Yield so the emitter delivers.
+		await Promise.resolve();
+
+		expect(cb2).toHaveBeenCalledTimes(1);
+		expect(cb1).not.toHaveBeenCalled();
+	});
+
+	it("onClose fires exactly once even if both 'remote' and 'error' would fire", async () => {
+		// fire() in the real session is idempotent via a `closed` flag.
+		// The fake mirrors this — once a close-of-any-kind fires, further
+		// fireXxx() calls are no-ops.
+		const fake = makeFakeSession();
+		const cb = vi.fn();
+		fake.session.onClose(cb);
+
+		fake.fireRemoteClose();
+		fake.fireError(); // would-be second close
+
+		await Promise.resolve();
+		expect(cb).toHaveBeenCalledTimes(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// M10 — startAutoReconnect chosen-gone mid-loop untested
+// ---------------------------------------------------------------------------
+
+describe("TomoConnection — auto-reconnect resolves to gone (M10)", () => {
+	it("stream-close-triggered loop transitions to disconnected{chosen-gone} and stops the loop", async () => {
+		// Pre-fix this exact scenario was tested for forceReconnect and
+		// autoReconnectIfRemembered, but NOT for the loop driven by
+		// handleSessionClose → startAutoReconnect. Same resolveLiveInstance
+		// helper, separate code path. Regression in the "null → disconnect
+		// + cancel" branch would pass all existing tests.
+		vi.useFakeTimers();
+		const target = inst({ name: "going-away" });
+		const first = makeFakeSession();
+		mockedAttach.mockResolvedValueOnce(first.session);
+		// findByName returns the target on initial connect (via openPicker
+		// path) — but the loop calls findByName on each attempt. Make
+		// attempt #1 of the reconnect loop find nothing.
+		mockedFindByName
+			.mockResolvedValueOnce(null); // attempt 1 inside the reconnect loop
+
+		const s = settings();
+		const conn = new TomoConnection(s);
+		await conn.connect(target);
+		expect(conn.state.kind).toBe("connected");
+
+		// Fire remote close → handleSessionClose → startAutoReconnect.
+		first.fireRemoteClose();
+		await Promise.resolve();
+		expect(conn.state.kind).toBe("reconnecting");
+
+		// Drive the 500 ms backoff for attempt #1.
+		await vi.advanceTimersByTimeAsync(500);
+		await vi.advanceTimersByTimeAsync(0);
+
+		// findByName returned null → disconnected{chosen-gone}.
+		const state = conn.state;
+		expect(state.kind).toBe("disconnected");
+		if (state.kind !== "disconnected") throw new Error("expected disconnected");
+		expect(state.reason?.code).toBe("attach-failed");
+		expect(state.reason?.detail).toContain("no longer exists");
+
+		// Loop should have terminated — no further mockedAttach calls
+		// for subsequent attempts. (1 call: the initial connect.)
+		expect(mockedAttach).toHaveBeenCalledTimes(1);
+
 		await conn.dispose();
 	});
 });

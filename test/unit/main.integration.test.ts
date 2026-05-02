@@ -24,7 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 
 // dockerode mock — minimal surface so listTomoInstances / inspectContainer
 // in src/connection/docker.ts don't blow up if the auto-reconnect path is
-// exercised. With chosenInstanceId=null (default settings) the path returns
+// exercised. With chosenInstanceName=null (default settings) the path returns
 // early before any docker call, but the constructor of Dockerode is invoked
 // once the singleton client is created, so we still need the class.
 interface DockerodeHandles {
@@ -94,7 +94,7 @@ describe("TomoHashiPlugin integration (T5.3)", () => {
 			author: "",
 		};
 		plugin = new TomoHashiPlugin(app, manifest);
-		// Mock loadData to return null (default settings — chosenInstanceId null).
+		// Mock loadData to return null (default settings — chosenInstanceName null).
 		vi.mocked(plugin.loadData).mockResolvedValue(null);
 	});
 

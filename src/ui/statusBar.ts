@@ -125,7 +125,13 @@ export function mountStatusBar(
 	const root = plugin.addStatusBarItem();
 	root.addClass("hashi-status-bar-bridge");
 	root.setAttr("role", "status");
-	root.setAttr("aria-live", "polite");
+	// review round 2 / L33: role="status" already implies
+	// aria-live="polite" per the ARIA spec. The earlier explicit
+	// aria-live attribute was redundant and contradicted the lesson
+	// from M12 (the chat-view indicator was switched to bare aria-live
+	// to avoid AT escalation overrides). Status bar only emits polite
+	// transitions, so the implicit politeness from role=status is
+	// sufficient.
 	// H9: keyboard reachable. Click handler triggers focus-modal during
 	// running state; a keydown handler below mirrors that. tabindex stays
 	// at 0 across all states for predictable Tab order — the keyboard and
@@ -139,9 +145,13 @@ export function mountStatusBar(
 		// the announcer span below + the root's aria-label.
 		attr: { "aria-hidden": "true" },
 	});
+	// review round 2 / L34: previously carried aria-hidden="false",
+	// which is redundant (default state) and misleading — explicit
+	// aria-hidden="false" does NOT override an ancestor's
+	// aria-hidden="true" per spec; the attribute communicates safety
+	// it cannot guarantee. Drop the attribute.
 	const announcer = root.createSpan({
 		cls: "hashi-status-bar-bridge-sr",
-		attr: { "aria-hidden": "false" },
 	});
 
 	// Initial class so DOM-tests asserting `is-idle` see it before the

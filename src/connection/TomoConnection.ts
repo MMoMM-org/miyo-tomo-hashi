@@ -21,7 +21,7 @@
  *    session if they diverge. This is cheaper than wiring an AbortController
  *    through `dockerode`'s callback-style attach.
  *
- * 2. `chosenInstanceId` is mutated on `this.settings` on entering Connected,
+ * 2. `chosenInstanceName` is mutated on `this.settings` on entering Connected,
  *    NOT cleared on disconnect (FS2: remember last connected). T3.4 wires a
  *    `persist` callback through the constructor so the settings object is
  *    flushed to plugin data on every Connected transition; on Disconnect
@@ -57,7 +57,7 @@ import {
 	inspectContainer,
 	listTomoInstances,
 } from "./docker";
-import { ReconnectLoop } from "./reconnectLoop";
+import { INITIAL_RECONNECT_DELAY_MS, ReconnectLoop } from "./reconnectLoop";
 import type { ConnectionState } from "./state";
 import type { ConnectionError, TomoInstance } from "./types";
 
@@ -102,9 +102,12 @@ function toConnectionError(err: unknown): ConnectionError {
 }
 
 function chunkToUint8Array(chunk: unknown): Uint8Array {
+	// Node Buffer is a Uint8Array subclass, so the instanceof check below
+	// covers both — the previous separate `Buffer.isBuffer` branch was
+	// dead code (review round 2 / L5), and re-wrapping the buffer with
+	// `new Uint8Array(buffer)` allocated a redundant view per chunk.
 	if (chunk instanceof Uint8Array) return chunk;
 	if (typeof chunk === "string") return Buffer.from(chunk);
-	if (Buffer.isBuffer(chunk)) return new Uint8Array(chunk);
 	// Fallback — preserve bytes by going through Buffer.from on `String(chunk)`.
 	return Buffer.from(String(chunk));
 }
@@ -136,6 +139,77 @@ export class TomoConnection {
 		return this.currentState;
 	}
 
+	/**
+	 * Shared attach-install-persist-setState path used by every lifecycle
+	 * method (review M4). Pre-fix the same shape — `attach → epoch-check →
+	 * installSession → persistChosenInstanceBestEffort → setState(connected)`
+	 * — was inlined in connect(), forceReconnect(),
+	 * autoReconnectIfRemembered(), and the inner attempt of
+	 * startAutoReconnect(). The duplication invited subtle drift between
+	 * sites (one called resolveLiveInstance, another didn't; the order of
+	 * persist vs setState varied across versions). One helper, one truth.
+	 *
+	 * Returns:
+	 *   "installed" — happy path; state is now `connected`.
+	 *   "stale"     — concurrent transition observed; session closed and
+	 *                 dropped quietly. Caller should return without
+	 *                 changing state (a newer flow already owns it).
+	 *   ConnectionError — attach() threw. Caller decides whether to drive
+	 *                 setState({disconnected, reason}) or absorb the error
+	 *                 (e.g., reconnect-loop short-circuit branches).
+	 */
+	private async attemptAttach(
+		target: TomoInstance,
+		capturedEpoch: number,
+	): Promise<"installed" | "stale" | ConnectionError> {
+		let session: AttachSession;
+		try {
+			session = await attach(target.containerId);
+		} catch (err: unknown) {
+			return toConnectionError(err);
+		}
+		if (capturedEpoch !== this.epoch) {
+			await session.close();
+			return "stale";
+		}
+		this.installSession(session, target);
+		await this.persistChosenInstanceBestEffort(target.name);
+		this.setState({ kind: "connected", instance: target });
+		return "installed";
+	}
+
+	/**
+	 * Persist `chosenInstanceName` as a best-effort save (review M5). The
+	 * pre-fix code did `await this.persist(...)` between `installSession()`
+	 * and `setState({kind:"connected"})` — if persist threw, the live
+	 * AttachSession was wired but `currentState` was forced to
+	 * `disconnected` by the surrounding catch, leaving a hybrid state
+	 * where `write()` and `forceReconnect()` both behaved wrong. Now: a
+	 * persist failure logs and continues; the session install + state
+	 * transition own correctness. The user is connected; their next
+	 * reload just won't auto-reconnect to this instance until they pick
+	 * again.
+	 */
+	private async persistChosenInstanceBestEffort(
+		name: string | null,
+	): Promise<void> {
+		this.settings.chosenInstanceName = name;
+		try {
+			await this.persist(this.settings);
+		} catch (err: unknown) {
+			// v0.1 trade-off (review round 2 / L4): console.warn only,
+			// not a user-visible Notice. Persist failures are rare
+			// (Obsidian's saveData backs onto a vetted fs op chain) and
+			// the user is now CONNECTED — surfacing a Notice on every
+			// connect would be noisy. The downside is silent: their
+			// next reload won't auto-reconnect to this instance until
+			// they pick it again. If users report "I picked X, it
+			// connected, but next time it didn't auto-reconnect" we
+			// should promote this to a Notice via an injected callback.
+			console.warn("[hashi] failed to persist chosenInstanceName:", err);
+		}
+	}
+
 	get instanceName(): string | null {
 		const s = this.currentState;
 		if (s.kind === "connected") return s.instance.name ?? s.instance.shortId;
@@ -157,26 +231,10 @@ export class TomoConnection {
 		this.setState({ kind: "attaching", target });
 		this.currentTarget = target;
 
-		try {
-			const session = await attach(target.containerId);
-			if (epoch !== this.epoch) {
-				// A concurrent transition happened (disconnect / dispose / new
-				// connect). Drop this session quietly.
-				await session.close();
-				return;
-			}
-			this.installSession(session, target);
-			// FS2: persist by stable instance name so we survive container
-			// stop+start (the ID changes, the name label doesn't). Falls back
-			// to leaving chosenInstanceName null when the target has no name —
-			// rare; production Tomo always sets the label.
-			this.settings.chosenInstanceName = target.name;
-			await this.persist(this.settings);
-			this.setState({ kind: "connected", instance: target });
-		} catch (err: unknown) {
-			if (epoch !== this.epoch) return;
-			this.setState({ kind: "disconnected", reason: toConnectionError(err) });
-		}
+		const result = await this.attemptAttach(target, epoch);
+		if (result === "installed" || result === "stale") return;
+		if (epoch !== this.epoch) return;
+		this.setState({ kind: "disconnected", reason: result });
 	}
 
 	async disconnect(): Promise<void> {
@@ -200,32 +258,29 @@ export class TomoConnection {
 
 		this.setState({ kind: "attaching", target });
 
+		// Resolve by name first if we have one — that's what survives a
+		// container restart (new ID, same instance-name label). Fall back
+		// to the cached containerId for nameless instances.
+		let live: TomoInstance | null;
 		try {
-			// Resolve by name first if we have one — that's what survives a
-			// container restart (new ID, same instance-name label). Fall back
-			// to the cached containerId for nameless instances.
-			const live = await this.resolveLiveInstance(target);
-			if (epoch !== this.epoch) return;
-			if (live === null) {
-				this.setState({
-					kind: "disconnected",
-					reason: { code: "attach-failed", detail: DETAIL_GONE },
-				});
-				return;
-			}
-			const session = await attach(live.containerId);
-			if (epoch !== this.epoch) {
-				await session.close();
-				return;
-			}
-			this.installSession(session, live);
-			this.settings.chosenInstanceName = live.name;
-			await this.persist(this.settings);
-			this.setState({ kind: "connected", instance: live });
+			live = await this.resolveLiveInstance(target);
 		} catch (err: unknown) {
 			if (epoch !== this.epoch) return;
 			this.setState({ kind: "disconnected", reason: toConnectionError(err) });
+			return;
 		}
+		if (epoch !== this.epoch) return;
+		if (live === null) {
+			this.setState({
+				kind: "disconnected",
+				reason: { code: "attach-failed", detail: DETAIL_GONE },
+			});
+			return;
+		}
+		const result = await this.attemptAttach(live, epoch);
+		if (result === "installed" || result === "stale") return;
+		if (epoch !== this.epoch) return;
+		this.setState({ kind: "disconnected", reason: result });
 	}
 
 	async autoReconnectIfRemembered(): Promise<void> {
@@ -238,35 +293,32 @@ export class TomoConnection {
 		this.bumpEpoch();
 		const epoch = this.epoch;
 
+		// Resolve the persisted name to whatever container ID is currently
+		// running. Survives docker stop+start (new ID, same name label) —
+		// the original FS2 path inspected by container ID and broke on
+		// every restart, forcing the user back into the picker.
+		let target: TomoInstance | null;
 		try {
-			// Resolve the persisted name to whatever container ID is currently
-			// running. Survives docker stop+start (new ID, same name label) —
-			// the original FS2 path inspected by container ID and broke on
-			// every restart, forcing the user back into the picker.
-			const target = await findInstanceByName(name);
-			if (epoch !== this.epoch) return;
-			if (target === null) {
-				this.setState({
-					kind: "disconnected",
-					reason: { code: "attach-failed", detail: DETAIL_GONE },
-				});
-				return;
-			}
-
-			this.setState({ kind: "attaching", target });
-			const session = await attach(target.containerId);
-			if (epoch !== this.epoch) {
-				await session.close();
-				return;
-			}
-			this.installSession(session, target);
-			this.settings.chosenInstanceName = target.name;
-			await this.persist(this.settings);
-			this.setState({ kind: "connected", instance: target });
+			target = await findInstanceByName(name);
 		} catch (err: unknown) {
 			if (epoch !== this.epoch) return;
 			this.setState({ kind: "disconnected", reason: toConnectionError(err) });
+			return;
 		}
+		if (epoch !== this.epoch) return;
+		if (target === null) {
+			this.setState({
+				kind: "disconnected",
+				reason: { code: "attach-failed", detail: DETAIL_GONE },
+			});
+			return;
+		}
+
+		this.setState({ kind: "attaching", target });
+		const result = await this.attemptAttach(target, epoch);
+		if (result === "installed" || result === "stale") return;
+		if (epoch !== this.epoch) return;
+		this.setState({ kind: "disconnected", reason: result });
 	}
 
 	async dispose(): Promise<void> {
@@ -435,7 +487,7 @@ export class TomoConnection {
 			kind: "reconnecting",
 			target,
 			attempt: 1,
-			nextDelayMs: 500,
+			nextDelayMs: INITIAL_RECONNECT_DELAY_MS,
 		});
 
 		const loop = new ReconnectLoop();
@@ -455,28 +507,32 @@ export class TomoConnection {
 						loop.cancel();
 						return false;
 					}
-					const session = await attach(live.containerId);
-					if (epoch !== this.epoch) {
-						await session.close();
-						return false;
-					}
-					this.installSession(session, live);
-					this.settings.chosenInstanceName = live.name;
-					await this.persist(this.settings);
-					this.setState({ kind: "connected", instance: live });
-					return true;
+					// M4: shared attach-install-persist path.
+					const r = await this.attemptAttach(live, epoch);
+					if (r === "stale") return false;
+					if (r === "installed") return true;
+					// `r` is a ConnectionError — fall through to the catch
+					// branch via throw so the existing non-transient-error
+					// short-circuit logic owns the disposition.
+					throw new ConnectionFailure(r);
 				} catch (err: unknown) {
 					// Non-transient errors short-circuit the loop. A
-					// permission-denied or daemon-unreachable error will not
-					// resolve by waiting; retrying 5× across 15.5 s just delays
-					// the named error the user needs to act on. Transient
-					// errors (`attach-failed` for stream race / 404 / etc.)
-					// still ride the full backoff schedule. Spec ref:
-					// requirements.md F1/AC12 (added 2026-04-28).
+					// permission-denied, daemon-unreachable, or no-instances
+					// error will not resolve by waiting; retrying 5× across
+					// 15.5 s just delays the named error the user needs to
+					// act on. Transient errors (`attach-failed` for stream
+					// race / 404 / etc.) still ride the full backoff
+					// schedule. Spec ref: requirements.md F1/AC12 (added
+					// 2026-04-28). `no-instances` added in review round 2 /
+					// M2 — defensive: no source code currently throws it
+					// into the reconnect path, but if a future caller adds
+					// one, the loop should not waste the user's time
+					// waiting for containers that are not coming back.
 					if (
 						isConnectionFailure(err) &&
 						(err.code === "socket-permission-denied" ||
-							err.code === "daemon-unreachable")
+							err.code === "daemon-unreachable" ||
+							err.code === "no-instances")
 					) {
 						if (epoch === this.epoch) {
 							this.setState({

@@ -66,7 +66,7 @@ export interface CommandDeps {
 	 * Returns the currently chosen Tomo container ID, or `null` when no
 	 * instance has ever been chosen this session (or remembered from prior).
 	 */
-	chosenInstanceId: () => string | null;
+	getChosenInstanceName: () => string | null;
 }
 
 export function registerCommands(plugin: Plugin, deps: CommandDeps): void {
@@ -84,7 +84,7 @@ function registerReconnectCommand(plugin: Plugin, deps: CommandDeps): void {
 	let currentLabel = "";
 
 	const onInvoke = async (): Promise<void> => {
-		const id = deps.chosenInstanceId();
+		const id = deps.getChosenInstanceName();
 		if (id === null) {
 			new Notice(NO_INSTANCE_NOTICE);
 			return;

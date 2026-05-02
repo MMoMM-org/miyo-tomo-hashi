@@ -255,6 +255,22 @@ describe("SettingsTab", () => {
 // --- InstancePickerModal -----------------------------------------------------
 
 describe("InstancePickerModal", () => {
+	it("list element has aria-live='polite' + aria-atomic for AT announcements (H6)", async () => {
+		// Pre-fix: loading→list / loading→empty / loading→error swaps
+		// happened via listEl.empty() + new child append. SR users heard
+		// modal title then silence — no signal for any of the 3 outcomes.
+		const conn = makeConnection({
+			openPicker: vi.fn<() => Promise<TomoInstance[]>>(async () => []),
+		});
+		const app = new App();
+		const modal = new InstancePickerModal(app, asConnection(conn));
+		await modal.onOpen();
+
+		const listEl = modal.contentEl.querySelector(".hashi-instance-picker-list");
+		expect(listEl?.getAttribute("aria-live")).toBe("polite");
+		expect(listEl?.getAttribute("aria-atomic")).toBe("true");
+	});
+
 	it("renders 'Loading…' before openPicker resolves", async () => {
 		let release: (value: TomoInstance[]) => void = () => {};
 		const pending = new Promise<TomoInstance[]>((resolve) => {

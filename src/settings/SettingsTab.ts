@@ -108,9 +108,29 @@ export function buildSettingsHandlers(
 			await persistence.saveSettings();
 		};
 
+	// review round 2 / L45: per-key whitelist of valid enum values.
+	// Pre-fix dropdownHandler accepted any string and wrote it through
+	// to data.json without validation. The UI <select> options are the
+	// only production source today, but buildSettingsHandlers is exported
+	// and HandlerMap is now public — a caller could invoke a handler with
+	// an out-of-range string and corrupt persisted settings. Mirrors the
+	// pathHandler guard pattern.
+	const dropdownAllowed: Record<
+		"executionMode" | "runLogRetention" | "hooksPolicy",
+		readonly string[]
+	> = {
+		executionMode: ["confirm", "auto-run", "silent"],
+		runLogRetention: ["always", "only-after-failed"],
+		hooksPolicy: ["enabled", "disabled", "ask"],
+	};
+
 	const dropdownHandler =
 		(key: "executionMode" | "runLogRetention" | "hooksPolicy") =>
 		async (v: string): Promise<void> => {
+			if (!dropdownAllowed[key].includes(v)) {
+				notice(`Invalid ${key} value: "${v}"`);
+				return;
+			}
 			(persistence.settings as unknown as Record<string, unknown>)[key] = v;
 			await persistence.saveSettings();
 		};

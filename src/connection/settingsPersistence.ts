@@ -33,6 +33,13 @@ export async function loadSettings(
 	plugin: PluginDataHost,
 ): Promise<PluginSettings> {
 	const stored = (await plugin.loadData()) as Partial<PluginSettings> | null;
+	// settings_version migration anchor (review round 2 / L51).
+	// Pre-v0.1 stored payloads do not carry the field at all; the
+	// spread merge below treats absent → DEFAULT_SETTINGS.settings_version
+	// (= 1), so a missing field is implicitly v1. When introducing a v2,
+	// add a migration block here that branches on
+	// `(stored?.settings_version ?? 1)` and rewrites fields as needed
+	// before the spread merge runs.
 	return { ...DEFAULT_SETTINGS, ...(stored ?? {}) };
 }
 

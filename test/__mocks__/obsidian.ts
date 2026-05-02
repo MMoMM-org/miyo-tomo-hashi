@@ -423,6 +423,11 @@ export class Menu {
 export class Modal {
 	app: App;
 	contentEl = document.createElement("div");
+	// M13: titleEl mirrors the real Obsidian Modal — Obsidian wires
+	// aria-labelledby on the modal container to this element. Subclasses
+	// can call this.titleEl.setText("…") instead of bypassing via
+	// contentEl.createEl("h2", …).
+	titleEl = document.createElement("div");
 
 	constructor(app: App) {
 		this.app = app;

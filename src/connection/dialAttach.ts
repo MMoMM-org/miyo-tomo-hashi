@@ -35,16 +35,40 @@ import http from "node:http";
 import process from "node:process";
 import type { Duplex } from "node:stream";
 
-const SOCKET_PATH: string =
+/**
+ * Single source of truth for the Docker daemon socket path. Re-exported
+ * for `docker.ts` (which uses it to construct the dockerode client) so
+ * the platform-detection lives in one place (review round 2 / L11).
+ */
+export const SOCKET_PATH: string =
 	process.platform === "win32"
 		? "\\\\.\\pipe\\docker_engine"
 		: "/var/run/docker.sock";
 
-export function dialAttach(containerId: string): Promise<Duplex> {
+/**
+ * Connection target for dialAttach. Production uses a Unix-socket path
+ * (or named pipe on Windows). Tests can pass `{ host, port }` to point
+ * at a local TCP `http.Server` and exercise the full request → 101 →
+ * upgrade path without Docker (review H3). Sandboxed test environments
+ * block `listen()` on Unix sockets, so TCP loopback is the portable
+ * test transport.
+ */
+export type DialTarget =
+	| { readonly socketPath: string }
+	| { readonly host: string; readonly port: number };
+
+const DEFAULT_TARGET: DialTarget = { socketPath: SOCKET_PATH };
+
+export function dialAttach(
+	containerId: string,
+	target: DialTarget = DEFAULT_TARGET,
+): Promise<Duplex> {
 	return new Promise<Duplex>((resolve, reject) => {
 		const params = "stream=1&stdout=1&stderr=1&stdin=1&logs=0";
 		const req = http.request({
-			socketPath: SOCKET_PATH,
+			...("socketPath" in target
+				? { socketPath: target.socketPath }
+				: { host: target.host, port: target.port }),
 			path: `/containers/${containerId}/attach?${params}`,
 			method: "POST",
 			headers: {
@@ -55,10 +79,21 @@ export function dialAttach(containerId: string): Promise<Duplex> {
 			},
 		});
 
+		// M2 (review/spec-001): 10-second upgrade timeout. If the daemon
+		// accepts the TCP connection but stalls before completing the 101
+		// handshake (mid-restart, partial response, stuck upgrade), pre-fix
+		// behavior was to hang indefinitely — neither resolve nor reject
+		// fired. setTimeout fires the request's `error` event with a
+		// timeout error which routes to reject() below.
+		req.setTimeout(10_000, () => {
+			req.destroy(new Error("dialAttach: Docker upgrade timeout"));
+		});
+
 		// 'upgrade' fires after Docker responds with 101 Switching Protocols.
 		// `head` may carry initial bytes already received with the response —
 		// unshift them back onto the socket so consumers see them in order.
 		req.on("upgrade", (_res, socket, head) => {
+			req.setTimeout(0); // clear the timeout once upgraded
 			if (head.length > 0) socket.unshift(head);
 			resolve(socket);
 		});

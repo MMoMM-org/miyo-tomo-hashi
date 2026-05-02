@@ -314,9 +314,13 @@ describe("InstructionExecutor — halt-on-dependency", () => {
 		const { executor } = makeSingleFileExecutor(vault, set);
 		const counts = await executor.execute({ kind: "single-file", sourcePath });
 
-		expect(counts.failed).toBeGreaterThanOrEqual(1);      // I03 failed
+		// review round 2 / L13: tightened from toBeGreaterThanOrEqual to
+		// toBe — the exact counts are knowable from the fixture (one
+		// failed, one skipped-dependency, one applied), and the loose
+		// bound would silently accept a regression that double-counts.
+		expect(counts.failed).toBe(1);                        // I03 failed
 		expect(counts["skipped-dependency"]).toBe(1);         // I04 skipped-dependency
-		expect(counts.applied).toBeGreaterThanOrEqual(1);     // I05 applied
+		expect(counts.applied).toBe(1);                       // I05 applied
 
 		// applied:true written for I05 only
 		const updated = await vault.readJSON<InstructionSet>(sourcePath);
@@ -353,9 +357,10 @@ describe("InstructionExecutor — independent failure does not propagate", () =>
 		const { executor } = makeSingleFileExecutor(vault, set);
 		const counts = await executor.execute({ kind: "single-file", sourcePath });
 
-		// I01 failed, I02 still runs → applied
-		expect(counts.failed).toBeGreaterThanOrEqual(1);
-		expect(counts.applied).toBeGreaterThanOrEqual(1);
+		// I01 failed, I02 still runs → applied (exact counts knowable;
+		// review round 2 / L13).
+		expect(counts.failed).toBe(1);
+		expect(counts.applied).toBe(1);
 
 		const updated = await vault.readJSON<InstructionSet>(sourcePath);
 		const i02 = updated.actions.find((a) => a.id === "I02");
@@ -539,6 +544,54 @@ describe("InstructionExecutor — batched applied-flag writes (H5)", () => {
 		const after = await vault.readJSON<InstructionSet>(sourcePath);
 		expect(after.actions.every((a) => a.applied === true)).toBe(true);
 	});
+
+	it("peer .md is ticked AFTER source JSON applied flag is written (review round 2 / M3)", async () => {
+		// Pre-fix ordering: tickPeerCheckbox fired inside the action loop,
+		// then markActionsApplied flushed after the loop. A crash between
+		// the tick and the flush left peer .md showing `[x] Applied` while
+		// source JSON still had `applied: false` — the next run re-enqueued
+		// the action while the user saw it as done. Post-fix: source JSON
+		// is the truth, peer .md is ticked only after the JSON write
+		// succeeds. This test pins the ordering by spying on vault writes
+		// and asserting the JSON write precedes the peer .md modification.
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/peer_order_instructions.json`;
+		const set = makeInstructionSet([
+			makeCreateMoc("I01", `${INBOX}/m1.md`),
+		]);
+
+		// Peer .md path is derived by replacing `.json` with `.md` on the
+		// source path (see derivePeerPath in peerCheckboxSync.ts).
+		const peerPath = `${INBOX}/peer_order_instructions.md`;
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note");
+		// Peer .md with the heading + unticked checkbox tickPeerCheckbox
+		// targets. Without it the peer-tick would no-op via "peer-missing".
+		await vault.create(peerPath, "# Peer\n\n### I01\n\n- [ ] Applied\n");
+
+		const order: string[] = [];
+		vi.spyOn(vault, "processJSON").mockImplementation(async (path, fn) => {
+			if (path === sourcePath) order.push("markActionsApplied");
+			return FakeVaultFS.prototype.processJSON.call(vault, path, fn);
+		});
+		vi.spyOn(vault, "process").mockImplementation(async (path, fn) => {
+			if (path === peerPath) order.push("tickPeerCheckbox");
+			return FakeVaultFS.prototype.process.call(vault, path, fn);
+		});
+
+		const { executor } = makeSingleFileExecutor(vault, set);
+		await executor.execute({ kind: "single-file", sourcePath });
+
+		// Ordering: source JSON write precedes peer .md write.
+		const jsonIdx = order.indexOf("markActionsApplied");
+		const peerIdx = order.indexOf("tickPeerCheckbox");
+		expect(jsonIdx).toBeGreaterThanOrEqual(0);
+		expect(peerIdx).toBeGreaterThanOrEqual(0);
+		expect(jsonIdx).toBeLessThan(peerIdx);
+	});
 });
 
 describe("InstructionExecutor — validation failure in batch", () => {
@@ -619,9 +672,13 @@ describe("InstructionExecutor — validation failure in batch", () => {
 
 		const counts = await executor.execute({ kind: "batch" });
 
-		// validSet's action should have run (applied or failed based on handler)
-		// The invalid file's contribution is 0 applied
-		expect(counts.applied + counts.failed + counts["skipped-already"]).toBeGreaterThanOrEqual(1);
+		// validSet's I01 ran. The invalid file contributes 0 because the
+		// schema validator rejects it before action enumeration. Tighter
+		// than `>= 1` so a regression that swallows the I01 outcome
+		// fails this assertion (review round 2 / L13).
+		expect(counts.applied).toBe(1);
+		expect(counts.failed).toBe(0);
+		expect(counts["skipped-already"]).toBe(0);
 
 		// Valid file's action should be applied (source file exists)
 		const updated = await vault.readJSON<InstructionSet>(validPath);
