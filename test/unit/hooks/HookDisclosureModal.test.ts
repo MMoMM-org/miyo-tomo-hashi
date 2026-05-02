@@ -130,16 +130,98 @@ describe("HookDisclosureModal — DOM rendering", () => {
 		await decision;
 	});
 
-	it("renders three buttons in order: Enable, Enable once, Disable", async () => {
+	it("renders three buttons in order: Disable, Enable once, Enable", async () => {
+		// C1 (review/spec-002-fixes): Disable comes first so reflexive
+		// keyboard Enter on the focused primary button cancels rather than
+		// session-enables.
 		const modal = new HookDisclosureModal(app, fixture());
 		const decision = modal.present();
 
 		const buttons = modal.contentEl.querySelectorAll("button");
 		const labels = Array.from(buttons).map((b) => b.textContent ?? "");
-		expect(labels).toEqual(["Enable", "Enable once", "Disable"]);
+		expect(labels).toEqual(["Disable", "Enable once", "Enable"]);
 
 		findButton(modal, "Disable")?.click();
 		await decision;
+	});
+});
+
+describe("HookDisclosureModal — safe defaults (C1, C2)", () => {
+	let app: App;
+
+	beforeEach(() => {
+		app = new App();
+	});
+
+	// C1
+	it("Disable is the primary (mod-cta) action", async () => {
+		const modal = new HookDisclosureModal(app, fixture());
+		const decision = modal.present();
+		const disable = findButton(modal, "Disable");
+		const enable = findButton(modal, "Enable");
+		expect(disable?.classList.contains("mod-cta")).toBe(true);
+		expect(enable?.classList.contains("mod-cta")).toBe(false);
+		findButton(modal, "Disable")?.click();
+		await decision;
+	});
+
+	// C1 — focus assertion requires contentEl attached to document
+	it("Disable receives focus after open", async () => {
+		const modal = new HookDisclosureModal(app, fixture());
+		document.body.appendChild(modal.contentEl);
+		try {
+			const decision = modal.present();
+			const disable = findButton(modal, "Disable");
+			expect(document.activeElement).toBe(disable);
+			findButton(modal, "Disable")?.click();
+			await decision;
+		} finally {
+			document.body.removeChild(modal.contentEl);
+		}
+	});
+
+	// C2
+	it("contentEl exposes an accessible name via aria-labelledby", async () => {
+		const modal = new HookDisclosureModal(app, fixture());
+		const decision = modal.present();
+
+		const labelledBy = modal.contentEl.getAttribute("aria-labelledby");
+		expect(labelledBy).toBeTruthy();
+
+		const heading = modal.contentEl.querySelector(
+			`[id="${labelledBy}"]`,
+		);
+		expect(heading).not.toBeNull();
+		// The accessible name must be a meaningful prompt — not just the
+		// bare filename. Filename appears in the meta div separately.
+		expect(heading?.textContent ?? "").toMatch(/enable hook/i);
+
+		findButton(modal, "Disable")?.click();
+		await decision;
+	});
+
+	// C2 — id collision check when two modals are open simultaneously
+	it("two simultaneously-open modals have distinct labelledby ids", async () => {
+		const a = new HookDisclosureModal(
+			app,
+			fixture({ vaultRelativePath: "hooks/a.js" }),
+		);
+		const b = new HookDisclosureModal(
+			app,
+			fixture({ vaultRelativePath: "hooks/b.js" }),
+		);
+		const pa = a.present();
+		const pb = b.present();
+
+		const idA = a.contentEl.getAttribute("aria-labelledby");
+		const idB = b.contentEl.getAttribute("aria-labelledby");
+		expect(idA).toBeTruthy();
+		expect(idB).toBeTruthy();
+		expect(idA).not.toBe(idB);
+
+		findButton(a, "Disable")?.click();
+		findButton(b, "Disable")?.click();
+		await Promise.all([pa, pb]);
 	});
 });
 

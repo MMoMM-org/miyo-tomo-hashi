@@ -44,6 +44,10 @@ const DISCLOSURE_TEXT =
 	"variables. Only enable hooks from sources you trust.";
 
 export class HookDisclosureModal extends Modal {
+	// Per-instance counter ensures unique aria-labelledby ids across
+	// simultaneously-open modals (review C2).
+	private static labelledByCounter = 0;
+
 	private resolver: ((decision: AskDecision) => void) | null = null;
 	private readonly escHandler: (evt: KeyboardEvent) => void;
 
@@ -77,10 +81,14 @@ export class HookDisclosureModal extends Modal {
 		contentEl.addEventListener("keydown", this.escHandler);
 
 		const filename = this.deriveFilename(this.hookInfo.vaultRelativePath);
+		const titleId = `hashi-hook-disclosure-title-${++HookDisclosureModal.labelledByCounter}`;
+
+		contentEl.setAttribute("aria-labelledby", titleId);
 
 		contentEl.createEl("h2", {
 			cls: "hashi-hook-disclosure-modal-title",
-			text: filename,
+			text: `Enable hook: ${filename}?`,
+			attr: { id: titleId },
 		});
 
 		const meta = contentEl.createDiv({ cls: "hashi-hook-disclosure-modal-meta" });
@@ -101,9 +109,13 @@ export class HookDisclosureModal extends Modal {
 		const buttons = contentEl.createDiv({
 			cls: "hashi-hook-disclosure-modal-buttons",
 		});
-		this.createButton(buttons, "Enable", "enable-session", true);
+		// Safe-default ordering (review C1): Disable is first AND primary AND
+		// auto-focused so reflexive Enter/Space cancels rather than enabling
+		// an untrusted hook for the whole session.
+		const disableBtn = this.createButton(buttons, "Disable", "disable", true);
 		this.createButton(buttons, "Enable once", "enable-once", false);
-		this.createButton(buttons, "Disable", "disable", false);
+		this.createButton(buttons, "Enable", "enable-session", false);
+		disableBtn.focus();
 	}
 
 	override onClose(): void {
