@@ -369,6 +369,102 @@ describe("statusBar — summary with failures (error window)", () => {
 	});
 });
 
+// ---------------------------------------------------------------------------
+// H9 — keyboard reachability
+// ---------------------------------------------------------------------------
+
+describe("statusBar — keyboard reachability (H9)", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		executionStore.set({ kind: "idle" });
+	});
+
+	afterEach(() => {
+		executionStore.set({ kind: "idle" });
+		document.body.innerHTML = "";
+		vi.useRealTimers();
+	});
+
+	it("root has tabindex='0' so keyboard users can focus it", () => {
+		const h = mount();
+		expect(h.getRoot().getAttribute("tabindex")).toBe("0");
+	});
+
+	it("keydown Enter while running invokes onActiveModalFocus", () => {
+		const h = mount();
+		executionStore.set({
+			kind: "running",
+			mode: "confirm",
+			records: [record()],
+			currentIndex: 0,
+		});
+		h.getRoot().dispatchEvent(
+			new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+		);
+		expect(h.onActiveModalFocus).toHaveBeenCalledTimes(1);
+	});
+
+	it("keydown Space while running invokes onActiveModalFocus", () => {
+		const h = mount();
+		executionStore.set({
+			kind: "running",
+			mode: "confirm",
+			records: [record()],
+			currentIndex: 0,
+		});
+		h.getRoot().dispatchEvent(
+			new KeyboardEvent("keydown", { key: " ", bubbles: true }),
+		);
+		expect(h.onActiveModalFocus).toHaveBeenCalledTimes(1);
+	});
+
+	it("keydown Enter while idle is a no-op (matches click semantics)", () => {
+		const h = mount();
+		h.getRoot().dispatchEvent(
+			new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+		);
+		expect(h.onActiveModalFocus).not.toHaveBeenCalled();
+	});
+
+	it("keydown of a non-activation key while running is a no-op", () => {
+		const h = mount();
+		executionStore.set({
+			kind: "running",
+			mode: "confirm",
+			records: [record()],
+			currentIndex: 0,
+		});
+		h.getRoot().dispatchEvent(
+			new KeyboardEvent("keydown", { key: "Tab", bubbles: true }),
+		);
+		expect(h.onActiveModalFocus).not.toHaveBeenCalled();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// H10 — glyph aria-hidden so SR doesn't read CJK + announcement together
+// ---------------------------------------------------------------------------
+
+describe("statusBar — glyph aria-hidden (H10)", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		executionStore.set({ kind: "idle" });
+	});
+
+	afterEach(() => {
+		executionStore.set({ kind: "idle" });
+		document.body.innerHTML = "";
+		vi.useRealTimers();
+	});
+
+	it("the visible 橋 glyph span carries aria-hidden='true'", () => {
+		const h = mount();
+		const glyph = h.getRoot().querySelector(".hashi-status-bar-bridge-glyph");
+		expect(glyph).not.toBeNull();
+		expect(glyph?.getAttribute("aria-hidden")).toBe("true");
+	});
+});
+
 describe("statusBar — click handling", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();

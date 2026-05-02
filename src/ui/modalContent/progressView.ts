@@ -34,10 +34,15 @@ export function renderProgressView(
 
 	if (!isRunning(state)) return;
 
-	createHeader(
+	const header = createHeader(
 		contentEl,
 		`Running — ${state.currentIndex} of ${state.records.length} actions`,
 	);
+	// H11: announce progress changes to assistive tech. The fast-path
+	// updateProgressView only swaps text via setText, which preserves
+	// these attributes — so announcements continue across in-place ticks.
+	header.setAttr("aria-live", "polite");
+	header.setAttr("aria-atomic", "true");
 
 	// Sticky error banner — accumulates every failure outcome seen so far
 	const failures = state.records

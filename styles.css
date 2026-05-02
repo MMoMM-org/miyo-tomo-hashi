@@ -209,13 +209,21 @@
 	color: var(--text-muted);
 }
 
+/* H12: non-color cue so the running/error states are distinguishable
+ * without relying on hue alone (red-green color blindness affects ~8% of
+ * males). text-decoration is ignored by screen readers, so it's
+ * redundant cue only — no extra noise in the a11y tree. */
 .hashi-status-bar-bridge.is-running {
 	color: var(--color-green);
 	cursor: pointer;
+	text-decoration: underline solid;
+	text-underline-offset: 2px;
 }
 
 .hashi-status-bar-bridge.is-error {
 	color: var(--color-red);
+	text-decoration: underline wavy;
+	text-underline-offset: 2px;
 }
 
 /* The screen-reader announcement span carries text-node updates on every

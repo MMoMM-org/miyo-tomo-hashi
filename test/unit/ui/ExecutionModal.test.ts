@@ -455,6 +455,22 @@ describe("ExecutionModal — progress subview (state=running)", () => {
 		};
 	}
 
+	it("progress header is an aria-live region (H11)", () => {
+		// Per-tick text changes ("3 of 10" → "4 of 10") must be announced.
+		// The header element acts as the live region (polite + atomic).
+		const records = [record({ id: "I01" }), record({ id: "I02" })];
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set(running(records, 0));
+
+		const header = modal.contentEl.querySelector(
+			".hashi-execution-modal-header",
+		);
+		expect(header?.getAttribute("aria-live")).toBe("polite");
+		expect(header?.getAttribute("aria-atomic")).toBe("true");
+	});
+
 	it("running→running with same records updates DOM in place (H4)", () => {
 		// Pre-fix code rebuilt contentEl on every store tick — N×5 element
 		// teardown+rebuild per iteration on Obsidian's main thread between

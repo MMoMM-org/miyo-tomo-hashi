@@ -126,8 +126,19 @@ export function mountStatusBar(
 	root.addClass("hashi-status-bar-bridge");
 	root.setAttr("role", "status");
 	root.setAttr("aria-live", "polite");
+	// H9: keyboard reachable. Click handler triggers focus-modal during
+	// running state; a keydown handler below mirrors that. tabindex stays
+	// at 0 across all states for predictable Tab order — the keyboard and
+	// click handlers both no-op outside running, matching PRD F10.
+	root.setAttr("tabindex", "0");
 
-	root.createSpan({ cls: "hashi-status-bar-bridge-glyph", text: "橋" });
+	root.createSpan({
+		cls: "hashi-status-bar-bridge-glyph",
+		text: "橋",
+		// H10: hide the visible CJK glyph from SR. State is conveyed via
+		// the announcer span below + the root's aria-label.
+		attr: { "aria-hidden": "true" },
+	});
 	const announcer = root.createSpan({
 		cls: "hashi-status-bar-bridge-sr",
 		attr: { "aria-hidden": "false" },
@@ -168,6 +179,16 @@ export function mountStatusBar(
 			callbacks.onActiveModalFocus();
 		}
 		// idle / error — deliberate no-op (PRD F10).
+	});
+
+	// H9: Enter/Space mirrors click for keyboard activation. Only the two
+	// activation keys to keep Tab/Shift+Tab navigation intact.
+	root.addEventListener("keydown", (evt: KeyboardEvent) => {
+		if (evt.key !== "Enter" && evt.key !== " ") return;
+		evt.preventDefault();
+		if (visual.kind === "running") {
+			callbacks.onActiveModalFocus();
+		}
 	});
 
 	const unsubscribe = executionStore.subscribe((state) => {
