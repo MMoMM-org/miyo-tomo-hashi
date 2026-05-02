@@ -318,6 +318,31 @@ export class TomoChatView extends ItemView {
 		this.unsubscribe = connectionStore.subscribe((state) =>
 			this.render(state),
 		);
+
+		// C1 (review/spec-001): bootstrap focus on open. The render()
+		// transition path only focuses on disabled→enabled, which doesn't
+		// fire on first mount (input.disabled defaults to false either way).
+		// Without this, keyboard users open the view and must mouse-click
+		// before any keystroke is captured. Connected → input owns focus;
+		// otherwise → terminal owns focus so the AT user at least lands
+		// inside the chat view's primary surface.
+		const initial = connectionStore.get();
+		if (initial.kind === "connected") {
+			this.inputEl?.focus();
+		} else {
+			this.terminal?.terminal.focus();
+		}
+	}
+
+	/**
+	 * Obsidian's workspace focus system delegates here when the view becomes
+	 * active. The `override` keyword is omitted because `focus()` isn't in
+	 * Obsidian's typed `ItemView` declarations — the runtime calls it via
+	 * duck typing. Defaults would land focus on `contentEl`; we route to the
+	 * xterm terminal so keyboard input is immediately captured (review C1).
+	 */
+	focus(): void {
+		this.terminal?.terminal.focus();
 	}
 
 	override async onClose(): Promise<void> {

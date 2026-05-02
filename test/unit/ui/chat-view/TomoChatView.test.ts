@@ -45,38 +45,55 @@ const terminalHooks: TerminalHooks = {
 	options: { fontSize: 14 },
 };
 
+// Track focus-mock instances per-test so assertions can target the latest
+// terminal that the view holds. Refreshed on every createTerminal call.
+const terminalFocusSpies: ReturnType<typeof vi.fn>[] = [];
+
 vi.mock("../../../../src/ui/chat-view/terminalHost", () => ({
-	createTerminal: vi.fn(() => ({
-		terminal: {
-			write: vi.fn(),
-			dispose: vi.fn(),
-			// xterm-onData wiring (T7 fix): TomoChatView subscribes via
-			// terminal.onData to forward keystrokes typed inside the xterm
-			// area to the container's stdin. Mock returns a disposable.
-			onData: vi.fn((cb: (data: string) => void) => {
-				terminalHooks.onDataCb = cb;
-				return { dispose: vi.fn() };
-			}),
-			onResize: vi.fn(
-				(cb: (dims: { rows: number; cols: number }) => void) => {
-					terminalHooks.onResizeCb = cb;
+	createTerminal: vi.fn(() => {
+		const focusSpy = vi.fn();
+		terminalFocusSpies.push(focusSpy);
+		return {
+			terminal: {
+				write: vi.fn(),
+				dispose: vi.fn(),
+				// L8/C1: focus delegated to xterm so the chat view becomes
+				// keyboard-active without a click.
+				focus: focusSpy,
+				// xterm-onData wiring (T7 fix): TomoChatView subscribes via
+				// terminal.onData to forward keystrokes typed inside the xterm
+				// area to the container's stdin. Mock returns a disposable.
+				onData: vi.fn((cb: (data: string) => void) => {
+					terminalHooks.onDataCb = cb;
 					return { dispose: vi.fn() };
+				}),
+				onResize: vi.fn(
+					(cb: (dims: { rows: number; cols: number }) => void) => {
+						terminalHooks.onResizeCb = cb;
+						return { dispose: vi.fn() };
+					},
+				),
+				get rows() {
+					return terminalHooks.rows;
 				},
-			),
-			get rows() {
-				return terminalHooks.rows;
+				get cols() {
+					return terminalHooks.cols;
+				},
+				options: terminalHooks.options,
 			},
-			get cols() {
-				return terminalHooks.cols;
-			},
-			options: terminalHooks.options,
-		},
-		fitAddon: { fit: vi.fn() },
-	})),
+			fitAddon: { fit: vi.fn() },
+		};
+	}),
 	writeChunk: vi.fn(),
 	fit: vi.fn(),
 	dispose: vi.fn(),
 }));
+
+const lastTerminalFocusSpy = (): ReturnType<typeof vi.fn> => {
+	const last = terminalFocusSpies[terminalFocusSpies.length - 1];
+	if (last === undefined) throw new Error("no terminal created yet");
+	return last;
+};
 
 // --- factories ---------------------------------------------------------------
 
@@ -276,6 +293,77 @@ describe("TomoChatView — input enabled/disabled gating", () => {
 			".hashi-chat-view-input",
 		);
 		expect(document.activeElement).toBe(input);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// C1 — Focus-on-open (review/spec-001 critical a11y)
+// ---------------------------------------------------------------------------
+
+describe("TomoChatView — focus on open (C1)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		terminalFocusSpies.length = 0;
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	afterEach(() => {
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	it("focuses the chat input on open when state is already connected", async () => {
+		// Pre-fix: onOpen built DOM, subscribed, render() saw connected on
+		// first tick — but `wasDisabled && !shouldBeDisabled` was
+		// `false && false` so no focus fired. Keyboard user opened the view
+		// and had to click before any keystroke registered.
+		connectionStore.set({ kind: "connected", instance: inst() });
+		const leaf = new WorkspaceLeaf();
+		const view = new TomoChatView(
+			leaf,
+			asConnection(makeConnection()),
+			vi.fn(() => null),
+			1,
+			vi.fn(async () => {}),
+		);
+		// Attach BEFORE onOpen so the bootstrap focus in onOpen actually
+		// moves activeElement (jsdom no-ops focus on detached elements).
+		document.body.appendChild(view.contentEl);
+		await view.onOpen();
+		const input = view.contentEl.querySelector<HTMLInputElement>(
+			".hashi-chat-view-input",
+		);
+		expect(document.activeElement).toBe(input);
+		await view.onClose();
+		document.body.removeChild(view.contentEl);
+	});
+
+	it("focuses the xterm terminal on open when state is not connected", async () => {
+		// Open + disconnected → terminal owns focus so AT users at least
+		// land inside the chat view's primary surface, not the modal root.
+		const leaf = new WorkspaceLeaf();
+		const view = new TomoChatView(
+			leaf,
+			asConnection(makeConnection()),
+			vi.fn(() => null),
+			1,
+			vi.fn(async () => {}),
+		);
+		document.body.appendChild(view.contentEl);
+		await view.onOpen();
+		expect(lastTerminalFocusSpy()).toHaveBeenCalled();
+		await view.onClose();
+		document.body.removeChild(view.contentEl);
+	});
+
+	it("focus() override delegates to xterm terminal (Obsidian focus contract)", async () => {
+		const h = await mountView();
+		document.body.appendChild(h.root);
+		// Obsidian's workspace focus system calls ItemView.focus() when the
+		// view becomes active. Without this override, focus lands on the
+		// content container rather than the terminal.
+		const before = lastTerminalFocusSpy().mock.calls.length;
+		h.view.focus();
+		expect(lastTerminalFocusSpy().mock.calls.length).toBeGreaterThan(before);
 	});
 });
 
