@@ -16,6 +16,7 @@ import {
 	createRowGlyph,
 	glyphForOutcome,
 	groupByFile,
+	rowAriaLabel,
 } from "./shared";
 
 function isRunning(
@@ -70,6 +71,11 @@ export function renderProgressView(
 			cls: "hashi-execution-modal-file-heading",
 			text: fileId,
 		});
+		// M10: list semantics for AT navigation + count.
+		const list = body.createEl("ul", {
+			cls: "hashi-execution-modal-row-list",
+			attr: { role: "list" },
+		});
 		for (const record of records) {
 			const isCurrent =
 				record.outcome === null &&
@@ -77,7 +83,10 @@ export function renderProgressView(
 			const cls: string[] = ["hashi-execution-modal-row"];
 			if (record.outcome?.kind === "applied") cls.push("is-applied");
 			else if (record.outcome?.kind === "failed") cls.push("is-failed");
-			const row = body.createDiv({ cls });
+			const row = list.createEl("li", {
+				cls,
+				attr: { "aria-label": rowAriaLabel(record, isCurrent) },
+			});
 			createRowGlyph(row, glyphForOutcome(record, isCurrent));
 			row.createSpan({
 				cls: "hashi-execution-modal-row-id",
@@ -136,12 +145,16 @@ export function updateProgressView(
 		if (row === null) return;
 		row.classList.toggle("is-applied", record.outcome?.kind === "applied");
 		row.classList.toggle("is-failed", record.outcome?.kind === "failed");
+		const isCurrent =
+			record.outcome === null && i === state.currentIndex;
+		// M11: keep aria-label in sync with the new outcome state on each
+		// in-place tick so AT users hear advancing progress without a
+		// full DOM rebuild.
+		row.setAttr("aria-label", rowAriaLabel(record, isCurrent));
 		const glyphEl = row.querySelector<HTMLElement>(
 			".hashi-execution-modal-row-glyph",
 		);
 		if (glyphEl !== null) {
-			const isCurrent =
-				record.outcome === null && i === state.currentIndex;
 			glyphEl.setText(glyphForOutcome(record, isCurrent));
 		}
 	});

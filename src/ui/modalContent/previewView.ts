@@ -19,6 +19,7 @@ import {
 	GLYPH_APPLIED,
 	GLYPH_PENDING,
 	groupByFile,
+	rowAriaLabel,
 } from "./shared";
 
 interface PreviewState {
@@ -60,15 +61,20 @@ export function renderPreviewView(
 		});
 	}
 
-	// Body — per-file groups
+	// Body — per-file groups (M10: action rows are <ul role="list"> + <li>
+	// so AT can announce item count and navigate by list shortcuts)
 	const body = contentEl.createDiv({ cls: "hashi-execution-modal-body" });
 	for (const [fileId, records] of groupByFile(ps.records)) {
 		body.createEl("h3", {
 			cls: "hashi-execution-modal-file-heading",
 			text: fileId,
 		});
+		const list = body.createEl("ul", {
+			cls: "hashi-execution-modal-row-list",
+			attr: { role: "list" },
+		});
 		for (const record of records) {
-			renderRow(body, record);
+			renderRow(list, record);
 		}
 	}
 
@@ -100,7 +106,10 @@ function renderRow(parent: HTMLElement, record: ActionRecord): void {
 	const cls = isApplied
 		? ["hashi-execution-modal-row", "is-applied"]
 		: ["hashi-execution-modal-row"];
-	const row = parent.createDiv({ cls });
+	const row = parent.createEl("li", {
+		cls,
+		attr: { "aria-label": rowAriaLabel(record) },
+	});
 	createRowGlyph(row, isApplied ? GLYPH_APPLIED : GLYPH_PENDING);
 	row.createSpan({
 		cls: "hashi-execution-modal-row-id",

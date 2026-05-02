@@ -116,13 +116,16 @@ export class ExecutionModal extends Modal {
 		switch (state.kind) {
 			case "previewing":
 				renderPreviewView(this.contentEl, state, wrappedCallbacks);
+				this.restoreFocusAfterRender();
 				return;
 			case "running":
 				renderProgressView(this.contentEl, state, wrappedCallbacks);
+				this.restoreFocusAfterRender();
 				return;
 			case "summary":
 			case "validation-failed":
 				renderSummaryView(this.contentEl, state, wrappedCallbacks);
+				this.restoreFocusAfterRender();
 				return;
 			case "idle":
 			case "preparing":
@@ -132,6 +135,21 @@ export class ExecutionModal extends Modal {
 				this.contentEl.addClass("hashi-execution-modal");
 				return;
 		}
+	}
+
+	/**
+	 * Move focus to the new view's primary action button after a full
+	 * rebuild (review M13). Without this, contentEl.empty() destroys the
+	 * focused element and keyboard users land on the modal container.
+	 *
+	 * Selection: prefer .mod-cta (the explicit primary). progressView
+	 * has no primary class — fall back to the first button (Cancel).
+	 */
+	private restoreFocusAfterRender(): void {
+		const target =
+			this.contentEl.querySelector<HTMLElement>(".mod-cta") ??
+			this.contentEl.querySelector<HTMLElement>("button");
+		target?.focus();
 	}
 
 	/**
