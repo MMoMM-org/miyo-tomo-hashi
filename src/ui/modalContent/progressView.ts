@@ -95,3 +95,81 @@ export function renderProgressView(
 		callbacks.onCancel?.();
 	});
 }
+
+/**
+ * In-place tick update for an existing progress view (review H4).
+ *
+ * Used by ExecutionModal's fast path when state transitions running →
+ * running with the same `records` array reference. Avoids the per-tick
+ * teardown+rebuild of N×5 DOM elements that would otherwise run on
+ * Obsidian's main thread between awaits.
+ *
+ * Safe to call at any time after `renderProgressView` has built the view.
+ * Updates header text, error banner, and per-row glyph/class only — no
+ * structural changes.
+ */
+export function updateProgressView(
+	contentEl: HTMLElement,
+	state: Extract<RunState, { kind: "running" }>,
+): void {
+	const header = contentEl.querySelector<HTMLElement>(
+		".hashi-execution-modal-header",
+	);
+	if (header !== null) {
+		header.setText(
+			`Running — ${state.currentIndex} of ${state.records.length} actions`,
+		);
+	}
+
+	updateErrorBanner(contentEl, state);
+
+	const rows = contentEl.querySelectorAll<HTMLElement>(
+		".hashi-execution-modal-row",
+	);
+	state.records.forEach((record, i) => {
+		const row = rows.item(i);
+		if (row === null) return;
+		row.classList.toggle("is-applied", record.outcome?.kind === "applied");
+		row.classList.toggle("is-failed", record.outcome?.kind === "failed");
+		const glyphEl = row.querySelector<HTMLElement>(
+			".hashi-execution-modal-row-glyph",
+		);
+		if (glyphEl !== null) {
+			const isCurrent =
+				record.outcome === null && i === state.currentIndex;
+			glyphEl.setText(glyphForOutcome(record, isCurrent));
+		}
+	});
+}
+
+function updateErrorBanner(
+	contentEl: HTMLElement,
+	state: Extract<RunState, { kind: "running" }>,
+): void {
+	const failures = state.records
+		.map((r) => r.outcome)
+		.filter((o): o is { kind: "failed"; reason: string } =>
+			o !== null && o.kind === "failed",
+		);
+	let banner = contentEl.querySelector<HTMLElement>(
+		".hashi-execution-modal-error-banner",
+	);
+	if (failures.length === 0) {
+		if (banner !== null) banner.remove();
+		return;
+	}
+	if (banner === null) {
+		banner = contentEl.createDiv({
+			cls: "hashi-execution-modal-error-banner",
+		});
+		banner.setAttr("aria-live", "assertive");
+		const headerEl = contentEl.querySelector(
+			".hashi-execution-modal-header",
+		);
+		if (headerEl !== null && headerEl.nextSibling !== null) {
+			contentEl.insertBefore(banner, headerEl.nextSibling);
+		}
+	}
+	const lines = failures.map((f) => f.reason).join(" · ");
+	banner.setText(`${failures.length} failed: ${lines}`);
+}

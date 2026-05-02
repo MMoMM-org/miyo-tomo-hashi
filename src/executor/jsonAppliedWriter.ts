@@ -32,3 +32,29 @@ export async function markActionApplied(
 		),
 	}));
 }
+
+/**
+ * Batched variant: set `applied: true` on every action whose id is in
+ * `actionIds`, all in a single atomic processJSON cycle (review H5).
+ *
+ * Per-action invocation of markActionApplied serializes through Obsidian's
+ * per-path queue — N applied actions = N read+parse+serialize+write cycles.
+ * The InstructionExecutor accumulates ids during the run and flushes them
+ * here once per source after the action loop.
+ *
+ * No-op when `actionIds` is empty.
+ */
+export async function markActionsApplied(
+	vault: VaultFS,
+	sourcePath: string,
+	actionIds: ReadonlyArray<string>,
+): Promise<void> {
+	if (actionIds.length === 0) return;
+	const ids = new Set(actionIds);
+	await vault.processJSON<InstructionSet>(sourcePath, (set) => ({
+		...set,
+		actions: set.actions.map((a) =>
+			ids.has(a.id) ? { ...a, applied: true } : a,
+		),
+	}));
+}

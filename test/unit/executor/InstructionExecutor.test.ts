@@ -426,6 +426,48 @@ describe("InstructionExecutor — cancellation", () => {
 // Scenario 7: Validation-only failure in batch
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// H5 — Batched applied-flag writes (one processJSON per source, not N)
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — batched applied-flag writes (H5)", () => {
+	it("one processJSON call against the source for N applied actions", async () => {
+		// Pre-fix code called markActionApplied per applied action — each
+		// triggered its own atomic read+parse+serialize+write cycle through
+		// Obsidian's per-path queue. The batched write path consolidates them.
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/batch_apply_instructions.json`;
+		const set = makeInstructionSet([
+			makeCreateMoc("I01", `${INBOX}/m1.md`),
+			makeCreateMoc("I02", `${INBOX}/m2.md`),
+			makeCreateMoc("I03", `${INBOX}/m3.md`),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note I01");
+		await vault.create("inbox/note-I02.md", "# Note I02");
+		await vault.create("inbox/note-I03.md", "# Note I03");
+
+		const processJSONSpy = vi.spyOn(vault, "processJSON");
+
+		const { executor } = makeSingleFileExecutor(vault, set);
+		await executor.execute({ kind: "single-file", sourcePath });
+
+		// Filter out any processJSON calls against non-source files (e.g.
+		// none expected at present, but the assertion is path-scoped).
+		const sourceWrites = processJSONSpy.mock.calls.filter(
+			(c) => c[0] === sourcePath,
+		);
+		expect(sourceWrites.length).toBe(1);
+
+		// Outcome unchanged: all three actions are applied.
+		const after = await vault.readJSON<InstructionSet>(sourcePath);
+		expect(after.actions.every((a) => a.applied === true)).toBe(true);
+	});
+});
+
 describe("InstructionExecutor — validation failure in batch", () => {
 	it("malformed JSON in one source records as per-file failure; other sources proceed (H3)", async () => {
 		// Before the H3 fix, an uncaught JSON.parse throw aborted the entire

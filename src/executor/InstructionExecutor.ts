@@ -47,7 +47,7 @@ import {
 	computeRemaining,
 	type DependencyEdge,
 } from "./planner.js";
-import { markActionApplied } from "./jsonAppliedWriter.js";
+import { markActionsApplied } from "./jsonAppliedWriter.js";
 import { tickPeerCheckbox } from "./peerCheckboxSync.js";
 import { RunLogWriter } from "./runLog.js";
 import { HANDLERS } from "../actions/index.js";
@@ -270,6 +270,9 @@ export class InstructionExecutor {
 
 		// Step 8: execute each record
 		const failedIds = new Set<string>();
+		// H5: accumulate applied ids per source so we can flush all writes
+		// in one processJSON call after the loop, instead of N per source.
+		const appliedByFile = new Map<string, string[]>();
 
 		for (let i = 0; i < records.length; i++) {
 			const record = records[i] as ActionRecord;
@@ -335,9 +338,12 @@ export class InstructionExecutor {
 			const afterOutcome = await this.hookRunner.run("after", action);
 
 			if (handlerOutcome.kind !== "failed") {
-				// Step 8f: write applied:true to source JSON
+				// Step 8f: queue applied:true write (flushed in one batch
+				// after the loop — review H5).
 				if (handlerOutcome.kind === "applied") {
-					await markActionApplied(vault, record.fileId, record.id);
+					const list = appliedByFile.get(record.fileId) ?? [];
+					list.push(record.id);
+					appliedByFile.set(record.fileId, list);
 					// Step 8g: best-effort tick peer .md
 					await tickPeerCheckbox(vault, record.fileId, record.id);
 				}
@@ -360,6 +366,13 @@ export class InstructionExecutor {
 				// Step 8h: append record outcome to run log
 				logWriter.appendRecord(record);
 			}
+		}
+
+		// Step 8.5 (H5): flush batched applied-flag writes — one processJSON
+		// call per source, regardless of how many actions in that source
+		// were applied.
+		for (const [fileId, ids] of appliedByFile) {
+			await markActionsApplied(vault, fileId, ids);
 		}
 
 		// Step 9: finalize run log per retention policy

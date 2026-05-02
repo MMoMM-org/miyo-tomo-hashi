@@ -30,7 +30,10 @@ import type { Store } from "../util/store";
 
 import type { ModalCallbacks } from "./modalContent/types";
 import { renderPreviewView } from "./modalContent/previewView";
-import { renderProgressView } from "./modalContent/progressView";
+import {
+	renderProgressView,
+	updateProgressView,
+} from "./modalContent/progressView";
 import { renderSummaryView } from "./modalContent/summaryView";
 
 /** Subset of InstructionExecutor the modal needs. */
@@ -92,7 +95,22 @@ export class ExecutionModal extends Modal {
 	}
 
 	private render(state: RunState): void {
+		const prevState = this.currentState;
 		this.currentState = state;
+
+		// H4 fast path: running → running with the same `records` reference
+		// (just an index advance) — update glyphs/header in place rather
+		// than rebuilding the full DOM tree. Avoids an O(N²) main-thread
+		// teardown across an N-action run.
+		if (
+			state.kind === "running" &&
+			prevState.kind === "running" &&
+			prevState.records === state.records
+		) {
+			updateProgressView(this.contentEl, state);
+			return;
+		}
+
 		const wrappedCallbacks = this.wrapCallbacks(state);
 
 		switch (state.kind) {

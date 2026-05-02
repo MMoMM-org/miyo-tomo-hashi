@@ -455,6 +455,68 @@ describe("ExecutionModal — progress subview (state=running)", () => {
 		};
 	}
 
+	it("running→running with same records updates DOM in place (H4)", () => {
+		// Pre-fix code rebuilt contentEl on every store tick — N×5 element
+		// teardown+rebuild per iteration on Obsidian's main thread between
+		// awaits. The fast path detects same-records-different-index and
+		// updates in place. This test pins the in-place behavior by tagging
+		// the body element and verifying its identity survives the next
+		// tick.
+		const records = [record({ id: "I01" }), record({ id: "I02" })];
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set(running(records, 0));
+
+		const bodyBefore = modal.contentEl.querySelector(
+			".hashi-execution-modal-body",
+		) as HTMLElement | null;
+		expect(bodyBefore).not.toBeNull();
+		bodyBefore?.setAttribute("data-test-marker", "phase1");
+
+		// Advance index — same `records` array reference
+		exec.state.set(running(records, 1));
+
+		const bodyAfter = modal.contentEl.querySelector(
+			".hashi-execution-modal-body",
+		) as HTMLElement | null;
+		expect(bodyAfter).toBe(bodyBefore);
+		expect(bodyAfter?.getAttribute("data-test-marker")).toBe("phase1");
+
+		// Header text reflects the new index
+		const header = modal.contentEl.querySelector(
+			".hashi-execution-modal-header",
+		);
+		expect(header?.textContent).toContain("1 of 2");
+	});
+
+	it("running→running with a different records array does a full rebuild", () => {
+		// New run: records identity differs. Must rebuild from scratch
+		// (otherwise stale DOM rows from the previous run survive).
+		const records1 = [record({ id: "I01" })];
+		const records2 = [record({ id: "X01" }), record({ id: "X02" })];
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set(running(records1, 0));
+
+		const bodyBefore = modal.contentEl.querySelector(
+			".hashi-execution-modal-body",
+		);
+		bodyBefore?.setAttribute("data-test-marker", "phase1");
+
+		exec.state.set(running(records2, 0));
+
+		const bodyAfter = modal.contentEl.querySelector(
+			".hashi-execution-modal-body",
+		);
+		expect(bodyAfter).not.toBe(bodyBefore);
+		expect(bodyAfter?.getAttribute("data-test-marker")).toBeNull();
+		expect(
+			modal.contentEl.querySelectorAll(".hashi-execution-modal-row").length,
+		).toBe(2);
+	});
+
 	it("row glyphs advance as outcomes arrive", () => {
 		const records = [
 			record({ id: "I01" }),
