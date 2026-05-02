@@ -790,11 +790,15 @@ describe("TomoChatView — accessibility (PRD F5/AC7)", () => {
 		connectionStore.set({ kind: "disconnected" });
 	});
 
-	it("indicator has role=\"status\" and aria-live attributes", async () => {
+	it("indicator has aria-live attribute (no role=status — review M12)", async () => {
+		// M12: removed role="status" because its implicit aria-live=polite
+		// overrode the dynamic assertive escalation in some AT (JAWS,
+		// older VoiceOver), silently downgrading the "Disconnected"
+		// announcement that needs to interrupt.
 		const h = await mountView();
 		const ind = h.root.querySelector(".hashi-chat-view-indicator");
 		expect(ind).not.toBeNull();
-		expect(ind!.getAttribute("role")).toBe("status");
+		expect(ind!.getAttribute("role")).toBeNull();
 		expect(ind!.getAttribute("aria-live")).not.toBeNull();
 	});
 

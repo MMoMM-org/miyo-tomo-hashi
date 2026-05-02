@@ -199,11 +199,14 @@ export class TomoChatView extends ItemView {
 			cls: "hashi-chat-view-indicator",
 		});
 		// PRD F5/AC7 + F9/AC5 — screen-reader announcement contract for
-		// indicator state changes. `aria-live` is set on the indicator
-		// itself so the live-region attribute lives on the element whose
+		// indicator state changes. `aria-live` lives on the element whose
 		// text content changes; render() updates the live politeness based
 		// on severity (assertive for disconnected/error).
-		this.indicatorEl.setAttr("role", "status");
+		//
+		// M12 (review/spec-001): no `role="status"` — its implicit
+		// aria-live="polite" overrides the dynamic assertive escalation
+		// in some AT (JAWS, older VoiceOver), silently downgrading the
+		// "Disconnected" announcement that needs to interrupt.
 		this.indicatorEl.setAttr("aria-live", "polite");
 		const headerActions = header.createDiv({
 			cls: "hashi-chat-view-header-actions",
@@ -216,6 +219,12 @@ export class TomoChatView extends ItemView {
 		const zoomGroup = headerActions.createDiv({
 			cls: "hashi-chat-view-zoom-group",
 		});
+		// M14 (review/spec-001): SR users hear three isolated buttons
+		// without the structural context that they form a mutually-
+		// exclusive selector. role=group + aria-label gives the trio a
+		// single accessible name.
+		zoomGroup.setAttr("role", "group");
+		zoomGroup.setAttr("aria-label", "Terminal zoom");
 		this.zoomButtons.clear();
 		for (const level of ZOOM_LEVELS) {
 			const btn = zoomGroup.createEl("button", {

@@ -116,6 +116,12 @@ export function flushPending(session: TerminalSession): void {
 }
 
 function joinChunks(chunks: (Uint8Array | string)[]): string | Uint8Array {
+	// M11 (review/spec-001): single-chunk fast path. The dominant frame on
+	// a steady chat-output stream is one chunk; pre-fix code still
+	// allocated a fresh Uint8Array(total) and copied bytes into it. xterm's
+	// terminal.write accepts a single chunk directly. Zero-cost early
+	// return removes the wasted copy.
+	if (chunks.length === 1) return chunks[0]!;
 	// All-string fast path — common for terminal escape sequences and ASCII
 	// chat output, avoids a TextEncoder round-trip.
 	if (chunks.every((c): c is string => typeof c === "string")) {

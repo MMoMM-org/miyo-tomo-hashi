@@ -39,7 +39,12 @@ export class InstancePickerModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass("hashi-instance-picker");
-		contentEl.createEl("h2", { text: "Tomo instance" });
+		// M13 (review/spec-001): use Obsidian's titleEl so the dialog
+		// container's aria-labelledby chain wires up automatically.
+		// Pre-fix used `contentEl.createEl("h2", ...)` which bypassed
+		// titleEl entirely; the dialog's computed accessible name was
+		// empty depending on Obsidian's internal labeling.
+		this.titleEl.setText("Tomo instance");
 
 		const listEl = contentEl.createDiv({ cls: "hashi-instance-picker-list" });
 		// H6: announce async state transitions to assistive tech. The
