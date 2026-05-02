@@ -44,16 +44,27 @@ describe("validate", () => {
 		}
 	});
 
-	it("rejects schema_version '0' with a message naming the field", () => {
+	it("rejects schema_version '0' with PRD F2 'expected 1, got 0' message (M14)", () => {
 		const result = validate({ ...VALID_FIXTURE, schema_version: "0" });
 		expect(result.ok).toBe(false);
-		if (!result.ok) expect(result.message).toContain("schema_version");
+		if (!result.ok) {
+			// PRD F2 contract — the user-facing form must be self-explanatory
+			// with both expected and actual values, so it can drive the
+			// "upgrade Hashi" prompt without re-parsing AJV's generic msg.
+			expect(result.message).toBe(
+				"Schema version mismatch — expected 1, got 0",
+			);
+		}
 	});
 
-	it("rejects schema_version '2' with a message naming the field", () => {
+	it("rejects schema_version '2' with PRD F2 'expected 1, got 2' message (M14)", () => {
 		const result = validate({ ...VALID_FIXTURE, schema_version: "2" });
 		expect(result.ok).toBe(false);
-		if (!result.ok) expect(result.message).toContain("schema_version");
+		if (!result.ok) {
+			expect(result.message).toBe(
+				"Schema version mismatch — expected 1, got 2",
+			);
+		}
 	});
 
 	it("rejects schema_version missing with a message naming the field", () => {

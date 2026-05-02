@@ -28,16 +28,48 @@ export function validate(raw: unknown): ValidationOutcome {
 		return { ok: true, data: raw as unknown as InstructionSet };
 	}
 	const errors = validateInstructionSet.errors ?? [];
-	const message = formatErrors(errors);
+	const message = formatErrors(errors, raw);
 	return { ok: false, message };
 }
 
-function formatErrors(errors: ErrorObject[]): string {
+function formatErrors(errors: ErrorObject[], raw: unknown): string {
 	if (errors.length === 0) return "schema validation failed";
-	// Prefer the first error's instancePath + message. If multiple errors
-	// share a common cause, joining them produces noise — keep it tight.
 	const first = errors[0];
 	if (!first) return "schema validation failed";
+
+	// M14: PRD F2 contract. Schema-version mismatch is the one failure
+	// mode that has prescribed user-facing wording — it drives the
+	// "upgrade Hashi" prompt downstream, so callers parse the literal
+	// "Schema version mismatch — expected X, got Y" form. AJV's generic
+	// "must be equal to constant" doesn't carry the actual value.
+	if (first.keyword === "const" && first.instancePath === "/schema_version") {
+		const expected = stringifyScalar(
+			(first.params as { allowedValue?: unknown }).allowedValue,
+			"1",
+		);
+		const actualRaw = (raw as { schema_version?: unknown } | null)
+			?.schema_version;
+		const actual = stringifyScalar(actualRaw, "undefined");
+		return `Schema version mismatch — expected ${expected}, got ${actual}`;
+	}
+
 	const path = first.instancePath || "(root)";
 	return `${path} ${first.message ?? "is invalid"}`;
+}
+
+// Format a primitive value safely; objects/arrays return JSON.stringify
+// rather than the default `[object Object]`. Keeps error messages
+// useful without tripping no-base-to-string.
+function stringifyScalar(value: unknown, fallback: string): string {
+	if (value === undefined) return fallback;
+	if (value === null) return "null";
+	if (typeof value === "string") return value;
+	if (typeof value === "number") return Number.prototype.toString.call(value);
+	if (typeof value === "boolean") return value ? "true" : "false";
+	if (typeof value === "bigint") return BigInt.prototype.toString.call(value);
+	try {
+		return JSON.stringify(value);
+	} catch {
+		return fallback;
+	}
 }

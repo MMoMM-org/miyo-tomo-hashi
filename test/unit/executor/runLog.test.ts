@@ -136,6 +136,19 @@ describe("RunLogWriter.start", () => {
 // ---------------------------------------------------------------------------
 
 describe("RunLogWriter.finalize — header", () => {
+	it("includes log_format_version in frontmatter (M16)", async () => {
+		// Future tooling that parses run-log frontmatter (Tomo, dashboards,
+		// re-run helpers) gets a clear contract version. Cheap to add now;
+		// expensive to back-port if the format evolves silently.
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const filePath = await writer.start(makeStartMeta());
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(filePath);
+
+		expect(content).toMatch(/^---[\s\S]*?\nlog_format_version:\s*1\b/m);
+	});
+
 	it("includes start and end timestamps in frontmatter", async () => {
 		const vault = new FakeVaultFS();
 		const writer = new RunLogWriter(vault);

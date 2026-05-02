@@ -18,6 +18,14 @@ import { buildRunLogFilename, resolveCollisionFreePath } from "../util/filenames
 
 export type RunLogRetention = "always" | "only-after-failed";
 
+/**
+ * Bump on any breaking change to the run-log frontmatter or table shape
+ * (review M16). Future tooling (Tomo, Kokoro, dashboards) keys on this
+ * to detect and adapt to format changes; missing it would force silent
+ * parse-on-best-effort.
+ */
+const LOG_FORMAT_VERSION = 1;
+
 export interface RunLogStartMeta {
 	readonly inboxFolder: string;
 	readonly startedAt: Date;
@@ -178,6 +186,7 @@ function renderFrontmatter(
 
 	return [
 		"---",
+		`log_format_version: ${LOG_FORMAT_VERSION}`,
 		`started: ${startIso}`,
 		`ended:   ${endIso}`,
 		`mode: ${meta.mode}`,

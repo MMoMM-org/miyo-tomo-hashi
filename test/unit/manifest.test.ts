@@ -23,6 +23,32 @@ describe("manifest.json — platform constraints", () => {
 	});
 });
 
+describe("manifest.json — version (M15)", () => {
+	interface ManifestWithVersion extends Manifest {
+		version: string;
+	}
+
+	function loadVersionedManifest(): ManifestWithVersion {
+		return loadManifest() as ManifestWithVersion;
+	}
+
+	it("declares a non-zero semver matching package.json (M15)", () => {
+		const m = loadVersionedManifest();
+		// Pre-fix: 0.0.0 — pre-release placeholder. PRD targets v0.1.0
+		// as the first published version. Must be a valid semver and
+		// match package.json so Obsidian's plugin manager can install
+		// and update consistently.
+		expect(m.version).toMatch(/^\d+\.\d+\.\d+$/);
+		expect(m.version).not.toBe("0.0.0");
+
+		const pkgPath = resolve(__dirname, "../../package.json");
+		const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+			version: string;
+		};
+		expect(m.version).toBe(pkg.version);
+	});
+});
+
 describe("manifest.json — Obsidian community-plugin review constraints", () => {
 	// All four assertions below mirror the rejection points the Obsidian
 	// reviewer bot raised on the sibling plugin obsidian-archivist (PR
