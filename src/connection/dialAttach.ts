@@ -40,11 +40,30 @@ const SOCKET_PATH: string =
 		? "\\\\.\\pipe\\docker_engine"
 		: "/var/run/docker.sock";
 
-export function dialAttach(containerId: string): Promise<Duplex> {
+/**
+ * Connection target for dialAttach. Production uses a Unix-socket path
+ * (or named pipe on Windows). Tests can pass `{ host, port }` to point
+ * at a local TCP `http.Server` and exercise the full request → 101 →
+ * upgrade path without Docker (review H3). Sandboxed test environments
+ * block `listen()` on Unix sockets, so TCP loopback is the portable
+ * test transport.
+ */
+export type DialTarget =
+	| { readonly socketPath: string }
+	| { readonly host: string; readonly port: number };
+
+const DEFAULT_TARGET: DialTarget = { socketPath: SOCKET_PATH };
+
+export function dialAttach(
+	containerId: string,
+	target: DialTarget = DEFAULT_TARGET,
+): Promise<Duplex> {
 	return new Promise<Duplex>((resolve, reject) => {
 		const params = "stream=1&stdout=1&stderr=1&stdin=1&logs=0";
 		const req = http.request({
-			socketPath: SOCKET_PATH,
+			...("socketPath" in target
+				? { socketPath: target.socketPath }
+				: { host: target.host, port: target.port }),
 			path: `/containers/${containerId}/attach?${params}`,
 			method: "POST",
 			headers: {

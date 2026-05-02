@@ -126,7 +126,12 @@ describe("Hashi e2e — happy path + reconnect + chosen-instance-gone", () => {
 
 		await conn.connect(ours!);
 		expect(conn.state.kind).toBe("connected");
-		expect(settings.chosenInstanceName).toBe(c.id);
+		// H2 (review/spec-001): post-FS2 rework persists the stable
+		// instance-NAME label, not the volatile container ID. Pre-fix this
+		// asserted `c.id` (64-char hex) which can never equal the label
+		// "e2e-test" — silently green only because the live test was
+		// never being run in CI. Manual runs would have failed unconditionally.
+		expect(settings.chosenInstanceName).toBe("e2e-test");
 		expect(observed).toContain("attaching");
 		expect(observed).toContain("connected");
 
