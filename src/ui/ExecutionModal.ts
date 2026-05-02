@@ -64,12 +64,31 @@ export class ExecutionModal extends Modal {
 	}
 
 	override onClose(): void {
+		// Safety net for native dismissal (review H2): Obsidian's framework
+		// Scope handles Esc and the X chrome before any contentEl listener
+		// fires — only this lifecycle hook runs. If a run is gated at
+		// proceedResolve (confirm-mode preview) or mid-execution, missing
+		// the cancel here leaves the lock held and proceedResolve unresolved
+		// until plugin reload. cancel() is idempotent.
+		const needCancel =
+			this.currentState.kind === "previewing" ||
+			this.currentState.kind === "running";
+
 		this.contentEl.removeEventListener("keydown", this.escHandler);
 		if (this.unsubscribe !== null) {
 			this.unsubscribe();
 			this.unsubscribe = null;
 		}
 		this.contentEl.empty();
+
+		if (needCancel) {
+			this.executor.cancel();
+			// Drive the post-cancel idle transition through the consumer's
+			// onClose hook so the executor doesn't park at `summary` with
+			// no modal to surface it. Treats native dismiss as equivalent
+			// to clicking Close on the summary view.
+			this.callbacks.onClose?.();
+		}
 	}
 
 	private render(state: RunState): void {

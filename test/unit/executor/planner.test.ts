@@ -348,14 +348,54 @@ describe("computeRemaining — summary strings", () => {
 		expect(records[0]?.summary).toContain("notes/note.md");
 	});
 
-	it("link_to_moc summary contains target_moc and line_to_add", () => {
-		const actions: Action[] = [makeLinkToMoc("I01", "moc/MyMOC.md", "- [[note]]")];
+	it("link_to_moc summary contains target_moc but NOT line_to_add (privacy H1)", () => {
+		// Constitution L2 Privacy: audit log records metadata only — never the
+		// content of an inserted line. The summary flows verbatim into the
+		// run log table, so it must carry path/structural metadata only.
+		const actions: Action[] = [makeLinkToMoc("I01", "moc/MyMOC.md", "- [[secret note]]")];
 		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
 
 		const { records } = computeRemaining(sources);
 
 		expect(records[0]?.summary).toContain("moc/MyMOC.md");
-		expect(records[0]?.summary).toContain("- [[note]]");
+		expect(records[0]?.summary).not.toContain("- [[secret note]]");
+		expect(records[0]?.summary).not.toContain("secret note");
+	});
+
+	it("add_relationship summary contains paths and marker but NOT line content (privacy H1)", () => {
+		const actions: Action[] = [{
+			action: "add_relationship",
+			id: "I01",
+			target_moc_path: "moc/MyMOC.md",
+			marker: "<--",
+			line: "- [[secret relationship]]",
+		} as Action];
+		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
+
+		const { records } = computeRemaining(sources);
+
+		expect(records[0]?.summary).toContain("moc/MyMOC.md");
+		expect(records[0]?.summary).toContain("<--");
+		expect(records[0]?.summary).not.toContain("secret relationship");
+	});
+
+	it("update_tracker summary contains path and field but NOT value (privacy H1)", () => {
+		const actions: Action[] = [{
+			action: "update_tracker",
+			id: "I01",
+			daily_note_path: "daily/2026-05-01.md",
+			date: "2026-05-01",
+			field: "weight_kg",
+			value: 99.9,
+			syntax: "inline_field",
+		} as Action];
+		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
+
+		const { records } = computeRemaining(sources);
+
+		expect(records[0]?.summary).toContain("daily/2026-05-01.md");
+		expect(records[0]?.summary).toContain("weight_kg");
+		expect(records[0]?.summary).not.toContain("99.9");
 	});
 });
 

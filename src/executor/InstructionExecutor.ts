@@ -147,7 +147,16 @@ export class InstructionExecutor {
 		const perFileFailures = new Map<string, string>();
 
 		for (const sourcePath of sourcePaths) {
-			const raw = await vault.readJSON(sourcePath);
+			let raw: unknown;
+			try {
+				raw = await vault.readJSON(sourcePath);
+			} catch (err) {
+				// Review H3: a single malformed JSON source must not abort
+				// the whole run. Record on the same channel as schema-fail.
+				const message = err instanceof Error ? err.message : String(err);
+				perFileFailures.set(sourcePath, `read failed: ${message}`);
+				continue;
+			}
 			const outcome = this.validator.validate(raw);
 			if (outcome.ok) {
 				validSources.push({

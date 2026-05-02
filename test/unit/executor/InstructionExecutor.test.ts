@@ -427,6 +427,46 @@ describe("InstructionExecutor — cancellation", () => {
 // ---------------------------------------------------------------------------
 
 describe("InstructionExecutor — validation failure in batch", () => {
+	it("malformed JSON in one source records as per-file failure; other sources proceed (H3)", async () => {
+		// Before the H3 fix, an uncaught JSON.parse throw aborted the entire
+		// batch — one bad file killed the run. The fix wraps readJSON and
+		// records the error as a per-file failure on the same channel as
+		// schema-fail.
+		const vault = new FakeVaultFS();
+		const validPath = `${INBOX}/a_instructions.json`;
+		const malformedPath = `${INBOX}/b_instructions.json`;
+		const validSet = makeInstructionSet([
+			makeCreateMoc("I01", `${INBOX}/moc-malformed.md`),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(validPath, JSON.stringify(validSet, null, 2) + "\n");
+		// Intentionally malformed: JSON.parse will throw SyntaxError
+		await vault.create(malformedPath, "{ not valid json");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note");
+
+		const notify = vi.fn();
+		const store = new Store<RunState>({ kind: "idle" });
+		const executor = new InstructionExecutor({
+			vault,
+			validator: makeOkValidator(validSet),
+			hookRunner: makeHookRunner(),
+			settings: makeSettings(),
+			clock: fixedClock,
+			store,
+			notify,
+		});
+
+		// Must NOT throw
+		await expect(executor.execute({ kind: "batch" })).resolves.toBeDefined();
+
+		// Valid file's action should have been applied
+		const updated = await vault.readJSON<InstructionSet>(validPath);
+		const i01 = updated.actions.find((a) => a.id === "I01");
+		expect(i01?.applied).toBe(true);
+	});
+
 	it("invalid file's actions are skipped; other files in batch proceed", async () => {
 		const vault = new FakeVaultFS();
 		const validPath = `${INBOX}/a_instructions.json`;

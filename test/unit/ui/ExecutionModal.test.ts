@@ -312,6 +312,106 @@ describe("ExecutionModal — preview subview (confirm mode)", () => {
 	});
 });
 
+// ---------------------------------------------------------------------------
+// H2 — onClose lifecycle: native dismiss must drain the executor
+// ---------------------------------------------------------------------------
+
+describe("ExecutionModal — onClose lifecycle (H2: native-dismiss safety)", () => {
+	let app: App;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		app = new App();
+	});
+
+	it("calls executor.cancel when native onClose fires while previewing", () => {
+		// Obsidian's framework Scope handles Esc and the X chrome before
+		// any of our contentEl listeners fire — only the lifecycle onClose
+		// runs. If a run is gated at proceedResolve, missing this drain
+		// leaves the lock held until plugin reload.
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set({
+			kind: "previewing",
+			mode: "confirm",
+			records: [record()],
+			remaining: 1,
+			total: 1,
+		});
+
+		modal.onClose();
+
+		expect(exec.cancel).toHaveBeenCalledTimes(1);
+	});
+
+	it("calls executor.cancel when native onClose fires while running", () => {
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set({
+			kind: "running",
+			mode: "confirm",
+			records: [record()],
+			currentIndex: 0,
+		});
+
+		modal.onClose();
+
+		expect(exec.cancel).toHaveBeenCalledTimes(1);
+	});
+
+	it("does NOT call executor.cancel when native onClose fires from summary", () => {
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [record({ outcome: { kind: "applied" } })],
+			counts: counts({ applied: 1 }),
+			logFilePath: null,
+		});
+
+		modal.onClose();
+
+		expect(exec.cancel).not.toHaveBeenCalled();
+	});
+
+	it("does NOT call executor.cancel when native onClose fires from idle", () => {
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+
+		modal.onClose();
+
+		expect(exec.cancel).not.toHaveBeenCalled();
+	});
+
+	it("forwards callbacks.onClose when canceling so consumer can drive idle", () => {
+		// After cancel, the executor transitions to summary with no modal to
+		// close it — main.ts's onClose hook drives the idle transition.
+		// Mirror that wiring here so the executor doesn't end up parked at
+		// summary forever.
+		const onCloseCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, { onClose: onCloseCb });
+		modal.onOpen();
+		exec.state.set({
+			kind: "previewing",
+			mode: "confirm",
+			records: [record()],
+			remaining: 1,
+			total: 1,
+		});
+
+		modal.onClose();
+
+		expect(exec.cancel).toHaveBeenCalledTimes(1);
+		expect(onCloseCb).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("ExecutionModal — preview subview (auto-run, state=running)", () => {
 	let app: App;
 
