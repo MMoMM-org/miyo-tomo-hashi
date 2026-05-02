@@ -27,9 +27,13 @@ import { Plugin as PluginMock } from "../../__mocks__/obsidian";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+	registerExecutorFileMenu,
 	registerFileMenu,
+	type ExecutorFileMenuDeps,
 	type FileMenuDeps,
 } from "../../../src/commands/fileMenu";
+import { DEFAULT_SETTINGS } from "../../../src/types/index";
+import type { Invocation } from "../../../src/executor/InstructionExecutor";
 
 function asPlugin(stub: PluginMock): Plugin {
 	return stub as unknown as Plugin;
@@ -346,5 +350,187 @@ describe("registerFileMenu", () => {
 		expect(input.value).toBe("tail@a.md ");
 
 		input.remove();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// registerExecutorFileMenu — H6 (review/spec-002)
+//
+// Pre-fix: this entry was the only untested vault-mutation trigger in the
+// codebase. Existing main.test.ts only asserted that registerEvent was
+// called twice — never exercised the async sibling-lookup gating, the
+// menu-item shape, or the executor.execute dispatch.
+//
+// Covers PRD F1 ACs:
+//   - `.md` peer with sibling `<stem>.json`     → entry present
+//   - `.md` with no sibling                     → entry absent
+//   - `.json` file                              → entry absent
+//   - any other extension                       → entry absent
+//   - clicking entry → executor.execute({ kind: "single-file", sourcePath })
+// ---------------------------------------------------------------------------
+
+const EXEC_ENTRY_LABEL = "Execute instructions…";
+
+type ExecutorFileMenuHandler = (
+	menu: Menu,
+	file: TAbstractFile,
+	source: string,
+) => void;
+
+function recoverExecutorHandler(plugin: PluginMock): ExecutorFileMenuHandler {
+	const calls = vi.mocked(plugin.app.workspace.on).mock.calls as unknown[][];
+	const call = calls.find((args) => args[0] === "file-menu");
+	if (call === undefined) {
+		throw new Error(
+			"registerExecutorFileMenu did not register a 'file-menu' handler",
+		);
+	}
+	return call[1] as ExecutorFileMenuHandler;
+}
+
+async function driveExecutorMenu(
+	plugin: PluginMock,
+	file: TAbstractFile,
+	source = "file-explorer-context-menu",
+): Promise<MenuWithItems> {
+	const handler = recoverExecutorHandler(plugin);
+	const menu = new Menu() as MenuWithItems;
+	handler(menu, file, source);
+	// The executor handler does an async vault.exists check before
+	// addItem — flush the microtask queue so the addItem call (if any)
+	// has completed by the time the test asserts.
+	await Promise.resolve();
+	await Promise.resolve();
+	return menu;
+}
+
+interface FakeExistsVault {
+	exists: ReturnType<typeof vi.fn<(path: string) => Promise<boolean>>>;
+}
+
+function makeVault(present: ReadonlySet<string> = new Set()): FakeExistsVault {
+	return {
+		exists: vi.fn(async (path: string) => present.has(path)),
+	};
+}
+
+function makeExecutorDeps(
+	executeImpl: (inv: Invocation) => Promise<unknown> = async () => undefined,
+	vaultPresent: ReadonlySet<string> = new Set(),
+): { deps: ExecutorFileMenuDeps; execute: ReturnType<typeof vi.fn>; vault: FakeExistsVault } {
+	const execute = vi.fn(executeImpl);
+	const vault = makeVault(vaultPresent);
+	return {
+		execute,
+		vault,
+		deps: {
+			executor: { execute } as ExecutorFileMenuDeps["executor"],
+			vault: vault as ExecutorFileMenuDeps["vault"],
+			settings: DEFAULT_SETTINGS,
+		},
+	};
+}
+
+describe("registerExecutorFileMenu (H6)", () => {
+	let plugin: PluginMock;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		plugin = new PluginMock();
+	});
+
+	it("registers a 'file-menu' handler via plugin.registerEvent", () => {
+		const { deps } = makeExecutorDeps();
+		registerExecutorFileMenu(asPlugin(plugin), deps);
+		expect(plugin.registerEvent).toHaveBeenCalledTimes(1);
+		expect(plugin.app.workspace.on).toHaveBeenCalledWith(
+			"file-menu",
+			expect.any(Function),
+		);
+	});
+
+	it(".md peer with existing .json sibling → entry added", async () => {
+		const present = new Set(["folder/run_instructions.json"]);
+		const { deps } = makeExecutorDeps(undefined, present);
+		registerExecutorFileMenu(asPlugin(plugin), deps);
+
+		const menu = await driveExecutorMenu(
+			plugin,
+			fakeFile("folder/run_instructions.md"),
+		);
+
+		expect(menu.items.length).toBe(1);
+		expect(menu.items[0]?.setTitle).toHaveBeenCalledWith(EXEC_ENTRY_LABEL);
+	});
+
+	it(".md without a .json sibling → no entry", async () => {
+		const { deps } = makeExecutorDeps(); // empty vault
+		registerExecutorFileMenu(asPlugin(plugin), deps);
+
+		const menu = await driveExecutorMenu(
+			plugin,
+			fakeFile("notes/just-a-note.md"),
+		);
+
+		expect(menu.items.length).toBe(0);
+	});
+
+	it(".json file → no entry (user does not interact with the JSON directly)", async () => {
+		// Even if the .json exists, opening the file menu on the .json
+		// itself must not surface the entry.
+		const present = new Set(["folder/run_instructions.json"]);
+		const { deps } = makeExecutorDeps(undefined, present);
+		registerExecutorFileMenu(asPlugin(plugin), deps);
+
+		const menu = await driveExecutorMenu(
+			plugin,
+			fakeFile("folder/run_instructions.json"),
+		);
+
+		expect(menu.items.length).toBe(0);
+	});
+
+	it("non-.md / non-.json extension → no entry", async () => {
+		const { deps } = makeExecutorDeps();
+		registerExecutorFileMenu(asPlugin(plugin), deps);
+
+		const menu = await driveExecutorMenu(
+			plugin,
+			fakeFile("folder/notes.pdf"),
+		);
+
+		expect(menu.items.length).toBe(0);
+	});
+
+	it("clicking the entry calls executor.execute({kind:'single-file', sourcePath})", async () => {
+		const present = new Set(["folder/run_instructions.json"]);
+		const { deps, execute } = makeExecutorDeps(undefined, present);
+		registerExecutorFileMenu(asPlugin(plugin), deps);
+
+		const menu = await driveExecutorMenu(
+			plugin,
+			fakeFile("folder/run_instructions.md"),
+		);
+		expect(menu.items.length).toBe(1);
+
+		const onClick = recoverOnClick(menu);
+		await onClick();
+
+		expect(execute).toHaveBeenCalledTimes(1);
+		expect(execute).toHaveBeenCalledWith({
+			kind: "single-file",
+			sourcePath: "folder/run_instructions.json",
+		});
+	});
+
+	it("does not invoke executor.execute during registration or menu construction", async () => {
+		const present = new Set(["folder/run_instructions.json"]);
+		const { deps, execute } = makeExecutorDeps(undefined, present);
+		registerExecutorFileMenu(asPlugin(plugin), deps);
+
+		await driveExecutorMenu(plugin, fakeFile("folder/run_instructions.md"));
+
+		// Entry exists but no click yet — execute must not have been called.
+		expect(execute).not.toHaveBeenCalled();
 	});
 });
