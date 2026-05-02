@@ -74,10 +74,21 @@ export function dialAttach(
 			},
 		});
 
+		// M2 (review/spec-001): 10-second upgrade timeout. If the daemon
+		// accepts the TCP connection but stalls before completing the 101
+		// handshake (mid-restart, partial response, stuck upgrade), pre-fix
+		// behavior was to hang indefinitely — neither resolve nor reject
+		// fired. setTimeout fires the request's `error` event with a
+		// timeout error which routes to reject() below.
+		req.setTimeout(10_000, () => {
+			req.destroy(new Error("dialAttach: Docker upgrade timeout"));
+		});
+
 		// 'upgrade' fires after Docker responds with 101 Switching Protocols.
 		// `head` may carry initial bytes already received with the response —
 		// unshift them back onto the socket so consumers see them in order.
 		req.on("upgrade", (_res, socket, head) => {
+			req.setTimeout(0); // clear the timeout once upgraded
 			if (head.length > 0) socket.unshift(head);
 			resolve(socket);
 		});

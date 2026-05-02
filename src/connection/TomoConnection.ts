@@ -136,6 +136,29 @@ export class TomoConnection {
 		return this.currentState;
 	}
 
+	/**
+	 * Persist `chosenInstanceName` as a best-effort save (review M5). The
+	 * pre-fix code did `await this.persist(...)` between `installSession()`
+	 * and `setState({kind:"connected"})` — if persist threw, the live
+	 * AttachSession was wired but `currentState` was forced to
+	 * `disconnected` by the surrounding catch, leaving a hybrid state
+	 * where `write()` and `forceReconnect()` both behaved wrong. Now: a
+	 * persist failure logs and continues; the session install + state
+	 * transition own correctness. The user is connected; their next
+	 * reload just won't auto-reconnect to this instance until they pick
+	 * again.
+	 */
+	private async persistChosenInstanceBestEffort(
+		name: string | null,
+	): Promise<void> {
+		this.settings.chosenInstanceName = name;
+		try {
+			await this.persist(this.settings);
+		} catch (err: unknown) {
+			console.warn("[hashi] failed to persist chosenInstanceName:", err);
+		}
+	}
+
 	get instanceName(): string | null {
 		const s = this.currentState;
 		if (s.kind === "connected") return s.instance.name ?? s.instance.shortId;
@@ -169,9 +192,9 @@ export class TomoConnection {
 			// FS2: persist by stable instance name so we survive container
 			// stop+start (the ID changes, the name label doesn't). Falls back
 			// to leaving chosenInstanceName null when the target has no name —
-			// rare; production Tomo always sets the label.
-			this.settings.chosenInstanceName = target.name;
-			await this.persist(this.settings);
+			// rare; production Tomo always sets the label. Best-effort save
+			// per M5 — connect succeeds even if persistence fails.
+			await this.persistChosenInstanceBestEffort(target.name);
 			this.setState({ kind: "connected", instance: target });
 		} catch (err: unknown) {
 			if (epoch !== this.epoch) return;
@@ -219,8 +242,7 @@ export class TomoConnection {
 				return;
 			}
 			this.installSession(session, live);
-			this.settings.chosenInstanceName = live.name;
-			await this.persist(this.settings);
+			await this.persistChosenInstanceBestEffort(live.name);
 			this.setState({ kind: "connected", instance: live });
 		} catch (err: unknown) {
 			if (epoch !== this.epoch) return;
@@ -260,8 +282,7 @@ export class TomoConnection {
 				return;
 			}
 			this.installSession(session, target);
-			this.settings.chosenInstanceName = target.name;
-			await this.persist(this.settings);
+			await this.persistChosenInstanceBestEffort(target.name);
 			this.setState({ kind: "connected", instance: target });
 		} catch (err: unknown) {
 			if (epoch !== this.epoch) return;
@@ -461,8 +482,7 @@ export class TomoConnection {
 						return false;
 					}
 					this.installSession(session, live);
-					this.settings.chosenInstanceName = live.name;
-					await this.persist(this.settings);
+					await this.persistChosenInstanceBestEffort(live.name);
 					this.setState({ kind: "connected", instance: live });
 					return true;
 				} catch (err: unknown) {

@@ -216,6 +216,11 @@ export async function attach(id: string): Promise<AttachSession> {
 	const raw = await dialAttach(id);
 
 	let stdoutStream: Readable;
+	// M3 (review/spec-001): captured for explicit destroy() in close(). On
+	// the non-TTY branch we own the demuxed PassThroughs; without explicit
+	// teardown they sit half-open until GC, leaking one stream object pair
+	// per reconnect cycle.
+	let demuxedStreams: { stdoutPT: PassThrough; stderrPT: PassThrough } | null = null;
 	if (tty) {
 		stdoutStream = raw;
 	} else {
@@ -228,6 +233,7 @@ export async function attach(id: string): Promise<AttachSession> {
 		});
 		docker.modem.demuxStream(raw, stdoutPT, stderrPT);
 		stdoutStream = stdoutPT;
+		demuxedStreams = { stdoutPT, stderrPT };
 	}
 
 	const stdinStream: Writable = raw;
@@ -259,6 +265,12 @@ export async function attach(id: string): Promise<AttachSession> {
 			if (closed) return;
 			fire("user");
 			raw.destroy();
+			// M3: explicit teardown of the demuxed PassThroughs so they don't
+			// linger in a half-open state once the raw socket is gone.
+			if (demuxedStreams !== null) {
+				demuxedStreams.stdoutPT.destroy();
+				demuxedStreams.stderrPT.destroy();
+			}
 		},
 		onClose(cb): void {
 			listener = cb;
