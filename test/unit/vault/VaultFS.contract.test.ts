@@ -33,6 +33,22 @@ export function runContractTests(makeVaultFS: () => VaultFS): void {
     });
   });
 
+  describe("cachedRead round-trip (L8)", () => {
+    it("returns the same content as read for a freshly-written file", async () => {
+      const vault = makeVaultFS();
+      await vault.create("notes/cached.md", "hello\nworld");
+      const cached = await vault.cachedRead("notes/cached.md");
+      const direct = await vault.read("notes/cached.md");
+      expect(cached).toBe(direct);
+      expect(cached).toBe("hello\nworld");
+    });
+
+    it("rejects when called on a path that does not exist", async () => {
+      const vault = makeVaultFS();
+      await expect(vault.cachedRead("never-created.md")).rejects.toThrow();
+    });
+  });
+
   describe("readJSON round-trip", () => {
     it("readJSON parses JSON written with create", async () => {
       const vault = makeVaultFS();
@@ -113,6 +129,18 @@ export function runContractTests(makeVaultFS: () => VaultFS): void {
       const raw = await vault.read(path);
       const expected = JSON.stringify({ x: 2 }, null, 2) + "\n";
       expect(raw).toBe(expected);
+    });
+
+    // L14: Pre-fix the contract didn't pin behavior on a missing file.
+    // FakeVaultFS silently fell back to empty-string parse; ObsidianVaultFS
+    // throws. A future refactor in production code that called processJSON
+    // before create() would pass tests against the fake and break against
+    // real Obsidian. Lock it down: both adapters must reject.
+    it("rejects when called on a path that does not exist", async () => {
+      const vault = makeVaultFS();
+      await expect(
+        vault.processJSON<{ x: number }>("never-created.json", (json) => json),
+      ).rejects.toThrow();
     });
   });
 
@@ -221,6 +249,11 @@ function makeBrokenStub(overrides: Partial<VaultFS>): VaultFS {
 
   const base: VaultFS = {
     read: vi.fn(async (path: string) => {
+      const v = store.get(path);
+      if (v === undefined) throw new Error(`Not found: ${path}`);
+      return v;
+    }),
+    cachedRead: vi.fn(async (path: string) => {
       const v = store.get(path);
       if (v === undefined) throw new Error(`Not found: ${path}`);
       return v;

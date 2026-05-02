@@ -27,6 +27,14 @@ export class ObsidianVaultFS implements VaultFS {
     return await this.app.vault.read(file);
   }
 
+  async cachedRead(path: string): Promise<string> {
+    // L8: prefer Obsidian's editor-aware read for pre-flight checks. If
+    // the file is open in an editor, returns the in-memory content
+    // (cheaper than disk); otherwise falls through to a normal read.
+    const file = this.requireFile(path);
+    return await this.app.vault.cachedRead(file);
+  }
+
   async readJSON<T = unknown>(path: string): Promise<T> {
     const text = await this.read(path);
     return JSON.parse(text) as T;
@@ -101,12 +109,14 @@ export class ObsidianVaultFS implements VaultFS {
   }
 
   async createFolder(path: string): Promise<void> {
-    try {
-      await this.app.vault.createFolder(path);
-    } catch (err) {
-      const message = (err as { message?: string } | null)?.message ?? "";
-      if (!message.includes("already exists")) throw err;
-    }
+    // L5: pre-check via getAbstractFileByPath — Obsidian doesn't expose a
+    // typed error code for "folder already exists", and the message-string
+    // match was fragile across locales / Obsidian versions. The
+    // getAbstractFileByPath probe is cheap (metadata-only) and lets the
+    // catch only fire on real failure.
+    const existing = this.app.vault.getAbstractFileByPath(path);
+    if (existing !== null) return;
+    await this.app.vault.createFolder(path);
   }
 
   async trash(path: string): Promise<void> {

@@ -1,3 +1,16 @@
+/**
+ * paths — vault-relative path safety helpers (the path-safety port).
+ *
+ * Single source of truth for the validation pipeline that every
+ * vault-mutating action runs before touching the filesystem:
+ *   schema → normalize → contain → denyList → payloadGuard → execute
+ * (PRD F9). Callers: InstructionExecutor (vault writes), action
+ * handlers, FsHookLoader (hooks dir resolution). Each helper is pure
+ * and synchronous so the executor can pre-flight without I/O.
+ *
+ * Review L15 — file-level "why" header per Constitution L2.
+ */
+
 import { normalizePath } from "obsidian";
 
 export type SafetyResult =

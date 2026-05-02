@@ -52,6 +52,10 @@ type BufferedEntry =
 			// two outcomes for one action. Now stays a single row with the
 			// hook reason concatenated into the error column.
 			readonly afterHookFailure?: { readonly reason: string };
+			// Free-form note from a hook's "messages" outcome (review L11).
+			// Pre-fix these went to console only; users had no way to diagnose
+			// hook info/warnings from the run log.
+			readonly hookNote?: string;
 	  }
 	| { readonly kind: "validation"; readonly failure: ValidationFailure };
 
@@ -81,7 +85,10 @@ export class RunLogWriter {
 
 	appendRecord(
 		record: ActionRecord,
-		opts?: { afterHookFailure?: { reason: string } },
+		opts?: {
+			afterHookFailure?: { reason: string };
+			hookNote?: string;
+		},
 	): void {
 		this.entries.push({
 			kind: "record",
@@ -89,6 +96,7 @@ export class RunLogWriter {
 			...(opts?.afterHookFailure !== undefined
 				? { afterHookFailure: opts.afterHookFailure }
 				: {}),
+			...(opts?.hookNote !== undefined ? { hookNote: opts.hookNote } : {}),
 		});
 	}
 
@@ -297,11 +305,16 @@ function renderEntryRow(
 	// because the after-hook ran AFTER the vault commit and doesn't
 	// invalidate it; the failure is recorded but does not flip the row's
 	// outcome.
-	const error = entry.afterHookFailure !== undefined
-		? (baseError !== ""
-			? `${baseError}; after-hook failed: ${entry.afterHookFailure.reason}`
-			: `after-hook failed: ${entry.afterHookFailure.reason}`)
-		: baseError;
+	let error = baseError;
+	if (entry.afterHookFailure !== undefined) {
+		const hookErr = `after-hook failed: ${entry.afterHookFailure.reason}`;
+		error = error !== "" ? `${error}; ${hookErr}` : hookErr;
+	}
+	if (entry.hookNote !== undefined && entry.hookNote !== "") {
+		// L11: surface hook info/warnings from "messages" outcomes.
+		const note = `hook note: ${entry.hookNote}`;
+		error = error !== "" ? `${error}; ${note}` : note;
+	}
 
 	const idCell = renderIdCell(id, peerHeadings);
 	return `| ${idCell} | ${kind} | ${escapeCell(summary)} | ${escapeCell(outcomeStr + depNote)} | ${escapeCell(error)} |`;

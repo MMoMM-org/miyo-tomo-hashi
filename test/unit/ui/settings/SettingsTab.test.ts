@@ -548,6 +548,8 @@ describe("SettingsTab — instruction executor controls", () => {
 
 		const savedKeys = new Set(Object.keys(plugin.settings));
 		const expectedKeys = new Set<string>([
+			// meta (review L3 — schema_version for future migration)
+			"settings_version",
 			// 001 fields
 			"chosenInstanceName",
 			"zoomLevel",

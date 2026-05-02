@@ -26,6 +26,12 @@ export class FakeVaultFS implements VaultFS {
     return v;
   }
 
+  // L8: no caching layer in tests — alias to read. Production
+  // ObsidianVaultFS.cachedRead delegates to app.vault.cachedRead.
+  async cachedRead(path: string): Promise<string> {
+    return this.read(path);
+  }
+
   async readJSON<T = unknown>(path: string): Promise<T> {
     return JSON.parse(await this.read(path)) as T;
   }

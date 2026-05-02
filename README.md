@@ -206,6 +206,15 @@ The `ctx` shape is the **stable v0.1 hook API**. Future Hashi versions
 will only add fields (additive, non-breaking). Removing or renaming a
 `ctx` field would be a breaking change and ride a major version bump.
 
+**Authoring caveat — module-level state in helpers.** Hashi evicts the
+hook entry-point file from `require.cache` on every run so edits are
+picked up without a plugin reload. Helpers transitively imported from
+your hook (e.g., `_helper.cjs`, `node:crypto`) stay cached for the
+session — module-level mutable state in those helpers (counters, open
+file handles, accumulated buffers) survives between runs and is
+shared across hook invocations. Keep helpers pure or scope state
+inside the exported function.
+
 ## Path safety
 
 Actions targeting `.obsidian/`, `.git/`, `.trash/`, the configured

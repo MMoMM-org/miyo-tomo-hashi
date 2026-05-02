@@ -390,6 +390,13 @@ export default class TomoHashiPlugin extends Plugin {
 	}
 
 	override onunload(): void {
+		// L10: reset the module-level executionStore singleton FIRST so a
+		// reload of this plugin in the same Obsidian process doesn't re-fire
+		// the modal subscription with a stale non-idle state and a null
+		// executor. CJS module caching means executionStore survives plugin
+		// disable/enable in the same session.
+		executionStore.set({ kind: "idle" });
+
 		// Drain 002 cleanups in LIFO order — see header decision (5).
 		while (this.cleanups.length > 0) {
 			const fn = this.cleanups.pop();

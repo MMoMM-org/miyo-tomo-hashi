@@ -75,7 +75,7 @@ async function handleInlineField(
 	const { vault } = ctx;
 	const { daily_note_path, field, value } = action;
 
-	const content = await vault.read(daily_note_path);
+	const content = await vault.cachedRead(daily_note_path);
 	const lines = content.split("\n");
 	const match = findInlineMatch(lines, field);
 
@@ -193,7 +193,7 @@ async function handleCalloutBody(
 	const { daily_note_path, field, value, section } = action;
 
 	const [content, metadata] = await Promise.all([
-		vault.read(daily_note_path),
+		vault.cachedRead(daily_note_path),
 		vault.metadata(daily_note_path),
 	]);
 
@@ -246,14 +246,23 @@ async function handleCheckbox(
 	const { vault } = ctx;
 	const { daily_note_path, field, value } = action;
 
-	const content = await vault.read(daily_note_path);
+	const content = await vault.cachedRead(daily_note_path);
 	const lines = content.split("\n");
 
 	const checkedPattern = `- [x] ${field}`;
 	const uncheckedPattern = `- [ ] ${field}`;
 
-	const isChecked = lines.some((l) => l === checkedPattern);
-	const isUnchecked = lines.some((l) => l === uncheckedPattern);
+	// L9: single pass over `lines` rather than two `lines.some()` scans.
+	let isChecked = false;
+	let isUnchecked = false;
+	for (const l of lines) {
+		if (l === checkedPattern) {
+			isChecked = true;
+		} else if (l === uncheckedPattern) {
+			isUnchecked = true;
+		}
+		if (isChecked && isUnchecked) break;
+	}
 
 	if (!isChecked && !isUnchecked) {
 		return { kind: "failed", reason: `Tracker field not found: ${field}` };

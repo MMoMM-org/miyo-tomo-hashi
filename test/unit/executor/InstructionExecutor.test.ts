@@ -264,11 +264,12 @@ describe("InstructionExecutor — single-run lock", () => {
 			notify,
 		});
 
-		// Start first run (won't finish until blockPromise resolves)
+		// Start first run (won't finish until blockPromise resolves).
+		// L13: execute() sets `this.running = true` synchronously before
+		// its first await, so the lock is held by the time this call
+		// returns its pending promise. No setTimeout sleep needed — the
+		// previous 10ms wait was a flake source on loaded CI.
 		const firstRunPromise = executor.execute({ kind: "single-file", sourcePath });
-
-		// Give the first run time to acquire the lock
-		await new Promise((r) => setTimeout(r, 10));
 
 		// Second run should reject fast
 		const secondRunCounts = await executor.execute({ kind: "single-file", sourcePath });

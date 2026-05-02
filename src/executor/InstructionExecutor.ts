@@ -30,7 +30,6 @@ import type { VaultFS } from "../vault/VaultFS.js";
 import type { Action } from "../schema/types.js";
 import type {
 	ActionRecord,
-	ActionOutcome,
 	Clock,
 	ExecutionMode,
 	RunCounts,
@@ -50,7 +49,7 @@ import {
 import { markActionsApplied } from "./jsonAppliedWriter.js";
 import { tickPeerCheckbox } from "./peerCheckboxSync.js";
 import { RunLogWriter } from "./runLog.js";
-import { HANDLERS } from "../actions/index.js";
+import { HANDLERS, type Handler } from "../actions/index.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -320,13 +319,17 @@ export class InstructionExecutor {
 				logWriter.appendRecord(record);
 				continue;
 			}
+			// L11: collect any "messages" outcomes from before-hook so the
+			// run log surfaces info/warnings (pre-fix only console).
+			const beforeNote =
+				beforeOutcome.kind === "messages"
+					? formatHookMessages("before", beforeOutcome)
+					: undefined;
 
-			// Step 8d: dispatch handler
-			const handler = HANDLERS[record.kind] as (
-				action: Action,
-				ctx: { vault: VaultFS; clock: Clock },
-			) => Promise<Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>>;
-
+			// Step 8d: dispatch handler. All handlers share the same broad
+			// outcome union (review L4), so the registry indexing widens
+			// cleanly to a single Action input — no narrowing cast needed.
+			const handler = HANDLERS[record.kind] as Handler<Action>;
 			const handlerOutcome = await handler(action, { vault, clock: this.clock });
 			record.outcome = handlerOutcome;
 
@@ -353,14 +356,24 @@ export class InstructionExecutor {
 			// outcome — the vault commit already happened. The failure is
 			// attached to the same row's error column (review M18) instead
 			// of being synthesized as a `${id}-after-hook` pseudo-record.
+			const afterNote =
+				afterOutcome.kind === "messages"
+					? formatHookMessages("after", afterOutcome)
+					: undefined;
+			const combinedNote = [beforeNote, afterNote]
+				.filter((n): n is string => n !== undefined)
+				.join("; ");
+			const opts: {
+				afterHookFailure?: { reason: string };
+				hookNote?: string;
+			} = {};
 			if (afterOutcome.kind === "failed") {
-				logWriter.appendRecord(record, {
-					afterHookFailure: { reason: afterOutcome.reason },
-				});
-			} else {
-				// Step 8h: append record outcome to run log
-				logWriter.appendRecord(record);
+				opts.afterHookFailure = { reason: afterOutcome.reason };
 			}
+			if (combinedNote !== "") {
+				opts.hookNote = combinedNote;
+			}
+			logWriter.appendRecord(record, opts);
 		}
 
 		// Step 8.5 (H5): flush batched applied-flag writes — one processJSON
@@ -462,6 +475,20 @@ export class InstructionExecutor {
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+function formatHookMessages(
+	phase: "before" | "after",
+	outcome: { kind: "messages"; info: string[]; warnings: string[] },
+): string {
+	const parts: string[] = [];
+	if (outcome.warnings.length > 0) {
+		parts.push(`${phase}-warn: ${outcome.warnings.join(" | ")}`);
+	}
+	if (outcome.info.length > 0) {
+		parts.push(`${phase}-info: ${outcome.info.join(" | ")}`);
+	}
+	return parts.join("; ");
+}
 
 function buildActionLookup(
 	sources: readonly { fileId: string; instructionSet: { actions: readonly Action[] } }[],
