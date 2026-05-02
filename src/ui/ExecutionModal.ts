@@ -30,7 +30,10 @@ import type { Store } from "../util/store";
 
 import type { ModalCallbacks } from "./modalContent/types";
 import { renderPreviewView } from "./modalContent/previewView";
-import { renderProgressView } from "./modalContent/progressView";
+import {
+	renderProgressView,
+	updateProgressView,
+} from "./modalContent/progressView";
 import { renderSummaryView } from "./modalContent/summaryView";
 
 /** Subset of InstructionExecutor the modal needs. */
@@ -64,28 +67,65 @@ export class ExecutionModal extends Modal {
 	}
 
 	override onClose(): void {
+		// Safety net for native dismissal (review H2): Obsidian's framework
+		// Scope handles Esc and the X chrome before any contentEl listener
+		// fires — only this lifecycle hook runs. If a run is gated at
+		// proceedResolve (confirm-mode preview) or mid-execution, missing
+		// the cancel here leaves the lock held and proceedResolve unresolved
+		// until plugin reload. cancel() is idempotent.
+		const needCancel =
+			this.currentState.kind === "previewing" ||
+			this.currentState.kind === "running";
+
 		this.contentEl.removeEventListener("keydown", this.escHandler);
 		if (this.unsubscribe !== null) {
 			this.unsubscribe();
 			this.unsubscribe = null;
 		}
 		this.contentEl.empty();
+
+		if (needCancel) {
+			this.executor.cancel();
+			// Drive the post-cancel idle transition through the consumer's
+			// onClose hook so the executor doesn't park at `summary` with
+			// no modal to surface it. Treats native dismiss as equivalent
+			// to clicking Close on the summary view.
+			this.callbacks.onClose?.();
+		}
 	}
 
 	private render(state: RunState): void {
+		const prevState = this.currentState;
 		this.currentState = state;
+
+		// H4 fast path: running → running with the same `records` reference
+		// (just an index advance) — update glyphs/header in place rather
+		// than rebuilding the full DOM tree. Avoids an O(N²) main-thread
+		// teardown across an N-action run.
+		if (
+			state.kind === "running" &&
+			prevState.kind === "running" &&
+			prevState.records === state.records
+		) {
+			updateProgressView(this.contentEl, state);
+			return;
+		}
+
 		const wrappedCallbacks = this.wrapCallbacks(state);
 
 		switch (state.kind) {
 			case "previewing":
 				renderPreviewView(this.contentEl, state, wrappedCallbacks);
+				this.restoreFocusAfterRender();
 				return;
 			case "running":
 				renderProgressView(this.contentEl, state, wrappedCallbacks);
+				this.restoreFocusAfterRender();
 				return;
 			case "summary":
 			case "validation-failed":
 				renderSummaryView(this.contentEl, state, wrappedCallbacks);
+				this.restoreFocusAfterRender();
 				return;
 			case "idle":
 			case "preparing":
@@ -95,6 +135,21 @@ export class ExecutionModal extends Modal {
 				this.contentEl.addClass("hashi-execution-modal");
 				return;
 		}
+	}
+
+	/**
+	 * Move focus to the new view's primary action button after a full
+	 * rebuild (review M13). Without this, contentEl.empty() destroys the
+	 * focused element and keyboard users land on the modal container.
+	 *
+	 * Selection: prefer .mod-cta (the explicit primary). progressView
+	 * has no primary class — fall back to the first button (Cancel).
+	 */
+	private restoreFocusAfterRender(): void {
+		const target =
+			this.contentEl.querySelector<HTMLElement>(".mod-cta") ??
+			this.contentEl.querySelector<HTMLElement>("button");
+		target?.focus();
 	}
 
 	/**

@@ -18,6 +18,14 @@ import { buildRunLogFilename, resolveCollisionFreePath } from "../util/filenames
 
 export type RunLogRetention = "always" | "only-after-failed";
 
+/**
+ * Bump on any breaking change to the run-log frontmatter or table shape
+ * (review M16). Future tooling (Tomo, Kokoro, dashboards) keys on this
+ * to detect and adapt to format changes; missing it would force silent
+ * parse-on-best-effort.
+ */
+const LOG_FORMAT_VERSION = 1;
+
 export interface RunLogStartMeta {
 	readonly inboxFolder: string;
 	readonly startedAt: Date;
@@ -35,7 +43,20 @@ export interface ValidationFailure {
 // ---------------------------------------------------------------------------
 
 type BufferedEntry =
-	| { readonly kind: "record"; readonly record: ActionRecord }
+	| {
+			readonly kind: "record";
+			readonly record: ActionRecord;
+			// Optional after-hook failure attached to this record (review M18).
+			// Pre-fix the executor synthesized a pseudo-record with id
+			// `${id}-after-hook` and pushed it as a separate row — read like
+			// two outcomes for one action. Now stays a single row with the
+			// hook reason concatenated into the error column.
+			readonly afterHookFailure?: { readonly reason: string };
+			// Free-form note from a hook's "messages" outcome (review L11).
+			// Pre-fix these went to console only; users had no way to diagnose
+			// hook info/warnings from the run log.
+			readonly hookNote?: string;
+	  }
 	| { readonly kind: "validation"; readonly failure: ValidationFailure };
 
 // ---------------------------------------------------------------------------
@@ -62,8 +83,21 @@ export class RunLogWriter {
 		return path;
 	}
 
-	appendRecord(record: ActionRecord): void {
-		this.entries.push({ kind: "record", record });
+	appendRecord(
+		record: ActionRecord,
+		opts?: {
+			afterHookFailure?: { reason: string };
+			hookNote?: string;
+		},
+	): void {
+		this.entries.push({
+			kind: "record",
+			record,
+			...(opts?.afterHookFailure !== undefined
+				? { afterHookFailure: opts.afterHookFailure }
+				: {}),
+			...(opts?.hookNote !== undefined ? { hookNote: opts.hookNote } : {}),
+		});
 	}
 
 	appendValidationFailure(failure: ValidationFailure): void {
@@ -178,6 +212,7 @@ function renderFrontmatter(
 
 	return [
 		"---",
+		`log_format_version: ${LOG_FORMAT_VERSION}`,
 		`started: ${startIso}`,
 		`ended:   ${endIso}`,
 		`mode: ${meta.mode}`,
@@ -194,18 +229,29 @@ function renderBody(
 	entries: readonly BufferedEntry[],
 	peerHeadings: Map<string, Map<string, PeerHeading>>,
 ): string {
+	// M9: pre-group entries once (O(E)). Pre-fix did entries.filter per
+	// source (O(S*E)) plus another full scan for "extra" file ids. Map
+	// preserves insertion order so the orphan loop stays deterministic.
+	const byFile = new Map<string, BufferedEntry[]>();
+	for (const e of entries) {
+		const id = entryFileId(e);
+		const list = byFile.get(id) ?? [];
+		list.push(e);
+		byFile.set(id, list);
+	}
+
 	const sections: string[] = [];
+	const seen = new Set<string>();
 
 	for (const fileId of sources) {
-		const fileEntries = entries.filter((e) => entryFileId(e) === fileId);
+		seen.add(fileId);
+		const fileEntries = byFile.get(fileId) ?? [];
 		sections.push(renderFileSection(fileId, fileEntries, peerHeadings.get(fileId)));
 	}
 
-	// Files that appear in entries but not in sources list (edge case guard)
-	const covered = new Set(sources);
-	const extra = new Set(entries.map(entryFileId).filter((id) => !covered.has(id)));
-	for (const fileId of extra) {
-		const fileEntries = entries.filter((e) => entryFileId(e) === fileId);
+	// Edge-case guard: files that appear in entries but not in sources.
+	for (const [fileId, fileEntries] of byFile) {
+		if (seen.has(fileId)) continue;
 		sections.push(renderFileSection(fileId, fileEntries, peerHeadings.get(fileId)));
 	}
 
@@ -229,25 +275,49 @@ function renderFileSection(
 	return [heading, "", header, divider, ...rows, ""].join("\n");
 }
 
+// Markdown-table cells terminate at `|`. Escape literal pipes anywhere
+// they may appear in user-derived strings (review M5). bb7d6fb fixed
+// idCell only; summary/error/depNote can also carry pipes (alias
+// separators in wikilinks, exception messages mentioning regex unions).
+function escapeCell(s: string): string {
+	return s.replace(/\|/g, "\\|");
+}
+
 function renderEntryRow(
 	entry: BufferedEntry,
 	peerHeadings: Map<string, PeerHeading> | undefined,
 ): string {
 	if (entry.kind === "validation") {
 		const msg = entry.failure.message;
-		return `| — | — | (validation failure) | failed | ${msg} |`;
+		return `| — | — | (validation failure) | failed | ${escapeCell(msg)} |`;
 	}
 
 	const { id, kind, summary, outcome } = entry.record;
 	const outcomeStr = outcome !== null ? outcome.kind : "pending";
-	const error = outcome !== null && outcome.kind === "failed" ? outcome.reason : "";
+	const baseError =
+		outcome !== null && outcome.kind === "failed" ? outcome.reason : "";
 	const depNote =
 		outcome !== null && outcome.kind === "skipped-dependency"
 			? ` (dependsOn: ${outcome.dependsOn})`
 			: "";
+	// M18: fold the after-hook failure (if any) into the same row's error
+	// column. Outcome stays as the handler's outcome (e.g., "applied")
+	// because the after-hook ran AFTER the vault commit and doesn't
+	// invalidate it; the failure is recorded but does not flip the row's
+	// outcome.
+	let error = baseError;
+	if (entry.afterHookFailure !== undefined) {
+		const hookErr = `after-hook failed: ${entry.afterHookFailure.reason}`;
+		error = error !== "" ? `${error}; ${hookErr}` : hookErr;
+	}
+	if (entry.hookNote !== undefined && entry.hookNote !== "") {
+		// L11: surface hook info/warnings from "messages" outcomes.
+		const note = `hook note: ${entry.hookNote}`;
+		error = error !== "" ? `${error}; ${note}` : note;
+	}
 
 	const idCell = renderIdCell(id, peerHeadings);
-	return `| ${idCell} | ${kind} | ${summary} | ${outcomeStr}${depNote} | ${error} |`;
+	return `| ${idCell} | ${kind} | ${escapeCell(summary)} | ${escapeCell(outcomeStr + depNote)} | ${escapeCell(error)} |`;
 }
 
 function renderIdCell(

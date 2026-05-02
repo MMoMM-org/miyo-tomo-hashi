@@ -119,7 +119,9 @@
 }
 
 .hashi-execution-modal-row.is-applied {
-	opacity: 0.55;
+	/* L2: 0.55 dropped --text-muted ID/kind cells below WCAG 4.5:1 in light
+	 * themes. 0.7 keeps the de-emphasis visual cue while staying readable. */
+	opacity: 0.7;
 }
 
 .hashi-execution-modal-row.is-failed {
@@ -209,13 +211,21 @@
 	color: var(--text-muted);
 }
 
+/* H12: non-color cue so the running/error states are distinguishable
+ * without relying on hue alone (red-green color blindness affects ~8% of
+ * males). text-decoration is ignored by screen readers, so it's
+ * redundant cue only — no extra noise in the a11y tree. */
 .hashi-status-bar-bridge.is-running {
 	color: var(--color-green);
 	cursor: pointer;
+	text-decoration: underline solid;
+	text-underline-offset: 2px;
 }
 
 .hashi-status-bar-bridge.is-error {
 	color: var(--color-red);
+	text-decoration: underline wavy;
+	text-underline-offset: 2px;
 }
 
 /* The screen-reader announcement span carries text-node updates on every

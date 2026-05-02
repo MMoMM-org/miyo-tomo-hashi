@@ -44,6 +44,10 @@ const DISCLOSURE_TEXT =
 	"variables. Only enable hooks from sources you trust.";
 
 export class HookDisclosureModal extends Modal {
+	// Per-instance counter ensures unique aria-labelledby ids across
+	// simultaneously-open modals (review C2).
+	private static labelledByCounter = 0;
+
 	private resolver: ((decision: AskDecision) => void) | null = null;
 	private readonly escHandler: (evt: KeyboardEvent) => void;
 
@@ -77,10 +81,16 @@ export class HookDisclosureModal extends Modal {
 		contentEl.addEventListener("keydown", this.escHandler);
 
 		const filename = this.deriveFilename(this.hookInfo.vaultRelativePath);
+		const counter = ++HookDisclosureModal.labelledByCounter;
+		const titleId = `hashi-hook-disclosure-title-${counter}`;
+		const disclosureId = `hashi-hook-disclosure-text-${counter}`;
+
+		contentEl.setAttribute("aria-labelledby", titleId);
 
 		contentEl.createEl("h2", {
 			cls: "hashi-hook-disclosure-modal-title",
-			text: filename,
+			text: `Enable hook: ${filename}?`,
+			attr: { id: titleId },
 		});
 
 		const meta = contentEl.createDiv({ cls: "hashi-hook-disclosure-modal-meta" });
@@ -96,14 +106,24 @@ export class HookDisclosureModal extends Modal {
 		contentEl.createEl("p", {
 			cls: "hashi-hook-disclosure-modal-disclosure",
 			text: DISCLOSURE_TEXT,
+			attr: { id: disclosureId },
 		});
 
 		const buttons = contentEl.createDiv({
 			cls: "hashi-hook-disclosure-modal-buttons",
 		});
-		this.createButton(buttons, "Enable", "enable-session", true);
-		this.createButton(buttons, "Enable once", "enable-once", false);
-		this.createButton(buttons, "Disable", "disable", false);
+		// Safe-default ordering (review C1): Disable is first AND primary AND
+		// auto-focused so reflexive Enter/Space cancels rather than enabling
+		// an untrusted hook for the whole session.
+		// L1: aria-describedby links the disclosure text to each button so
+		// SR users hear the warning before the action label.
+		const disableBtn = this.createButton(buttons, "Disable", "disable", true);
+		const enableOnceBtn = this.createButton(buttons, "Enable once", "enable-once", false);
+		const enableBtn = this.createButton(buttons, "Enable", "enable-session", false);
+		for (const btn of [disableBtn, enableOnceBtn, enableBtn]) {
+			btn.setAttribute("aria-describedby", disclosureId);
+		}
+		disableBtn.focus();
 	}
 
 	override onClose(): void {

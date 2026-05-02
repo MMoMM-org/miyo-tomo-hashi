@@ -221,6 +221,10 @@ function compareId(a: string, b: string): number {
 	return a.localeCompare(b);
 }
 
+// `summary` is persisted verbatim into the run-log markdown table. Per
+// Constitution L2 Privacy, audit traces must record metadata only — never
+// the content of an inserted line, a tracker value, or other note bytes.
+// Only path/structural fields belong here. (Review H1.)
 function buildSummary(action: Action): string {
 	switch (action.action) {
 		case "create_moc":
@@ -228,11 +232,11 @@ function buildSummary(action: Action): string {
 		case "move_note":
 			return `${action.source} → ${action.destination}`;
 		case "link_to_moc":
-			return `${action.target_moc} ← ${action.line_to_add}`;
+			return `${action.target_moc}`;
 		case "add_relationship":
-			return `${action.target_moc_path} :: ${action.marker} ← ${action.line}`;
+			return `${action.target_moc_path} :: ${action.marker}`;
 		case "update_tracker":
-			return `${action.daily_note_path} :: ${action.field}=${String(action.value)}`;
+			return `${action.daily_note_path} :: ${action.field}`;
 		case "update_log_entry":
 			return `${action.daily_note_path}#${action.section} (${action.position})`;
 		case "update_log_link":

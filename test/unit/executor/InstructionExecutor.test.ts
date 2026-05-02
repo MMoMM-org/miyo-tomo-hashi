@@ -264,11 +264,12 @@ describe("InstructionExecutor — single-run lock", () => {
 			notify,
 		});
 
-		// Start first run (won't finish until blockPromise resolves)
+		// Start first run (won't finish until blockPromise resolves).
+		// L13: execute() sets `this.running = true` synchronously before
+		// its first await, so the lock is held by the time this call
+		// returns its pending promise. No setTimeout sleep needed — the
+		// previous 10ms wait was a flake source on loaded CI.
 		const firstRunPromise = executor.execute({ kind: "single-file", sourcePath });
-
-		// Give the first run time to acquire the lock
-		await new Promise((r) => setTimeout(r, 10));
 
 		// Second run should reject fast
 		const secondRunCounts = await executor.execute({ kind: "single-file", sourcePath });
@@ -426,7 +427,161 @@ describe("InstructionExecutor — cancellation", () => {
 // Scenario 7: Validation-only failure in batch
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// M4 — settings can be passed as a getter so in-session changes take effect
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — settings as getter (M4)", () => {
+	it("uses the latest settings on each execute when constructed with a getter", async () => {
+		// Pre-fix the executor froze settings at construction. main.ts's
+		// persist() reassigns its `this.settings` to a new object, so the
+		// executor would silently use stale values for the rest of the
+		// session. The getter form binds late.
+		const vault = new FakeVaultFS();
+		await vault.createFolder(INBOX);
+		await vault.createFolder("inbox");
+
+		// Two separate inbox folders; we'll flip the getter mid-test.
+		const inboxA = `${INBOX}/A`;
+		const inboxB = `${INBOX}/B`;
+		await vault.createFolder(inboxA);
+		await vault.createFolder(inboxB);
+
+		// Each has its own batch source so we can tell which one ran.
+		const setA = makeInstructionSet([makeCreateMoc("I01", `${inboxA}/m1.md`)]);
+		const setB = makeInstructionSet([makeCreateMoc("I02", `${inboxB}/m2.md`)]);
+		await vault.create(`${inboxA}/a_instructions.json`, JSON.stringify(setA, null, 2) + "\n");
+		await vault.create(`${inboxB}/b_instructions.json`, JSON.stringify(setB, null, 2) + "\n");
+		await vault.create("inbox/note-I01.md", "# Note");
+		await vault.create("inbox/note-I02.md", "# Note");
+
+		// Mutable settings object the test can reassign.
+		let liveSettings: PluginSettings = makeSettings({ tomoInboxFolder: inboxA });
+
+		const executor = new InstructionExecutor({
+			vault,
+			validator: {
+				validate: (raw: unknown): ValidationOutcome => {
+					const s = raw as { schema_version?: string };
+					if (s?.schema_version === "1") {
+						return { ok: true, data: raw as InstructionSet };
+					}
+					return { ok: false, message: "invalid" };
+				},
+			},
+			hookRunner: makeHookRunner(),
+			// Pass a getter — executor must read settings on each run.
+			settings: () => liveSettings,
+			clock: fixedClock,
+			store: new Store<RunState>({ kind: "idle" }),
+		});
+
+		await executor.execute({ kind: "batch" });
+		// After first run: inboxA's I01 must be applied
+		const afterFirstA = await vault.readJSON<InstructionSet>(
+			`${inboxA}/a_instructions.json`,
+		);
+		expect(afterFirstA.actions.find((a) => a.id === "I01")?.applied).toBe(true);
+		const afterFirstB = await vault.readJSON<InstructionSet>(
+			`${inboxB}/b_instructions.json`,
+		);
+		expect(afterFirstB.actions.find((a) => a.id === "I02")?.applied).toBeUndefined();
+
+		// Simulate persist() reassigning settings
+		liveSettings = makeSettings({ tomoInboxFolder: inboxB });
+
+		await executor.execute({ kind: "batch" });
+		// Second run must read the NEW inbox folder
+		const afterSecondB = await vault.readJSON<InstructionSet>(
+			`${inboxB}/b_instructions.json`,
+		);
+		expect(afterSecondB.actions.find((a) => a.id === "I02")?.applied).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// H5 — Batched applied-flag writes (one processJSON per source, not N)
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — batched applied-flag writes (H5)", () => {
+	it("one processJSON call against the source for N applied actions", async () => {
+		// Pre-fix code called markActionApplied per applied action — each
+		// triggered its own atomic read+parse+serialize+write cycle through
+		// Obsidian's per-path queue. The batched write path consolidates them.
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/batch_apply_instructions.json`;
+		const set = makeInstructionSet([
+			makeCreateMoc("I01", `${INBOX}/m1.md`),
+			makeCreateMoc("I02", `${INBOX}/m2.md`),
+			makeCreateMoc("I03", `${INBOX}/m3.md`),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note I01");
+		await vault.create("inbox/note-I02.md", "# Note I02");
+		await vault.create("inbox/note-I03.md", "# Note I03");
+
+		const processJSONSpy = vi.spyOn(vault, "processJSON");
+
+		const { executor } = makeSingleFileExecutor(vault, set);
+		await executor.execute({ kind: "single-file", sourcePath });
+
+		// Filter out any processJSON calls against non-source files (e.g.
+		// none expected at present, but the assertion is path-scoped).
+		const sourceWrites = processJSONSpy.mock.calls.filter(
+			(c) => c[0] === sourcePath,
+		);
+		expect(sourceWrites.length).toBe(1);
+
+		// Outcome unchanged: all three actions are applied.
+		const after = await vault.readJSON<InstructionSet>(sourcePath);
+		expect(after.actions.every((a) => a.applied === true)).toBe(true);
+	});
+});
+
 describe("InstructionExecutor — validation failure in batch", () => {
+	it("malformed JSON in one source records as per-file failure; other sources proceed (H3)", async () => {
+		// Before the H3 fix, an uncaught JSON.parse throw aborted the entire
+		// batch — one bad file killed the run. The fix wraps readJSON and
+		// records the error as a per-file failure on the same channel as
+		// schema-fail.
+		const vault = new FakeVaultFS();
+		const validPath = `${INBOX}/a_instructions.json`;
+		const malformedPath = `${INBOX}/b_instructions.json`;
+		const validSet = makeInstructionSet([
+			makeCreateMoc("I01", `${INBOX}/moc-malformed.md`),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(validPath, JSON.stringify(validSet, null, 2) + "\n");
+		// Intentionally malformed: JSON.parse will throw SyntaxError
+		await vault.create(malformedPath, "{ not valid json");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note");
+
+		const notify = vi.fn();
+		const store = new Store<RunState>({ kind: "idle" });
+		const executor = new InstructionExecutor({
+			vault,
+			validator: makeOkValidator(validSet),
+			hookRunner: makeHookRunner(),
+			settings: makeSettings(),
+			clock: fixedClock,
+			store,
+			notify,
+		});
+
+		// Must NOT throw
+		await expect(executor.execute({ kind: "batch" })).resolves.toBeDefined();
+
+		// Valid file's action should have been applied
+		const updated = await vault.readJSON<InstructionSet>(validPath);
+		const i01 = updated.actions.find((a) => a.id === "I01");
+		expect(i01?.applied).toBe(true);
+	});
+
 	it("invalid file's actions are skipped; other files in batch proceed", async () => {
 		const vault = new FakeVaultFS();
 		const validPath = `${INBOX}/a_instructions.json`;

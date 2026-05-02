@@ -9,11 +9,19 @@ import type { SkipAction } from "../schema/types.js";
 import type { ActionOutcome } from "../executor/state.js";
 import type { HandlerContext } from "./types.js";
 
-type SkipOutcome = Extract<ActionOutcome, { kind: "applied" }>;
+// L4: shared handler outcome union — every handler returns the same broad
+// shape so the dispatch table and orchestrator don't need cast back-and-
+// forth gymnastics. skip never actually returns "skipped-already" or
+// "failed" today, but the broader type matches every other handler and
+// gives us room to grow.
+type HandlerOutcome = Extract<
+	ActionOutcome,
+	{ kind: "applied" | "skipped-already" | "failed" }
+>;
 
 export async function skip(
 	_action: SkipAction,
 	_ctx: HandlerContext,
-): Promise<SkipOutcome> {
+): Promise<HandlerOutcome> {
 	return { kind: "applied" };
 }

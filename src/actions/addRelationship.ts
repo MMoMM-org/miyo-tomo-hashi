@@ -40,7 +40,7 @@ export async function addRelationship(
 		return { kind: "failed", reason: "Relationship target missing" };
 	}
 
-	const content = await vault.read(target_moc_path);
+	const content = await vault.cachedRead(target_moc_path);
 	const lines = content.split("\n");
 
 	let matchIdx = -1;

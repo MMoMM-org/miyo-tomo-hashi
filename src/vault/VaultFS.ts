@@ -16,6 +16,17 @@ export interface VaultFS {
   /** Read the raw string content of a file. Throws if the file does not exist. */
   read(path: string): Promise<string>;
 
+  /**
+   * Read-only fast path (review L8). Returns the latest in-memory content
+   * of the file if Obsidian has it open in an editor; otherwise reads from
+   * disk. Use for pre-flight idempotency checks where staleness is
+   * acceptable — `process` always reads fresh disk state when it commits.
+   *
+   * Falls back to `read` semantics in adapters that have no caching layer
+   * (FakeVaultFS, etc.).
+   */
+  cachedRead(path: string): Promise<string>;
+
   /** Read and parse a JSON file. Throws if the file does not exist or is not valid JSON. */
   readJSON<T = unknown>(path: string): Promise<T>;
 

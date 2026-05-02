@@ -10,10 +10,13 @@
  * [ref: PRD/F5; SDD/Atomic JSON Applied-Flag Write]
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
-import { markActionApplied } from "../../../src/executor/jsonAppliedWriter.js";
+import {
+	markActionApplied,
+	markActionsApplied,
+} from "../../../src/executor/jsonAppliedWriter.js";
 import type { InstructionSet, Action, CreateMocAction, MoveNoteAction } from "../../../src/schema/types.js";
 
 // ---------------------------------------------------------------------------
@@ -172,6 +175,70 @@ describe("markActionApplied — monotonicity", () => {
 // ---------------------------------------------------------------------------
 // markActionApplied — atomicity
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// markActionsApplied — batch (H5)
+// ---------------------------------------------------------------------------
+
+describe("markActionsApplied — batch (H5)", () => {
+	it("sets applied:true on every listed id in a single processJSON call", async () => {
+		// Pre-fix code did N writes for N applied actions per source — N
+		// read+parse+serialize+write cycles serialized through Obsidian's
+		// per-path queue. Batch consolidates them.
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([
+			makeCreateMoc("I01"),
+			makeCreateMoc("I02"),
+			makeCreateMoc("I03"),
+		]);
+		await seedFile(vault, "inbox/batch_instructions.json", set);
+		const spy = vi.spyOn(vault, "processJSON");
+
+		await markActionsApplied(vault, "inbox/batch_instructions.json", [
+			"I01",
+			"I03",
+		]);
+
+		expect(spy).toHaveBeenCalledTimes(1);
+
+		const updated = JSON.parse(
+			await vault.read("inbox/batch_instructions.json"),
+		) as InstructionSet;
+		expect(updated.actions.find((a) => a.id === "I01")?.applied).toBe(true);
+		expect(updated.actions.find((a) => a.id === "I02")?.applied).toBeUndefined();
+		expect(updated.actions.find((a) => a.id === "I03")?.applied).toBe(true);
+	});
+
+	it("is a no-op when given an empty id list (no processJSON call)", async () => {
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([makeCreateMoc("I01")]);
+		await seedFile(vault, "inbox/batch_instructions.json", set);
+		const spy = vi.spyOn(vault, "processJSON");
+
+		await markActionsApplied(vault, "inbox/batch_instructions.json", []);
+
+		expect(spy).not.toHaveBeenCalled();
+	});
+
+	it("preserves non-action fields and 2-space indent + trailing newline", async () => {
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([makeCreateMoc("I01"), makeCreateMoc("I02")]);
+		await seedFile(vault, "inbox/batch_instructions.json", set);
+
+		await markActionsApplied(vault, "inbox/batch_instructions.json", [
+			"I01",
+			"I02",
+		]);
+
+		const raw = await vault.read("inbox/batch_instructions.json");
+		expect(raw.endsWith("\n")).toBe(true);
+		expect(raw).toContain('\n  "schema_version"');
+
+		const updated = JSON.parse(raw) as InstructionSet;
+		expect(updated.schema_version).toBe("1");
+		expect(updated.type).toBe("tomo-instructions");
+	});
+});
 
 describe("markActionApplied — atomicity", () => {
 	it("concurrent writes on different actionIds both appear without overwriting each other", async () => {

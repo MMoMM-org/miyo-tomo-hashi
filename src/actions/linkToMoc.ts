@@ -58,7 +58,7 @@ export async function linkToMoc(
 	}
 
 	const [content, metadata] = await Promise.all([
-		vault.read(mocPath),
+		vault.cachedRead(mocPath),
 		vault.metadata(mocPath),
 	]);
 

@@ -30,7 +30,6 @@ import type { VaultFS } from "../vault/VaultFS.js";
 import type { Action } from "../schema/types.js";
 import type {
 	ActionRecord,
-	ActionOutcome,
 	Clock,
 	ExecutionMode,
 	RunCounts,
@@ -47,10 +46,10 @@ import {
 	computeRemaining,
 	type DependencyEdge,
 } from "./planner.js";
-import { markActionApplied } from "./jsonAppliedWriter.js";
+import { markActionsApplied } from "./jsonAppliedWriter.js";
 import { tickPeerCheckbox } from "./peerCheckboxSync.js";
 import { RunLogWriter } from "./runLog.js";
-import { HANDLERS } from "../actions/index.js";
+import { HANDLERS, type Handler } from "../actions/index.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -64,7 +63,15 @@ export interface InstructionExecutorDeps {
 	readonly vault: VaultFS;
 	readonly validator: { validate(raw: unknown): ValidationOutcome };
 	readonly hookRunner: { run(phase: "before" | "after", action: Action): Promise<HookOutcome> };
-	readonly settings: PluginSettings;
+	/**
+	 * Plugin settings — either a snapshot or a getter function.
+	 *
+	 * Pass a getter when the consumer reassigns its settings object on
+	 * persist (this is what main.ts does). With a snapshot, the executor
+	 * holds a frozen reference and silently uses stale values across
+	 * in-session changes (review M4).
+	 */
+	readonly settings: PluginSettings | (() => PluginSettings);
 	readonly clock: Clock;
 	readonly store?: Store<RunState>;
 	readonly notify?: (msg: string) => void;
@@ -78,7 +85,7 @@ export class InstructionExecutor {
 	private readonly vault: VaultFS;
 	private readonly validator: { validate(raw: unknown): ValidationOutcome };
 	private readonly hookRunner: { run(phase: "before" | "after", action: Action): Promise<HookOutcome> };
-	private readonly settings: PluginSettings;
+	private readonly settingsRef: () => PluginSettings;
 	private readonly clock: Clock;
 	readonly state: Store<RunState>;
 	private readonly notify: (msg: string) => void;
@@ -91,10 +98,19 @@ export class InstructionExecutor {
 		this.vault = deps.vault;
 		this.validator = deps.validator;
 		this.hookRunner = deps.hookRunner;
-		this.settings = deps.settings;
+		this.settingsRef =
+			typeof deps.settings === "function"
+				? deps.settings
+				: () => deps.settings as PluginSettings;
 		this.clock = deps.clock;
 		this.state = deps.store ?? executionStore;
 		this.notify = deps.notify ?? (() => { /* no-op in prod when not injected */ });
+	}
+
+	// Reads through the registered accessor so consumers passing a getter
+	// see live changes (review M4). Safe to call at any time during run().
+	private get settings(): PluginSettings {
+		return this.settingsRef();
 	}
 
 	cancel(): void {
@@ -142,23 +158,11 @@ export class InstructionExecutor {
 		// Step 2: resolve sources
 		const sourcePaths = await this.resolveSources(invocation);
 
-		// Step 3: validate each source, build per-file failure map
-		const validSources: Array<{ fileId: string; sourcePath: string; set: unknown }> = [];
-		const perFileFailures = new Map<string, string>();
-
-		for (const sourcePath of sourcePaths) {
-			const raw = await vault.readJSON(sourcePath);
-			const outcome = this.validator.validate(raw);
-			if (outcome.ok) {
-				validSources.push({
-					fileId: sourcePath,
-					sourcePath,
-					set: outcome.data,
-				});
-			} else {
-				perFileFailures.set(sourcePath, outcome.message);
-			}
-		}
+		// Step 3: validate each source (M17: extracted from run()'s body
+		// for readability — single-purpose helper, no behavior change).
+		const { validSources, perFileFailures } = await this.validateAllSources(
+			sourcePaths,
+		);
 
 		// All files failed validation
 		if (sourcePaths.length > 0 && validSources.length === 0) {
@@ -195,6 +199,10 @@ export class InstructionExecutor {
 		// Cast to mutable array — ActionRecord.outcome is intentionally mutable per state.ts
 		const { records: readonlyRecords, dependencies } = computeRemaining(resolvedSources);
 		const records = readonlyRecords as ActionRecord[];
+		// M6: index dependencies once (O(E)) so findDependencyFailure does
+		// O(d_record) lookup per record instead of O(E) scan. Pre-fix was
+		// O(N*E); now O(N+E).
+		const depMap = buildDepMap(dependencies);
 
 		// Step 5: set store → preparing → previewing/running
 		this.state.set({
@@ -261,6 +269,9 @@ export class InstructionExecutor {
 
 		// Step 8: execute each record
 		const failedIds = new Set<string>();
+		// H5: accumulate applied ids per source so we can flush all writes
+		// in one processJSON call after the loop, instead of N per source.
+		const appliedByFile = new Map<string, string[]>();
 
 		for (let i = 0; i < records.length; i++) {
 			const record = records[i] as ActionRecord;
@@ -284,7 +295,7 @@ export class InstructionExecutor {
 			}
 
 			// Step 8b: dependency check
-			const depFailure = findDependencyFailure(record, dependencies, failedIds);
+			const depFailure = findDependencyFailure(record, depMap, failedIds);
 			if (depFailure !== null) {
 				record.outcome = { kind: "skipped-dependency", dependsOn: depFailure };
 				logWriter.appendRecord(record);
@@ -308,13 +319,17 @@ export class InstructionExecutor {
 				logWriter.appendRecord(record);
 				continue;
 			}
+			// L11: collect any "messages" outcomes from before-hook so the
+			// run log surfaces info/warnings (pre-fix only console).
+			const beforeNote =
+				beforeOutcome.kind === "messages"
+					? formatHookMessages("before", beforeOutcome)
+					: undefined;
 
-			// Step 8d: dispatch handler
-			const handler = HANDLERS[record.kind] as (
-				action: Action,
-				ctx: { vault: VaultFS; clock: Clock },
-			) => Promise<Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>>;
-
+			// Step 8d: dispatch handler. All handlers share the same broad
+			// outcome union (review L4), so the registry indexing widens
+			// cleanly to a single Action input — no narrowing cast needed.
+			const handler = HANDLERS[record.kind] as Handler<Action>;
 			const handlerOutcome = await handler(action, { vault, clock: this.clock });
 			record.outcome = handlerOutcome;
 
@@ -326,31 +341,46 @@ export class InstructionExecutor {
 			const afterOutcome = await this.hookRunner.run("after", action);
 
 			if (handlerOutcome.kind !== "failed") {
-				// Step 8f: write applied:true to source JSON
+				// Step 8f: queue applied:true write (flushed in one batch
+				// after the loop — review H5).
 				if (handlerOutcome.kind === "applied") {
-					await markActionApplied(vault, record.fileId, record.id);
+					const list = appliedByFile.get(record.fileId) ?? [];
+					list.push(record.id);
+					appliedByFile.set(record.fileId, list);
 					// Step 8g: best-effort tick peer .md
 					await tickPeerCheckbox(vault, record.fileId, record.id);
 				}
 			}
 
-			// Step 8e (continued): after-hook failure does NOT change action outcome,
-			// but we record it as a separate log entry
+			// Step 8e (continued): after-hook failure does NOT change action
+			// outcome — the vault commit already happened. The failure is
+			// attached to the same row's error column (review M18) instead
+			// of being synthesized as a `${id}-after-hook` pseudo-record.
+			const afterNote =
+				afterOutcome.kind === "messages"
+					? formatHookMessages("after", afterOutcome)
+					: undefined;
+			const combinedNote = [beforeNote, afterNote]
+				.filter((n): n is string => n !== undefined)
+				.join("; ");
+			const opts: {
+				afterHookFailure?: { reason: string };
+				hookNote?: string;
+			} = {};
 			if (afterOutcome.kind === "failed") {
-				logWriter.appendRecord(record);
-				// Append a pseudo-record capturing the hook failure
-				const hookFailRecord: ActionRecord = {
-					fileId: record.fileId,
-					id: `${record.id}-after-hook`,
-					kind: record.kind,
-					summary: `after-hook failure for ${record.id}`,
-					outcome: { kind: "failed", reason: afterOutcome.reason },
-				};
-				logWriter.appendRecord(hookFailRecord);
-			} else {
-				// Step 8h: append record outcome to run log
-				logWriter.appendRecord(record);
+				opts.afterHookFailure = { reason: afterOutcome.reason };
 			}
+			if (combinedNote !== "") {
+				opts.hookNote = combinedNote;
+			}
+			logWriter.appendRecord(record, opts);
+		}
+
+		// Step 8.5 (H5): flush batched applied-flag writes — one processJSON
+		// call per source, regardless of how many actions in that source
+		// were applied.
+		for (const [fileId, ids] of appliedByFile) {
+			await markActionsApplied(vault, fileId, ids);
 		}
 
 		// Step 9: finalize run log per retention policy
@@ -383,6 +413,49 @@ export class InstructionExecutor {
 		return counts;
 	}
 
+	/**
+	 * Read each sourcePath, JSON-parse it, run schema validation, and
+	 * partition into valid sources vs per-file failures (review M17 +
+	 * H3). Single-purpose helper extracted from run() to keep the
+	 * orchestrator method below the file-size ceiling.
+	 */
+	private async validateAllSources(
+		sourcePaths: readonly string[],
+	): Promise<{
+		validSources: Array<{ fileId: string; sourcePath: string; set: unknown }>;
+		perFileFailures: Map<string, string>;
+	}> {
+		const validSources: Array<{
+			fileId: string;
+			sourcePath: string;
+			set: unknown;
+		}> = [];
+		const perFileFailures = new Map<string, string>();
+
+		for (const sourcePath of sourcePaths) {
+			let raw: unknown;
+			try {
+				raw = await this.vault.readJSON(sourcePath);
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				perFileFailures.set(sourcePath, `read failed: ${message}`);
+				continue;
+			}
+			const outcome = this.validator.validate(raw);
+			if (outcome.ok) {
+				validSources.push({
+					fileId: sourcePath,
+					sourcePath,
+					set: outcome.data,
+				});
+			} else {
+				perFileFailures.set(sourcePath, outcome.message);
+			}
+		}
+
+		return { validSources, perFileFailures };
+	}
+
 	private async resolveSources(invocation: Invocation): Promise<string[]> {
 		if (invocation.kind === "single-file") {
 			const resolved = await resolveSingle(this.vault, invocation.sourcePath);
@@ -403,6 +476,20 @@ export class InstructionExecutor {
 // Private helpers
 // ---------------------------------------------------------------------------
 
+function formatHookMessages(
+	phase: "before" | "after",
+	outcome: { kind: "messages"; info: string[]; warnings: string[] },
+): string {
+	const parts: string[] = [];
+	if (outcome.warnings.length > 0) {
+		parts.push(`${phase}-warn: ${outcome.warnings.join(" | ")}`);
+	}
+	if (outcome.info.length > 0) {
+		parts.push(`${phase}-info: ${outcome.info.join(" | ")}`);
+	}
+	return parts.join("; ");
+}
+
 function buildActionLookup(
 	sources: readonly { fileId: string; instructionSet: { actions: readonly Action[] } }[],
 ): Map<string, Action> {
@@ -415,15 +502,27 @@ function buildActionLookup(
 	return map;
 }
 
+function buildDepMap(
+	dependencies: readonly DependencyEdge[],
+): ReadonlyMap<string, ReadonlyArray<string>> {
+	const map = new Map<string, string[]>();
+	for (const edge of dependencies) {
+		const list = map.get(edge.dependent) ?? [];
+		list.push(edge.dependsOn);
+		map.set(edge.dependent, list);
+	}
+	return map;
+}
+
 function findDependencyFailure(
 	record: ActionRecord,
-	dependencies: readonly DependencyEdge[],
+	depMap: ReadonlyMap<string, ReadonlyArray<string>>,
 	failedIds: ReadonlySet<string>,
 ): string | null {
-	for (const edge of dependencies) {
-		if (edge.dependent === record.id && failedIds.has(edge.dependsOn)) {
-			return edge.dependsOn;
-		}
+	const dependsOnIds = depMap.get(record.id);
+	if (dependsOnIds === undefined) return null;
+	for (const dependsOn of dependsOnIds) {
+		if (failedIds.has(dependsOn)) return dependsOn;
 	}
 	return null;
 }

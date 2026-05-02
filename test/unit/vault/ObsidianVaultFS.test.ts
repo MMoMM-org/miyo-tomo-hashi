@@ -40,6 +40,10 @@ function makeRichApp(): App {
       tfile.name = path.split("/").pop() ?? path;
       return tfile;
     }
+    // Empty folder created via createFolder() — tracked under __folder:<path>.
+    if (store.has(`__folder:${path}`)) {
+      return { path, children: [] } as unknown as TFolder;
+    }
     // Folder: return folder-like object when any stored path starts with "<path>/"
     const prefix = `${path}/`;
     const isFolder = [...store.keys()].some(
@@ -60,6 +64,14 @@ function makeRichApp(): App {
   });
 
   app.vault.read = vi.fn(async (file: TFile) => {
+    const v = store.get(file.path);
+    if (v === undefined) throw new Error(`File not found: ${file.path}`);
+    return v;
+  });
+
+  // L8: cachedRead returns the same content as read in the test mock
+  // (no real editor cache to consult).
+  app.vault.cachedRead = vi.fn(async (file: TFile) => {
     const v = store.get(file.path);
     if (v === undefined) throw new Error(`File not found: ${file.path}`);
     return v;

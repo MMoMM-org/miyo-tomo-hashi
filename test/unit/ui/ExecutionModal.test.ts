@@ -312,6 +312,106 @@ describe("ExecutionModal — preview subview (confirm mode)", () => {
 	});
 });
 
+// ---------------------------------------------------------------------------
+// H2 — onClose lifecycle: native dismiss must drain the executor
+// ---------------------------------------------------------------------------
+
+describe("ExecutionModal — onClose lifecycle (H2: native-dismiss safety)", () => {
+	let app: App;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		app = new App();
+	});
+
+	it("calls executor.cancel when native onClose fires while previewing", () => {
+		// Obsidian's framework Scope handles Esc and the X chrome before
+		// any of our contentEl listeners fire — only the lifecycle onClose
+		// runs. If a run is gated at proceedResolve, missing this drain
+		// leaves the lock held until plugin reload.
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set({
+			kind: "previewing",
+			mode: "confirm",
+			records: [record()],
+			remaining: 1,
+			total: 1,
+		});
+
+		modal.onClose();
+
+		expect(exec.cancel).toHaveBeenCalledTimes(1);
+	});
+
+	it("calls executor.cancel when native onClose fires while running", () => {
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set({
+			kind: "running",
+			mode: "confirm",
+			records: [record()],
+			currentIndex: 0,
+		});
+
+		modal.onClose();
+
+		expect(exec.cancel).toHaveBeenCalledTimes(1);
+	});
+
+	it("does NOT call executor.cancel when native onClose fires from summary", () => {
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [record({ outcome: { kind: "applied" } })],
+			counts: counts({ applied: 1 }),
+			logFilePath: null,
+		});
+
+		modal.onClose();
+
+		expect(exec.cancel).not.toHaveBeenCalled();
+	});
+
+	it("does NOT call executor.cancel when native onClose fires from idle", () => {
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+
+		modal.onClose();
+
+		expect(exec.cancel).not.toHaveBeenCalled();
+	});
+
+	it("forwards callbacks.onClose when canceling so consumer can drive idle", () => {
+		// After cancel, the executor transitions to summary with no modal to
+		// close it — main.ts's onClose hook drives the idle transition.
+		// Mirror that wiring here so the executor doesn't end up parked at
+		// summary forever.
+		const onCloseCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, { onClose: onCloseCb });
+		modal.onOpen();
+		exec.state.set({
+			kind: "previewing",
+			mode: "confirm",
+			records: [record()],
+			remaining: 1,
+			total: 1,
+		});
+
+		modal.onClose();
+
+		expect(exec.cancel).toHaveBeenCalledTimes(1);
+		expect(onCloseCb).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("ExecutionModal — preview subview (auto-run, state=running)", () => {
 	let app: App;
 
@@ -354,6 +454,145 @@ describe("ExecutionModal — progress subview (state=running)", () => {
 			currentIndex: idx,
 		};
 	}
+
+	it("action rows are <li> inside a <ul role=list> for AT navigation (M10)", () => {
+		const records = [record({ id: "I01" }), record({ id: "I02" })];
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set(running(records, 0));
+
+		const list = modal.contentEl.querySelector(
+			"ul.hashi-execution-modal-row-list",
+		);
+		expect(list).not.toBeNull();
+		expect(list?.getAttribute("role")).toBe("list");
+		const items = list?.querySelectorAll("li.hashi-execution-modal-row");
+		expect(items?.length).toBe(2);
+	});
+
+	it("each row glyph is aria-hidden + row carries an aria-label with state + id + kind (M11)", () => {
+		const records = [
+			record({ id: "I01", outcome: { kind: "applied" } }),
+			record({ id: "I02" }),
+		];
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set(running(records, 1));
+
+		const rows = modal.contentEl.querySelectorAll(".hashi-execution-modal-row");
+		expect(rows.length).toBe(2);
+		// applied row
+		expect(rows[0]?.getAttribute("aria-label")).toContain("applied");
+		expect(rows[0]?.getAttribute("aria-label")).toContain("I01");
+		expect(rows[0]?.getAttribute("aria-label")).toContain("create_moc");
+		// running row
+		expect(rows[1]?.getAttribute("aria-label")).toContain("running");
+		expect(rows[1]?.getAttribute("aria-label")).toContain("I02");
+		// glyphs aria-hidden
+		const glyphs = modal.contentEl.querySelectorAll(
+			".hashi-execution-modal-row-glyph",
+		);
+		expect(glyphs.length).toBe(2);
+		glyphs.forEach((g) => {
+			expect(g.getAttribute("aria-hidden")).toBe("true");
+		});
+	});
+
+	it("in-place update keeps row aria-label in sync with new outcome (M11)", () => {
+		const records = [record({ id: "I01" }), record({ id: "I02" })];
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set(running(records, 0));
+
+		// Tick: I01 completes as applied, advance currentIndex
+		(records[0] as ActionRecord).outcome = { kind: "applied" };
+		exec.state.set(running(records, 1));
+
+		const rows = modal.contentEl.querySelectorAll(".hashi-execution-modal-row");
+		expect(rows[0]?.getAttribute("aria-label")).toContain("applied");
+		expect(rows[1]?.getAttribute("aria-label")).toContain("running");
+	});
+
+	it("progress header is an aria-live region (H11)", () => {
+		// Per-tick text changes ("3 of 10" → "4 of 10") must be announced.
+		// The header element acts as the live region (polite + atomic).
+		const records = [record({ id: "I01" }), record({ id: "I02" })];
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set(running(records, 0));
+
+		const header = modal.contentEl.querySelector(
+			".hashi-execution-modal-header",
+		);
+		expect(header?.getAttribute("aria-live")).toBe("polite");
+		expect(header?.getAttribute("aria-atomic")).toBe("true");
+	});
+
+	it("running→running with same records updates DOM in place (H4)", () => {
+		// Pre-fix code rebuilt contentEl on every store tick — N×5 element
+		// teardown+rebuild per iteration on Obsidian's main thread between
+		// awaits. The fast path detects same-records-different-index and
+		// updates in place. This test pins the in-place behavior by tagging
+		// the body element and verifying its identity survives the next
+		// tick.
+		const records = [record({ id: "I01" }), record({ id: "I02" })];
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set(running(records, 0));
+
+		const bodyBefore = modal.contentEl.querySelector(
+			".hashi-execution-modal-body",
+		) as HTMLElement | null;
+		expect(bodyBefore).not.toBeNull();
+		bodyBefore?.setAttribute("data-test-marker", "phase1");
+
+		// Advance index — same `records` array reference
+		exec.state.set(running(records, 1));
+
+		const bodyAfter = modal.contentEl.querySelector(
+			".hashi-execution-modal-body",
+		) as HTMLElement | null;
+		expect(bodyAfter).toBe(bodyBefore);
+		expect(bodyAfter?.getAttribute("data-test-marker")).toBe("phase1");
+
+		// Header text reflects the new index
+		const header = modal.contentEl.querySelector(
+			".hashi-execution-modal-header",
+		);
+		expect(header?.textContent).toContain("1 of 2");
+	});
+
+	it("running→running with a different records array does a full rebuild", () => {
+		// New run: records identity differs. Must rebuild from scratch
+		// (otherwise stale DOM rows from the previous run survive).
+		const records1 = [record({ id: "I01" })];
+		const records2 = [record({ id: "X01" }), record({ id: "X02" })];
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set(running(records1, 0));
+
+		const bodyBefore = modal.contentEl.querySelector(
+			".hashi-execution-modal-body",
+		);
+		bodyBefore?.setAttribute("data-test-marker", "phase1");
+
+		exec.state.set(running(records2, 0));
+
+		const bodyAfter = modal.contentEl.querySelector(
+			".hashi-execution-modal-body",
+		);
+		expect(bodyAfter).not.toBe(bodyBefore);
+		expect(bodyAfter?.getAttribute("data-test-marker")).toBeNull();
+		expect(
+			modal.contentEl.querySelectorAll(".hashi-execution-modal-row").length,
+		).toBe(2);
+	});
 
 	it("row glyphs advance as outcomes arrive", () => {
 		const records = [
@@ -426,6 +665,81 @@ describe("ExecutionModal — progress subview (state=running)", () => {
 		cancelBtn?.click();
 
 		expect(exec.cancel).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("ExecutionModal — summary subview a11y (M12, M13)", () => {
+	let app: App;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		app = new App();
+	});
+
+	it("stats row has role=img + human aria-label; glyph text is aria-hidden (M12)", () => {
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [record({ outcome: { kind: "applied" } })],
+			counts: counts({ applied: 5, "skipped-already": 2, failed: 0, durationMs: 1200 }),
+			logFilePath: null,
+		});
+
+		const stats = modal.contentEl.querySelector(
+			".hashi-execution-modal-stats",
+		);
+		expect(stats).not.toBeNull();
+		expect(stats?.getAttribute("role")).toBe("img");
+		const label = stats?.getAttribute("aria-label") ?? "";
+		expect(label).toContain("5 applied");
+		expect(label).toContain("2 skipped");
+		expect(label).toContain("0 failed");
+		expect(label).toContain("1.2 seconds");
+
+		const visibleSpan = stats?.querySelector("span");
+		expect(visibleSpan?.getAttribute("aria-hidden")).toBe("true");
+	});
+
+	it("phase transition moves focus to the new view's primary button (M13)", () => {
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		// Focus restoration requires contentEl in document
+		document.body.appendChild(modal.contentEl);
+		try {
+			modal.onOpen();
+			// Transition into preview
+			exec.state.set({
+				kind: "previewing",
+				mode: "confirm",
+				records: [record()],
+				remaining: 1,
+				total: 1,
+			});
+			// Execute is the .mod-cta in preview view
+			const execute = Array.from(
+				modal.contentEl.querySelectorAll("button"),
+			).find((b) => b.textContent === "Execute");
+			expect(document.activeElement).toBe(execute);
+
+			// Transition into summary
+			exec.state.set({
+				kind: "summary",
+				mode: "confirm",
+				records: [record({ outcome: { kind: "applied" } })],
+				counts: counts({ applied: 1, durationMs: 100 }),
+				logFilePath: null,
+			});
+			// Close is the .mod-cta in summary view
+			const closeBtn = Array.from(
+				modal.contentEl.querySelectorAll("button"),
+			).find((b) => b.textContent === "Close");
+			expect(document.activeElement).toBe(closeBtn);
+		} finally {
+			document.body.removeChild(modal.contentEl);
+		}
 	});
 });
 

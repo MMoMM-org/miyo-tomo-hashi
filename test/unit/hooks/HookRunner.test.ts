@@ -547,4 +547,103 @@ describe("HookRunner — ask-mode", () => {
 		const outcome = await runner.run("before", makeAction("create_moc"));
 		expect(outcome.kind).toBe("ok");
 	});
+
+	// -- M1: enable-session staleness guard ------------------------------
+
+	it("re-prompts when the hook file fingerprint (size or mtime) changes (M1)", async () => {
+		// Loader returns mutable fingerprint so the test can simulate a
+		// file-replacement scenario without touching disk between runs.
+		let fingerprint = { size: 100, mtimeMs: 1000 };
+		const loader: HookLoader = {
+			resolve: () => ({
+				absolutePath: path.join(
+					fixturesDir,
+					"after-link_to_moc-async-resolves.cjs",
+				),
+				duplicates: [],
+				fingerprint: { ...fingerprint },
+			}),
+		};
+		const logger = makeLogger();
+		const askCallback = vi.fn().mockResolvedValue("enable-session");
+
+		const runner = new HookRunner(fakeApp, loader, logger, {
+			policy: "ask",
+			requireFn,
+			askCallback,
+		});
+
+		await runner.run("before", makeAction("create_moc"));
+		expect(askCallback).toHaveBeenCalledTimes(1);
+
+		// Simulate the user (or a sibling process) replacing the hook file.
+		fingerprint = { size: 200, mtimeMs: 2000 };
+		await runner.run("before", makeAction("create_moc"));
+
+		// The remembered "enable-session" decision must NOT carry across a
+		// file change — the second run re-prompts for fresh consent.
+		expect(askCallback).toHaveBeenCalledTimes(2);
+	});
+
+	it("does NOT re-prompt when the fingerprint is unchanged (M1)", async () => {
+		const fingerprint = { size: 100, mtimeMs: 1000 };
+		const loader: HookLoader = {
+			resolve: () => ({
+				absolutePath: path.join(
+					fixturesDir,
+					"after-link_to_moc-async-resolves.cjs",
+				),
+				duplicates: [],
+				fingerprint: { ...fingerprint },
+			}),
+		};
+		const logger = makeLogger();
+		const askCallback = vi.fn().mockResolvedValue("enable-session");
+
+		const runner = new HookRunner(fakeApp, loader, logger, {
+			policy: "ask",
+			requireFn,
+			askCallback,
+		});
+
+		await runner.run("before", makeAction("create_moc"));
+		await runner.run("before", makeAction("create_moc"));
+
+		expect(askCallback).toHaveBeenCalledTimes(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// M3 — withTimeout must clear its timer when the hook resolves first
+// ---------------------------------------------------------------------------
+
+describe("HookRunner — timeout cleanup (M3)", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("does not leak a setTimeout handle when the hook resolves before timeout", async () => {
+		const loader = makeFixtureLoader({
+			"before-create_moc": path.join(
+				fixturesDir,
+				"after-link_to_moc-async-resolves.cjs",
+			),
+		});
+		const logger = makeLogger();
+		const runner = new HookRunner(fakeApp, loader, logger, {
+			policy: "enabled",
+			requireFn,
+			timeoutMs: 30_000,
+		});
+
+		await runner.run("before", makeAction("create_moc"));
+
+		// Pre-fix: Promise.race left the loser timer alive for the full
+		// 30s — vi.getTimerCount() would be 1 right after the await.
+		expect(vi.getTimerCount()).toBe(0);
+	});
 });

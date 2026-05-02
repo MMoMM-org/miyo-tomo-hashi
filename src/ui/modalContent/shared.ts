@@ -27,10 +27,27 @@ export function createButtonRow(parent: HTMLElement): HTMLElement {
 }
 
 export function createRowGlyph(parent: HTMLElement, glyph: string): HTMLElement {
+	// M11: glyph is decorative — meaning is conveyed by the row's aria-label
+	// (see rowAriaLabel below). Without this, screen readers read each glyph
+	// by its Unicode name ("white heavy check mark", "prohibition sign",
+	// etc.) which is noise.
 	return parent.createSpan({
 		cls: "hashi-execution-modal-row-glyph",
 		text: glyph,
+		attr: { "aria-hidden": "true" },
 	});
+}
+
+/**
+ * Human-readable accessible name for an action row (review M11).
+ * "<state>: <id> <kind> — <summary>"
+ */
+export function rowAriaLabel(record: ActionRecord, isCurrent = false): string {
+	const state = record.outcome === null
+		? (isCurrent ? "running" : "pending")
+		: record.outcome.kind;
+	const summary = record.summary !== "" ? ` — ${record.summary}` : "";
+	return `${state}: ${record.id} ${record.kind}${summary}`;
 }
 
 export function glyphForOutcome(record: ActionRecord, isCurrent: boolean): string {

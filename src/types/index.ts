@@ -16,6 +16,16 @@ export const ZOOM_LEVELS = [0.5, 1, 1.5] as const;
 export type ZoomLevel = (typeof ZOOM_LEVELS)[number];
 
 export interface PluginSettings {
+	// --- meta ---
+
+	/**
+	 * Schema version for the persisted settings shape (review L3). Bump on
+	 * any rename / type change so loadSettings can run a migration block
+	 * before merging defaults. Optional in storage so upgrades from v0.0.x
+	 * (no field) read as version 1 by default; loadSettings normalizes.
+	 */
+	settings_version?: number;
+
 	// --- 001 fields ---
 
 	/**
@@ -75,6 +85,7 @@ export interface PluginSettings {
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
+	settings_version: 1,
 	// 001 defaults
 	chosenInstanceName: null,
 	zoomLevel: 1,

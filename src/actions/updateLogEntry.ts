@@ -41,7 +41,7 @@ export async function updateLogEntry(
 	}
 
 	const [fileContent, metadata] = await Promise.all([
-		vault.read(daily_note_path),
+		vault.cachedRead(daily_note_path),
 		vault.metadata(daily_note_path),
 	]);
 

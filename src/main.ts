@@ -308,11 +308,14 @@ export default class TomoHashiPlugin extends Plugin {
 		});
 
 		// 10. InstructionExecutor — singleton per plugin load.
+		// Pass settings as a getter (review M4): persist() reassigns
+		// `this.settings` to a new object; a snapshot would freeze the
+		// executor at load-time values.
 		this.executor = new InstructionExecutor({
 			vault,
 			validator,
 			hookRunner,
-			settings: this.settings,
+			settings: () => this.settings,
 			clock: { now: () => new Date() },
 		});
 
@@ -387,6 +390,13 @@ export default class TomoHashiPlugin extends Plugin {
 	}
 
 	override onunload(): void {
+		// L10: reset the module-level executionStore singleton FIRST so a
+		// reload of this plugin in the same Obsidian process doesn't re-fire
+		// the modal subscription with a stale non-idle state and a null
+		// executor. CJS module caching means executionStore survives plugin
+		// disable/enable in the same session.
+		executionStore.set({ kind: "idle" });
+
 		// Drain 002 cleanups in LIFO order — see header decision (5).
 		while (this.cleanups.length > 0) {
 			const fn = this.cleanups.pop();

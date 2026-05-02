@@ -30,7 +30,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import type { HookKey, HookLoader } from "./HookRunner.js";
+import type { HookKey, HookLoader, ResolvedHook } from "./HookRunner.js";
 
 export class FsHookLoader implements HookLoader {
 	constructor(
@@ -38,9 +38,23 @@ export class FsHookLoader implements HookLoader {
 		private readonly getHooksDir: () => string,
 	) {}
 
-	resolve(key: HookKey): { absolutePath: string; duplicates: string[] } | null {
+	resolve(key: HookKey): ResolvedHook | null {
 		const hooksDir = this.getHooksDir();
 		const absoluteDir = path.resolve(this.vaultBasePath, hooksDir);
+
+		// M2: refuse hooksDir values that escape the vault root. `data.json`
+		// could be tampered (e.g., via Obsidian Sync from another device)
+		// to point hooksDir at "../escape" or an absolute path elsewhere
+		// on disk; without this guard, FsHookLoader would happily load
+		// hook code from arbitrary FS locations. Allow only paths that
+		// resolve inside the vault tree (or equal the vault root).
+		if (
+			absoluteDir !== this.vaultBasePath &&
+			!absoluteDir.startsWith(this.vaultBasePath + path.sep)
+		) {
+			return null;
+		}
+
 		let entries: string[];
 		try {
 			entries = fs.readdirSync(absoluteDir);
@@ -53,9 +67,25 @@ export class FsHookLoader implements HookLoader {
 		if (matches.length === 0) return null;
 		const [first, ...rest] = matches;
 		if (first === undefined) return null;
+		const absolutePath = path.join(absoluteDir, first);
+
+		// M1: stat the matched file so HookRunner can detect file
+		// replacement between ask-mode runs and re-prompt. Soft-fail to
+		// "no fingerprint" if stat throws (race with deletion); the
+		// staleness guard then degrades to the prior cached-decision
+		// behavior rather than blocking the run.
+		let fingerprint: { size: number; mtimeMs: number } | undefined;
+		try {
+			const stat = fs.statSync(absolutePath);
+			fingerprint = { size: stat.size, mtimeMs: stat.mtimeMs };
+		} catch {
+			fingerprint = undefined;
+		}
+
 		return {
-			absolutePath: path.join(absoluteDir, first),
+			absolutePath,
 			duplicates: rest.map((d) => path.join(absoluteDir, d)),
+			...(fingerprint !== undefined ? { fingerprint } : {}),
 		};
 	}
 }

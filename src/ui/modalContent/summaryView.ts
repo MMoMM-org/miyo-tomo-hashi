@@ -49,9 +49,21 @@ function renderSummary(
 
 	const seconds = (state.counts.durationMs / 1000).toFixed(1);
 
-	contentEl.createDiv({
+	// M12: the visible glyph text reads as "check mark five middle dot
+	// prohibition sign two ..." in a screen reader. Wrap the visible
+	// version aria-hidden and provide a human aria-label on a role="img"
+	// container so AT announces "5 applied, 2 skipped, 0 failed,
+	// 1.2 seconds" instead.
+	const stats = contentEl.createDiv({
 		cls: "hashi-execution-modal-stats",
+		attr: {
+			role: "img",
+			"aria-label": `${state.counts.applied} applied, ${skipped} skipped, ${state.counts.failed} failed, ${seconds} seconds`,
+		},
+	});
+	stats.createSpan({
 		text: `${GLYPH_APPLIED} ${state.counts.applied} · ${GLYPH_SKIPPED} ${skipped} · ${GLYPH_FAILED} ${state.counts.failed} (${seconds}s)`,
+		attr: { "aria-hidden": "true" },
 	});
 
 	if (state.logFilePath !== null) {
