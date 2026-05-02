@@ -159,32 +159,11 @@ export class InstructionExecutor {
 		// Step 2: resolve sources
 		const sourcePaths = await this.resolveSources(invocation);
 
-		// Step 3: validate each source, build per-file failure map
-		const validSources: Array<{ fileId: string; sourcePath: string; set: unknown }> = [];
-		const perFileFailures = new Map<string, string>();
-
-		for (const sourcePath of sourcePaths) {
-			let raw: unknown;
-			try {
-				raw = await vault.readJSON(sourcePath);
-			} catch (err) {
-				// Review H3: a single malformed JSON source must not abort
-				// the whole run. Record on the same channel as schema-fail.
-				const message = err instanceof Error ? err.message : String(err);
-				perFileFailures.set(sourcePath, `read failed: ${message}`);
-				continue;
-			}
-			const outcome = this.validator.validate(raw);
-			if (outcome.ok) {
-				validSources.push({
-					fileId: sourcePath,
-					sourcePath,
-					set: outcome.data,
-				});
-			} else {
-				perFileFailures.set(sourcePath, outcome.message);
-			}
-		}
+		// Step 3: validate each source (M17: extracted from run()'s body
+		// for readability — single-purpose helper, no behavior change).
+		const { validSources, perFileFailures } = await this.validateAllSources(
+			sourcePaths,
+		);
 
 		// All files failed validation
 		if (sourcePaths.length > 0 && validSources.length === 0) {
@@ -370,19 +349,14 @@ export class InstructionExecutor {
 				}
 			}
 
-			// Step 8e (continued): after-hook failure does NOT change action outcome,
-			// but we record it as a separate log entry
+			// Step 8e (continued): after-hook failure does NOT change action
+			// outcome — the vault commit already happened. The failure is
+			// attached to the same row's error column (review M18) instead
+			// of being synthesized as a `${id}-after-hook` pseudo-record.
 			if (afterOutcome.kind === "failed") {
-				logWriter.appendRecord(record);
-				// Append a pseudo-record capturing the hook failure
-				const hookFailRecord: ActionRecord = {
-					fileId: record.fileId,
-					id: `${record.id}-after-hook`,
-					kind: record.kind,
-					summary: `after-hook failure for ${record.id}`,
-					outcome: { kind: "failed", reason: afterOutcome.reason },
-				};
-				logWriter.appendRecord(hookFailRecord);
+				logWriter.appendRecord(record, {
+					afterHookFailure: { reason: afterOutcome.reason },
+				});
 			} else {
 				// Step 8h: append record outcome to run log
 				logWriter.appendRecord(record);
@@ -424,6 +398,49 @@ export class InstructionExecutor {
 
 		// Steps 12 & 13 handled by execute() finally block
 		return counts;
+	}
+
+	/**
+	 * Read each sourcePath, JSON-parse it, run schema validation, and
+	 * partition into valid sources vs per-file failures (review M17 +
+	 * H3). Single-purpose helper extracted from run() to keep the
+	 * orchestrator method below the file-size ceiling.
+	 */
+	private async validateAllSources(
+		sourcePaths: readonly string[],
+	): Promise<{
+		validSources: Array<{ fileId: string; sourcePath: string; set: unknown }>;
+		perFileFailures: Map<string, string>;
+	}> {
+		const validSources: Array<{
+			fileId: string;
+			sourcePath: string;
+			set: unknown;
+		}> = [];
+		const perFileFailures = new Map<string, string>();
+
+		for (const sourcePath of sourcePaths) {
+			let raw: unknown;
+			try {
+				raw = await this.vault.readJSON(sourcePath);
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				perFileFailures.set(sourcePath, `read failed: ${message}`);
+				continue;
+			}
+			const outcome = this.validator.validate(raw);
+			if (outcome.ok) {
+				validSources.push({
+					fileId: sourcePath,
+					sourcePath,
+					set: outcome.data,
+				});
+			} else {
+				perFileFailures.set(sourcePath, outcome.message);
+			}
+		}
+
+		return { validSources, perFileFailures };
 	}
 
 	private async resolveSources(invocation: Invocation): Promise<string[]> {

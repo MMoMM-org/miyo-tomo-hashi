@@ -15,6 +15,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import {
 	HANDLERS,
+	addRelationship,
 	createMoc,
 	moveNote,
 	linkToMoc,
@@ -92,6 +93,13 @@ describe("HANDLERS — identity", () => {
 
 	it("HANDLERS.delete_source === deleteSource", () => {
 		expect(HANDLERS.delete_source).toBe(deleteSource);
+	});
+
+	// M20: add_relationship was missing from the identity table even
+	// though behavior coverage in addRelationship.test.ts is solid. This
+	// closes the registration-completeness gap.
+	it("HANDLERS.add_relationship === addRelationship (M20)", () => {
+		expect(HANDLERS.add_relationship).toBe(addRelationship);
 	});
 
 	it("HANDLERS.skip === skip", () => {
@@ -223,6 +231,24 @@ describe("HANDLERS — dispatch smoke", () => {
 			section: "Log",
 			position: "after_last_line" as const,
 			target_stem: "SomeNote",
+		};
+		const handler = HANDLERS[action.action];
+		const outcome = await handler(action, makeCtx(vault));
+		expect(outcome.kind).toBe("applied");
+	});
+
+	// M20: dispatch smoke for add_relationship — closes the registration
+	// gap. Behavioral coverage lives in addRelationship.test.ts.
+	it("add_relationship: dispatches and returns applied (M20)", async () => {
+		const mocPath = "MOCs/projects.md";
+		const vault = new FakeVaultFS();
+		await vault.create(mocPath, "# MOC\nrelated:: [[old]]\n");
+		const action = {
+			action: "add_relationship" as const,
+			id: "smoke-ar",
+			target_moc_path: mocPath,
+			marker: "related::",
+			line: "related:: [[NewNote]]",
 		};
 		const handler = HANDLERS[action.action];
 		const outcome = await handler(action, makeCtx(vault));

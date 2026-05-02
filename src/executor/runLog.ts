@@ -43,7 +43,16 @@ export interface ValidationFailure {
 // ---------------------------------------------------------------------------
 
 type BufferedEntry =
-	| { readonly kind: "record"; readonly record: ActionRecord }
+	| {
+			readonly kind: "record";
+			readonly record: ActionRecord;
+			// Optional after-hook failure attached to this record (review M18).
+			// Pre-fix the executor synthesized a pseudo-record with id
+			// `${id}-after-hook` and pushed it as a separate row — read like
+			// two outcomes for one action. Now stays a single row with the
+			// hook reason concatenated into the error column.
+			readonly afterHookFailure?: { readonly reason: string };
+	  }
 	| { readonly kind: "validation"; readonly failure: ValidationFailure };
 
 // ---------------------------------------------------------------------------
@@ -70,8 +79,17 @@ export class RunLogWriter {
 		return path;
 	}
 
-	appendRecord(record: ActionRecord): void {
-		this.entries.push({ kind: "record", record });
+	appendRecord(
+		record: ActionRecord,
+		opts?: { afterHookFailure?: { reason: string } },
+	): void {
+		this.entries.push({
+			kind: "record",
+			record,
+			...(opts?.afterHookFailure !== undefined
+				? { afterHookFailure: opts.afterHookFailure }
+				: {}),
+		});
 	}
 
 	appendValidationFailure(failure: ValidationFailure): void {
@@ -268,11 +286,22 @@ function renderEntryRow(
 
 	const { id, kind, summary, outcome } = entry.record;
 	const outcomeStr = outcome !== null ? outcome.kind : "pending";
-	const error = outcome !== null && outcome.kind === "failed" ? outcome.reason : "";
+	const baseError =
+		outcome !== null && outcome.kind === "failed" ? outcome.reason : "";
 	const depNote =
 		outcome !== null && outcome.kind === "skipped-dependency"
 			? ` (dependsOn: ${outcome.dependsOn})`
 			: "";
+	// M18: fold the after-hook failure (if any) into the same row's error
+	// column. Outcome stays as the handler's outcome (e.g., "applied")
+	// because the after-hook ran AFTER the vault commit and doesn't
+	// invalidate it; the failure is recorded but does not flip the row's
+	// outcome.
+	const error = entry.afterHookFailure !== undefined
+		? (baseError !== ""
+			? `${baseError}; after-hook failed: ${entry.afterHookFailure.reason}`
+			: `after-hook failed: ${entry.afterHookFailure.reason}`)
+		: baseError;
 
 	const idCell = renderIdCell(id, peerHeadings);
 	return `| ${idCell} | ${kind} | ${escapeCell(summary)} | ${escapeCell(outcomeStr + depNote)} | ${escapeCell(error)} |`;

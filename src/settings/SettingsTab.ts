@@ -25,6 +25,7 @@ import { connectionStore, displayInstanceName } from "../connection/connectionSt
 import type { ConnectionState } from "../connection/state";
 import type { TomoConnection } from "../connection/TomoConnection";
 import type { ExecutionMode } from "../executor/state";
+import type { PluginSettings } from "../types/index";
 import { InstancePickerModal } from "./InstancePickerModal";
 
 // ---------------------------------------------------------------------------
@@ -56,36 +57,100 @@ function isUnsafeVaultRelative(s: string): SafetyResult {
 }
 
 // ---------------------------------------------------------------------------
-// Handler map — keyed test seam exposing onChange callbacks for direct
-// invocation from tests, without DOM event simulation. Each entry is typed
-// to its specific field's value type — no `unknown` widening, no contravariance
-// holes. Production code never reads this map; it's accessed by tests through
-// the `_getHandlersForTest()` accessor below.
+// Settings handlers — pure factory (review M19)
+//
+// Pre-fix: SettingsTab carried a private `_handlers` map populated during
+// display() and exposed via a `_getHandlersForTest()` accessor — test-only
+// state living on a production class. Now the handler logic is a module-
+// level pure function that both the class and tests construct on demand.
 // ---------------------------------------------------------------------------
 
-type HandlerMap = {
-	tomoInboxFolder?: (v: string) => Promise<void>;
-	hooksDir?: (v: string) => Promise<void>;
-	executionMode?: (v: string) => Promise<void>;
-	runLogRetention?: (v: string) => Promise<void>;
-	hooksPolicy?: (v: string) => Promise<void>;
-	debugLogging?: (v: boolean) => Promise<void>;
+/** Map of onChange handlers, keyed by PluginSettings field. */
+export type HandlerMap = {
+	tomoInboxFolder: (v: string) => Promise<void>;
+	hooksDir: (v: string) => Promise<void>;
+	executionMode: (v: string) => Promise<void>;
+	runLogRetention: (v: string) => Promise<void>;
+	hooksPolicy: (v: string) => Promise<void>;
+	debugLogging: (v: boolean) => Promise<void>;
 };
+
+export interface SettingsPersistence {
+	readonly settings: PluginSettings;
+	saveSettings(): Promise<void>;
+}
+
+/**
+ * Build the onChange handlers for the SettingsTab controls.
+ *
+ * Pure function — no DOM, no Notice, no `this`. Returns one handler per
+ * settings field. Path handlers reject unsafe input (notify + no save);
+ * dropdown and boolean handlers persist without validation.
+ *
+ * The optional `notice` injection is used in production for the unsafe-
+ * path Notice. Tests pass a vi.fn() (or omit and rely on the default
+ * which constructs an Obsidian Notice).
+ */
+export function buildSettingsHandlers(
+	persistence: SettingsPersistence,
+	notice: (msg: string) => void = (msg) => {
+		new Notice(msg);
+	},
+): HandlerMap {
+	const pathHandler =
+		(key: "tomoInboxFolder" | "hooksDir") => async (v: string): Promise<void> => {
+			const check = isUnsafeVaultRelative(v);
+			if (!check.ok) {
+				notice(`Invalid path (${check.reason}): "${v}"`);
+				return;
+			}
+			persistence.settings[key] = v;
+			await persistence.saveSettings();
+		};
+
+	const dropdownHandler =
+		(key: "executionMode" | "runLogRetention" | "hooksPolicy") =>
+		async (v: string): Promise<void> => {
+			(persistence.settings as unknown as Record<string, unknown>)[key] = v;
+			await persistence.saveSettings();
+		};
+
+	const booleanHandler =
+		(key: "debugLogging") => async (v: boolean): Promise<void> => {
+			persistence.settings[key] = v;
+			await persistence.saveSettings();
+		};
+
+	return {
+		tomoInboxFolder: pathHandler("tomoInboxFolder"),
+		hooksDir: pathHandler("hooksDir"),
+		executionMode: dropdownHandler("executionMode"),
+		runLogRetention: dropdownHandler("runLogRetention"),
+		hooksPolicy: dropdownHandler("hooksPolicy"),
+		debugLogging: booleanHandler("debugLogging"),
+	};
+}
+
 
 export class SettingsTab extends PluginSettingTab {
 	plugin: TomoHashiPlugin;
 	private unsubscribe: (() => void) | null = null;
 
 	/**
-	 * onChange handler map populated during display(). Tests fire these to
-	 * simulate user edits without DOM interaction. Not used in production —
-	 * private, accessed only via `_getHandlersForTest()` below.
+	 * Test seam (review M19): rebuilds handlers on demand via the pure
+	 * `buildSettingsHandlers` factory rather than caching them on the
+	 * class. Production code never reads this; tests use it to drive
+	 * onChange behavior without DOM event simulation.
 	 */
-	private _handlers: HandlerMap = {};
-
-	/** @internal — test seam only. Returns the handler map for direct invocation in tests. */
 	_getHandlersForTest(): Readonly<HandlerMap> {
-		return this._handlers;
+		return buildSettingsHandlers(this.persistence());
+	}
+
+	private persistence(): SettingsPersistence {
+		return {
+			settings: this.plugin.settings,
+			saveSettings: () => this.plugin.saveSettings(),
+		};
 	}
 
 	constructor(
@@ -100,7 +165,6 @@ export class SettingsTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		this._handlers = {};
 
 		new Setting(containerEl).setName("Tomo connection").setHeading();
 		const wrapper = containerEl.createDiv({
@@ -162,11 +226,13 @@ export class SettingsTab extends PluginSettingTab {
 	}
 
 	private renderExecutorSection(containerEl: HTMLElement): void {
+		const handlers = buildSettingsHandlers(this.persistence());
+
 		new Setting(containerEl).setName("Instruction executor").setHeading();
 
 		this.addPathSetting(containerEl, "Tomo inbox folder",
 			"Vault-relative path to the folder watched for _instructions.json files.",
-			"tomoInboxFolder");
+			"tomoInboxFolder", handlers.tomoInboxFolder);
 
 		this.addDropdownSetting<ExecutionMode>(containerEl, "Execution mode",
 			"How the executor presents a run before executing.",
@@ -175,7 +241,7 @@ export class SettingsTab extends PluginSettingTab {
 				["confirm", "Confirm before run"],
 				["auto-run", "Auto-run with preview"],
 				["silent", "Silent"],
-			]);
+			], handlers.executionMode);
 
 		this.addDropdownSetting<"always" | "only-after-failed">(containerEl,
 			"Run log retention",
@@ -184,11 +250,11 @@ export class SettingsTab extends PluginSettingTab {
 			[
 				["always", "Always keep"],
 				["only-after-failed", "Only after failed runs"],
-			]);
+			], handlers.runLogRetention);
 
 		this.addPathSetting(containerEl, "Hooks directory",
 			"Vault-relative path to the directory scanned for hook scripts.",
-			"hooksDir");
+			"hooksDir", handlers.hooksDir);
 
 		this.addDropdownSetting<"enabled" | "disabled" | "ask">(containerEl, "Hooks",
 			"Policy for executing user-authored hook scripts.",
@@ -197,19 +263,14 @@ export class SettingsTab extends PluginSettingTab {
 				["enabled", "Enabled"],
 				["disabled", "Disabled"],
 				["ask", "Ask"],
-			]);
+			], handlers.hooksPolicy);
 
 		new Setting(containerEl)
 			.setName("Debug logging")
 			.setDesc("Write verbose executor output to the developer console.")
 			.addToggle(toggle => {
 				toggle.setValue(this.plugin.settings.debugLogging);
-				const handler = async (v: boolean): Promise<void> => {
-					this.plugin.settings.debugLogging = v;
-					await this.plugin.saveSettings();
-				};
-				this._handlers.debugLogging = handler;
-				toggle.onChange(handler);
+				toggle.onChange(handlers.debugLogging);
 			});
 	}
 
@@ -223,6 +284,7 @@ export class SettingsTab extends PluginSettingTab {
 		name: string,
 		desc: string,
 		key: "tomoInboxFolder" | "hooksDir",
+		handler: (v: string) => Promise<void>,
 	): void {
 		new Setting(containerEl)
 			.setName(name)
@@ -230,18 +292,16 @@ export class SettingsTab extends PluginSettingTab {
 			.addText(text => {
 				text.setPlaceholder(this.plugin.settings[key] || "");
 				text.setValue(this.plugin.settings[key]);
-				const handler = async (v: string): Promise<void> => {
-					const check = isUnsafeVaultRelative(v);
-					if (!check.ok) {
-						new Notice(`Invalid path (${check.reason}): "${v}"`);
+				// Wrap the pure handler with UI-revert on rejection: the pure
+				// handler doesn't update plugin.settings[key] when invalid, so
+				// re-stamping the input from the (unchanged) settings restores
+				// the prior safe value.
+				text.onChange(async (v) => {
+					await handler(v);
+					if (this.plugin.settings[key] !== v) {
 						text.setValue(this.plugin.settings[key]);
-						return;
 					}
-					this.plugin.settings[key] = v;
-					await this.plugin.saveSettings();
-				};
-				this._handlers[key] = handler;
-				text.onChange(handler);
+				});
 			});
 	}
 
@@ -255,6 +315,7 @@ export class SettingsTab extends PluginSettingTab {
 		desc: string,
 		key: "executionMode" | "runLogRetention" | "hooksPolicy",
 		options: Array<[T, string]>,
+		handler: (v: string) => Promise<void>,
 	): void {
 		new Setting(containerEl)
 			.setName(name)
@@ -264,11 +325,6 @@ export class SettingsTab extends PluginSettingTab {
 					dropdown.addOption(value, label);
 				}
 				dropdown.setValue(this.plugin.settings[key] as string);
-				const handler = async (v: string): Promise<void> => {
-					(this.plugin.settings as unknown as Record<string, unknown>)[key] = v as T;
-					await this.plugin.saveSettings();
-				};
-				this._handlers[key] = handler;
 				dropdown.onChange(handler);
 			});
 	}
