@@ -252,6 +252,45 @@ describe("RunLogWriter.finalize — body", () => {
 		expect(content).toContain("Hello World — full sentence");
 	});
 
+	// -- M5: pipe escaping in non-id columns ----------------------------
+
+	it("escapes literal | in summary, error, and depNote columns (M5)", async () => {
+		// bb7d6fb only escaped the I## column. Other columns can carry
+		// pipes (e.g., wikilink alias separator in update_log_link
+		// summaries, exception messages mentioning regex unions, dep
+		// notes in unusual ids). Without escaping, the markdown table
+		// row breaks.
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const filePath = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord(
+			"2026-04-29_1432_instructions.json",
+			"I05",
+			"update_log_link",
+			"daily.md#section ← [[stem|with|pipes]]",
+			{ kind: "failed", reason: "matched | option a or b" },
+		));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(filePath);
+
+		// The summary cell's pipes are escaped (\| keeps the cell intact).
+		expect(content).toContain("[[stem\\|with\\|pipes]]");
+		// The error cell's pipe is escaped too.
+		expect(content).toContain("matched \\| option a or b");
+
+		// Sanity: each table row has the expected 5 separator pipes (the
+		// outer two + four inner). Count of literal `|` (not `\\|`) per
+		// row must remain 6.
+		const recordLine = content
+			.split("\n")
+			.find((l) => l.includes("update_log_link"));
+		expect(recordLine).toBeDefined();
+		const literalPipes = (recordLine ?? "")
+			.replace(/\\\|/g, "")
+			.match(/\|/g) ?? [];
+		expect(literalPipes.length).toBe(6);
+	});
+
 	it("skipped-dependency row includes the dependsOn id", async () => {
 		const vault = new FakeVaultFS();
 		const writer = new RunLogWriter(vault);

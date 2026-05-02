@@ -308,11 +308,14 @@ export default class TomoHashiPlugin extends Plugin {
 		});
 
 		// 10. InstructionExecutor — singleton per plugin load.
+		// Pass settings as a getter (review M4): persist() reassigns
+		// `this.settings` to a new object; a snapshot would freeze the
+		// executor at load-time values.
 		this.executor = new InstructionExecutor({
 			vault,
 			validator,
 			hookRunner,
-			settings: this.settings,
+			settings: () => this.settings,
 			clock: { now: () => new Date() },
 		});
 

@@ -41,6 +41,51 @@ describe("FsHookLoader", () => {
 		fs.rmSync(tmpRoot, { recursive: true, force: true });
 	});
 
+	// -- M2: vault-root containment --------------------------------------
+
+	it("returns null when hooksDir resolves outside the vault root via .. traversal (M2)", () => {
+		// `data.json` could be tampered to set hooksDir to "../escape", and
+		// path.resolve happily produces an out-of-vault absolute path.
+		// The loader must detect and refuse — otherwise hooks could be
+		// loaded from arbitrary FS locations.
+		const loader = new FsHookLoader(tmpRoot, () => "../escape/hooks");
+		expect(loader.resolve("before-create_moc")).toBeNull();
+	});
+
+	it("returns null when hooksDir is an absolute path outside the vault (M2)", () => {
+		// Even if the path exists on disk, an absolute path that's not
+		// rooted in the vault must be refused.
+		const escapeDir = fs.mkdtempSync(path.join(os.tmpdir(), "hashi-escape-"));
+		try {
+			fs.writeFileSync(
+				path.join(escapeDir, "before-create_moc.js"),
+				"module.exports = () => {};",
+			);
+			const loader = new FsHookLoader(tmpRoot, () => escapeDir);
+			expect(loader.resolve("before-create_moc")).toBeNull();
+		} finally {
+			fs.rmSync(escapeDir, { recursive: true, force: true });
+		}
+	});
+
+	// -- M1: file fingerprint exposed for staleness guard ----------------
+
+	it("includes a file fingerprint (size + mtimeMs) for matched hooks (M1)", () => {
+		const hooksDir = ".tomo-hashi/hooks";
+		const absoluteDir = path.join(tmpRoot, hooksDir);
+		fs.mkdirSync(absoluteDir, { recursive: true });
+		const file = path.join(absoluteDir, "before-create_moc.js");
+		fs.writeFileSync(file, "module.exports = () => {};");
+
+		const loader = new FsHookLoader(tmpRoot, () => hooksDir);
+		const result = loader.resolve("before-create_moc");
+
+		expect(result?.fingerprint).toBeDefined();
+		expect(typeof result?.fingerprint?.size).toBe("number");
+		expect(typeof result?.fingerprint?.mtimeMs).toBe("number");
+		expect(result?.fingerprint?.size).toBeGreaterThan(0);
+	});
+
 	it("returns null when the hooks directory does not exist on disk", () => {
 		const loader = new FsHookLoader(tmpRoot, () => ".tomo-hashi/hooks");
 		expect(loader.resolve("before-create_moc")).toBeNull();

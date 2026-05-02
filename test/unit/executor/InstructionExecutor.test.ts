@@ -427,6 +427,78 @@ describe("InstructionExecutor — cancellation", () => {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// M4 — settings can be passed as a getter so in-session changes take effect
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — settings as getter (M4)", () => {
+	it("uses the latest settings on each execute when constructed with a getter", async () => {
+		// Pre-fix the executor froze settings at construction. main.ts's
+		// persist() reassigns its `this.settings` to a new object, so the
+		// executor would silently use stale values for the rest of the
+		// session. The getter form binds late.
+		const vault = new FakeVaultFS();
+		await vault.createFolder(INBOX);
+		await vault.createFolder("inbox");
+
+		// Two separate inbox folders; we'll flip the getter mid-test.
+		const inboxA = `${INBOX}/A`;
+		const inboxB = `${INBOX}/B`;
+		await vault.createFolder(inboxA);
+		await vault.createFolder(inboxB);
+
+		// Each has its own batch source so we can tell which one ran.
+		const setA = makeInstructionSet([makeCreateMoc("I01", `${inboxA}/m1.md`)]);
+		const setB = makeInstructionSet([makeCreateMoc("I02", `${inboxB}/m2.md`)]);
+		await vault.create(`${inboxA}/a_instructions.json`, JSON.stringify(setA, null, 2) + "\n");
+		await vault.create(`${inboxB}/b_instructions.json`, JSON.stringify(setB, null, 2) + "\n");
+		await vault.create("inbox/note-I01.md", "# Note");
+		await vault.create("inbox/note-I02.md", "# Note");
+
+		// Mutable settings object the test can reassign.
+		let liveSettings: PluginSettings = makeSettings({ tomoInboxFolder: inboxA });
+
+		const executor = new InstructionExecutor({
+			vault,
+			validator: {
+				validate: (raw: unknown): ValidationOutcome => {
+					const s = raw as { schema_version?: string };
+					if (s?.schema_version === "1") {
+						return { ok: true, data: raw as InstructionSet };
+					}
+					return { ok: false, message: "invalid" };
+				},
+			},
+			hookRunner: makeHookRunner(),
+			// Pass a getter — executor must read settings on each run.
+			settings: () => liveSettings,
+			clock: fixedClock,
+			store: new Store<RunState>({ kind: "idle" }),
+		});
+
+		await executor.execute({ kind: "batch" });
+		// After first run: inboxA's I01 must be applied
+		const afterFirstA = await vault.readJSON<InstructionSet>(
+			`${inboxA}/a_instructions.json`,
+		);
+		expect(afterFirstA.actions.find((a) => a.id === "I01")?.applied).toBe(true);
+		const afterFirstB = await vault.readJSON<InstructionSet>(
+			`${inboxB}/b_instructions.json`,
+		);
+		expect(afterFirstB.actions.find((a) => a.id === "I02")?.applied).toBeUndefined();
+
+		// Simulate persist() reassigning settings
+		liveSettings = makeSettings({ tomoInboxFolder: inboxB });
+
+		await executor.execute({ kind: "batch" });
+		// Second run must read the NEW inbox folder
+		const afterSecondB = await vault.readJSON<InstructionSet>(
+			`${inboxB}/b_instructions.json`,
+		);
+		expect(afterSecondB.actions.find((a) => a.id === "I02")?.applied).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // H5 — Batched applied-flag writes (one processJSON per source, not N)
 // ---------------------------------------------------------------------------
 

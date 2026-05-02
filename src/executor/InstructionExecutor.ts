@@ -64,7 +64,15 @@ export interface InstructionExecutorDeps {
 	readonly vault: VaultFS;
 	readonly validator: { validate(raw: unknown): ValidationOutcome };
 	readonly hookRunner: { run(phase: "before" | "after", action: Action): Promise<HookOutcome> };
-	readonly settings: PluginSettings;
+	/**
+	 * Plugin settings — either a snapshot or a getter function.
+	 *
+	 * Pass a getter when the consumer reassigns its settings object on
+	 * persist (this is what main.ts does). With a snapshot, the executor
+	 * holds a frozen reference and silently uses stale values across
+	 * in-session changes (review M4).
+	 */
+	readonly settings: PluginSettings | (() => PluginSettings);
 	readonly clock: Clock;
 	readonly store?: Store<RunState>;
 	readonly notify?: (msg: string) => void;
@@ -78,7 +86,7 @@ export class InstructionExecutor {
 	private readonly vault: VaultFS;
 	private readonly validator: { validate(raw: unknown): ValidationOutcome };
 	private readonly hookRunner: { run(phase: "before" | "after", action: Action): Promise<HookOutcome> };
-	private readonly settings: PluginSettings;
+	private readonly settingsRef: () => PluginSettings;
 	private readonly clock: Clock;
 	readonly state: Store<RunState>;
 	private readonly notify: (msg: string) => void;
@@ -91,10 +99,19 @@ export class InstructionExecutor {
 		this.vault = deps.vault;
 		this.validator = deps.validator;
 		this.hookRunner = deps.hookRunner;
-		this.settings = deps.settings;
+		this.settingsRef =
+			typeof deps.settings === "function"
+				? deps.settings
+				: () => deps.settings as PluginSettings;
 		this.clock = deps.clock;
 		this.state = deps.store ?? executionStore;
 		this.notify = deps.notify ?? (() => { /* no-op in prod when not injected */ });
+	}
+
+	// Reads through the registered accessor so consumers passing a getter
+	// see live changes (review M4). Safe to call at any time during run().
+	private get settings(): PluginSettings {
+		return this.settingsRef();
 	}
 
 	cancel(): void {

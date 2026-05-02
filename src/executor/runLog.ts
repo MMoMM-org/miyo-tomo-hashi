@@ -229,13 +229,21 @@ function renderFileSection(
 	return [heading, "", header, divider, ...rows, ""].join("\n");
 }
 
+// Markdown-table cells terminate at `|`. Escape literal pipes anywhere
+// they may appear in user-derived strings (review M5). bb7d6fb fixed
+// idCell only; summary/error/depNote can also carry pipes (alias
+// separators in wikilinks, exception messages mentioning regex unions).
+function escapeCell(s: string): string {
+	return s.replace(/\|/g, "\\|");
+}
+
 function renderEntryRow(
 	entry: BufferedEntry,
 	peerHeadings: Map<string, PeerHeading> | undefined,
 ): string {
 	if (entry.kind === "validation") {
 		const msg = entry.failure.message;
-		return `| — | — | (validation failure) | failed | ${msg} |`;
+		return `| — | — | (validation failure) | failed | ${escapeCell(msg)} |`;
 	}
 
 	const { id, kind, summary, outcome } = entry.record;
@@ -247,7 +255,7 @@ function renderEntryRow(
 			: "";
 
 	const idCell = renderIdCell(id, peerHeadings);
-	return `| ${idCell} | ${kind} | ${summary} | ${outcomeStr}${depNote} | ${error} |`;
+	return `| ${idCell} | ${kind} | ${escapeCell(summary)} | ${escapeCell(outcomeStr + depNote)} | ${escapeCell(error)} |`;
 }
 
 function renderIdCell(

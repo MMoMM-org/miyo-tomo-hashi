@@ -44,8 +44,21 @@ export type HookOutcome =
 
 export type AskCallback = (hookPath: string) => Promise<AskDecision>;
 
+/**
+ * Resolved hook reference returned by `HookLoader.resolve`. The optional
+ * `fingerprint` (size + mtimeMs) lets HookRunner detect file replacement
+ * between ask-mode runs and re-prompt the user — see review M1. Loaders
+ * that cannot supply a fingerprint (e.g., test stubs) simply omit it; the
+ * staleness guard then degrades to the prior cached-decision behavior.
+ */
+export interface ResolvedHook {
+	absolutePath: string;
+	duplicates: string[];
+	fingerprint?: { size: number; mtimeMs: number };
+}
+
 export interface HookLoader {
-	resolve(key: HookKey): { absolutePath: string; duplicates: string[] } | null;
+	resolve(key: HookKey): ResolvedHook | null;
 }
 
 /** Minimal require-function interface — avoids the deprecated NodeRequire / RequireFn globals. */
@@ -73,23 +86,49 @@ function loadHookFresh(absolutePath: string, requireFn: RequireFn): Hook {
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-	return Promise.race([
-		promise,
-		new Promise<T>((_, reject) =>
-			setTimeout(
-				() => reject(new Error(`Hook exceeded ${ms}ms timeout`)),
-				ms,
-			),
-		),
-	]);
+	// Capture the timer handle so we can clear it after the race resolves
+	// (review M3). Promise.race only resolves the winner — the loser
+	// timer would otherwise stay alive for the full `ms` window, holding
+	// its closure (and surrounding context) until it fires.
+	let timerId: ReturnType<typeof setTimeout> | null = null;
+	const timeoutPromise = new Promise<T>((_, reject) => {
+		timerId = setTimeout(
+			() => reject(new Error(`Hook exceeded ${ms}ms timeout`)),
+			ms,
+		);
+	});
+	try {
+		return await Promise.race([promise, timeoutPromise]);
+	} finally {
+		if (timerId !== null) clearTimeout(timerId);
+	}
 }
 
 // ---------------------------------------------------------------------------
 // HookRunner
 // ---------------------------------------------------------------------------
 
+// Internal record paired with each remembered ask-mode decision. We keep
+// the file fingerprint that was approved so a later resolve() with a
+// changed fingerprint forces a re-prompt (review M1).
+interface SessionDecisionRecord {
+	decision: AskDecision;
+	fingerprint?: { size: number; mtimeMs: number };
+}
+
+function fingerprintsMatch(
+	a: { size: number; mtimeMs: number } | undefined,
+	b: { size: number; mtimeMs: number } | undefined,
+): boolean {
+	// If either side lacks a fingerprint we cannot prove staleness, so we
+	// fall back to the prior trust-the-cache behavior. FsHookLoader always
+	// supplies one in production; only test stubs would omit it.
+	if (a === undefined || b === undefined) return true;
+	return a.size === b.size && a.mtimeMs === b.mtimeMs;
+}
+
 export class HookRunner {
-	private readonly sessionDecisions = new Map<HookKey, AskDecision>();
+	private readonly sessionDecisions = new Map<HookKey, SessionDecisionRecord>();
 	private readonly requireFn: RequireFn;
 	private readonly timeoutMs: number;
 	private readonly askCallback: AskCallback;
@@ -130,7 +169,11 @@ export class HookRunner {
 		}
 
 		if (this.policy === "ask") {
-			const decision = await this.resolveAskDecision(key, absolutePath);
+			const decision = await this.resolveAskDecision(
+				key,
+				absolutePath,
+				resolved.fingerprint,
+			);
 			if (decision === "disable") return { kind: "ok" };
 		}
 
@@ -151,13 +194,22 @@ export class HookRunner {
 	private async resolveAskDecision(
 		key: HookKey,
 		absolutePath: string,
+		fingerprint: { size: number; mtimeMs: number } | undefined,
 	): Promise<AskDecision> {
 		const remembered = this.sessionDecisions.get(key);
-		if (remembered !== undefined) return remembered;
+		// Re-prompt if (a) no remembered decision, OR (b) the file changed
+		// since approval (review M1). Bounds the trust window to a single
+		// file identity even within one session.
+		if (
+			remembered !== undefined &&
+			fingerprintsMatch(remembered.fingerprint, fingerprint)
+		) {
+			return remembered.decision;
+		}
 
 		const decision = await this.askCallback(absolutePath);
 		if (decision === "enable-session" || decision === "disable") {
-			this.sessionDecisions.set(key, decision);
+			this.sessionDecisions.set(key, { decision, fingerprint });
 		}
 		// enable-once: invoke this time but don't store → next call re-prompts
 		return decision;
