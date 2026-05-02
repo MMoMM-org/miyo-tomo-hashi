@@ -149,7 +149,7 @@ function asConnection(c: FakeConnection): TomoConnection {
 interface Harness {
 	view: TomoChatView;
 	connection: FakeConnection;
-	chosenInstanceId: ReturnType<typeof vi.fn>;
+	getChosenInstanceName: ReturnType<typeof vi.fn>;
 	onZoomChange: ReturnType<typeof vi.fn>;
 	root: HTMLElement;
 }
@@ -162,7 +162,7 @@ interface MountOptions {
 const mountView = async (opts: MountOptions = {}): Promise<Harness> => {
 	const leaf = new WorkspaceLeaf();
 	const connection = makeConnection();
-	const chosenInstanceId = vi.fn(() => opts.chosenId ?? null);
+	const getChosenInstanceName = vi.fn(() => opts.chosenId ?? null);
 	const onZoomChange = vi.fn(
 		async (
 			_level: import("../../../../src/types/index").ZoomLevel,
@@ -171,12 +171,12 @@ const mountView = async (opts: MountOptions = {}): Promise<Harness> => {
 	const view = new TomoChatView(
 		leaf,
 		asConnection(connection),
-		chosenInstanceId,
+		getChosenInstanceName,
 		opts.initialZoom ?? 1,
 		onZoomChange,
 	);
 	await view.onOpen();
-	return { view, connection, chosenInstanceId, onZoomChange, root: view.contentEl };
+	return { view, connection, getChosenInstanceName, onZoomChange, root: view.contentEl };
 };
 
 describe("TomoChatView — view-type metadata", () => {
@@ -487,7 +487,7 @@ describe("TomoChatView — force reconnect button", () => {
 		expect(h.connection.forceReconnect).toHaveBeenCalledTimes(1);
 	});
 
-	it("is disabled when chosenInstanceId() returns null", async () => {
+	it("is disabled when getChosenInstanceName() returns null", async () => {
 		const h = await mountView();
 		const btn = h.root.querySelector<HTMLButtonElement>(
 			".hashi-chat-view-force-reconnect",
@@ -495,7 +495,7 @@ describe("TomoChatView — force reconnect button", () => {
 		expect(btn!.disabled).toBe(true);
 	});
 
-	it("is enabled when chosenInstanceId() returns a string", async () => {
+	it("is enabled when getChosenInstanceName() returns a string", async () => {
 		const h = await mountView({ chosenId: "instance-id-123" });
 		const btn = h.root.querySelector<HTMLButtonElement>(
 			".hashi-chat-view-force-reconnect",

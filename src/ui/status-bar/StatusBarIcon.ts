@@ -72,7 +72,7 @@ export class StatusBarIcon {
 		private readonly plugin: Plugin,
 		private readonly actions: StatusBarActions,
 		// Dep-injected so phase-5 can wire it to the persisted settings.
-		private readonly chosenInstanceId: () => string | null,
+		private readonly getChosenInstanceName: () => string | null,
 	) {}
 
 	mount(): void {
@@ -98,7 +98,7 @@ export class StatusBarIcon {
 					? evt
 					: new MouseEvent("click", { clientX: 0, clientY: 0 });
 			openPopover(mouseEvt, {
-				forceReconnectEnabled: this.chosenInstanceId() !== null,
+				forceReconnectEnabled: this.getChosenInstanceName() !== null,
 				onForceReconnect: this.actions.onForceReconnect,
 				onOpenChat: this.actions.onOpenChat,
 				onOpenSettings: this.actions.onOpenSettings,

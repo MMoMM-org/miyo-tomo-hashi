@@ -113,7 +113,15 @@ export class RunLogWriter {
 		const content = renderLog(this.meta, endedAt, this.entries, peerHeadings);
 		await this.vault.process(this.logPath, () => content);
 
-		if (retention === "only-after-failed" && countFailures(this.entries) === 0) {
+		// Inlined countFailures (review round 2 / L16) — the helper just
+		// re-ran computeTotals to read one field; renderLog already
+		// computed the same tally above (line 187), but lifting that into
+		// the caller would ripple through renderLog's signature for one
+		// number. One extra pass per finalize is cheap; the helper isn't.
+		if (
+			retention === "only-after-failed" &&
+			computeTotals(this.entries).failed === 0
+		) {
 			await this.vault.trash(this.logPath);
 		}
 	}
@@ -279,8 +287,12 @@ function renderFileSection(
 // they may appear in user-derived strings (review M5). bb7d6fb fixed
 // idCell only; summary/error/depNote can also carry pipes (alias
 // separators in wikilinks, exception messages mentioning regex unions).
+// Newlines (review round 2 / L15) also break the table — a hook-emitted
+// `info` or `warnings` string carrying \n would terminate the row early
+// and leave trailing pipe-free text outside the table; collapse to
+// single space before pipe-escape so the row stays valid Markdown.
 function escapeCell(s: string): string {
-	return s.replace(/\|/g, "\\|");
+	return s.replace(/[\r\n]+/g, " ").replace(/\|/g, "\\|");
 }
 
 function renderEntryRow(
@@ -375,10 +387,6 @@ function computeTotals(entries: readonly BufferedEntry[]): Totals {
 	}
 
 	return t;
-}
-
-function countFailures(entries: readonly BufferedEntry[]): number {
-	return computeTotals(entries).failed;
 }
 
 // ---------------------------------------------------------------------------

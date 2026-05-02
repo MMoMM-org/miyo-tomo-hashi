@@ -160,7 +160,7 @@ export default class TomoHashiPlugin extends Plugin {
 		this.connection = new TomoConnection(this.settings, persist);
 		const conn = this.connection;
 
-		const chosenInstanceId = (): string | null =>
+		const getChosenInstanceName = (): string | null =>
 			this.settings.chosenInstanceName;
 
 		// 1. Chat view registration (T4.3).
@@ -173,7 +173,7 @@ export default class TomoHashiPlugin extends Plugin {
 				new TomoChatView(
 					leaf,
 					conn,
-					chosenInstanceId,
+					getChosenInstanceName,
 					this.settings.zoomLevel,
 					onZoomChange,
 				),
@@ -203,7 +203,7 @@ export default class TomoHashiPlugin extends Plugin {
 					}
 				},
 			},
-			chosenInstanceId,
+			getChosenInstanceName,
 		);
 		this.statusBarIcon.mount();
 
@@ -232,7 +232,7 @@ export default class TomoHashiPlugin extends Plugin {
 		registerCommands(this, {
 			connection: conn,
 			showChatWindow: () => showChatWindow(this.app),
-			chosenInstanceId,
+			getChosenInstanceName,
 		});
 
 		// 6. FS2 auto-reconnect on load. Fire-and-forget — onload must not
@@ -355,7 +355,12 @@ export default class TomoHashiPlugin extends Plugin {
 			lastKind = state.kind;
 			// Open on the first non-idle transition.
 			if (prev === "idle" && state.kind !== "idle" && activeModal === null) {
-				const mode = "mode" in state ? state.mode : "confirm";
+				// review round 2 / L47: every non-idle RunState branch
+				// carries `mode` per state.ts. The "mode" in state guard
+				// + "confirm" fallback was defensive against a kind that
+				// no longer exists; TypeScript narrows state.mode safely
+				// after the kind !== "idle" check.
+				const mode = state.mode;
 				if (mode === "silent") return;
 				if (this.executor === null) return;
 				const exec = this.executor;
@@ -393,10 +398,20 @@ export default class TomoHashiPlugin extends Plugin {
 		this.cleanups.push(unsubModalGlue);
 
 		// 13. 002 commands + file-menu (T6.1).
+		// review round 2 / L46: settings is exposed via a getter that
+		// reads `this.settings` live, so a user-changed tomoInboxFolder
+		// / hooksPolicy reaches the command handlers without an
+		// Obsidian restart. Pre-fix `settings: this.settings`
+		// snapshotted the object at plugin-onload time. The ExecutorCmdDeps
+		// shape declares `settings` so callers `executorCmdDeps.settings`
+		// dispatches through the getter on every access.
+		const getSettings = (): PluginSettings => this.settings;
 		const executorCmdDeps = {
 			executor: this.executor,
 			vault,
-			settings: this.settings,
+			get settings(): PluginSettings {
+				return getSettings();
+			},
 		} as const;
 		registerExecutorCommands(this, executorCmdDeps);
 		registerExecutorFileMenu(this, executorCmdDeps);

@@ -57,7 +57,7 @@ of any kind.
 
 ### Privacy regression guard
 
-`test/unit/connection/no-chat-content-logged.test.ts` runs in every
+`test/unit/no-chat-content-logged.test.ts` runs in every
 CI build. It greps the `src/connection/**` and `src/ui/chat-view/**`
 trees for any `logger.<method>(..., chunk|data|stdout|stderr|...)`
 call — a single such call breaks the build. This is the technical

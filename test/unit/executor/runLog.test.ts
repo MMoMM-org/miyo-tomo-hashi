@@ -304,6 +304,37 @@ describe("RunLogWriter.finalize — body", () => {
 		expect(literalPipes.length).toBe(6);
 	});
 
+	it("collapses newlines in cells so a row stays single-line (review round 2 / L15)", async () => {
+		// A hook-emitted info/warnings string carrying \n was previously
+		// embedded verbatim into the table row, terminating every column
+		// after the newline and leaving trailing pipe-free text outside
+		// the table. escapeCell now collapses [\r\n]+ to a single space
+		// before pipe-escape so the row stays valid Markdown regardless
+		// of the source string's whitespace shape.
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord(
+			"2026-04-29_1432_instructions.json",
+			"I07",
+			"create_moc",
+			"a → moc",
+			{ kind: "failed", reason: "line one\nline two\r\nline three" },
+		));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		// The failed record's row must be a single line — the embedded
+		// \n / \r\n must not split the row across multiple table lines.
+		const rowLines = content
+			.split("\n")
+			.filter((l) => l.includes("create_moc") && l.includes("failed"));
+		expect(rowLines.length).toBe(1);
+		// And the failure-reason text is preserved with newlines collapsed
+		// to spaces.
+		expect(rowLines[0]).toContain("line one line two line three");
+	});
+
 	it("skipped-dependency row includes the dependsOn id", async () => {
 		const vault = new FakeVaultFS();
 		const writer = new RunLogWriter(vault);

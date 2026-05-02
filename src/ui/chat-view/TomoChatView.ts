@@ -11,7 +11,7 @@
  *
  * --- Decisions ---
  *
- * 1. `chosenInstanceId` is dependency-injected as a `() => string | null`
+ * 1. `getChosenInstanceName` is dependency-injected as a `() => string | null`
  *    callback rather than reading the settings object directly. Mirrors
  *    `StatusBarIcon` (T4.2) and keeps the view decoupled from the plugin
  *    settings shape; main.ts wires it to the persisted instance NAME (label
@@ -29,7 +29,7 @@
  *    real workspace leaf — focus works there. Tests append the contentEl
  *    to `document.body` to verify focus behavior.
  *
- * 4. The Force Reconnect button is `disabled` when `chosenInstanceId()`
+ * 4. The Force Reconnect button is `disabled` when `getChosenInstanceName()`
  *    returns null. Parity with the status-bar popover (PRD F3 / AC5,
  *    SDD ADR-9): "Force Reconnect" must never open the picker.
  *
@@ -141,7 +141,7 @@ export class TomoChatView extends ItemView {
 	constructor(
 		leaf: WorkspaceLeaf,
 		private readonly connection: TomoConnection,
-		private readonly chosenInstanceId: () => string | null,
+		private readonly getChosenInstanceName: () => string | null,
 		initialZoom: ZoomLevel,
 		private readonly onZoomChange: (level: ZoomLevel) => Promise<void>,
 	) {
@@ -231,7 +231,12 @@ export class TomoChatView extends ItemView {
 				cls: "hashi-chat-view-zoom-btn",
 				text: this.formatZoomLabel(level),
 			});
-			btn.setAttr("aria-label", `Zoom ${this.formatZoomLabel(level)}`);
+			// review round 2 / L30: per-button label is just the size — the
+			// containing role=group's "Terminal zoom" name supplies the
+			// context. Pre-fix label was "Zoom S/M/L" which some screen
+			// readers concatenated with the group label as "Terminal zoom
+			// Zoom S".
+			btn.setAttr("aria-label", this.formatZoomLabel(level));
 			// H5 (review/spec-001): SR users can't tell which zoom is
 			// active without aria-pressed — the .is-active CSS class is
 			// invisible to AT.
@@ -308,7 +313,15 @@ export class TomoChatView extends ItemView {
 		const inputRow = root.createDiv({ cls: "hashi-chat-view-input-row" });
 		this.inputEl = inputRow.createEl("input", {
 			cls: "hashi-chat-view-input",
-			attr: { type: "text", placeholder: "Type a message…" },
+			// review round 2 / L28: aria-label="Message" — placeholder is
+			// not a substitute for an accessible name in some browser/AT
+			// combinations; an explicit label guarantees the input is
+			// announced to screen readers.
+			attr: {
+				type: "text",
+				placeholder: "Type a message…",
+				"aria-label": "Message",
+			},
 		});
 		this.inputEl.addEventListener("keydown", (evt) => {
 			if (evt.key !== "Enter" || evt.shiftKey) return;
@@ -351,11 +364,19 @@ export class TomoChatView extends ItemView {
 	 * Obsidian's workspace focus system delegates here when the view becomes
 	 * active. The `override` keyword is omitted because `focus()` isn't in
 	 * Obsidian's typed `ItemView` declarations — the runtime calls it via
-	 * duck typing. Defaults would land focus on `contentEl`; we route to the
-	 * xterm terminal so keyboard input is immediately captured (review C1).
+	 * duck typing. Defaults would land focus on `contentEl`; we route to
+	 * the input when Connected (so users can type immediately) or to the
+	 * xterm terminal otherwise (so AT users land inside the chat surface).
+	 * Mirrors the onOpen bootstrap (review round 2 / L29). Pre-fix this
+	 * always routed to the terminal, forcing the user to manually move
+	 * focus to the input each time the view was re-activated mid-session.
 	 */
 	focus(): void {
-		this.terminal?.terminal.focus();
+		if (connectionStore.get().kind === "connected") {
+			this.inputEl?.focus();
+		} else {
+			this.terminal?.terminal.focus();
+		}
 	}
 
 	override async onClose(): Promise<void> {
@@ -472,7 +493,7 @@ export class TomoChatView extends ItemView {
 			input.focus();
 		}
 
-		const noInstance = this.chosenInstanceId() === null;
+		const noInstance = this.getChosenInstanceName() === null;
 		btn.disabled = noInstance;
 		btn.title = noInstance
 			? "Force reconnect (no instance chosen)"

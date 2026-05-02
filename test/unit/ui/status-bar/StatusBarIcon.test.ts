@@ -69,7 +69,7 @@ interface Harness {
 	plugin: PluginStub;
 	icon: StatusBarIcon;
 	actions: StatusBarActions;
-	chosenInstanceId: ReturnType<typeof vi.fn>;
+	getChosenInstanceName: ReturnType<typeof vi.fn>;
 	getRoot: () => HTMLElement;
 }
 
@@ -84,14 +84,14 @@ const mountIcon = (chosenId: string | null = null): Harness => {
 		}),
 	};
 	const actions = makeActions();
-	const chosenInstanceId = vi.fn(() => chosenId);
-	const icon = new StatusBarIcon(asPlugin(plugin), actions, chosenInstanceId);
+	const getChosenInstanceName = vi.fn(() => chosenId);
+	const icon = new StatusBarIcon(asPlugin(plugin), actions, getChosenInstanceName);
 	icon.mount();
 	return {
 		plugin,
 		icon,
 		actions,
-		chosenInstanceId,
+		getChosenInstanceName,
 		getRoot: () => {
 			const root = created[0];
 			if (root === undefined) throw new Error("status bar item not created");

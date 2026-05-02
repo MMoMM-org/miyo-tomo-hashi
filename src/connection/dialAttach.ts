@@ -35,7 +35,12 @@ import http from "node:http";
 import process from "node:process";
 import type { Duplex } from "node:stream";
 
-const SOCKET_PATH: string =
+/**
+ * Single source of truth for the Docker daemon socket path. Re-exported
+ * for `docker.ts` (which uses it to construct the dockerode client) so
+ * the platform-detection lives in one place (review round 2 / L11).
+ */
+export const SOCKET_PATH: string =
 	process.platform === "win32"
 		? "\\\\.\\pipe\\docker_engine"
 		: "/var/run/docker.sock";

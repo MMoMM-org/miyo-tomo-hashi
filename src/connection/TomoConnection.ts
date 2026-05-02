@@ -21,7 +21,7 @@
  *    session if they diverge. This is cheaper than wiring an AbortController
  *    through `dockerode`'s callback-style attach.
  *
- * 2. `chosenInstanceId` is mutated on `this.settings` on entering Connected,
+ * 2. `chosenInstanceName` is mutated on `this.settings` on entering Connected,
  *    NOT cleared on disconnect (FS2: remember last connected). T3.4 wires a
  *    `persist` callback through the constructor so the settings object is
  *    flushed to plugin data on every Connected transition; on Disconnect
@@ -57,7 +57,7 @@ import {
 	inspectContainer,
 	listTomoInstances,
 } from "./docker";
-import { ReconnectLoop } from "./reconnectLoop";
+import { INITIAL_RECONNECT_DELAY_MS, ReconnectLoop } from "./reconnectLoop";
 import type { ConnectionState } from "./state";
 import type { ConnectionError, TomoInstance } from "./types";
 
@@ -102,9 +102,12 @@ function toConnectionError(err: unknown): ConnectionError {
 }
 
 function chunkToUint8Array(chunk: unknown): Uint8Array {
+	// Node Buffer is a Uint8Array subclass, so the instanceof check below
+	// covers both — the previous separate `Buffer.isBuffer` branch was
+	// dead code (review round 2 / L5), and re-wrapping the buffer with
+	// `new Uint8Array(buffer)` allocated a redundant view per chunk.
 	if (chunk instanceof Uint8Array) return chunk;
 	if (typeof chunk === "string") return Buffer.from(chunk);
-	if (Buffer.isBuffer(chunk)) return new Uint8Array(chunk);
 	// Fallback — preserve bytes by going through Buffer.from on `String(chunk)`.
 	return Buffer.from(String(chunk));
 }
@@ -194,6 +197,15 @@ export class TomoConnection {
 		try {
 			await this.persist(this.settings);
 		} catch (err: unknown) {
+			// v0.1 trade-off (review round 2 / L4): console.warn only,
+			// not a user-visible Notice. Persist failures are rare
+			// (Obsidian's saveData backs onto a vetted fs op chain) and
+			// the user is now CONNECTED — surfacing a Notice on every
+			// connect would be noisy. The downside is silent: their
+			// next reload won't auto-reconnect to this instance until
+			// they pick it again. If users report "I picked X, it
+			// connected, but next time it didn't auto-reconnect" we
+			// should promote this to a Notice via an injected callback.
 			console.warn("[hashi] failed to persist chosenInstanceName:", err);
 		}
 	}
@@ -475,7 +487,7 @@ export class TomoConnection {
 			kind: "reconnecting",
 			target,
 			attempt: 1,
-			nextDelayMs: 500,
+			nextDelayMs: INITIAL_RECONNECT_DELAY_MS,
 		});
 
 		const loop = new ReconnectLoop();

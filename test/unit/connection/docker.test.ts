@@ -60,6 +60,12 @@ vi.mock("dockerode", () => {
 const mockDialAttach = vi.fn<(id: string) => Promise<import("node:stream").Duplex>>();
 vi.mock("../../../src/connection/dialAttach", () => ({
 	dialAttach: (id: string) => mockDialAttach(id),
+	// SOCKET_PATH is re-exported from dialAttach (round 2 / L11) and read
+	// by docker.ts to construct the dockerode client. Echoing the
+	// production constant here keeps the mock surface complete; the
+	// dockerode mock above ignores the value, so the literal does not
+	// affect test behaviour.
+	SOCKET_PATH: "/var/run/docker.sock",
 }));
 
 beforeEach(() => {

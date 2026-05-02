@@ -33,12 +33,11 @@
  */
 
 import { Buffer } from "node:buffer";
-import process from "node:process";
 import { PassThrough, type Readable, type Writable } from "node:stream";
 
 import Dockerode from "dockerode";
 
-import { dialAttach } from "./dialAttach";
+import { SOCKET_PATH, dialAttach } from "./dialAttach";
 import type { ConnectionError, TomoInstance } from "./types";
 
 // --- AttachSession contract --------------------------------------------------
@@ -68,11 +67,6 @@ export interface AttachSession {
 
 const DOCKER_LABEL_COMPONENT = "miyo.component=tomo";
 const DOCKER_LABEL_INSTANCE_NAME = "miyo.tomo.instance-name";
-
-const SOCKET_PATH: string =
-	process.platform === "win32"
-		? "\\\\.\\pipe\\docker_engine"
-		: "/var/run/docker.sock";
 
 let _client: Dockerode | undefined;
 

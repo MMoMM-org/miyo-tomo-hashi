@@ -108,14 +108,26 @@ function findCheckboxInSection(
 	actionId: string,
 ): CheckboxResult | null {
 	const lines = content.split("\n");
-	const headingPattern = new RegExp(`^### ${escapeRegExp(actionId)}(\\s|$)`);
+	// review round 2 / L20: replace per-call new RegExp with a string
+	// startsWith + delimiter check. Each instruction-set run was paying
+	// one RegExp compile per applied action (e.g. 20 compiles for a
+	// 20-action run); the equivalent string scan is allocation-free.
+	// `headingPrefix` matches the documented format `### <actionId>`
+	// followed by either whitespace, end of line, or any continuation
+	// character handled below.
+	const headingPrefix = `### ${actionId}`;
+	const isHeadingForAction = (line: string): boolean => {
+		if (!line.startsWith(headingPrefix)) return false;
+		const tail = line.charAt(headingPrefix.length);
+		return tail === "" || /\s/.test(tail);
+	};
 
 	let inSection = false;
 
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i] ?? "";
 		if (!inSection) {
-			if (headingPattern.test(line)) {
+			if (isHeadingForAction(line)) {
 				inSection = true;
 			}
 			continue;
@@ -136,8 +148,4 @@ function findCheckboxInSection(
 	}
 
 	return null;
-}
-
-function escapeRegExp(s: string): string {
-	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

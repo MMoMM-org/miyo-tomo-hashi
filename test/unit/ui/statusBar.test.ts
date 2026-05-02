@@ -148,10 +148,16 @@ describe("statusBar — initial render", () => {
 		expect(h.getRoot().getAttribute("title")).toBe("Hashi: idle");
 	});
 
-	it("has role='status' and aria-live='polite' (ARIA live region)", () => {
+	it("has role='status' which implies aria-live='polite' (review round 2 / L33)", () => {
+		// role=status carries an implicit aria-live=polite per the ARIA
+		// spec; the previously-explicit aria-live attribute was removed
+		// to avoid the inconsistency M12 corrected on the chat-view
+		// indicator (where the explicit role+aria-live caused AT
+		// escalation overrides). The status bar relies on the implicit
+		// politeness from role=status alone.
 		const h = mount();
 		expect(h.getRoot().getAttribute("role")).toBe("status");
-		expect(h.getRoot().getAttribute("aria-live")).toBe("polite");
+		expect(h.getRoot().getAttribute("aria-live")).toBeNull();
 	});
 });
 
