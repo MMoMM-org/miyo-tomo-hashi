@@ -19,26 +19,16 @@ Two things in one Obsidian plugin:
 
 Tomo (Claude Code) generates a lot of vault-shaped output — MOCs to create, notes to move, daily logs to update — and Tomo's review step is where you decide *what* to apply. Hashi is what runs the apply step, with two opinions baked in:
 
-- **Apply happens locally, with a preview.** Nothing in your vault changes until you've seen the action list. Even auto-run mode shows the preview *first*, just without blocking.
+- **Apply happens locally, with a preview.** Nothing in your vault changes until you've seen the action list. Even auto-run mode shows the preview *first*, just without blocking. And if you have the peace of mind.. Tomo Hashi even does everything in the background.. your choice.
 - **Re-running is safe.** Every action has an idempotency probe. Hashi writes `applied: true` next to each action it commits, so a re-trigger picks up where it stopped — after a crash, after manual cleanup, after a partial cancellation.
 
 If you're already using Tomo for inbox processing or daily-note summaries, Hashi turns its review-output into one click.
 
 ## Two components, one plugin
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    MiYo Tomo Hashi                           │
-│                                                              │
-│  A. Tomo Session GUI         B. Instruction Executor         │
-│     (status bar 友)              (status bar 橋)              │
-│                                                              │
-│     Chat view ←→ xterm           _instructions.json runner   │
-│     Docker container attach      Preview / progress / summary│
-│     Force reconnect, zoom        Hooks (.cjs, ask-mode)      │
-│                                  Run log per execution       │
-└─────────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="assets/two-components-overview.svg" alt="MiYo Tomo Hashi architecture overview — A: Tomo Session GUI with the 友 status-bar icon (chat view ↔ xterm.js, Docker container attach, force reconnect, zoom, no external surface); B: Instruction Executor with the 橋 status-bar icon (_instructions.json runner, preview / progress / summary, hooks, run log per execution). The two share the plugin process and settings tab, nothing else." width="900" />
+</p>
 
 The two components share the plugin process and the settings tab, but **nothing else**. You can use Hashi for instruction sets without ever connecting to a Tomo container, or use the chat view without ever running an instruction set. See [How It Works](docs/how-it-works.md) for the architectural boundary.
 
@@ -116,16 +106,6 @@ The two components share the plugin process and the settings tab, but **nothing 
   <img src="assets/settings-tab-overview.png" alt="MiYo Tomo Hashi settings tab — Tomo connection + Instruction executor sections" width="720" />
 </p>
 
-### Status bar — connection (友) and executor (橋)
-
-> Screenshot — both status-bar icons side by side, each showing one of its states.
-<p align="center">
-  <img src="assets/status-bar-tomo.png" alt="Status bar 友 icon in three connection states (connected / reconnecting / disconnected)" width="480" />
-</p>
-
-<p align="center">
-  <img src="assets/status-bar-bridge.png" alt="Status bar 橋 icon in three executor states (idle / running / error)" width="480" />
-</p>
 
 ### Execution flow
 
@@ -152,12 +132,10 @@ The two components share the plugin process and the settings tab, but **nothing 
 - **Action: copy_note** — explicit copy variant of `move_note`.
 - **Multi-line input** — Shift+Enter composes; Enter sends.
 - **Rollback hint** — when a run halts mid-way, surface a `git restore`-style suggestion in the summary.
-- **Mobile compatibility** — currently `isDesktopOnly: true` because of Docker socket and Node `fs` use. Mobile would need a non-Docker transport.
+- **Mobile compatibility** — currently `isDesktopOnly: true` because of Docker socket and Node `fs` use. Mobile would need a non-Docker transport or drop the Tomo Chat interface. Let me know.
 
 ## Known edge cases
 
-- **Format A vs Format B peer-naming.** Tomo has emitted two peer-naming conventions for `_instructions.json` files: `<base>_instructions.json.md` (Format A) and `<base>_instructions.md` (Format B). The current planner only recognises Format B. Format A files require running via the command palette with the `.json` itself active. See `test/Hashi/SETUP.md` for the workaround.
-- **`delete_source` on files with `:` in the name** on non-macOS platforms — Obsidian's `vault.trash()` may report success without actually trashing. The action records `skipped-already`. Workaround: rename via `move_note` first.
 - **Auto-reconnect across Obsidian Sync devices.** The persisted `chosenInstanceName` is replicated by Sync. On a second device, the auto-attach may land on a same-labelled but unrelated container. Hashi shows a Notice naming the instance it just attached to so a wrong-container connect is detectable.
 
 ## Part of MiYo
