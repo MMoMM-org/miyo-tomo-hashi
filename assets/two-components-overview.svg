@@ -26,18 +26,18 @@
   <text x="160" y="228" font-family="monospace" font-size="11" fill="#666666">talk to Claude Code from inside Obsidian</text>
 
   <!-- Big kanji 友 -->
-  <text x="340" y="390" font-family="serif" font-size="180" fill="#111111" text-anchor="middle" font-weight="400">友</text>
+  <text x="340" y="425" font-family="serif" font-size="180" fill="#111111" text-anchor="middle" font-weight="400">友</text>
 
   <!-- Status bar reference -->
-  <rect x="244" y="400" width="192" height="32" rx="4" fill="#ffffff" stroke="#111111" stroke-width="1" opacity="0.6"/>
-  <text x="270" y="421" font-family="serif" font-size="18" fill="#111111" text-anchor="middle">友</text>
-  <text x="290" y="421" font-family="monospace" font-size="11" fill="#555555">  status-bar icon</text>
+  <rect x="244" y="440" width="192" height="32" rx="4" fill="#ffffff" stroke="#111111" stroke-width="1" opacity="0.6"/>
+  <text x="270" y="461" font-family="serif" font-size="18" fill="#111111" text-anchor="middle">友</text>
+  <text x="290" y="461" font-family="monospace" font-size="11" fill="#555555">  status-bar icon</text>
 
   <!-- Feature bullets -->
-  <text x="100" y="488" font-family="monospace" font-size="13" fill="#222222">·  Chat view  ←→  xterm.js</text>
-  <text x="100" y="514" font-family="monospace" font-size="13" fill="#222222">·  Docker container attach</text>
-  <text x="100" y="540" font-family="monospace" font-size="13" fill="#222222">·  Force reconnect, zoom</text>
-  <text x="100" y="566" font-family="monospace" font-size="13" fill="#222222">·  No external surface</text>
+  <text x="100" y="508" font-family="monospace" font-size="13" fill="#222222">·  Chat view  ←→  xterm.js</text>
+  <text x="100" y="534" font-family="monospace" font-size="13" fill="#222222">·  Docker container attach</text>
+  <text x="100" y="560" font-family="monospace" font-size="13" fill="#222222">·  Force reconnect, zoom</text>
+  <text x="100" y="586" font-family="monospace" font-size="13" fill="#222222">·  No external surface</text>
 
   <!-- ================= RIGHT COLUMN — B ================= -->
 
@@ -50,18 +50,18 @@
   <text x="760" y="228" font-family="monospace" font-size="11" fill="#666666">apply Tomo's vault edits with preview + log</text>
 
   <!-- Big kanji 橋 -->
-  <text x="940" y="390" font-family="serif" font-size="180" fill="#111111" text-anchor="middle" font-weight="400">橋</text>
+  <text x="940" y="425" font-family="serif" font-size="180" fill="#111111" text-anchor="middle" font-weight="400">橋</text>
 
   <!-- Status bar reference -->
-  <rect x="844" y="400" width="192" height="32" rx="4" fill="#ffffff" stroke="#111111" stroke-width="1" opacity="0.6"/>
-  <text x="870" y="421" font-family="serif" font-size="18" fill="#111111" text-anchor="middle">橋</text>
-  <text x="890" y="421" font-family="monospace" font-size="11" fill="#555555">  status-bar icon</text>
+  <rect x="844" y="440" width="192" height="32" rx="4" fill="#ffffff" stroke="#111111" stroke-width="1" opacity="0.6"/>
+  <text x="870" y="461" font-family="serif" font-size="18" fill="#111111" text-anchor="middle">橋</text>
+  <text x="890" y="461" font-family="monospace" font-size="11" fill="#555555">  status-bar icon</text>
 
   <!-- Feature bullets -->
-  <text x="700" y="488" font-family="monospace" font-size="13" fill="#222222">·  _instructions.json runner</text>
-  <text x="700" y="514" font-family="monospace" font-size="13" fill="#222222">·  Preview / progress / summary</text>
-  <text x="700" y="540" font-family="monospace" font-size="13" fill="#222222">·  Hooks (.cjs, ask-mode)</text>
-  <text x="700" y="566" font-family="monospace" font-size="13" fill="#222222">·  Run log per execution</text>
+  <text x="700" y="508" font-family="monospace" font-size="13" fill="#222222">·  _instructions.json runner</text>
+  <text x="700" y="534" font-family="monospace" font-size="13" fill="#222222">·  Preview / progress / summary</text>
+  <text x="700" y="560" font-family="monospace" font-size="13" fill="#222222">·  Hooks (.cjs, ask-mode)</text>
+  <text x="700" y="586" font-family="monospace" font-size="13" fill="#222222">·  Run log per execution</text>
 
   <!-- ================= BOTTOM STRIP ================= -->
 
