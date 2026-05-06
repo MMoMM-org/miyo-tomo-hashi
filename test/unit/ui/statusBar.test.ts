@@ -67,6 +67,7 @@ function counts(overrides: Partial<RunCounts> = {}): RunCounts {
 
 interface PluginStub {
 	addStatusBarItem: ReturnType<typeof vi.fn>;
+	registerDomEvent: ReturnType<typeof vi.fn>;
 }
 
 function asPlugin(stub: PluginStub): Plugin {
@@ -89,6 +90,11 @@ function mount(): Harness {
 			created.push(el);
 			return el;
 		}),
+		registerDomEvent: vi.fn(
+			(el: HTMLElement, type: string, cb: EventListener) => {
+				el.addEventListener(type, cb);
+			},
+		),
 	};
 	const onActiveModalFocus = vi.fn();
 	const teardown = mountStatusBar(asPlugin(plugin), {

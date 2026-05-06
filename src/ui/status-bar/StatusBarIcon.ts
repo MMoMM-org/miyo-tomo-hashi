@@ -105,8 +105,8 @@ export class StatusBarIcon {
 			});
 		};
 
-		root.addEventListener("click", handleActivate);
-		root.addEventListener("keydown", (evt) => {
+		this.plugin.registerDomEvent(root, "click", handleActivate);
+		this.plugin.registerDomEvent(root, "keydown", (evt) => {
 			if (evt.key === "Enter" || evt.key === " ") {
 				evt.preventDefault();
 				handleActivate(evt);

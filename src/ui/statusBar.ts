@@ -184,7 +184,7 @@ export function mountStatusBar(
 		announcer.setText(announcementFor(next));
 	}
 
-	root.addEventListener("click", () => {
+	plugin.registerDomEvent(root, "click", () => {
 		if (visual.kind === "running") {
 			callbacks.onActiveModalFocus();
 		}
@@ -193,7 +193,7 @@ export function mountStatusBar(
 
 	// H9: Enter/Space mirrors click for keyboard activation. Only the two
 	// activation keys to keep Tab/Shift+Tab navigation intact.
-	root.addEventListener("keydown", (evt: KeyboardEvent) => {
+	plugin.registerDomEvent(root, "keydown", (evt: KeyboardEvent) => {
 		if (evt.key !== "Enter" && evt.key !== " ") return;
 		evt.preventDefault();
 		if (visual.kind === "running") {
