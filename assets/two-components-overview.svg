@@ -7,7 +7,7 @@
 
   <!-- Title block at the top -->
   <text x="640" y="98" font-family="serif" font-size="22" fill="#111111" text-anchor="middle" font-weight="500">MiYo Tomo Hashi</text>
-  <text x="640" y="124" font-family="monospace" font-size="12" fill="#888888" text-anchor="middle" letter-spacing="1.5" xml:space="preserve">T W O C O M P O N E N T S · O N E P L U G I N</text>
+  <text x="640" y="124" font-family="monospace" font-size="12" fill="#888888" text-anchor="middle" letter-spacing="1.5" xml:space="preserve">T W O  C O M P O N E N T S  ·  O N E  P L U G I N</text>
 
   <!-- Divider under title -->
   <line x1="160" y1="148" x2="1120" y2="148" stroke="#111111" stroke-width="1" opacity="0.25"/>
