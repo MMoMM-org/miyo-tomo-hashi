@@ -1,252 +1,201 @@
 <p align="center">
-  <img src="tomo-hashi-banner.svg" alt="MiYo Tomo Hashi" />
+  <img src="assets/tomo-hashi-banner.svg" alt="MiYo Tomo Hashi" width="480" />
 </p>
 
-# MiYo Tomo Hashi
+# MiYo Tomo Hashi — Obsidian ↔ Tomo Bridge
 
-Direct integration with Tomo (Claude Code) sessions for session interaction and automated vault updates
+Two things in one Obsidian plugin:
+
+- **A** — A live chat tab that attaches to a running [Tomo](https://github.com/MMoMM-org/miyo-tomo) Docker container. Talk to Claude Code from inside Obsidian.
+- **B** — An instruction executor that runs `_instructions.json` files Tomo emits, applying batch vault edits with full preview, run logs, and idempotent re-runs.
+
+> Part of the **MiYo** family. The plugin is referred to as **MiYo Tomo Hashi** in the Obsidian community-plugin index and in the settings UI; "Hashi" alone is used as a short form throughout this README and the source. 橋 means *bridge*.
 
 <p align="center">
-  <img src="tomo-hashi-hanko.png" alt="" width="120" />
+  <img src="assets/tomo-hashi-hanko.png" alt="MiYo Tomo Hashi hanko" width="120" />
 </p>
 
-## Installation
+## Why MiYo Tomo Hashi?
 
-### Community Plugins (after listing)
-1. Open Obsidian Settings → Community Plugins
-2. Search for "MiYo Tomo Hashi"
-3. Install and enable
+Tomo (Claude Code) generates a lot of vault-shaped output — MOCs to create, notes to move, daily logs to update — and Tomo's review step is where you decide *what* to apply. Hashi is what runs the apply step, with two opinions baked in:
 
-### Manual
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/MMoMM-org/miyo-tomo-hashi/releases/latest)
-2. Create folder `<vault>/.obsidian/plugins/miyo-tomo-hashi/`
-3. Copy the downloaded files into that folder
-4. Restart Obsidian and enable the plugin
+- **Apply happens locally, with a preview.** Nothing in your vault changes until you've seen the action list. Even auto-run mode shows the preview *first*, just without blocking.
+- **Re-running is safe.** Every action has an idempotency probe. Hashi writes `applied: true` next to each action it commits, so a re-trigger picks up where it stopped — after a crash, after manual cleanup, after a partial cancellation.
 
-### BRAT (Beta)
-1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat)
-2. Add beta plugin: `MMoMM-org/miyo-tomo-hashi`
+If you're already using Tomo for inbox processing or daily-note summaries, Hashi turns its review-output into one click.
 
-## What it does
+## Two components, one plugin
 
-MiYo Tomo Hashi is the **executor** half of a Tomo→Obsidian workflow.
-After a Tomo session emits an `_instructions.json` (e.g., from inbox-processing review),
-this plugin runs those instructions against your vault: creates MOCs,
-moves notes, updates daily logs, links new notes into existing MOCs,
-deletes processed sources. You always get a preview before anything is
-written, watch progress in real time, and get a per-run log file for
-inspection.
-
-The plugin **never runs automatically** — only on explicit user action.
-Approval lives upstream in Tomo's review step; Hashi's preview is
-informational, not an approval gate.
-
-## Quick start
-
-1. Settings → Community plugins → MiYo Tomo Hashi → enable
-2. Settings → MiYo Tomo Hashi → set **Tomo inbox folder** (e.g., `100 Inbox`)
-3. Open command palette → **Execute instructions document**
-4. Review the action list in the modal → click **Execute**
-5. Check the run log file (`tomo-hashi-run-log_YYYY-MM-DDTHHMM.md`)
-   that appears alongside your `_instructions.json`
-
-## How to run
-
-| Trigger | Behavior |
-| --- | --- |
-| Command palette **Execute instructions document** with an `_instructions.json` or its `.md` peer active | Runs against that single set |
-| Command palette with no relevant file active | Batch — runs every `*_instructions.json` in your configured inbox folder |
-| Right-click on a `.md` peer in the file explorer → **Execute instructions…** | Same as palette + active peer |
-
-## Execution modes
-
-Settings → MiYo Tomo Hashi → **Execution mode**:
-
-| Mode | Behavior |
-| --- | --- |
-| **Confirm before run** *(default)* | Modal opens with action preview. Click **Execute** to proceed; **Cancel** anytime. |
-| **Auto-run with preview** | Modal opens AND execution starts immediately. You can watch progress and **Cancel** mid-run. |
-| **Silent** | No modal. A Notice summarizes the result on completion. The run log file records everything. |
-
-## Symbol legend during a run
-
-Five glyphs appear across the preview, progress, and summary views:
-
-| Symbol | Meaning | Where it appears |
-| :---: | --- | --- |
-| **✓** | **Applied** — action succeeded; vault was modified | Per-row glyph (progress + summary); summary stats |
-| **✗** | **Failed** — action returned an error; nothing committed for that action | Per-row glyph; summary stats |
-| **⊘** | **Skipped** — action did not need to run, or was preempted | Per-row glyph; summary stats |
-| **⏺** | **Pending** — action queued, not yet executed | Per-row glyph (preview + progress) |
-| **⟳** | **Running** — action currently executing | Per-row glyph for the current action |
-
-The summary stats line at the end of a run reads:
-
-> ✓ *applied* · ⊘ *skipped* · ✗ *failed* (*duration* s)
-
-### What "Skipped" (⊘) means in detail
-
-Three sub-categories all roll up into the ⊘ count:
-
-- **`skipped-already`** — the action's target state is already in place
-  (the bullet is already in the MOC, the tracker field is already set
-  to the target value, the source file is already trashed, …).
-  Re-running an instruction set is therefore safe — this is idempotency
-  working correctly.
-- **`skipped-dependency`** — a `link_to_moc` references a MOC whose
-  earlier `create_moc` failed; the dependent link is not attempted
-  (halt-on-dependency).
-- **`skipped-cancelled`** — you clicked Cancel during a run; the
-  in-flight action commits, all remaining actions are recorded as
-  cancelled.
-
-The run log records the specific sub-category per action.
-
-## Reading the modal
-
-**Preview** (before the run starts):
-- Every action grouped by source file
-- Banner "*N* of *M* remaining (*X* already applied — re-run safe)" for
-  partial-resume runs
-- **Execute** + **Cancel** buttons; footer:
-  *"Approval lives in Tomo's review step. This preview is informational."*
-
-**Progress** (during the run):
-- Each row's glyph updates ⏺ → ⟳ → (✓ / ✗ / ⊘) as actions complete
-- A sticky error banner accumulates if anything fails
-- **Cancel** halts the run after the current action commits
-
-**Summary** (after the run):
-- Stats line `✓ A · ⊘ S · ✗ F (T s)`
-- *"Run log: \<filename\>"* reference
-- **View errors** button (only when failures > 0) opens the run log
-- **Close** dismisses the modal
-
-## Status bar — 橋 indicator
-
-The 橋 (bridge) glyph in your status bar reflects executor state:
-
-| State | Meaning |
-| --- | --- |
-| **Idle** | No active run, no recent failures |
-| **Green** | Run in progress |
-| **Red** | Last run had failures (auto-clears after ~10 s, or on next run) |
-
-Hover for tooltip details (action counts during a run, log filename
-after a failure). Click during an active run to focus the modal.
-
-## Run log
-
-Every run produces `tomo-hashi-run-log_YYYY-MM-DDTHHMM.md` in your
-configured inbox folder, alongside the source `_instructions.json`.
-
-The log contains:
-- Header: start/end times, mode, source file(s), per-bucket totals
-- Per-action table: `I##` · kind · payload summary · outcome · error
-  (when failed)
-
-**Retention** (Settings → Run log retention):
-- **Always keep** *(default)* — every run leaves a log file
-- **Only after failed runs** — zero-failure runs delete their log at
-  the end (cuts down on inbox noise)
-
-## Partial-resume
-
-If a run was interrupted or you re-trigger after some actions already
-ran, the modal banner shows *"N of M remaining (X already applied —
-re-run safe)"*. Already-applied rows render at reduced opacity with
-the ✓ glyph; only the unapplied actions execute. The `_instructions.json`
-file is the source of truth — its per-action `applied: true` flag
-controls what gets re-tried.
-
-## Hooks (optional, power-user)
-
-Drop Node `.cjs` files in your hooks directory (default
-`.tomo-hashi/hooks/`) to extend each action with custom pre/post
-logic — e.g., `before-create_moc.cjs`, `after-move_note.cjs`. Hooks
-run with full plugin privilege (same trust model as Templater).
-
-**Hook policy** (Settings → Hooks):
-- **Disabled** *(safe default — kill switch)* — hooks never run
-- **Ask on first use** — disclosure modal lists the hook's path + size
-  before first run; you choose Enable / Enable once / Disable
-- **Enabled** — hooks run without per-invocation prompts
-
-### Hook function signature
-
-Each hook file exports a single async function that takes one
-`ctx` argument and returns a result object (or `void`):
-
-```js
-// .tomo-hashi/hooks/before-create_moc.cjs
-module.exports = async (ctx) => {
-  // ctx.action  — the Action variant being executed (immutable);
-  //               check ctx.action.action for the kind, then access
-  //               kind-specific fields.
-  // ctx.app     — Obsidian's App instance. Treat as a stable surface;
-  //               read access is broad (vault, metadataCache, workspace,
-  //               vault.adapter), so handle it with the same care as
-  //               any in-process plugin code.
-  // ctx.logger  — { info, warn, error } — each takes a string and writes
-  //               into the run log. Prefer these over console for
-  //               messages the user should see in the run-log UI.
-
-  if (ctx.action.action === "create_moc") {
-    ctx.logger.info(`will create MOC at ${ctx.action.destination}`);
-  }
-  return { info: ["pre-flight ok"] };
-};
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    MiYo Tomo Hashi                           │
+│                                                              │
+│  A. Tomo Session GUI         B. Instruction Executor         │
+│     (status bar 友)              (status bar 橋)              │
+│                                                              │
+│     Chat view ←→ xterm           _instructions.json runner   │
+│     Docker container attach      Preview / progress / summary│
+│     Force reconnect, zoom        Hooks (.cjs, ask-mode)      │
+│                                  Run log per execution       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-Hook return shape: `{ info?: string[], warnings?: string[], errors?: string[] }`.
-A non-empty `errors` array fails the action; `before-` hooks short-circuit
-the handler, `after-` hooks are recorded as a separate log entry.
+The two components share the plugin process and the settings tab, but **nothing else**. You can use Hashi for instruction sets without ever connecting to a Tomo container, or use the chat view without ever running an instruction set. See [How It Works](docs/how-it-works.md) for the architectural boundary.
 
-The `ctx` shape is the **stable v0.1 hook API**. Future Hashi versions
-will only add fields (additive, non-breaking). Removing or renaming a
-`ctx` field would be a breaking change and ride a major version bump.
+## Features
 
-**Authoring caveat — module-level state in helpers.** Hashi evicts the
-hook entry-point file from `require.cache` on every run so edits are
-picked up without a plugin reload. Helpers transitively imported from
-your hook (e.g., `_helper.cjs`, `node:crypto`) stay cached for the
-session — module-level mutable state in those helpers (counters, open
-file handles, accumulated buffers) survives between runs and is
-shared across hook invocations. Keep helpers pure or scope state
-inside the exported function.
+### A — Tomo session GUI
 
-## Path safety
+- **Unified chat tab** rendering the Tomo container's TUI via xterm.js
+- **Bidirectional input** — type into the line input or directly into the terminal
+- **Connection state** in the status bar (友) and chat-view header
+- **Force reconnect** with fixed-schedule backoff (5 attempts, 15.5 s budget)
+- **Auto-reconnect on plugin load** — by container label, with a Notice telling you which one
+- **Zoom controls** (0.5× / 1× / 1.5×), persisted across reloads
+- **Sync-aware** — the persisted instance name handles Obsidian Sync correctly (with a visible warning)
+- **No external surface** — Docker socket is *outbound only*, no ports opened
 
-Actions targeting `.obsidian/`, `.git/`, `.trash/`, the configured
-hooks directory, or paths that escape the vault root are rejected
-before any write — the deny-list cannot be disabled.
+### B — Instruction executor
 
-## Troubleshooting
+- **Three execution modes**: Confirm before run / Auto-run with preview / Silent
+- **Preview → progress → summary** modal, all stages in one Modal instance (no flicker)
+- **Idempotent re-runs** with a partial-resume banner ("N of M remaining (X already applied)")
+- **Per-run log** as a markdown file in your inbox folder, with retention policy
+- **Status bar 橋** indicator (idle / running / error)
+- **Path safety** — `.obsidian/`, `.git/`, `.trash/`, hooks dir, and traversal-escape paths are denied
+- **Optional hooks** — `.cjs` files in your vault, full plugin privilege, with an ask-mode disclosure modal
+- **Schema validation** — vendored Tomo schema, ajv-compiled at module load
+- **9 action kinds** — create_moc, move_note, link_to_moc, add_relationship, update_tracker, update_log_entry, update_log_link, delete_source, skip
 
-| Symptom | Likely cause / fix |
-| --- | --- |
-| Notice "Tomo inbox folder not found" | Set the path in Settings → MiYo Tomo Hashi |
-| Notice "Tomo inbox is empty" | Your inbox folder has no `*_instructions.json` files; generate a new set in Tomo |
-| Modal opens but is empty after a run | Build is older than `f59a89a` (2026-04-30) — update the plugin |
-| Links land in `[!connect] Your way around` instead of `[!blocks] Key Concepts` | Build is older than `e227691` (2026-04-30) — update the plugin |
-| **View errors** button does nothing | Build is older than `66e068d` (2026-04-30) — update the plugin |
-| Action failed *"MOC target missing"* | The MOC referenced by `link_to_moc` is neither in your vault nor created earlier in the same run by `create_moc` — check Tomo's instruction set |
-| Action failed *"Inconsistent state — both source and destination present"* | Both the source file in inbox AND the destination already exist; resolve manually before re-running |
-| `delete_source` on a file with `:` in its name returns `skipped-already` on platforms other than macOS | Obsidian's `vault.trash()` may not see the file; use a post-hook or trash manually |
+## Documentation
 
-## Development
+| Document | Audience | Content |
+|---|---|---|
+| [Installation](docs/installation.md) | Everyone | Community Plugins, BRAT, manual install |
+| [Configuration](docs/configuration.md) | Vault owners | Settings reference, both components |
+| [How It Works](docs/how-it-works.md) | Vault owners | Two-component architecture, layer boundaries |
+| [Session View](docs/session-view.md) | Tomo users | Chat tab, terminal, zoom, file-prefill — branch A |
+| [Connection](docs/connection.md) | Tomo users | Picker, reconnect schedule, status bar 友 — branch A |
+| [Instruction Executor](docs/instruction-executor.md) | Tomo users | Modal stages, modes, partial-resume, status bar 橋 — branch B |
+| [Action Reference](docs/action-reference.md) | Tomo users | All 9 action kinds with idempotency rules — branch B |
+| [Hooks](docs/hooks.md) | Power users | `.cjs` hook authoring, policy, disclosure modal — branch B |
+| [Run Log](docs/run-log.md) | Vault owners | Log format, retention, hook output — branch B |
+| [Development](docs/development.md) | Contributors | Build, test, lint, architecture, test vault |
 
-```bash
-git clone https://github.com/MMoMM-org/miyo-tomo-hashi.git
-cd miyo-tomo-hashi
-git config core.hooksPath .githooks
-npm install
-npm run dev       # Watch mode
-npm run build     # Production build
-npm test          # Run tests
-npm run lint      # Lint
-```
+## Quick start — A — Tomo session GUI
+
+1. [Install the plugin](docs/installation.md)
+2. Start a Tomo container with the right label (`docker run --label miyo.tomo.role=session …`)
+3. **Settings → MiYo Tomo Hashi → Connect** → pick the container in the picker
+4. The chat view opens automatically; type to interact, watch Claude Code's TUI render inline
+
+> Screenshot — chat view connected, Claude Code's TUI visible in the terminal area, input row at the bottom.
+<p align="center">
+  <img src="assets/session-view-connected.png" alt="MiYo Tomo Hashi chat view connected to a Tomo container, xterm rendering Claude Code's TUI" width="800" />
+</p>
+
+## Quick start — B — Instruction executor
+
+1. [Install the plugin](docs/installation.md)
+2. **Settings → MiYo Tomo Hashi → Tomo inbox folder** → set your inbox path (e.g., `100 Inbox`)
+3. Drop an `_instructions.json` from Tomo into that folder
+4. **Command palette → "Execute instructions document"** → review the action list → **Execute**
+5. Watch progress; check the run log file (`tomo-hashi-run-log_…md`) afterwards
+
+> Screenshot — execution modal at the preview stage, actions grouped by source file, **Execute** button.
+<p align="center">
+  <img src="assets/executor-preview.png" alt="Execution modal preview view — actions grouped by source file, Execute and Cancel buttons" width="800" />
+</p>
+
+## Screenshots
+
+### Settings
+
+> Screenshot — full settings tab with both sections expanded.
+<p align="center">
+  <img src="assets/settings-tab-overview.png" alt="MiYo Tomo Hashi settings tab — Tomo connection + Instruction executor sections" width="720" />
+</p>
+
+### Status bar — connection (友) and executor (橋)
+
+> Screenshot — both status-bar icons side by side, each showing one of its states.
+<p align="center">
+  <img src="assets/status-bar-tomo.png" alt="Status bar 友 icon in three connection states (connected / reconnecting / disconnected)" width="480" />
+</p>
+
+<p align="center">
+  <img src="assets/status-bar-bridge.png" alt="Status bar 橋 icon in three executor states (idle / running / error)" width="480" />
+</p>
+
+### Execution flow
+
+> Screenshot — progress view with rows partway through, glyphs animating, sticky error banner.
+<p align="center">
+  <img src="assets/executor-progress.png" alt="Execution modal progress view — per-row glyphs animating ⏺ → ⟳ → ✓ / ✗, sticky error banner" width="800" />
+</p>
+
+> Screenshot — summary view with stats line and View errors button.
+<p align="center">
+  <img src="assets/executor-summary.png" alt="Execution modal summary view — stats line ✓·⊘·✗ with elapsed time, run log filename, View errors and Close buttons" width="720" />
+</p>
+
+### Hook disclosure
+
+> Screenshot — hook disclosure modal asking the user whether to enable a hook (Disable focused as safe default).
+<p align="center">
+  <img src="assets/hook-disclosure.png" alt="Hook disclosure modal — filename, vault-relative path, file size, capability disclosure, three buttons" width="560" />
+</p>
+
+## Roadmap
+
+- **Granular hook policy** — per-hook enable/disable persistence (currently session-scoped after the disclosure-modal decision).
+- **Action: copy_note** — explicit copy variant of `move_note`.
+- **Multi-line input** — Shift+Enter composes; Enter sends.
+- **Rollback hint** — when a run halts mid-way, surface a `git restore`-style suggestion in the summary.
+- **Mobile compatibility** — currently `isDesktopOnly: true` because of Docker socket and Node `fs` use. Mobile would need a non-Docker transport.
+
+## Known edge cases
+
+- **Format A vs Format B peer-naming.** Tomo has emitted two peer-naming conventions for `_instructions.json` files: `<base>_instructions.json.md` (Format A) and `<base>_instructions.md` (Format B). The current planner only recognises Format B. Format A files require running via the command palette with the `.json` itself active. See `test/Hashi/SETUP.md` for the workaround.
+- **`delete_source` on files with `:` in the name** on non-macOS platforms — Obsidian's `vault.trash()` may report success without actually trashing. The action records `skipped-already`. Workaround: rename via `move_note` first.
+- **Auto-reconnect across Obsidian Sync devices.** The persisted `chosenInstanceName` is replicated by Sync. On a second device, the auto-attach may land on a same-labelled but unrelated container. Hashi shows a Notice naming the instance it just attached to so a wrong-container connect is detectable.
+
+## Part of MiYo
+
+Hashi is part of **MiYo**, a small family of Obsidian-adjacent tools focused on giving you control over what your assistants can see and do.
+
+- [**MiYo Kado**](https://github.com/MMoMM-org/miyo-kado) — security-first MCP gateway. The *external-inbound* surface for AI assistants. Default-deny, per-key scopes, audit log.
+- [**MiYo Tomo**](https://github.com/MMoMM-org/miyo-tomo) — Claude Code AI workflows. The session you talk to from Hashi's chat view, and the source of the `_instructions.json` Hashi runs.
+- **MiYo Tomo Hashi** — *this plugin*. Internal-only, no external surface, paired with Tomo.
+
+Scope boundary: Kado is the only external-inbound vault surface in the MiYo family. Hashi has *no* external surface — the Docker socket is outbound from Hashi to a local Tomo container, and there's no MCP, no port, no inbound network.
+
+## Privacy
+
+See [PRIVACY.md](PRIVACY.md) for the full statement. Short version: nothing leaves your machine. No telemetry, no crash reports, no third-party services.
+
+## Support
+
+If MiYo Tomo Hashi is useful and you want to help me keep building, you can support development via:
+
+- [Buy Me a Coffee](https://ko-fi.com/mmomm)
+- [GitHub Sponsors](https://github.com/sponsors/MMoMM-org)
+
+Issues and pull requests are also very welcome.
+
+## Contributing
+
+See the [Development Guide](docs/development.md) for build, test, and lint commands. Short version:
+
+1. **Open an issue first** for non-trivial work so we can align on scope.
+2. **Fork & branch** from `main` with a descriptive name (`fix/<thing>`, `feat/<thing>`).
+3. **Keep changes focused** — one feature or one fix per PR.
+4. **Tests & lint must pass** — `npm run build`, `npm test`, `npm run lint`.
+5. **Conventional commits** — release notes are generated from commit history.
+6. **Open a PR** against `main` and reference the issue.
+
+For security issues, please **do not** open a public issue — email marcus@mmomm.org instead.
 
 ## License
 
-MIT - see [LICENSE](LICENSE)
+[MIT](LICENSE)
