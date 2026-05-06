@@ -55,10 +55,14 @@ const makeActions = (): StatusBarActions => ({
 	onOpenSettings: vi.fn(),
 });
 
-// Minimal plugin stub — StatusBarIcon only calls `plugin.addStatusBarItem()`.
+// Minimal plugin stub — StatusBarIcon calls `plugin.addStatusBarItem()` and
+// `plugin.registerDomEvent()` (the latter is the Obsidian-idiomatic
+// auto-cleanup wrapper around addEventListener; in tests we proxy through
+// to the real DOM listener so dispatchEvent() still triggers the handler).
 // Mirrors the cast-funnel pattern from `SettingsTab.test.ts`.
 interface PluginStub {
 	addStatusBarItem: ReturnType<typeof vi.fn>;
+	registerDomEvent: ReturnType<typeof vi.fn>;
 }
 
 function asPlugin(stub: PluginStub): Plugin {
@@ -82,6 +86,11 @@ const mountIcon = (chosenId: string | null = null): Harness => {
 			created.push(el);
 			return el;
 		}),
+		registerDomEvent: vi.fn(
+			(el: HTMLElement, type: string, cb: EventListener) => {
+				el.addEventListener(type, cb);
+			},
+		),
 	};
 	const actions = makeActions();
 	const getChosenInstanceName = vi.fn(() => chosenId);

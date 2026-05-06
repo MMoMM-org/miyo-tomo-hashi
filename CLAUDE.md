@@ -28,6 +28,13 @@ npm run test:watch   # vitest watch mode
 npm run test:coverage # vitest with v8 coverage
 ```
 
+## Test Vault — `test/Hashi/`
+Local manual-QA vault (gitignored). See `test/Hashi/SETUP.md` for full guide.
+```bash
+HASHI_DEPLOY_VAULT=1 npm run build   # build + deploy plugin into test/Hashi/.obsidian/plugins/miyo-tomo-hashi
+bash test/Hashi/reset-vault.sh       # restore vault content from Archive.zip (preserves .obsidian/)
+```
+
 ## Rules
 - Use Plan Mode for any change touching more than 2 files
 - Commit after every completed task
