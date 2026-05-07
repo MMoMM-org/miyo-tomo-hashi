@@ -34,7 +34,7 @@
 		"globals": "14.0.0",
 		"jiti": "2.6.1",
 		"jsdom": "^26.1.0",
-		"semantic-release": "^24.2.3",
+		"semantic-release": "^25.0.3",
 		"tslib": "2.4.0",
 		"typescript": "^5.8.3",
 		"typescript-eslint": "8.35.1",
