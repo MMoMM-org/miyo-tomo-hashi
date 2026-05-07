@@ -54,7 +54,10 @@ describe("createMoc handler", () => {
 		expect(outcome.kind).toBe("skipped-already");
 	});
 
-	it("both source AND target present → failed with inconsistent-state message", async () => {
+	// F-43 collision-guard wording: when destination already exists, the
+	// reason must explicitly reference the destination path so Tomo's
+	// error_msg surfaces a clear filename collision to the user.
+	it("both source AND target present → failed with destination-collision message", async () => {
 		const vault = new FakeVaultFS();
 		await seedFile(vault, "Inbox/my-note.md");
 		await seedFile(vault, "Atlas/MOC/my-note.md");
@@ -66,7 +69,7 @@ describe("createMoc handler", () => {
 		expect(outcome.kind).toBe("failed");
 		if (outcome.kind === "failed") {
 			expect(outcome.reason).toBe(
-				"Inconsistent state — both source and destination present",
+				"destination already exists: Atlas/MOC/my-note.md",
 			);
 		}
 	});

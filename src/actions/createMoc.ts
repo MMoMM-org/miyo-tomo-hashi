@@ -7,8 +7,13 @@
  * Idempotency matrix:
  *   src ✓  dst ✗ → applied   (createFolder(dirOf(dst)) then rename)
  *   src ✗  dst ✓ → skipped-already
- *   src ✓  dst ✓ → failed    "Inconsistent state — both source and destination present"
+ *   src ✓  dst ✓ → failed    "destination already exists: <path>"
  *   src ✗  dst ✗ → failed    "Source missing — nothing to move"
+ *
+ * The src ✓ + dst ✓ branch is also F-43's destination-collision guard: a
+ * pre-write existence check that fails with a clear message so dependent
+ * link_to_moc / add_relationship actions cascade via the planner's
+ * dependency graph (no partial application of a MOC and its links).
  *
  * [ref: PRD/F4; SDD/Obsidian API Mapping per Action Kind]
  */
@@ -32,7 +37,7 @@ export async function createMoc(
 	]);
 
 	if (srcExists && dstExists) {
-		return { kind: "failed", reason: "Inconsistent state — both source and destination present" };
+		return { kind: "failed", reason: `destination already exists: ${destination}` };
 	}
 
 	if (!srcExists && dstExists) {

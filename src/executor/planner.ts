@@ -14,6 +14,7 @@
 import type {
 	Action,
 	ActionKind,
+	AddRelationshipAction,
 	CreateMocAction,
 	LinkToMocAction,
 } from "../schema/types.js";
@@ -198,6 +199,9 @@ function buildDependencies(source: ResolvedSource): DependencyEdge[] {
 	const linkToMocs = actions.filter(
 		(a): a is LinkToMocAction => a.action === "link_to_moc",
 	);
+	const addRelationships = actions.filter(
+		(a): a is AddRelationshipAction => a.action === "add_relationship",
+	);
 
 	const edges: DependencyEdge[] = [];
 
@@ -206,6 +210,18 @@ function buildDependencies(source: ResolvedSource): DependencyEdge[] {
 		for (const create of createMocs) {
 			if (create.destination === resolvedTarget) {
 				edges.push({ dependent: link.id, dependsOn: create.id });
+			}
+		}
+	}
+
+	// F-43 collision-guard cascade: an add_relationship targeting a MOC
+	// whose create_moc fails must also fail (no phantom up::/related:: edges
+	// pointing into a non-existent MOC). target_moc_path is the canonical
+	// resolved field; target_moc is informational only.
+	for (const rel of addRelationships) {
+		for (const create of createMocs) {
+			if (create.destination === rel.target_moc_path) {
+				edges.push({ dependent: rel.id, dependsOn: create.id });
 			}
 		}
 	}
