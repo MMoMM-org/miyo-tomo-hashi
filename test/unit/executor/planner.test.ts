@@ -22,6 +22,7 @@ import {
 import type { ResolvedSource } from "../../../src/executor/state.js";
 import type {
 	Action,
+	AddRelationshipAction,
 	CreateMocAction,
 	InstructionSet,
 	LinkToMocAction,
@@ -85,6 +86,23 @@ function makeLinkToMoc(id: string, targetMoc: string, lineToAdd: string, targetM
 		anchor: { type: "callout", value: "[!blocks] Key Concepts" },
 		placement: "inside",
 		...(targetMocPath !== undefined ? { target_moc_path: targetMocPath } : {}),
+		...(applied !== undefined ? { applied } : {}),
+	};
+}
+
+function makeAddRelationship(
+	id: string,
+	targetMocPath: string,
+	marker: string,
+	line: string,
+	applied?: boolean,
+): AddRelationshipAction {
+	return {
+		action: "add_relationship",
+		id,
+		target_moc_path: targetMocPath,
+		marker,
+		line,
 		...(applied !== undefined ? { applied } : {}),
 	};
 }
@@ -489,6 +507,51 @@ describe("computeRemaining — dependency graph", () => {
 			makeCreateMoc("I01", "inbox/note.md", "moc/MyMOC.md"),
 			makeLinkToMoc("I02", "moc/MyMOC.md", "- [[note1]]", "moc/MyMOC.md"),
 			makeLinkToMoc("I03", "moc/MyMOC.md", "- [[note2]]", "moc/MyMOC.md"),
+		];
+		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
+
+		const { dependencies } = computeRemaining(sources);
+
+		expect(dependencies).toHaveLength(2);
+		const dependents = dependencies.map((d) => d.dependent).sort();
+		expect(dependents).toEqual(["I02", "I03"]);
+		expect(dependencies.every((d) => d.dependsOn === "I01")).toBe(true);
+	});
+
+	// F-43 collision-guard cascade — add_relationship → create_moc edges
+	// must exist so a failed create_moc cascades to its dependent
+	// add_relationship actions (no partial application).
+	it("builds an in-set dependency edge when add_relationship target_moc_path matches create_moc destination", () => {
+		const actions: Action[] = [
+			makeCreateMoc("I01", "inbox/note.md", "moc/MyMOC.md"),
+			makeAddRelationship("I02", "moc/MyMOC.md", "up", "up:: [[OtherMOC]]"),
+		];
+		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
+
+		const { dependencies } = computeRemaining(sources);
+
+		expect(dependencies).toHaveLength(1);
+		expect(dependencies[0]?.dependent).toBe("I02");
+		expect(dependencies[0]?.dependsOn).toBe("I01");
+	});
+
+	it("does NOT build an add_relationship → create_moc edge when paths do not match", () => {
+		const actions: Action[] = [
+			makeCreateMoc("I01", "inbox/note.md", "moc/DifferentMOC.md"),
+			makeAddRelationship("I02", "moc/MyMOC.md", "up", "up:: [[OtherMOC]]"),
+		];
+		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
+
+		const { dependencies } = computeRemaining(sources);
+
+		expect(dependencies).toHaveLength(0);
+	});
+
+	it("builds both link_to_moc and add_relationship edges to the same create_moc", () => {
+		const actions: Action[] = [
+			makeCreateMoc("I01", "inbox/note.md", "moc/MyMOC.md"),
+			makeLinkToMoc("I02", "moc/MyMOC.md", "- [[note]]", "moc/MyMOC.md"),
+			makeAddRelationship("I03", "moc/MyMOC.md", "up", "up:: [[Parent]]"),
 		];
 		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
 
