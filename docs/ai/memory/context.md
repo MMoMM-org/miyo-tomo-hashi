@@ -1,5 +1,9 @@
 # Context Memory
 
+## Pending release cut
+
+- **0.2.0 release cut** (loose end from F-43 collision-guard handoff, 2026-05-07). The implementation shipped to main via PR #3 (commit `40b7383`), but the version bump + tag are still pending. Required when releasing: bump `package.json` and `manifest.json` from `0.1.0` to `0.2.0`, add an entry to `versions.json` mapping `0.2.0` to its minimum Obsidian version, tag `0.2.0`, and flip the ACK in `_outbox/for-tomo/2026-05-07_hashi-to-tomo_create-moc-collision-guard-ACK.md` once the tag exists. Tomo's F-43 PLAN T6.4 launch gate already has the receipt; the version cut just makes the ACK's `target_version: 0.2.0` literally true.
+
 ## Deferred Review Items (2026-04-25 multi-batch review)
 
 The following items from the 2026-04-25 multi-batch spec review on branch `feat/xdd-scaffold` were classified Defer — out of scope for the XDD-scaffold branch but should be picked up later. Each row names where the work belongs.
