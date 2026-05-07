@@ -1,5 +1,15 @@
 # Context Memory
 
+## Release pipeline — operational from 0.2.0 forward
+
+Releases are automated by **semantic-release** on every push to `main`. The workflow (`.github/workflows/release.yml`) runs `npx semantic-release`, which analyses conventional-commit subjects since the last tag, computes the next semver, runs `version-bump.mjs` (propagates version to `manifest.json` and `versions.json`), tags the commit, and drafts a GitHub release with `build/main.js`, `manifest.json`, and `styles.css` as assets.
+
+**0.1.0 anchor:** tag `0.1.0` was placed at commit `9d9d00b` (the original `feat: PRD-aligned errors + v0.1.0 + log_format_version` commit) so semantic-release has a starting point. Without the anchor, the first run would default to `1.0.0`.
+
+**Pipeline-fix history:** prior to 2026-05-07 the workflow trigger and `.releaserc.json` both pointed at `master` while the actual default branch is `main`, so the pipeline never fired and `0.1.0` was set manually in `package.json`/`manifest.json` only. Both refs were corrected in the same PR that opened semantic-release for `0.2.0`.
+
+**For maintainers:** do not bump `package.json`/`manifest.json`/`versions.json` by hand; let conventional commits and the pipeline do it. The version files are listed as `@semantic-release/git` assets and committed automatically as `chore(release): X.Y.Z [skip ci]`.
+
 ## Deferred Review Items (2026-04-25 multi-batch review)
 
 The following items from the 2026-04-25 multi-batch spec review on branch `feat/xdd-scaffold` were classified Defer — out of scope for the XDD-scaffold branch but should be picked up later. Each row names where the work belongs.
