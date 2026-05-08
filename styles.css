@@ -5,6 +5,67 @@
 	font-size: var(--font-small);
 }
 
+/* --- Manifest-driven settings header (HeaderSection) ---
+ *
+ * Two-column flex strip rendered above the rest of the settings UI.
+ * Mirrors the unified MiYo Obsidian-plugin settings header style — see
+ * miyo-kado for the canonical reference and `_inbox/from-kado/
+ * 2026-05-08_kado-to-hashi_unified-obsidian-settings-header.md` for the
+ * shared specification.
+ *
+ * Structural rules only — every colour comes from Obsidian theme tokens
+ * so light and dark themes render correctly without overrides.
+ */
+
+.hashi-settings-header {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 12px 0 14px;
+	margin-bottom: 8px;
+}
+
+.hashi-header-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.hashi-header-identity {
+	font-size: var(--font-small);
+	color: var(--text-muted);
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 6px;
+}
+
+.hashi-header-identity a {
+	color: var(--text-accent);
+}
+
+.hashi-plugin-name {
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.hashi-header-sep {
+	color: var(--text-faint);
+}
+
+.hashi-tagline {
+	margin: 4px 0 0 0;
+	font-size: var(--font-small);
+	color: var(--text-muted);
+}
+
+.hashi-header-hanko {
+	flex: 0 0 auto;
+	display: block;
+	margin-left: auto;
+	width: 72px;
+	height: 72px;
+}
+
 /* --- Status-bar 友 kanji connection indicator --- */
 
 /* The kanji itself is the primary connection-state visual: color +

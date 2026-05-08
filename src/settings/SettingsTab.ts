@@ -26,6 +26,7 @@ import type { ConnectionState } from "../connection/state";
 import type { TomoConnection } from "../connection/TomoConnection";
 import type { ExecutionMode } from "../executor/state";
 import type { PluginSettings } from "../types/index";
+import { HeaderSection } from "./HeaderSection";
 import { InstancePickerModal } from "./InstancePickerModal";
 
 // ---------------------------------------------------------------------------
@@ -155,6 +156,7 @@ export function buildSettingsHandlers(
 export class SettingsTab extends PluginSettingTab {
 	plugin: TomoHashiPlugin;
 	private unsubscribe: (() => void) | null = null;
+	private readonly headerSection: HeaderSection;
 
 	/**
 	 * Test seam (review M19): rebuilds handlers on demand via the pure
@@ -180,11 +182,20 @@ export class SettingsTab extends PluginSettingTab {
 	) {
 		super(app, plugin);
 		this.plugin = plugin;
+		this.headerSection = new HeaderSection({ plugin });
 	}
 
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+
+		// Manifest-driven identity strip (handoff
+		// `2026-05-08_kado-to-hashi_unified-obsidian-settings-header.md`):
+		// rendered once per display() call, above the existing sections.
+		const headerContainer = containerEl.createDiv({
+			cls: "hashi-settings-header",
+		});
+		this.headerSection.render(headerContainer);
 
 		new Setting(containerEl).setName("Tomo connection").setHeading();
 		const wrapper = containerEl.createDiv({
