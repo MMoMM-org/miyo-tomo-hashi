@@ -73,15 +73,31 @@ function asConnection(fake: FakeConnection): TomoConnection {
 // Minimal plugin stub — SettingsTab only uses it as the second `super()` arg,
 // reads plugin.settings, and calls plugin.saveSettings() when controls change.
 // Extended in T1.3 to include all PluginSettings fields + saveSettings().
+// The `manifest` field is consumed by the HeaderSection rendered at the top
+// of `display()` (manifest-driven identity strip — handoff from miyo-kado).
 interface PluginStub {
 	settings: PluginSettings;
 	saveSettings: ReturnType<typeof vi.fn>;
+	manifest: {
+		id: string;
+		name: string;
+		version: string;
+		author?: string;
+		authorUrl?: string;
+	};
 }
 
 function makePlugin(overrides: Partial<PluginSettings> = {}): PluginStub {
 	return {
 		settings: { ...DEFAULT_SETTINGS, ...overrides },
 		saveSettings: vi.fn<() => Promise<void>>(async () => {}),
+		manifest: {
+			id: "miyo-tomo-hashi",
+			name: "MiYo Tomo Hashi",
+			version: "0.0.0-test",
+			author: "Marcus Breiden <marcus@mmomm.org>",
+			authorUrl: "https://www.mmomm.org",
+		},
 	};
 }
 

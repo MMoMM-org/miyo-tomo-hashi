@@ -198,7 +198,14 @@ const context = await esbuild.context({
 	// `@xterm/xterm/css/xterm.css`. Use `text` so the CSS is inlined as a string
 	// in the single `main.js` artifact (Obsidian plugin packaging model). The
 	// xterm CSS will be appended to <head> at view-mount time in phase 4.
-	loader: { ".css": "text" },
+	//
+	// `.png` → `dataurl`: the settings header inlines the plugin hanko via
+	// `import hankoUrl from "../../assets/tomo-hashi-hanko-144.png"`. BRAT
+	// and the official Community Plugins installer both fetch only
+	// main.js / manifest.json / styles.css from a release, so a sibling
+	// `assets/` directory would 404 on non-developer installs. Inlining as
+	// a data URI is the only delivery path that survives both installers.
+	loader: { ".css": "text", ".png": "dataurl" },
 	plugins: [stubMissingNativeDeps, copyAssets],
 });
 
