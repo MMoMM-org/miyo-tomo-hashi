@@ -1,3 +1,10 @@
+# [0.3.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.2.0...0.3.0) (2026-05-08)
+
+
+### Features
+
+* **settings:** manifest-driven header with inlined hanko ([2ccc257](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/2ccc257a2ee355ac216ebf5785e7cd2c505b0ae8))
+
 # [0.2.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.1.0...0.2.0) (2026-05-07)
 
 

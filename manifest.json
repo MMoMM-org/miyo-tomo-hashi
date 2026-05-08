@@ -1,7 +1,7 @@
 {
 	"id": "miyo-tomo-hashi",
 	"name": "MiYo Tomo Hashi",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"minAppVersion": "1.5.0",
 	"description": "Direct integration with Tomo (Claude Code) sessions for session interaction and automated vault updates",
 	"author": "Marcus Breiden <marcus@mmomm.org>",
