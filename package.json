@@ -11,8 +11,8 @@
 		"test:watch": "vitest",
 		"test:coverage": "vitest run --coverage",
 		"test:live": "vitest run --config vitest.live.config.ts",
-		"lint": "eslint src/",
-		"lint:fix": "eslint src/ --fix"
+		"lint": "eslint src/ manifest.json",
+		"lint:fix": "eslint src/ manifest.json --fix"
 	},
 	"keywords": [],
 	"license": "MIT",

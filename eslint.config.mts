@@ -20,6 +20,17 @@ export default tseslint.config(
 	},
 	...tseslint.configs.recommendedTypeChecked,
 	...obsidianmd.configs.recommended,
+	{
+		files: ["manifest.json"],
+		rules: {
+			"obsidianmd/validate-manifest": "error",
+			// Parsing manifest.json with the TS parser surfaces the
+			// top-level object literal as a bare expression. The lint we
+			// actually want here is validate-manifest — silence the noise.
+			"@typescript-eslint/no-unused-expressions": "off",
+			"no-unused-expressions": "off",
+		},
+	},
 	globalIgnores([
 		"node_modules",
 		"dist",
