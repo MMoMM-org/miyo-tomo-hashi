@@ -1,3 +1,11 @@
+## [0.3.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.3.0...0.3.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* **lint:** resolve obsidianmd 0.3.0 findings ([30d575c](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/30d575c180858489064e08f11950e6fe869c3c1f)), closes [#8](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/8)
+* **lint:** wire validate-manifest and reformulate description ([1caf814](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/1caf814fae6ebd64e45c67d93c5e028f89d0c347))
+
 # [0.3.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.2.0...0.3.0) (2026-05-08)
 
 
