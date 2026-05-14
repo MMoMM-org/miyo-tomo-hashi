@@ -118,7 +118,7 @@ export class TomoChatView extends ItemView {
 	private terminalResizeDisposable: { dispose: () => void } | null = null;
 	private terminal: TerminalSession | null = null;
 	private resizeObserver: ResizeObserver | null = null;
-	private resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	private resizeDebounceTimer: number | null = null;
 	// Drives the post-Connected resize push. Tracking the previous state
 	// kind avoids resyncing on every store transition (e.g. indicator-only
 	// updates) — only the disconnected→connected edge needs the explicit
@@ -299,9 +299,9 @@ export class TomoChatView extends ItemView {
 		if (typeof ResizeObserver !== "undefined") {
 			this.resizeObserver = new ResizeObserver(() => {
 				if (this.resizeDebounceTimer !== null) {
-					clearTimeout(this.resizeDebounceTimer);
+					window.clearTimeout(this.resizeDebounceTimer);
 				}
-				this.resizeDebounceTimer = setTimeout(() => {
+				this.resizeDebounceTimer = window.setTimeout(() => {
 					this.resizeDebounceTimer = null;
 					if (this.terminal !== null) fit(this.terminal);
 				}, RESIZE_DEBOUNCE_MS);
@@ -401,7 +401,7 @@ export class TomoChatView extends ItemView {
 			this.resizeObserver = null;
 		}
 		if (this.resizeDebounceTimer !== null) {
-			clearTimeout(this.resizeDebounceTimer);
+			window.clearTimeout(this.resizeDebounceTimer);
 			this.resizeDebounceTimer = null;
 		}
 		if (this.terminal !== null) {

@@ -27,7 +27,7 @@ export const INITIAL_RECONNECT_DELAY_MS = DELAYS_MS[0];
 
 export class ReconnectLoop {
 	private cancelled = false;
-	private currentTimer: ReturnType<typeof setTimeout> | null = null;
+	private currentTimer: number | null = null;
 	private currentResolve: (() => void) | null = null;
 
 	async run(
@@ -49,7 +49,7 @@ export class ReconnectLoop {
 	cancel(): void {
 		this.cancelled = true;
 		if (this.currentTimer) {
-			clearTimeout(this.currentTimer);
+			window.clearTimeout(this.currentTimer);
 			this.currentTimer = null;
 		}
 		if (this.currentResolve) {
@@ -61,7 +61,7 @@ export class ReconnectLoop {
 	private wait(ms: number): Promise<void> {
 		return new Promise<void>((resolve) => {
 			this.currentResolve = resolve;
-			this.currentTimer = setTimeout(() => {
+			this.currentTimer = window.setTimeout(() => {
 				this.currentTimer = null;
 				this.currentResolve = null;
 				resolve();
