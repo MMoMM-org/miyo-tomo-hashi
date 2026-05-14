@@ -11,7 +11,8 @@
 		"test:watch": "vitest",
 		"test:coverage": "vitest run --coverage",
 		"test:live": "vitest run --config vitest.live.config.ts",
-		"lint": "eslint ."
+		"lint": "eslint src/",
+		"lint:fix": "eslint src/ --fix"
 	},
 	"keywords": [],
 	"license": "MIT",
@@ -30,7 +31,7 @@
 		"@types/dockerode": "^3.3.29",
 		"@types/node": "^22.0.0",
 		"esbuild": "0.25.5",
-		"eslint-plugin-obsidianmd": "0.1.9",
+		"eslint-plugin-obsidianmd": "0.3.0",
 		"globals": "14.0.0",
 		"jiti": "2.6.1",
 		"jsdom": "^26.1.0",
