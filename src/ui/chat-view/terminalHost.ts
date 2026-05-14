@@ -109,7 +109,7 @@ export function writeChunk(
 	if (typeof bytes !== "string") state.hasBinary = true;
 	if (state.scheduled) return;
 	state.scheduled = true;
-	requestAnimationFrame(() => {
+	window.requestAnimationFrame(() => {
 		flushPending(session);
 	});
 }

@@ -210,7 +210,7 @@ function updateErrorBanner(
 		// empty assertive region first and then setting text after caused
 		// some AT to announce the empty insertion before the actual
 		// failure text on first failure.
-		banner = document.createElement("div");
+		banner = activeDocument.createElement("div");
 		banner.classList.add("hashi-execution-modal-error-banner");
 		banner.setAttribute("aria-live", "assertive");
 		banner.textContent = text;

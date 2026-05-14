@@ -312,7 +312,7 @@ export default class TomoHashiPlugin extends Plugin {
 		// format=cjs). Anchor at `__filename` (CJS global) — at runtime this
 		// is the bundled main.js path; createRequire uses it as resolution
 		// origin for `require()` calls into the hooks directory.
-		// eslint-disable-next-line no-undef -- `__filename` is a CJS global; valid at runtime in our esbuild CJS bundle.
+		 
 		const cjsRequire = createRequire(__filename);
 		const hookRunner = new HookRunner(this.app, hookLoader, hookLogger, {
 			askCallback,

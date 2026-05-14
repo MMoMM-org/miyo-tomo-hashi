@@ -105,9 +105,9 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	// (review M3). Promise.race only resolves the winner — the loser
 	// timer would otherwise stay alive for the full `ms` window, holding
 	// its closure (and surrounding context) until it fires.
-	let timerId: ReturnType<typeof setTimeout> | null = null;
+	let timerId: number | null = null;
 	const timeoutPromise = new Promise<T>((_, reject) => {
-		timerId = setTimeout(
+		timerId = window.setTimeout(
 			() => reject(new Error(`Hook exceeded ${ms}ms timeout`)),
 			ms,
 		);
@@ -115,7 +115,7 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	try {
 		return await Promise.race([promise, timeoutPromise]);
 	} finally {
-		if (timerId !== null) clearTimeout(timerId);
+		if (timerId !== null) window.clearTimeout(timerId);
 	}
 }
 

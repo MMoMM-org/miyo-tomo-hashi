@@ -121,6 +121,15 @@ if (typeof HTMLElement !== "undefined") {
 	}
 }
 
+// In real Obsidian, `activeDocument` is a global pointing to the document of
+// the currently-active window (handles popouts). jsdom has no equivalent —
+// point it at the single jsdom `document` so production code using
+// `activeDocument.*` runs unchanged under tests.
+if (typeof globalThis !== "undefined" && typeof document !== "undefined") {
+	const g = globalThis as typeof globalThis & { activeDocument?: Document };
+	if (g.activeDocument === undefined) g.activeDocument = document;
+}
+
 // --- App & Workspace ---
 
 export class Component {

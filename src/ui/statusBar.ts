@@ -160,12 +160,12 @@ export function mountStatusBar(
 	let currentClass: StateClass = "is-idle";
 	root.addClass(currentClass);
 
-	let errorTimer: ReturnType<typeof setTimeout> | null = null;
+	let errorTimer: number | null = null;
 	let visual: VisualState = { kind: "idle" };
 
 	function clearErrorTimer(): void {
 		if (errorTimer !== null) {
-			clearTimeout(errorTimer);
+			window.clearTimeout(errorTimer);
 			errorTimer = null;
 		}
 	}
@@ -210,7 +210,7 @@ export function mountStatusBar(
 
 		if (next.kind === "error") {
 			clearErrorTimer();
-			errorTimer = setTimeout(() => {
+			errorTimer = window.setTimeout(() => {
 				errorTimer = null;
 				applyVisual({ kind: "idle" });
 			}, ERROR_WINDOW_MS);
