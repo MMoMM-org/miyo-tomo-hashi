@@ -135,13 +135,70 @@ Hooks emit lines into the run log via `ctx.logger`. The log records:
 
 A hook timeout (default 30 s, hard-coded in v0.1) records a `failed` outcome with the reason `hook-timeout`. The action's outcome follows the same `before-` short-circuit / `after-` separate-log rules.
 
-## Worked example: post-move backlink audit
+## Worked examples
+
+### Rewrite aliases after move
+
+When Tomo renders a note, it sets the `aliases` frontmatter to an auto-generated value (e.g. `2026-05-26_1918_Asahikawa Hokkaido's second-largest city`). This hook replaces it with the note's title — useful when you want aliases to be human-readable in your vault.
+
+The same pattern works for both `after-move_note.cjs` and `after-create_moc.cjs` — both action types carry `ctx.action.destination` (the final vault path) and `ctx.action.title`.
 
 ```js
 // .tomo-hashi/hooks/after-move_note.cjs
+//
+// Rewrites the aliases array in frontmatter after Hashi moves the note.
+// ctx.action fields used:
+//   - destination  (string) — vault-relative path of the moved note
+//   - title        (string) — final note title
+//
+// Obsidian API used:
+//   - app.vault.getAbstractFileByPath(path) — resolve TFile from path
+//   - app.fileManager.processFrontMatter(file, fn) — atomic read-mutate-write
+//     of YAML frontmatter. The callback receives a mutable object; changes
+//     are serialised back to the file automatically.
+//
+// Return shape:
+//   { info: string[] }   — logged to the Hashi run log
+//   { errors: string[] } — recorded as hook failure (action still applied)
+//
 module.exports = async (ctx) => {
-  if (ctx.action.action !== "move_note") return;
+  const { action, app, logger } = ctx;
 
+  // getAbstractFileByPath returns TFile | TFolder | null.
+  // For a .md destination this will always be a TFile.
+  const file = app.vault.getAbstractFileByPath(action.destination);
+  if (!file) {
+    return { warnings: [`File not found at ${action.destination}`] };
+  }
+
+  try {
+    await app.fileManager.processFrontMatter(file, (fm) => {
+      // fm is a mutable JS object representing the YAML frontmatter.
+      // Assigning a property writes it back; deleting removes the key.
+      fm.aliases = [`${action.title} (HASHI)`];
+    });
+  } catch (err) {
+    return { errors: [`processFrontMatter failed: ${err}`] };
+  }
+
+  logger.info(`alias → "${action.title} (HASHI)"`);
+  return { info: [`alias → "${action.title} (HASHI)"`] };
+};
+```
+
+> **Tip — `create_moc` variant.** Copy the file as `after-create_moc.cjs`. The code is identical — both `move_note` and `create_moc` actions expose `destination` and `title`.
+
+### Post-move backlink audit (read-only)
+
+A minimal hook that logs information without modifying any files. Useful for debugging or vault analytics.
+
+```js
+// .tomo-hashi/hooks/after-move_note.cjs
+//
+// Read-only audit: count outgoing links in the moved note.
+// Uses metadataCache — fast, no disk reads, no vault writes.
+//
+module.exports = async (ctx) => {
   const file = ctx.app.vault.getAbstractFileByPath(ctx.action.destination);
   if (!file) {
     return { warnings: [`moved file not found at ${ctx.action.destination}`] };
@@ -155,7 +212,31 @@ module.exports = async (ctx) => {
 };
 ```
 
-This logs the outgoing-link count of every moved note to the run log. No vault writes; pure read-side audit.
+### Pre-flight guard: block moves to protected folders
+
+A `before-` hook that rejects actions matching a condition. The `errors` return short-circuits the handler — the action is recorded as `failed` and never executes.
+
+```js
+// .tomo-hashi/hooks/before-move_note.cjs
+//
+// Reject moves into folders the user wants to protect from automation.
+//
+const PROTECTED = ["Atlas/000 Archive", "Atlas/999 Restricted"];
+
+module.exports = async (ctx) => {
+  const dest = ctx.action.destination;
+  for (const prefix of PROTECTED) {
+    if (dest.startsWith(prefix)) {
+      return { errors: [`Blocked: ${dest} is in a protected folder`] };
+    }
+  }
+  // undefined return = no effect, handler proceeds normally
+};
+```
+
+## Built-in frontmatter cleanup
+
+Hashi automatically strips the `tomo:` frontmatter block (containing `doc_type`, `state`, `run_id`, `updated_at`) from notes after `move_note` and `create_moc` actions. This metadata is Tomo's internal lifecycle tracking and has no value once the note reaches its final vault location. No hook is needed for this — it happens as part of the action handler.
 
 ## See also
 
