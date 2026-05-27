@@ -201,7 +201,7 @@ describe("TomoChatView — DOM skeleton", () => {
 		connectionStore.set({ kind: "disconnected" });
 	});
 
-	it("onOpen builds the DOM skeleton (header, indicator, force-reconnect button, terminal host, input)", async () => {
+	it("onOpen builds the DOM skeleton (header, indicator, force-reconnect button, terminal host)", async () => {
 		const h = await mountView();
 		expect(h.root.classList.contains("hashi-chat-view")).toBe(true);
 		expect(h.root.querySelector(".hashi-chat-view-header")).not.toBeNull();
@@ -212,11 +212,11 @@ describe("TomoChatView — DOM skeleton", () => {
 		expect(
 			h.root.querySelector(".hashi-chat-view-terminal-host"),
 		).not.toBeNull();
-		expect(h.root.querySelector(".hashi-chat-view-input")).not.toBeNull();
+		expect(h.root.querySelector(".hashi-chat-view-input")).toBeNull();
 	});
 
 	it("creates the terminal session via terminalHost.createTerminal on the terminal-host element", async () => {
-		const h = await mountView();
+		await mountView();
 		expect(terminalHost.createTerminal).toHaveBeenCalledTimes(1);
 		const args = vi.mocked(terminalHost.createTerminal).mock.calls[0];
 		expect(args).toBeDefined();
@@ -232,69 +232,6 @@ describe("TomoChatView — DOM skeleton", () => {
 	});
 });
 
-describe("TomoChatView — input enabled/disabled gating", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		connectionStore.set({ kind: "disconnected" });
-	});
-
-	afterEach(() => {
-		connectionStore.set({ kind: "disconnected" });
-	});
-
-	it("input is disabled when state is disconnected", async () => {
-		const h = await mountView();
-		const input = h.root.querySelector<HTMLInputElement>(
-			".hashi-chat-view-input",
-		);
-		expect(input).not.toBeNull();
-		expect(input!.disabled).toBe(true);
-	});
-
-	it("input is disabled when state is attaching", async () => {
-		const h = await mountView();
-		connectionStore.set({ kind: "attaching", target: inst() });
-		const input = h.root.querySelector<HTMLInputElement>(
-			".hashi-chat-view-input",
-		);
-		expect(input!.disabled).toBe(true);
-	});
-
-	it("input is disabled when state is reconnecting", async () => {
-		const h = await mountView();
-		connectionStore.set({
-			kind: "reconnecting",
-			target: inst(),
-			attempt: 1,
-			nextDelayMs: 500,
-		});
-		const input = h.root.querySelector<HTMLInputElement>(
-			".hashi-chat-view-input",
-		);
-		expect(input!.disabled).toBe(true);
-	});
-
-	it("input is enabled when state transitions to connected", async () => {
-		const h = await mountView();
-		connectionStore.set({ kind: "connected", instance: inst() });
-		const input = h.root.querySelector<HTMLInputElement>(
-			".hashi-chat-view-input",
-		);
-		expect(input!.disabled).toBe(false);
-	});
-
-	it("input is focused when transitioning from disabled to enabled", async () => {
-		const h = await mountView();
-		// Append the contentEl into document.body so `focus()` actually moves
-		// activeElement; jsdom requires a connected element.
-		document.body.appendChild(h.root);
-		connectionStore.set({ kind: "connected", instance: inst() });
-		const input = h.root.querySelector<HTMLInputElement>(
-			".hashi-chat-view-input",
-		);
-		expect(document.activeElement).toBe(input);
-	});
-});
 
 // ---------------------------------------------------------------------------
 // C1 — Focus-on-open (review/spec-001 critical a11y)
@@ -311,35 +248,8 @@ describe("TomoChatView — focus on open (C1)", () => {
 		connectionStore.set({ kind: "disconnected" });
 	});
 
-	it("focuses the chat input on open when state is already connected", async () => {
-		// Pre-fix: onOpen built DOM, subscribed, render() saw connected on
-		// first tick — but `wasDisabled && !shouldBeDisabled` was
-		// `false && false` so no focus fired. Keyboard user opened the view
-		// and had to click before any keystroke registered.
+	it("focuses the xterm terminal on open regardless of connection state", async () => {
 		connectionStore.set({ kind: "connected", instance: inst() });
-		const leaf = new WorkspaceLeaf();
-		const view = new TomoChatView(
-			leaf,
-			asConnection(makeConnection()),
-			vi.fn(() => null),
-			1,
-			vi.fn(async () => {}),
-		);
-		// Attach BEFORE onOpen so the bootstrap focus in onOpen actually
-		// moves activeElement (jsdom no-ops focus on detached elements).
-		document.body.appendChild(view.contentEl);
-		await view.onOpen();
-		const input = view.contentEl.querySelector<HTMLInputElement>(
-			".hashi-chat-view-input",
-		);
-		expect(document.activeElement).toBe(input);
-		await view.onClose();
-		document.body.removeChild(view.contentEl);
-	});
-
-	it("focuses the xterm terminal on open when state is not connected", async () => {
-		// Open + disconnected → terminal owns focus so AT users at least
-		// land inside the chat view's primary surface, not the modal root.
 		const leaf = new WorkspaceLeaf();
 		const view = new TomoChatView(
 			leaf,
@@ -355,85 +265,15 @@ describe("TomoChatView — focus on open (C1)", () => {
 		document.body.removeChild(view.contentEl);
 	});
 
-	it("focus() override delegates to xterm terminal (Obsidian focus contract)", async () => {
+	it("focus() delegates to xterm terminal (Obsidian focus contract)", async () => {
 		const h = await mountView();
 		document.body.appendChild(h.root);
-		// Obsidian's workspace focus system calls ItemView.focus() when the
-		// view becomes active. Without this override, focus lands on the
-		// content container rather than the terminal.
 		const before = lastTerminalFocusSpy().mock.calls.length;
 		h.view.focus();
 		expect(lastTerminalFocusSpy().mock.calls.length).toBeGreaterThan(before);
 	});
 });
 
-describe("TomoChatView — message send", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		connectionStore.set({ kind: "disconnected" });
-	});
-
-	afterEach(() => {
-		connectionStore.set({ kind: "disconnected" });
-	});
-
-	it("Enter key sends the input value with a trailing newline via connection.write", async () => {
-		const h = await mountView();
-		connectionStore.set({ kind: "connected", instance: inst() });
-		const input = h.root.querySelector<HTMLInputElement>(
-			".hashi-chat-view-input",
-		);
-		input!.value = "hello";
-		input!.dispatchEvent(
-			new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-		);
-		expect(h.connection.write).toHaveBeenCalledTimes(1);
-		expect(h.connection.write).toHaveBeenCalledWith("hello\n");
-	});
-
-	it("Enter clears the input field after sending", async () => {
-		const h = await mountView();
-		connectionStore.set({ kind: "connected", instance: inst() });
-		const input = h.root.querySelector<HTMLInputElement>(
-			".hashi-chat-view-input",
-		);
-		input!.value = "ping";
-		input!.dispatchEvent(
-			new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-		);
-		expect(input!.value).toBe("");
-	});
-
-	it("empty input does not call connection.write", async () => {
-		const h = await mountView();
-		connectionStore.set({ kind: "connected", instance: inst() });
-		const input = h.root.querySelector<HTMLInputElement>(
-			".hashi-chat-view-input",
-		);
-		input!.value = "";
-		input!.dispatchEvent(
-			new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-		);
-		expect(h.connection.write).not.toHaveBeenCalled();
-	});
-
-	it("Shift+Enter does not send", async () => {
-		const h = await mountView();
-		connectionStore.set({ kind: "connected", instance: inst() });
-		const input = h.root.querySelector<HTMLInputElement>(
-			".hashi-chat-view-input",
-		);
-		input!.value = "draft";
-		input!.dispatchEvent(
-			new KeyboardEvent("keydown", {
-				key: "Enter",
-				shiftKey: true,
-				bubbles: true,
-			}),
-		);
-		expect(h.connection.write).not.toHaveBeenCalled();
-	});
-});
 
 describe("TomoChatView — stream forwarding", () => {
 	beforeEach(() => {
@@ -748,37 +588,6 @@ describe("TomoChatView — onClose lifecycle", () => {
 	});
 });
 
-describe("TomoChatView — input accessors (T5.3 file-menu wiring)", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		connectionStore.set({ kind: "disconnected" });
-	});
-
-	afterEach(() => {
-		connectionStore.set({ kind: "disconnected" });
-	});
-
-	it("getInputElement returns the input element after onOpen", async () => {
-		const h = await mountView();
-		const input = h.view.getInputElement();
-		expect(input).not.toBeNull();
-		expect(input!.classList.contains("hashi-chat-view-input")).toBe(true);
-	});
-
-	it("setInputAndFocus sets value, focuses input, and places caret at end", async () => {
-		const h = await mountView();
-		document.body.appendChild(h.root);
-		// Input must be enabled for jsdom focus() to move activeElement —
-		// disabled inputs reject focus per WHATWG spec.
-		connectionStore.set({ kind: "connected", instance: inst() });
-		h.view.setInputAndFocus("@foo/bar.md ");
-		const input = h.view.getInputElement();
-		expect(input!.value).toBe("@foo/bar.md ");
-		expect(document.activeElement).toBe(input);
-		expect(input!.selectionStart).toBe("@foo/bar.md ".length);
-		expect(input!.selectionEnd).toBe("@foo/bar.md ".length);
-	});
-});
 
 describe("TomoChatView — accessibility (PRD F5/AC7)", () => {
 	beforeEach(() => {
@@ -874,7 +683,7 @@ describe("TomoChatView — continuity-gap indicator (PRD F5/AC5 + F8/AC5)", () =
 		expect(ind!.textContent).toBe("Connected — first");
 	});
 
-	it("clears the gap suffix when the user types and submits a message", async () => {
+	it("clears the gap suffix when the user types in the terminal", async () => {
 		const h = await mountView();
 		document.body.appendChild(h.root);
 
@@ -890,13 +699,8 @@ describe("TomoChatView — continuity-gap indicator (PRD F5/AC5 + F8/AC5)", () =
 		const ind = h.root.querySelector(".hashi-chat-view-indicator");
 		expect(ind!.textContent).toContain("Reconnected (gap)");
 
-		const input = h.root.querySelector<HTMLInputElement>(
-			".hashi-chat-view-input",
-		);
-		input!.value = "hi";
-		input!.dispatchEvent(
-			new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-		);
+		expect(terminalHooks.onDataCb).not.toBeNull();
+		terminalHooks.onDataCb!("a");
 
 		expect(ind!.textContent).not.toContain("Reconnected (gap)");
 		expect(ind!.textContent).toBe("Connected — qa-test");

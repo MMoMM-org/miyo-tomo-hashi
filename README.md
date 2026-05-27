@@ -37,7 +37,7 @@ The two components share the plugin process and the settings tab, but **nothing 
 ### A — Tomo session GUI
 
 - **Unified chat tab** rendering the Tomo container's TUI via xterm.js
-- **Bidirectional input** — type into the line input or directly into the terminal
+- **Bidirectional input** — type directly into the terminal; `@file` references are injected into the session via the file-menu action
 - **Connection state** in the status bar (友) and chat-view header
 - **Force reconnect** with fixed-schedule backoff (5 attempts, 15.5 s budget)
 - **Auto-reconnect on plugin load** — by container label, with a Notice telling you which one
@@ -79,7 +79,7 @@ The two components share the plugin process and the settings tab, but **nothing 
 3. **Settings → MiYo Tomo Hashi → Connect** → pick the container in the picker
 4. The chat view opens automatically; type to interact, watch Claude Code's TUI render inline
 
-> Screenshot — chat view connected, Claude Code's TUI visible in the terminal area, input row at the bottom.
+> Screenshot — chat view connected, Claude Code's TUI visible in the terminal area.
 <p align="center">
   <img src="assets/session-view-connected.png" alt="MiYo Tomo Hashi chat view connected to a Tomo container, xterm rendering Claude Code's TUI" width="800" />
 </p>
@@ -130,7 +130,6 @@ The two components share the plugin process and the settings tab, but **nothing 
 
 - **Granular hook policy** — per-hook enable/disable persistence (currently session-scoped after the disclosure-modal decision).
 - **Action: copy_note** — explicit copy variant of `move_note`.
-- **Multi-line input** — Shift+Enter composes; Enter sends.
 - **Rollback hint** — when a run halts mid-way, surface a `git restore`-style suggestion in the summary.
 - **Mobile compatibility** — currently `isDesktopOnly: true` because of Docker socket and Node `fs` use. Mobile would need a non-Docker transport or drop the Tomo Chat interface. Let me know.
 
