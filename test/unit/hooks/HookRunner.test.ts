@@ -614,6 +614,110 @@ describe("HookRunner — ask-mode", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 10. preApprove — collect all ask-mode decisions upfront before execution
+// ---------------------------------------------------------------------------
+
+describe("HookRunner — preApprove", () => {
+	it("prompts for all discovered hook keys in one pass", async () => {
+		const loader = makeFixtureLoader({
+			"before-create_moc": path.join(fixturesDir, "before-create_moc-returns-errors.cjs"),
+			"after-move_note": path.join(fixturesDir, "after-move_note-returns-info.cjs"),
+		});
+		const logger = makeLogger();
+		const askCallback = vi.fn().mockResolvedValue("enable-session");
+
+		const runner = new HookRunner(fakeApp, loader, logger, {
+			policy: "ask",
+			requireFn,
+			askCallback,
+		});
+
+		await runner.preApprove(["create_moc", "move_note"]);
+
+		// Both hooks discovered → two prompts
+		expect(askCallback).toHaveBeenCalledTimes(2);
+	});
+
+	it("subsequent run() calls skip ask after preApprove", async () => {
+		const loader = makeFixtureLoader({
+			"before-create_moc": path.join(fixturesDir, "before-create_moc-returns-errors.cjs"),
+			"after-move_note": path.join(fixturesDir, "after-move_note-returns-info.cjs"),
+		});
+		const logger = makeLogger();
+		const askCallback = vi.fn().mockResolvedValue("enable-session");
+
+		const runner = new HookRunner(fakeApp, loader, logger, {
+			policy: "ask",
+			requireFn,
+			askCallback,
+		});
+
+		await runner.preApprove(["create_moc", "move_note"]);
+		// Now run() should NOT re-prompt
+		await runner.run("before", makeAction("create_moc"));
+		await runner.run("after", makeAction("move_note"));
+
+		// Still only 2 calls — from preApprove, not from run()
+		expect(askCallback).toHaveBeenCalledTimes(2);
+	});
+
+	it("skips entirely when policy is not ask", async () => {
+		const loader = makeFixtureLoader({
+			"before-create_moc": path.join(fixturesDir, "before-create_moc-returns-errors.cjs"),
+		});
+		const logger = makeLogger();
+		const askCallback = vi.fn().mockResolvedValue("enable-session");
+
+		const runner = new HookRunner(fakeApp, loader, logger, {
+			policy: "enabled",
+			requireFn,
+			askCallback,
+		});
+
+		await runner.preApprove(["create_moc"]);
+
+		expect(askCallback).not.toHaveBeenCalled();
+	});
+
+	it("does not prompt for action kinds with no hook files", async () => {
+		const loader = makeFixtureLoader({
+			"after-move_note": path.join(fixturesDir, "after-move_note-returns-info.cjs"),
+		});
+		const logger = makeLogger();
+		const askCallback = vi.fn().mockResolvedValue("enable-session");
+
+		const runner = new HookRunner(fakeApp, loader, logger, {
+			policy: "ask",
+			requireFn,
+			askCallback,
+		});
+
+		await runner.preApprove(["create_moc", "move_note", "skip"]);
+
+		// Only after-move_note exists → 1 prompt
+		expect(askCallback).toHaveBeenCalledTimes(1);
+	});
+
+	it("deduplicates when the same kind appears multiple times", async () => {
+		const loader = makeFixtureLoader({
+			"after-create_moc": path.join(fixturesDir, "after-move_note-returns-info.cjs"),
+		});
+		const logger = makeLogger();
+		const askCallback = vi.fn().mockResolvedValue("enable-session");
+
+		const runner = new HookRunner(fakeApp, loader, logger, {
+			policy: "ask",
+			requireFn,
+			askCallback,
+		});
+
+		await runner.preApprove(["create_moc", "create_moc", "create_moc"]);
+
+		expect(askCallback).toHaveBeenCalledTimes(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // M3 — withTimeout must clear its timer when the hook resolves first
 // ---------------------------------------------------------------------------
 

@@ -55,6 +55,7 @@ export class HookDisclosureModal extends Modal {
 		this.escHandler = (evt: KeyboardEvent) => {
 			if (evt.key !== "Escape") return;
 			this.resolveOnce("disable");
+			this.close();
 		};
 	}
 
@@ -155,6 +156,7 @@ export class HookDisclosureModal extends Modal {
 		if (isPrimary) btn.addClass("mod-cta");
 		btn.addEventListener("click", () => {
 			this.resolveOnce(decision);
+			this.close();
 		});
 		return btn;
 	}

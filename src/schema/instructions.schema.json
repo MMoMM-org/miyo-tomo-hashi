@@ -184,7 +184,7 @@
         "parent_moc": {"type": ["string", "null"], "description": "Parent MOC stem for up-linking (emitted separately as an add_relationship action with marker='up::' on this MOC)."},
         "template": {"type": ["string", "null"]},
         "tags": {"type": "array", "items": {"type": "string"}},
-        "supporting_items": {"type": ["string", "null"], "description": "Raw 'Supporting items' field from the Proposed MOC block (e.g. 'S02, S06, S12'). Consumed by the renderer to generate link_to_moc actions for each supporting item into this new MOC."},
+        "supporting_items": {"oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}, {"type": "null"}], "description": "Supporting items for this MOC. Suggestion-parser emits comma-separated SNN IDs (string), MOC-proposal-parser emits note titles (array). Both formats coexist."},
         "applied": {"$ref": "#/$defs/applied_field"}
       }
     },

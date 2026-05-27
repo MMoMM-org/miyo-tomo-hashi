@@ -87,6 +87,30 @@ describe("createMoc handler", () => {
 		expect(await vault.exists("Atlas/MOC/my-note.md")).toBe(true);
 	});
 
+	it("strips tomo: frontmatter block after move", async () => {
+		const vault = new FakeVaultFS();
+		const content = [
+			"---",
+			"title: PKM MOC",
+			"tomo:",
+			"  doc_type: source",
+			"  state: captured",
+			"---",
+			"",
+			"# MOC Body",
+		].join("\n");
+		await seedFile(vault, "Inbox/my-note.md", content);
+		const action = makeAction();
+		const ctx = makeCtx(vault);
+
+		const outcome = await createMoc(action, ctx);
+
+		expect(outcome.kind).toBe("applied");
+		const result = await vault.read("Atlas/MOC/my-note.md");
+		expect(result).not.toContain("tomo:");
+		expect(result).toContain("title: PKM MOC");
+	});
+
 	it("source absent + target absent → failed with source-missing message", async () => {
 		const vault = new FakeVaultFS();
 		const action = makeAction();

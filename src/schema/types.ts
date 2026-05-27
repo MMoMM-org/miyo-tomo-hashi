@@ -28,7 +28,7 @@ export interface CreateMocAction extends ActionBase {
 	readonly parent_moc?: string | null;
 	readonly template?: string | null;
 	readonly tags?: string[];
-	readonly supporting_items?: string | null;
+	readonly supporting_items?: string | string[] | null;
 }
 
 export interface MoveNoteAction extends ActionBase {

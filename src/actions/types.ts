@@ -24,3 +24,34 @@ export function dirOf(path: string): string {
 	const idx = path.lastIndexOf("/");
 	return idx === -1 ? "" : path.slice(0, idx);
 }
+
+/**
+ * Strip the `tomo:` block from YAML frontmatter. The block includes the
+ * key line and all indented children. Content outside frontmatter is
+ * never touched.
+ */
+export function stripTomoFrontmatter(content: string): string {
+	if (!content.startsWith("---\n")) return content;
+	const endIdx = content.indexOf("\n---", 4);
+	if (endIdx === -1) return content;
+
+	const fm = content.slice(4, endIdx);
+	const rest = content.slice(endIdx);
+	const lines = fm.split("\n");
+	const result: string[] = [];
+	let skipping = false;
+
+	for (const line of lines) {
+		if (skipping) {
+			if (line === "" || line[0] === " " || line[0] === "\t") continue;
+			skipping = false;
+		}
+		if (/^tomo:/.test(line)) {
+			skipping = true;
+			continue;
+		}
+		result.push(line);
+	}
+
+	return `---\n${result.join("\n")}${rest}`;
+}

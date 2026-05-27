@@ -65,8 +65,11 @@ function makeFailValidator(message: string): { validate: (raw: unknown) => Valid
 
 function makeHookRunner(
 	outcome: HookOutcome = { kind: "ok" },
-): { run: Mock } {
-	return { run: vi.fn().mockResolvedValue(outcome) };
+): { run: Mock; preApprove: Mock } {
+	return {
+		run: vi.fn().mockResolvedValue(outcome),
+		preApprove: vi.fn().mockResolvedValue(undefined),
+	};
 }
 
 function makeInstructionSet(actions: Action[]): InstructionSet {
@@ -123,7 +126,7 @@ function makeSingleFileExecutor(
 	set: InstructionSet,
 	overrides?: {
 		settings?: Partial<PluginSettings>;
-		hookRunner?: { run: Mock };
+		hookRunner?: { run: Mock; preApprove: Mock };
 		store?: Store<RunState>;
 	},
 ): { executor: InstructionExecutor; notify: Mock; store: Store<RunState> } {
@@ -246,6 +249,7 @@ describe("InstructionExecutor — single-run lock", () => {
 				await blockPromise;
 				return { kind: "ok" as const };
 			}),
+			preApprove: vi.fn().mockResolvedValue(undefined),
 		};
 
 		// The first set has one action so the hook runs
@@ -404,6 +408,7 @@ describe("InstructionExecutor — cancellation", () => {
 				}
 				return { kind: "ok" };
 			}),
+			preApprove: vi.fn().mockResolvedValue(undefined),
 		};
 
 		const notify = vi.fn();
@@ -760,6 +765,7 @@ describe("InstructionExecutor — pre-hook throw", () => {
 				}
 				return { kind: "ok" };
 			}),
+			preApprove: vi.fn().mockResolvedValue(undefined),
 		};
 
 		const { executor } = makeSingleFileExecutor(vault, set, {
@@ -801,6 +807,7 @@ describe("InstructionExecutor — post-hook throw", () => {
 				}
 				return { kind: "ok" };
 			}),
+			preApprove: vi.fn().mockResolvedValue(undefined),
 		};
 
 		const { executor } = makeSingleFileExecutor(vault, set, {
