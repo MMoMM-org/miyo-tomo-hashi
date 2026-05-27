@@ -1,4 +1,5 @@
 import { globalIgnores } from "eslint/config";
+import type { Linter } from "eslint";
 import obsidianmd from "eslint-plugin-obsidianmd";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -19,14 +20,14 @@ export default tseslint.config(
 		},
 	},
 	...tseslint.configs.recommendedTypeChecked,
-	...obsidianmd.configs.recommended,
+	{
+		plugins: { obsidianmd },
+		rules: obsidianmd.configs!.recommended as Linter.RulesRecord,
+	},
 	{
 		files: ["manifest.json"],
 		rules: {
 			"obsidianmd/validate-manifest": "error",
-			// Parsing manifest.json with the TS parser surfaces the
-			// top-level object literal as a bare expression. The lint we
-			// actually want here is validate-manifest — silence the noise.
 			"@typescript-eslint/no-unused-expressions": "off",
 			"no-unused-expressions": "off",
 		},
