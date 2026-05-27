@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.4.0...0.5.0) (2026-05-27)
+
+
+### Features
+
+* **chat:** inject [@file](https://github.com/file) references directly into Docker session stdin ([577a456](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/577a456312215fa295636cd72e8874dd4b89fd18))
+
 # [0.4.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.3.1...0.4.0) (2026-05-27)
 
 
