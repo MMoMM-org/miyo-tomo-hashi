@@ -1,3 +1,19 @@
+# [0.4.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.3.1...0.4.0) (2026-05-27)
+
+
+### Bug Fixes
+
+* **hooks:** close disclosure modal after user decision ([0d376b3](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/0d376b373dff13295b4d11b0a5a841788c4c360d))
+* **hooks:** reject .js hook files — Electron requires .cjs for CommonJS ([373fde0](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/373fde0cbe3b4040bb96191b172c3587d61b0cb6))
+* **schema:** align TypeScript type for supporting_items with schema ([e4e228b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/e4e228b8e58d13e53918325c1a249b2ffe9ff613))
+* **schema:** widen create_moc.supporting_items to accept string or array ([cf855d8](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/cf855d81ccaacc763e08c6f930dfd12f1cb3575e))
+
+
+### Features
+
+* **actions:** strip tomo: frontmatter after move_note and create_moc ([895c0ac](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/895c0acb804a9c28498e91aa613efe17f94dd6cf))
+* **hooks:** pre-approve all hook disclosures before execution starts ([4e43d4b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/4e43d4bd4cc3f421605e769e0d58a32eccf6855f))
+
 ## [0.3.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.3.0...0.3.1) (2026-05-14)
 
 
