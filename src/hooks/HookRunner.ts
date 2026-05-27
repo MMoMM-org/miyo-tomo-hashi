@@ -93,10 +93,13 @@ function loadHookFresh(absolutePath: string, requireFn: RequireFn): Hook {
 		}
 	}
 	const mod = requireFn(absolutePath) as { default?: Hook } | Hook;
+	console.debug(`[hashi:hooks] loadHookFresh typeof mod="${typeof mod}"`, typeof mod === "object" ? Object.keys(mod as object) : "");
 	if (typeof mod === "function") return mod;
 	if (typeof (mod as { default?: Hook }).default === "function") {
+		console.debug("[hashi:hooks] loadHookFresh → using mod.default");
 		return (mod as { default: Hook }).default;
 	}
+	console.debug("[hashi:hooks] loadHookFresh → FALLING BACK TO noopHook");
 	return noopHook;
 }
 
@@ -169,6 +172,7 @@ export class HookRunner {
 	}
 
 	async preApprove(actionKinds: readonly ActionKind[]): Promise<void> {
+		console.debug(`[hashi:hooks] preApprove policy="${this.policy}" kinds=[${[...actionKinds].join(", ")}]`);
 		if (this.policy !== "ask") return;
 
 		const seen = new Set<HookKey>();
@@ -192,11 +196,18 @@ export class HookRunner {
 	}
 
 	async run(phase: HookPhase, action: Action): Promise<HookOutcome> {
-		if (this.policy === "disabled") return { kind: "ok" };
+		if (this.policy === "disabled") {
+			console.debug(`[hashi:hooks] run ${phase}-${action.action} → SKIP (disabled)`);
+			return { kind: "ok" };
+		}
 
 		const key: HookKey = `${phase}-${action.action}`;
 		const resolved = this.loader.resolve(key);
-		if (resolved === null) return { kind: "ok" };
+		if (resolved === null) {
+			console.debug(`[hashi:hooks] run "${key}" → no hook file`);
+			return { kind: "ok" };
+		}
+		console.debug(`[hashi:hooks] run "${key}" → found "${resolved.absolutePath}"`);
 
 		const { absolutePath, duplicates } = resolved;
 
@@ -222,7 +233,9 @@ export class HookRunner {
 			logger: this.logger,
 		};
 
-		return this.invoke(phase, hookFn, ctx);
+		const outcome = await this.invoke(phase, hookFn, ctx);
+		console.debug(`[hashi:hooks] run "${key}" → outcome=${outcome.kind}`, outcome.kind === "failed" ? outcome.reason : "");
+		return outcome;
 	}
 
 	resetSessionDecisions(): void {

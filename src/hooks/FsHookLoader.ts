@@ -41,6 +41,7 @@ export class FsHookLoader implements HookLoader {
 	resolve(key: HookKey): ResolvedHook | null {
 		const hooksDir = this.getHooksDir();
 		const absoluteDir = path.resolve(this.vaultBasePath, hooksDir);
+		console.debug(`[hashi:hooks] resolve("${key}") → dir="${absoluteDir}"`);
 
 		// M2: refuse hooksDir values that escape the vault root. `data.json`
 		// could be tampered (e.g., via Obsidian Sync from another device)
@@ -70,18 +71,25 @@ export class FsHookLoader implements HookLoader {
 			canonicalDir !== canonicalBase &&
 			!canonicalDir.startsWith(canonicalBase + path.sep)
 		) {
+			console.debug(`[hashi:hooks] resolve("${key}") → BLOCKED: dir escapes vault (canonical="${canonicalDir}", base="${canonicalBase}")`);
 			return null;
 		}
 
 		let entries: string[];
 		try {
 			entries = fs.readdirSync(absoluteDir);
-		} catch {
+		} catch (err) {
+			console.debug(`[hashi:hooks] resolve("${key}") → readdirSync failed:`, err);
 			return null;
 		}
 		const matches = entries
-			.filter((e) => e === `${key}.js` || e === `${key}.cjs`)
+			.filter((e) => e === `${key}.cjs`)
 			.sort();
+		const jsOnly = entries.filter((e) => e === `${key}.js`);
+		if (jsOnly.length > 0 && matches.length === 0) {
+			console.warn(`[hashi:hooks] "${key}.js" found but ignored — Electron requires .cjs for CommonJS hooks. Rename to "${key}.cjs".`);
+		}
+		console.debug(`[hashi:hooks] resolve("${key}") → entries=[${entries.join(", ")}] matches=[${matches.join(", ")}]`);
 		if (matches.length === 0) return null;
 		const [first, ...rest] = matches;
 		if (first === undefined) return null;

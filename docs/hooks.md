@@ -142,15 +142,15 @@ A hook timeout (default 30 s, hard-coded in v0.1) records a `failed` outcome wit
 module.exports = async (ctx) => {
   if (ctx.action.action !== "move_note") return;
 
-  const file = ctx.app.vault.getAbstractFileByPath(ctx.action.to);
+  const file = ctx.app.vault.getAbstractFileByPath(ctx.action.destination);
   if (!file) {
-    return { warnings: [`moved file not found at ${ctx.action.to}`] };
+    return { warnings: [`moved file not found at ${ctx.action.destination}`] };
   }
 
   const cache = ctx.app.metadataCache.getFileCache(file);
   const linkCount = (cache?.links ?? []).length;
   return {
-    info: [`moved → ${ctx.action.to}; outgoing links: ${linkCount}`],
+    info: [`moved → ${ctx.action.destination}; outgoing links: ${linkCount}`],
   };
 };
 ```
