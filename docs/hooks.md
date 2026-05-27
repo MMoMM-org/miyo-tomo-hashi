@@ -135,11 +135,11 @@ Hooks emit lines into the run log via `ctx.logger`. The log records:
 
 A hook timeout (default 30 s, hard-coded in v0.1) records a `failed` outcome with the reason `hook-timeout`. The action's outcome follows the same `before-` short-circuit / `after-` separate-log rules.
 
-## Worked examples
+## Working examples
 
 ### Rewrite aliases after move
 
-When Tomo renders a note, it sets the `aliases` frontmatter to an auto-generated value (e.g. `2026-05-26_1918_Asahikawa Hokkaido's second-largest city`). This hook replaces it with the note's title — useful when you want aliases to be human-readable in your vault.
+When Tomo renders a note, it sets the note name to an auto-generated value (e.g. `2026-05-26_1918_Asahikawa Hokkaido's second-largest city`). This hook replaces the alias with the note's title — not directly useful, but you can substitute it with a translation function for example :-) .
 
 The same pattern works for both `after-move_note.cjs` and `after-create_moc.cjs` — both action types carry `ctx.action.destination` (the final vault path) and `ctx.action.title`.
 
@@ -233,10 +233,6 @@ module.exports = async (ctx) => {
   // undefined return = no effect, handler proceeds normally
 };
 ```
-
-## Built-in frontmatter cleanup
-
-Hashi automatically strips the `tomo:` frontmatter block (containing `doc_type`, `state`, `run_id`, `updated_at`) from notes after `move_note` and `create_moc` actions. This metadata is Tomo's internal lifecycle tracking and has no value once the note reaches its final vault location. No hook is needed for this — it happens as part of the action handler.
 
 ## See also
 
