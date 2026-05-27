@@ -1,3 +1,10 @@
+## [0.5.3](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.5.2...0.5.3) (2026-05-27)
+
+
+### Bug Fixes
+
+* address community plugin submission findings ([7a7876b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/7a7876b4c05f80f490dda40810a0b31b5b6593b5))
+
 ## [0.5.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.5.1...0.5.2) (2026-05-27)
 
 
