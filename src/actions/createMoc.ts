@@ -20,7 +20,7 @@
 
 import type { CreateMocAction } from "../schema/types.js";
 import type { ActionOutcome } from "../executor/state.js";
-import { dirOf, type HandlerContext } from "./types.js";
+import { dirOf, stripTomoFrontmatter, type HandlerContext } from "./types.js";
 
 type MoveOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
 
@@ -51,5 +51,6 @@ export async function createMoc(
 	const dir = dirOf(destination);
 	if (dir !== "") await vault.createFolder(dir);
 	await vault.rename(source, destination);
+	await vault.process(destination, stripTomoFrontmatter);
 	return { kind: "applied" };
 }

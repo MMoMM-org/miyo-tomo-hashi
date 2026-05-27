@@ -84,6 +84,35 @@ describe("moveNote handler", () => {
 		expect(await vault.exists("Notes/Projects/raw-note.md")).toBe(true);
 	});
 
+	it("strips tomo: frontmatter block after move", async () => {
+		const vault = new FakeVaultFS();
+		const content = [
+			"---",
+			"title: Test Note",
+			"tomo:",
+			"  doc_type: source",
+			"  state: captured",
+			"  run_id: abc-123",
+			"tags:",
+			"  - topic/test",
+			"---",
+			"",
+			"# Body",
+		].join("\n");
+		await seedFile(vault, "Inbox/raw-note.md", content);
+		const action = makeAction();
+		const ctx = makeCtx(vault);
+
+		const outcome = await moveNote(action, ctx);
+
+		expect(outcome.kind).toBe("applied");
+		const result = await vault.read("Notes/Projects/raw-note.md");
+		expect(result).not.toContain("tomo:");
+		expect(result).not.toContain("doc_type");
+		expect(result).toContain("title: Test Note");
+		expect(result).toContain("tags:");
+	});
+
 	it("source absent + target absent → failed with source-missing message", async () => {
 		const vault = new FakeVaultFS();
 		const action = makeAction();
