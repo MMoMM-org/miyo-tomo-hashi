@@ -4,7 +4,7 @@
 	"version": "0.5.2",
 	"minAppVersion": "1.7.2",
 	"description": "Direct integration with Tomo, the Claude Code agent, for session interaction and automated vault updates.",
-	"author": "Marcus Breiden <marcus@mmomm.org>",
+	"author": "Marcus Breiden",
 	"authorUrl": "https://www.mmomm.org",
 	"fundingUrl": {
 		"Buy Me a Coffee": "https://ko-fi.com/mmomm",
