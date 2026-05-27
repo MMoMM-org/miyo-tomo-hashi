@@ -1,3 +1,10 @@
+## [0.5.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.5.1...0.5.2) (2026-05-27)
+
+
+### Bug Fixes
+
+* **lint:** resolve all 18 pre-existing lint errors ([d766dbe](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/d766dbe2e76d1909740fd81d751bf476f5d0be7d))
+
 ## [0.5.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.5.0...0.5.1) (2026-05-27)
 
 
