@@ -1,3 +1,10 @@
+## [0.5.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.5.0...0.5.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* **lint:** register obsidianmd plugin explicitly in flat config ([b2cc5fc](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/b2cc5fc2e14f42396e9fd92c97284f56ff8d593e))
+
 # [0.5.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.4.0...0.5.0) (2026-05-27)
 
 
