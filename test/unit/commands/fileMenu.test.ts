@@ -1,5 +1,5 @@
 /**
- * Unit tests for registerFileMenu — Phase-4 T4.4 file-menu @file prefill.
+ * Unit tests for registerFileMenu — Phase-4 T4.4 file-menu @file injection.
  *
  * Spec refs: spec 001-session-view phase-4 T4.4; PRD FS1 (all ACs);
  * SDD "Directory Map / src/commands/fileMenu.ts".
@@ -14,8 +14,6 @@
  * — recovered from the `plugin.app.workspace.on` mock spy.
  */
 
-// Side-effect import so the obsidian mock module loads and its HTMLElement
-// prototype shim is installed before tests instantiate input elements.
 import "obsidian";
 import { Menu, type Plugin, type TAbstractFile } from "obsidian";
 // `Plugin` from `obsidian` is `abstract` per the .d.ts, so it can't be
@@ -111,8 +109,7 @@ describe("registerFileMenu", () => {
 		vi.clearAllMocks();
 		plugin = new PluginMock();
 		deps = {
-			getOpenChatInput: vi.fn<() => HTMLInputElement | null>(() => null),
-			openChatViewAndPrefill: vi.fn<(text: string) => Promise<void>>(
+			openChatAndInject: vi.fn<(text: string) => Promise<void>>(
 				async () => {},
 			),
 		};
@@ -131,8 +128,6 @@ describe("registerFileMenu", () => {
 	it("the registered handler accepts (menu, file, source) — Obsidian's signature", () => {
 		registerFileMenu(asPlugin(plugin), deps);
 		const handler = recoverHandler(plugin);
-		// Function arity: handler may collapse unused params, but it must accept
-		// at least the menu + file pair without throwing.
 		expect(() => handler(new Menu(), fakeFile("a.md"), "src")).not.toThrow();
 	});
 
@@ -162,94 +157,18 @@ describe("registerFileMenu", () => {
 	it("does not invoke deps during registration or menu construction", () => {
 		registerFileMenu(asPlugin(plugin), deps);
 		driveMenu(plugin, fakeFile("note.md"));
-		expect(deps.getOpenChatInput).not.toHaveBeenCalled();
-		expect(deps.openChatViewAndPrefill).not.toHaveBeenCalled();
+		expect(deps.openChatAndInject).not.toHaveBeenCalled();
 	});
 
-	it("clicking entry when chat input is open inserts '@<path> ' at caret", async () => {
-		const input = document.createElement("input");
-		input.value = "hello world";
-		input.setSelectionRange(6, 6); // caret between "hello " and "world"
-		document.body.appendChild(input);
-		deps.getOpenChatInput = vi.fn<() => HTMLInputElement | null>(() => input);
-
+	it("clicking entry calls openChatAndInject with '@<path> '", async () => {
 		registerFileMenu(asPlugin(plugin), deps);
 		const menu = driveMenu(plugin, fakeFile("path/to/file.md"));
 		const onClick = recoverOnClick(menu);
 		await onClick();
 
-		expect(input.value).toBe("hello @path/to/file.md world");
-		expect(document.activeElement).toBe(input);
-		expect(deps.openChatViewAndPrefill).not.toHaveBeenCalled();
-
-		input.remove();
-	});
-
-	it("clicking entry replaces the current selection with '@<path> '", async () => {
-		const input = document.createElement("input");
-		input.value = "abc XYZ def";
-		input.setSelectionRange(4, 7); // selects "XYZ"
-		document.body.appendChild(input);
-		deps.getOpenChatInput = vi.fn<() => HTMLInputElement | null>(() => input);
-
-		registerFileMenu(asPlugin(plugin), deps);
-		const menu = driveMenu(plugin, fakeFile("path/to/file.md"));
-		const onClick = recoverOnClick(menu);
-		await onClick();
-
-		expect(input.value).toBe("abc @path/to/file.md  def");
-
-		input.remove();
-	});
-
-	it("caret moves to end of inserted text after insert", async () => {
-		const input = document.createElement("input");
-		input.value = "";
-		input.setSelectionRange(0, 0);
-		document.body.appendChild(input);
-		deps.getOpenChatInput = vi.fn<() => HTMLInputElement | null>(() => input);
-
-		registerFileMenu(asPlugin(plugin), deps);
-		const menu = driveMenu(plugin, fakeFile("a.md"));
-		const onClick = recoverOnClick(menu);
-		await onClick();
-
-		const expected = "@a.md ".length;
-		expect(input.value).toBe("@a.md ");
-		expect(input.selectionStart).toBe(expected);
-		expect(input.selectionEnd).toBe(expected);
-
-		input.remove();
-	});
-
-	it("clicking entry when chat view is closed calls openChatViewAndPrefill with prefill text", async () => {
-		deps.getOpenChatInput = vi.fn<() => HTMLInputElement | null>(() => null);
-
-		registerFileMenu(asPlugin(plugin), deps);
-		const menu = driveMenu(plugin, fakeFile("path/to/file.md"));
-		const onClick = recoverOnClick(menu);
-		await onClick();
-
-		expect(deps.openChatViewAndPrefill).toHaveBeenCalledTimes(1);
-		expect(deps.openChatViewAndPrefill).toHaveBeenCalledWith(
+		expect(deps.openChatAndInject).toHaveBeenCalledTimes(1);
+		expect(deps.openChatAndInject).toHaveBeenCalledWith(
 			"@path/to/file.md ",
-		);
-	});
-
-	it("disconnected state: openChatViewAndPrefill still receives the prefill text (caller decides connect-state UX)", async () => {
-		// "Disconnected" is represented by the chat view being closed AND a
-		// not-connected screen rendering on open. The fileMenu doesn't gate on
-		// connection state — it only routes the prefill — so the test asserts
-		// the contract: prefill always reaches openChatViewAndPrefill verbatim.
-		deps.getOpenChatInput = vi.fn<() => HTMLInputElement | null>(() => null);
-
-		registerFileMenu(asPlugin(plugin), deps);
-		const menu = driveMenu(plugin, fakeFile("inbox/draft.md"));
-		const onClick = recoverOnClick(menu);
-		await onClick();
-
-		expect(deps.openChatViewAndPrefill).toHaveBeenCalledWith(
-			"@inbox/draft.md ",
 		);
 	});
 
@@ -257,14 +176,14 @@ describe("registerFileMenu", () => {
 		registerFileMenu(asPlugin(plugin), deps);
 		const menu = driveMenu(plugin, fakeFile("notes/foo.md"));
 		await recoverOnClick(menu)();
-		expect(deps.openChatViewAndPrefill).toHaveBeenCalledWith("@notes/foo.md ");
+		expect(deps.openChatAndInject).toHaveBeenCalledWith("@notes/foo.md ");
 	});
 
 	it("works for .pdf files", async () => {
 		registerFileMenu(asPlugin(plugin), deps);
 		const menu = driveMenu(plugin, fakeFile("attachments/report.pdf"));
 		await recoverOnClick(menu)();
-		expect(deps.openChatViewAndPrefill).toHaveBeenCalledWith(
+		expect(deps.openChatAndInject).toHaveBeenCalledWith(
 			"@attachments/report.pdf ",
 		);
 	});
@@ -273,7 +192,7 @@ describe("registerFileMenu", () => {
 		registerFileMenu(asPlugin(plugin), deps);
 		const menu = driveMenu(plugin, fakeFile("assets/diagram.png"));
 		await recoverOnClick(menu)();
-		expect(deps.openChatViewAndPrefill).toHaveBeenCalledWith(
+		expect(deps.openChatAndInject).toHaveBeenCalledWith(
 			"@assets/diagram.png ",
 		);
 	});
@@ -282,7 +201,7 @@ describe("registerFileMenu", () => {
 		registerFileMenu(asPlugin(plugin), deps);
 		const menu = driveMenu(plugin, fakeFile("Some Folder/My Note.md"));
 		await recoverOnClick(menu)();
-		expect(deps.openChatViewAndPrefill).toHaveBeenCalledWith(
+		expect(deps.openChatAndInject).toHaveBeenCalledWith(
 			"@Some Folder/My Note.md ",
 		);
 	});
@@ -291,25 +210,19 @@ describe("registerFileMenu", () => {
 		registerFileMenu(asPlugin(plugin), deps);
 		const menu = driveMenu(plugin, fakeFile("a/b/c/d/e/file.md"));
 		await recoverOnClick(menu)();
-		expect(deps.openChatViewAndPrefill).toHaveBeenCalledWith(
+		expect(deps.openChatAndInject).toHaveBeenCalledWith(
 			"@a/b/c/d/e/file.md ",
 		);
 	});
 
-	it("strips newline/carriage-return/NUL from file.path before insertion (review-fix M3)", async () => {
-		// macOS / Linux filesystems allow \n, \r, \0 in filenames. A
-		// pathological filename `foo\nrm -rf /` would otherwise inject a
-		// newline + second command into the chat-input → container stdin
-		// pipeline. Strip is correct here (not escape) because the inserted
-		// text is shown to the user as @<path>; an escape sequence would
-		// render visibly and confuse the preview.
+	it("strips newline/carriage-return/NUL from file.path before injection (review-fix M3)", async () => {
 		registerFileMenu(asPlugin(plugin), deps);
 		const menu = driveMenu(
 			plugin,
 			fakeFile("foo\nrm -rf /\rcat\0eviction.md"),
 		);
 		await recoverOnClick(menu)();
-		expect(deps.openChatViewAndPrefill).toHaveBeenCalledWith(
+		expect(deps.openChatAndInject).toHaveBeenCalledWith(
 			"@foorm -rf /cateviction.md ",
 		);
 	});
@@ -318,38 +231,9 @@ describe("registerFileMenu", () => {
 		registerFileMenu(asPlugin(plugin), deps);
 		const menu = driveMenu(plugin, fakeFile("a/b\twith\ttabs.md"));
 		await recoverOnClick(menu)();
-		expect(deps.openChatViewAndPrefill).toHaveBeenCalledWith(
+		expect(deps.openChatAndInject).toHaveBeenCalledWith(
 			"@a/b\twith\ttabs.md ",
 		);
-	});
-
-	it("handles input with null selectionStart/End (treats as end-of-value)", async () => {
-		const input = document.createElement("input");
-		input.value = "tail";
-		// Force selection accessors to return null — mirrors browsers when the
-		// input has never been focused and has no caret. We can't actually set
-		// them to null on jsdom HTMLInputElement, so we wrap them.
-		Object.defineProperty(input, "selectionStart", {
-			configurable: true,
-			get: () => null,
-		});
-		Object.defineProperty(input, "selectionEnd", {
-			configurable: true,
-			get: () => null,
-		});
-		document.body.appendChild(input);
-		deps.getOpenChatInput = vi.fn<() => HTMLInputElement | null>(() => input);
-
-		registerFileMenu(asPlugin(plugin), deps);
-		const menu = driveMenu(plugin, fakeFile("a.md"));
-		const onClick = recoverOnClick(menu);
-		await onClick();
-
-		// With null selection, code falls back to value.length (end of value),
-		// so insertion appends.
-		expect(input.value).toBe("tail@a.md ");
-
-		input.remove();
 	});
 });
 

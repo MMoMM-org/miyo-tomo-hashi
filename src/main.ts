@@ -40,10 +40,9 @@
  *    check so older Obsidian builds (where the API is missing) become
  *    no-ops rather than crashes.
  *
- * 3. `TomoChatView` exposes `getInputElement()` and `setInputAndFocus()`
- *    accessors so the file-menu wiring can prefill the input without
- *    reaching into the view's private state. Narrow surface — the rest of
- *    the view's internals stay encapsulated.
+ * 3. File-menu @file injection writes directly to `connection.write()` after
+ *    ensuring the chat view is visible. If not connected, the write is
+ *    silently dropped — the user sees the disconnected state in the view.
  *
  * 4. `onunload` detaches every chat-view leaf via `getLeavesOfType()`. This
  *    cleans up multi-leaf scenarios (user manually cloned the view) — a
@@ -207,24 +206,21 @@ export default class TomoHashiPlugin extends Plugin {
 		);
 		this.statusBarIcon.mount();
 
-		// 4. File menu @file prefill (T4.4).
+		// 4. File menu @file injection (T4.4).
 		registerFileMenu(this, {
-			getOpenChatInput: (): HTMLInputElement | null => {
-				const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_TOMO_CHAT);
-				const first = leaves[0];
-				if (first === undefined) return null;
-				const view = first.view;
-				if (!(view instanceof TomoChatView)) return null;
-				return view.getInputElement();
-			},
-			openChatViewAndPrefill: async (text: string): Promise<void> => {
+			openChatAndInject: async (text: string): Promise<void> => {
 				await showChatWindow(this.app);
+				try {
+					conn.write(text);
+				} catch {
+					// Not connected — chat view is now visible so the user
+					// can see the disconnected state and connect manually.
+				}
 				const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_TOMO_CHAT);
 				const first = leaves[0];
-				if (first === undefined) return;
-				const view = first.view;
-				if (!(view instanceof TomoChatView)) return;
-				view.setInputAndFocus(text);
+				if (first?.view instanceof TomoChatView) {
+					first.view.focus();
+				}
 			},
 		});
 

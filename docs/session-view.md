@@ -13,7 +13,7 @@ Three entry points; all converge on a single `VIEW_TYPE_TOMO_CHAT` leaf (singlet
 
 1. **Status bar 友 → popover → Open chat**
 2. **Command palette → "MiYo Tomo Hashi: Show chat window"**
-3. **Right-click a vault file → "Insert into chat"** — opens the view AND prefills the input with `@<path> ` so you can ask Tomo about that file. See [file-menu prefill](#file-menu-file-prefill).
+3. **Right-click a vault file → "Open Tomo chat with @file reference"** — opens the view and writes `@<path> ` directly into the Docker session so it appears in Tomo's TUI as typed text. See [file-menu injection](#file-menu-file-injection).
 
 If no Tomo instance has been chosen yet, the picker modal opens first; once you select one, the chat view opens with the attach already in flight.
 
@@ -47,41 +47,31 @@ Tomo container stdout → Docker socket → xterm.write
 xterm onData (your keystrokes) → docker.write → container stdin
 ```
 
-A separate `<input>` row at the bottom is wired for *line-submit* style messaging — Enter sends `<text>\n` to the container's stdin and clears the field. Use whichever feels more natural; the terminal accepts both.
+All input goes through the terminal — there is no separate line-input field. Type directly into the xterm surface the same way you would type into any terminal emulator.
 
-### Input row
+## File-menu @file injection
 
-> Screenshot — input field at bottom of the chat view, user mid-message.
-<p align="center">
-  <img src="../assets/session-view-input.png" alt="Chat view input row at bottom — text field with placeholder, user typing a message" width="800" />
-</p>
-
-- `aria-label="Message"` — placeholder is not a substitute for an accessible name in some browser/AT combinations.
-- Disabled when not Connected; on the disabled→enabled transition the input auto-focuses so you can start typing immediately on reconnect.
-- **Enter** submits, **Shift+Enter** is reserved for future multi-line composition (currently inserts a newline without sending).
-
-## File-menu file prefill
-
-Right-click any file in the file explorer → **Insert into chat**. Hashi:
+Right-click any file in the file explorer → **Open Tomo chat with @file reference**. Hashi:
 
 1. Opens the chat view if it isn't open already.
-2. Inserts `@<vault-relative-path> ` at the input's caret position (or appends if the input is empty).
+2. Writes `@<vault-relative-path> ` directly into the Docker session's stdin, so it appears in Tomo's TUI as if you typed it.
 3. Strips control characters (`\n`, `\r`, `\0`) from the path so they cannot disrupt Tomo's terminal — escape sequences would render visibly inside the running TUI.
+4. If not connected, the chat view is still revealed so you can see the disconnected state and connect manually.
 
 Pattern: ask Tomo to look at a file by referencing it explicitly rather than pasting its contents.
 
 ## State transitions
 
-The chat view subscribes to `connectionStore`. Indicator + input + Force-reconnect button update on every transition:
+The chat view subscribes to `connectionStore`. Indicator + Force-reconnect button update on every transition:
 
-| State | Indicator class | Input | Force-reconnect |
-|---|---|:-:|:-:|
-| `attaching` | `is-attaching` | disabled | enabled if name set |
-| `connected` | `is-connected` | enabled, focused on edge | enabled if name set |
-| `reconnecting (N)` | `is-reconnecting` | disabled | enabled if name set |
-| `disconnected` | `is-disconnected` | disabled | enabled if name set |
+| State | Indicator class | Force-reconnect |
+|---|---|:-:|
+| `attaching` | `is-attaching` | enabled if name set |
+| `connected` | `is-connected` | enabled if name set |
+| `reconnecting (N)` | `is-reconnecting` | enabled if name set |
+| `disconnected` | `is-disconnected` | enabled if name set |
 
-On reconnecting → connected, a sticky `— Reconnected (gap)` suffix is appended to the indicator label until you type something. The signal is intentional: while Hashi was reconnecting, container output between the disconnect and the reconnect was lost — you may have missed bytes, and acknowledging by typing clears the suffix.
+On reconnecting → connected, a sticky `— Reconnected (gap)` suffix is appended to the indicator label until you type something in the terminal. The signal is intentional: while Hashi was reconnecting, container output between the disconnect and the reconnect was lost — you may have missed bytes, and acknowledging by typing clears the suffix.
 
 ## Resize behaviour
 

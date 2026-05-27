@@ -1,8 +1,9 @@
 /**
  * Tomo chat view — unified Session View over a Tomo Docker container. Hosts
  * an xterm.js terminal that surfaces the bidirectional Docker attach stream
- * (stdout/stderr → terminal, user input → `connection.write`), plus a
- * header with a state indicator and a Force Reconnect button.
+ * (stdout/stderr → terminal, user keystrokes → `connection.write`), plus a
+ * header with a state indicator and a Force Reconnect button. All user input
+ * flows through the terminal — there is no separate line-input field.
  *
  * Spec refs: spec 001-session-view phase-4 T4.3; PRD F4 (chat view), F5
  * (bidirectional chat), F8 (force-reconnect parity); SDD ADR-2 (xterm.js
@@ -21,19 +22,13 @@
  *
  * 2. The store subscription is established AFTER the DOM skeleton is built
  *    so the initial `render(state)` callback (Store fires immediately on
- *    subscribe) finds the indicator / button / input refs already attached.
+ *    subscribe) finds the indicator / button refs already attached.
  *
- * 3. Input is `disabled` whenever state is not Connected. On the
- *    disabled→enabled transition the input is `focus()`-ed so the user can
- *    type without an extra click. Production mounts the contentEl into a
- *    real workspace leaf — focus works there. Tests append the contentEl
- *    to `document.body` to verify focus behavior.
- *
- * 4. The Force Reconnect button is `disabled` when `getChosenInstanceName()`
+ * 3. The Force Reconnect button is `disabled` when `getChosenInstanceName()`
  *    returns null. Parity with the status-bar popover (PRD F3 / AC5,
  *    SDD ADR-9): "Force Reconnect" must never open the picker.
  *
- * 5. ResizeObserver is used to keep the xterm fit-to-container. Falls back
+ * 4. ResizeObserver is used to keep the xterm fit-to-container. Falls back
  *    silently when the runtime lacks ResizeObserver (jsdom under vitest).
  */
 
@@ -135,7 +130,6 @@ export class TomoChatView extends ItemView {
 	// every store transition.
 	private indicatorEl: HTMLElement | null = null;
 	private forceReconnectBtn: HTMLButtonElement | null = null;
-	private inputEl: HTMLInputElement | null = null;
 	private zoomButtons: Map<ZoomLevel, HTMLButtonElement> = new Map();
 
 	constructor(
@@ -159,33 +153,6 @@ export class TomoChatView extends ItemView {
 
 	override getIcon(): string {
 		return "message-square";
-	}
-
-	/**
-	 * Returns the chat input element, or `null` if `onOpen()` has not yet
-	 * built the DOM. Used by the file-menu @file prefill (T5.3) to insert a
-	 * reference at the caret of the open chat. Narrow accessor — exposes the
-	 * input element only, not the rest of the view internals.
-	 *
-	 * Spec ref: spec 001-session-view phase-5 T5.3; PRD FS1.
-	 */
-	getInputElement(): HTMLInputElement | null {
-		return this.inputEl;
-	}
-
-	/**
-	 * Sets the input value, focuses it, and places the caret at the end. Used
-	 * by the file-menu @file prefill (T5.3) when the chat view was just opened
-	 * by `openChatViewAndPrefill` and the user expects to start typing
-	 * immediately after the inserted reference. No-op when the DOM has not
-	 * yet been built.
-	 */
-	setInputAndFocus(text: string): void {
-		if (this.inputEl === null) return;
-		this.inputEl.value = text;
-		this.inputEl.focus();
-		const len = text.length;
-		this.inputEl.setSelectionRange(len, len);
 	}
 
 	override async onOpen(): Promise<void> {
@@ -266,17 +233,18 @@ export class TomoChatView extends ItemView {
 		});
 
 		// Forward keystrokes typed inside the xterm area to the container's
-		// stdin. This is what makes the chat view behave like a normal terminal
-		// emulator — without this, xterm captures key events but does nothing
-		// with them, so typing into the visible Tomo TUI silently drops bytes.
-		// The PRD-style separate input field below is still wired (for chat-
-		// style line submit on Enter); both entry points coexist.
+		// stdin. This is the sole input path — all typing (keyboard and
+		// programmatic writes via writeToSession) flows through the terminal.
 		this.terminalInputDisposable = this.terminal.terminal.onData((data) => {
 			try {
 				this.connection.write(data);
 			} catch {
 				// not connected — drop silently; render() shows the disconnected
 				// state and the user can re-Connect / Force Reconnect.
+			}
+			if (this.showGapNotice) {
+				this.showGapNotice = false;
+				this.render(connectionStore.get());
 			}
 		});
 
@@ -309,35 +277,6 @@ export class TomoChatView extends ItemView {
 			this.resizeObserver.observe(termHost);
 		}
 
-		// --- Input row -------------------------------------------------------
-		const inputRow = root.createDiv({ cls: "hashi-chat-view-input-row" });
-		this.inputEl = inputRow.createEl("input", {
-			cls: "hashi-chat-view-input",
-			// review round 2 / L28: aria-label="Message" — placeholder is
-			// not a substitute for an accessible name in some browser/AT
-			// combinations; an explicit label guarantees the input is
-			// announced to screen readers.
-			attr: {
-				type: "text",
-				placeholder: "Type a message…",
-				"aria-label": "Message",
-			},
-		});
-		this.inputEl.addEventListener("keydown", (evt) => {
-			if (evt.key !== "Enter" || evt.shiftKey) return;
-			evt.preventDefault();
-			const text = this.inputEl?.value ?? "";
-			if (text.length === 0) return;
-			this.connection.write(`${text}\n`);
-			if (this.inputEl !== null) this.inputEl.value = "";
-			// User acknowledged recovery by acting — clear the gap notice and
-			// re-render so the indicator drops the suffix.
-			if (this.showGapNotice) {
-				this.showGapNotice = false;
-				this.render(connectionStore.get());
-			}
-		});
-
 		// Subscribe AFTER the skeleton is built — Store fires the listener
 		// immediately on subscribe with the current value, so render() must
 		// have its DOM refs.
@@ -345,38 +284,11 @@ export class TomoChatView extends ItemView {
 			this.render(state),
 		);
 
-		// C1 (review/spec-001): bootstrap focus on open. The render()
-		// transition path only focuses on disabled→enabled, which doesn't
-		// fire on first mount (input.disabled defaults to false either way).
-		// Without this, keyboard users open the view and must mouse-click
-		// before any keystroke is captured. Connected → input owns focus;
-		// otherwise → terminal owns focus so the AT user at least lands
-		// inside the chat view's primary surface.
-		const initial = connectionStore.get();
-		if (initial.kind === "connected") {
-			this.inputEl?.focus();
-		} else {
-			this.terminal?.terminal.focus();
-		}
+		this.terminal?.terminal.focus();
 	}
 
-	/**
-	 * Obsidian's workspace focus system delegates here when the view becomes
-	 * active. The `override` keyword is omitted because `focus()` isn't in
-	 * Obsidian's typed `ItemView` declarations — the runtime calls it via
-	 * duck typing. Defaults would land focus on `contentEl`; we route to
-	 * the input when Connected (so users can type immediately) or to the
-	 * xterm terminal otherwise (so AT users land inside the chat surface).
-	 * Mirrors the onOpen bootstrap (review round 2 / L29). Pre-fix this
-	 * always routed to the terminal, forcing the user to manually move
-	 * focus to the input each time the view was re-activated mid-session.
-	 */
 	focus(): void {
-		if (connectionStore.get().kind === "connected") {
-			this.inputEl?.focus();
-		} else {
-			this.terminal?.terminal.focus();
-		}
+		this.terminal?.terminal.focus();
 	}
 
 	override async onClose(): Promise<void> {
@@ -454,8 +366,7 @@ export class TomoChatView extends ItemView {
 	private render(state: ConnectionState): void {
 		const indicator = this.indicatorEl;
 		const btn = this.forceReconnectBtn;
-		const input = this.inputEl;
-		if (indicator === null || btn === null || input === null) return;
+		if (indicator === null || btn === null) return;
 
 		// PRD F8/AC5 — flip the gap-notice flag on reconnecting → connected.
 		// The flag is sticky until the user types in the input (handled in
@@ -485,13 +396,6 @@ export class TomoChatView extends ItemView {
 			"aria-live",
 			view.stateClass === "is-disconnected" ? "assertive" : "polite",
 		);
-
-		const wasDisabled = input.disabled;
-		const shouldBeDisabled = state.kind !== "connected";
-		input.disabled = shouldBeDisabled;
-		if (wasDisabled && !shouldBeDisabled) {
-			input.focus();
-		}
 
 		const noInstance = this.getChosenInstanceName() === null;
 		btn.disabled = noInstance;
