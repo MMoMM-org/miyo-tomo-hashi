@@ -1,5 +1,4 @@
 import { globalIgnores } from "eslint/config";
-import type { Linter } from "eslint";
 import obsidianmd from "eslint-plugin-obsidianmd";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -22,7 +21,18 @@ export default tseslint.config(
 	...tseslint.configs.recommendedTypeChecked,
 	{
 		plugins: { obsidianmd },
-		rules: obsidianmd.configs!.recommended as Linter.RulesRecord,
+		rules: {
+			// obsidianmd 0.3.0's configs.recommended is a hybrid object: iterating
+			// it yields a full flat-config array (with js, tseslint, import, sdl
+			// bundled in), but its own properties are the obsidianmd/* rules. We
+			// only want the rules — extract them by filtering on the prefix.
+			...Object.fromEntries(
+				Object.entries(obsidianmd.configs!.recommended as Record<string, unknown>)
+					.filter(([k]) => k.startsWith("obsidianmd/")),
+			),
+			"@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+			"@typescript-eslint/require-await": "off",
+		},
 	},
 	{
 		files: ["manifest.json"],
