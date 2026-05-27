@@ -29,6 +29,7 @@
 import type { VaultFS } from "../vault/VaultFS.js";
 import type { Action } from "../schema/types.js";
 import type {
+	ActionKind,
 	ActionRecord,
 	Clock,
 	ExecutionMode,
@@ -62,7 +63,10 @@ export type Invocation =
 export interface InstructionExecutorDeps {
 	readonly vault: VaultFS;
 	readonly validator: { validate(raw: unknown): ValidationOutcome };
-	readonly hookRunner: { run(phase: "before" | "after", action: Action): Promise<HookOutcome> };
+	readonly hookRunner: {
+		run(phase: "before" | "after", action: Action): Promise<HookOutcome>;
+		preApprove(actionKinds: readonly ActionKind[]): Promise<void>;
+	};
 	/**
 	 * Plugin settings — either a snapshot or a getter function.
 	 *
@@ -84,7 +88,10 @@ export interface InstructionExecutorDeps {
 export class InstructionExecutor {
 	private readonly vault: VaultFS;
 	private readonly validator: { validate(raw: unknown): ValidationOutcome };
-	private readonly hookRunner: { run(phase: "before" | "after", action: Action): Promise<HookOutcome> };
+	private readonly hookRunner: {
+		run(phase: "before" | "after", action: Action): Promise<HookOutcome>;
+		preApprove(actionKinds: readonly ActionKind[]): Promise<void>;
+	};
 	private readonly settingsRef: () => PluginSettings;
 	private readonly clock: Clock;
 	readonly state: Store<RunState>;
@@ -249,6 +256,11 @@ export class InstructionExecutor {
 				return counts;
 			}
 		}
+
+		// Step 6.5: pre-approve hooks — collect all ask-mode decisions before
+		// the action loop starts, so disclosure modals don't interrupt execution.
+		const uniqueKinds = [...new Set(records.map((r) => r.kind))];
+		await this.hookRunner.preApprove(uniqueKinds);
 
 		this.state.set({
 			kind: "running",

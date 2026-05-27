@@ -168,6 +168,29 @@ export class HookRunner {
 		this.policy = options.policy;
 	}
 
+	async preApprove(actionKinds: readonly ActionKind[]): Promise<void> {
+		if (this.policy !== "ask") return;
+
+		const seen = new Set<HookKey>();
+		const phases: HookPhase[] = ["before", "after"];
+		for (const kind of actionKinds) {
+			for (const phase of phases) {
+				const key: HookKey = `${phase}-${kind}`;
+				if (seen.has(key)) continue;
+				seen.add(key);
+
+				const resolved = this.loader.resolve(key);
+				if (resolved === null) continue;
+
+				await this.resolveAskDecision(
+					key,
+					resolved.absolutePath,
+					resolved.fingerprint,
+				);
+			}
+		}
+	}
+
 	async run(phase: HookPhase, action: Action): Promise<HookOutcome> {
 		if (this.policy === "disabled") return { kind: "ok" };
 
