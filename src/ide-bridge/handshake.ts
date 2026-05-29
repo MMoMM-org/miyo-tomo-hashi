@@ -11,7 +11,7 @@
 import { createHash } from "node:crypto";
 
 /** RFC 6455 §1.3 magic GUID appended to the client key before hashing. */
-const WS_MAGIC_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B16";
+const WS_MAGIC_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 /**
  * Compute the `Sec-WebSocket-Accept` response header value for a client's

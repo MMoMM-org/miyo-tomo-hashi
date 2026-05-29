@@ -4,20 +4,16 @@ import { isAuthorized, secWebSocketAccept } from "../../../src/ide-bridge/handsh
 
 describe("secWebSocketAccept", () => {
 	it("returns the RFC 6455 accept value for the example key", () => {
-		// RFC 6455 §1.3 uses key `dGhlIHNhbXBsZSBub25jZQ==`. NOTE: the digest the
-		// RFC text prints alongside it (`s3pPLMBiTxaQ9kYGzzhZRbK+xOo=`) is a known
-		// erratum — it is not the actual SHA-1 of (key + GUID) and no conformant
-		// implementation (incl. the `ws` library) emits it. We assert the value a
-		// correct SHA-1 actually produces, which is what real clients verify against.
+		// canonical RFC 6455 §1.3 example
 		expect(secWebSocketAccept("dGhlIHNhbXBsZSBub25jZQ==")).toBe(
-			"ErhEfSMVJvC3FTevCFG+qKlPkws=",
+			"s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
 		);
 	});
 
 	it("matches the ws-library canonical pair (x3JJ...)", () => {
 		// A second, independently reproducible fixture taken from a working stack.
 		expect(secWebSocketAccept("x3JJHMbDL1EzLkh9GBhXDw==")).toBe(
-			"06dOLcsAPjFcF2yDCblKEyfsUL4=",
+			"HSmrc0sMlYUkAGmm5OPpG2HaGWk=",
 		);
 	});
 });

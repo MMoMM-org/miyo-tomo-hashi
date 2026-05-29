@@ -1,6 +1,6 @@
 ---
 title: "Phase 1: Protocol & Transport Primitives"
-status: pending
+status: in_progress
 version: "1.0"
 phase: 1
 ---
@@ -35,7 +35,7 @@ phase: 1
 
 This phase establishes the pure, Obsidian-free building blocks: protocol types and state, the RFC 6455 frame codec, the WebSocket handshake/auth, the auth token, and JSON-RPC dispatch. Everything here is unit-testable with no live Obsidian and no running server.
 
-- [ ] **T1.1 Protocol types & IdeBridge state** `[activity: domain-modeling]`
+- [x] **T1.1 Protocol types & IdeBridge state** `[activity: domain-modeling]`
 
   1. Prime: Read the data models `[ref: SDD/Interface Specifications/Application Data Models; lines: 294-320]` and the `ConnectionState` shape in `src/connection/state.ts` + `Store<T>` in `src/util/store.ts` (mirror these patterns).
   2. Test: `IdeBridgeState` exhaustive-switch coverage (a helper that maps each variant to a label/color, proving all four `kind`s handled); `ideBridgeStore` notifies subscribers on `set` and the returned unsubscribe stops notifications (mirror existing store tests).
@@ -46,7 +46,7 @@ This phase establishes the pure, Obsidian-free building blocks: protocol types a
   4. Validate: Unit tests pass; `npm run lint` clean; `npm run build` typechecks (no `any`).
   5. Success: `IdeBridgeState` has exactly the four variants `[ref: SDD; lines: 294-298]`; `SelectionChangedParams` carries plain vault-relative `filePath` and **no** extra path field `[ref: PRD/F5; ref: SDD/ADR-7]`.
 
-- [ ] **T1.2 RFC 6455 frame codec** `[activity: backend-api]` `[parallel: true]`
+- [x] **T1.2 RFC 6455 frame codec** `[activity: backend-api]` `[parallel: true]`
 
   1. Prime: Read the frame responsibilities `[ref: SDD/Directory Map; line: 251]` and the masking/PING-PONG/CLOSE gotchas `[ref: SDD/Implementation Gotchas; line: 681]`; skim the ~70-LOC codec in the obsidian-claude-ide reference.
   2. Test: encode a TEXT frame (server→client, **unmasked**) round-trips through a decoder; decode a **masked** client→server TEXT frame yields the original payload; PING decodes and a PONG can be encoded; CLOSE frame recognized; payload-length boundaries (≤125, 126–65535 / 16-bit, >65535 / 64-bit) encode/decode correctly; a partial/truncated buffer does not throw (returns "need more bytes").
@@ -57,7 +57,7 @@ This phase establishes the pure, Obsidian-free building blocks: protocol types a
 - [ ] **T1.3 WebSocket handshake & auth** `[activity: backend-api]` `[parallel: true]`
 
   1. Prime: Read the upgrade-auth example `[ref: SDD/Implementation Examples; lines: 414-435]`, the Sec-WebSocket-Accept gotcha `[ref: SDD/Implementation Gotchas; line: 680]`, and the auth interface spec `[ref: SDD/Interface Specifications; lines: 167-172]`.
-  2. Test: `secWebSocketAccept(key)` returns the RFC value (SHA-1 of key + magic GUID `258EAFA5-E914-47DA-95CA-C5AB0DC85B16`, base64) for a known fixture; auth check **rejects** a missing header, **rejects** a wrong token, **accepts** the exact stored token; a non-string header value is rejected.
+  2. Test: `secWebSocketAccept(key)` returns the RFC value (SHA-1 of key + magic GUID `258EAFA5-E914-47DA-95CA-C5AB0DC85B11`, base64) for a known fixture — the canonical RFC 6455 §1.3 example: key `dGhlIHNhbXBsZSBub25jZQ==` → accept `s3pPLMBiTxaQ9kYGzzhZRbK+xOo=` (corrected 2026-05-29: an earlier draft mistyped the GUID suffix as `B16`, which silently breaks interop with real Claude Code clients); auth check **rejects** a missing header, **rejects** a wrong token, **accepts** the exact stored token; a non-string header value is rejected.
   3. Implement: `src/ide-bridge/handshake.ts` — `secWebSocketAccept(key: string): string` (uses `node:crypto`) and `isAuthorized(headerValue: unknown, token: string): boolean` (checks `x-claude-code-ide-authorization`). Keep both pure (no socket I/O — the socket write lives in `wsServer`, T3.1).
   4. Validate: Unit tests pass against a fixed key→accept fixture; lint clean; types check.
   5. Success: Correct `Sec-WebSocket-Accept` for a known key `[ref: SDD; line: 680]`; auth returns false for missing/wrong token and true only for an exact match `[ref: PRD/F4]`.
