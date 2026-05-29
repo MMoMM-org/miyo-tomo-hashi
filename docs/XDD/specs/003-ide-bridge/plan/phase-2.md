@@ -59,7 +59,7 @@ This phase delivers the editor seam and every tool handler, plus the selection t
   4. Validate: Unit tests pass; lint clean; types check.
   5. Success: `getWorkspaceFolders` returns empty unconditionally `[ref: PRD/F8, line: 160; ref: SDD/ADR-7]`; selection tools return the specified shapes incl. the pinned empty cases `[ref: PRD/F6, F11]`.
 
-- [ ] **T2.3 openFile tool (path-safety)** `[activity: backend-api]` `[parallel: true]`
+- [x] **T2.3 openFile tool (path-safety)** `[activity: backend-api]` `[parallel: true]`
 
   1. Prime: Read the openFile flow `[ref: SDD/Runtime View; lines: 499-504]`, F7 criteria `[ref: PRD/F7]`, and `src/util/paths.ts` (`normalizeAndContain` — rejects absolute / `..` / drive-letter / double-sep).
   2. Test: rejects `../../etc/passwd` and absolute paths with JSON-RPC `-32602` (message contains "unsafe"); missing-but-safe path → `-32602` (not-found); existing vault file → adapter `opened` equals that path; empty path rejected.
