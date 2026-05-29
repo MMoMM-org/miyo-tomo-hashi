@@ -31,10 +31,13 @@ export type ToolName =
 /** JSON-RPC 2.0 error object. */
 export type RpcError = { code: number; message: string; data?: unknown };
 
-/** JSON-RPC 2.0 request. */
+/**
+ * JSON-RPC 2.0 request. `id` is OPTIONAL: a request with no `id` is a
+ * notification, which never receives a response.
+ */
 export type RpcRequest = {
 	jsonrpc: "2.0";
-	id: number | string | null;
+	id?: number | string | null;
 	method: string;
 	params?: unknown;
 };
