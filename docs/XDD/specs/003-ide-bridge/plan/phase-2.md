@@ -75,7 +75,7 @@ This phase delivers the editor seam and every tool handler, plus the selection t
   4. Validate: Unit tests pass; lint clean; types check.
   5. Success: Each stub returns the documented shape; out-of-scope tools are absent `[ref: PRD/F8; ref: SDD/Tool registry; lines: 351-358]`.
 
-- [ ] **T2.5 Tool registry & `tools/list`** `[activity: backend-api]`
+- [x] **T2.5 Tool registry & `tools/list`** `[activity: backend-api]`
 
   1. Prime: Read the registry responsibility `[ref: SDD/Directory Map; line: 259]` and `tools/call` targets `[ref: SDD/Tool registry; lines: 341-359]`. Depends on T2.2–T2.4 + Phase 1 `jsonRpc` dispatch contract.
   2. Test: registry maps each registered name → `{ description, inputSchema, handler }`; `buildToolsList()` returns exactly the registered tools (selection/openEditors/workspace/openFile + stubs) and **excludes** `openDiff`/`executeCode`; dispatching a registered name invokes its handler; dispatching an unregistered name yields `-32601` via the Phase 1 dispatcher.
