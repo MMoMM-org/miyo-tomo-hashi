@@ -22,6 +22,7 @@
 
 import type { EditorAdapter } from "../ObsidianEditorAdapter";
 import { normalizeAndContain } from "../../util/paths";
+import type { ToolContext } from "./types";
 
 // ---------------------------------------------------------------------------
 // Result shapes
@@ -47,6 +48,7 @@ export type OpenFileResult = OpenFileSuccess | OpenFileError;
 export async function openFile(
 	params: unknown,
 	adapter: EditorAdapter,
+	_ctx?: ToolContext,
 ): Promise<OpenFileResult> {
 	// --- Step 1: param narrowing ---
 	const raw = (params as Record<string, unknown> | null | undefined)?.filePath;

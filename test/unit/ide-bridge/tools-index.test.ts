@@ -203,4 +203,19 @@ describe("buildHandlerRegistry + dispatch", () => {
 		});
 		expect(res!.error).toBeUndefined();
 	});
+
+	it("sync stub handler: getDiagnostics returns { diagnostics: [] } without error-bridge corruption", async () => {
+		const adapter = makeAdapter();
+		const ctx = makeCtx();
+		const registry: HandlerRegistry = buildHandlerRegistry(adapter, ctx);
+
+		const res = await dispatch(makeRequest(7, "getDiagnostics"), registry);
+
+		expect(res).toEqual({
+			jsonrpc: "2.0",
+			id: 7,
+			result: { diagnostics: [] },
+		});
+		expect(res!.error).toBeUndefined();
+	});
 });

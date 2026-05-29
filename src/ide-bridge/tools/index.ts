@@ -93,7 +93,7 @@ const TOOL_REGISTRY: Record<ToolName, RegistryEntry> = {
 	openFile: {
 		description: "Open a vault file by vault-relative path in the Obsidian workspace.",
 		inputSchema: OPEN_FILE_SCHEMA,
-		handler: openFile as ToolHandler,
+		handler: openFile,
 	},
 	getWorkspaceFolders: {
 		description: "Return the workspace folder list. Always returns an empty array — the vault host path is intentionally not exposed.",
@@ -170,7 +170,7 @@ export function buildHandlerRegistry(
 	for (const name of Object.keys(TOOL_REGISTRY) as ToolName[]) {
 		const { handler } = TOOL_REGISTRY[name];
 		registry[name] = async (params: unknown): Promise<unknown> => {
-			const result = await (handler(params, adapter, ctx) as Promise<unknown>);
+			const result = await handler(params, adapter, ctx);
 			// Error bridge: translate returned { error } into a throw so dispatch
 			// produces a proper JSON-RPC error envelope. Guard against null (which
 			// is a valid result for getCurrentSelection/getLatestSelection).
