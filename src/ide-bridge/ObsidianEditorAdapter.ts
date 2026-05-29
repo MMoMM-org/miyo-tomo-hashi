@@ -51,6 +51,14 @@ export interface EditorAdapter {
 	openFile(vaultRelativePath: string): void;
 
 	/**
+	 * Return true when `vaultRelativePath` refers to an existing vault file.
+	 * Called by the openFile tool (T2.3) before invoking openFile() to avoid
+	 * silently opening a non-existent path. The real impl delegates to
+	 * app.vault.getAbstractFileByPath; the fake checks adapter.files.
+	 */
+	fileExists(vaultRelativePath: string): boolean;
+
+	/**
 	 * Returns the vault root identifier used in workspaceFolders responses.
 	 * Per ADR-7, this is always an empty string — the host filesystem path
 	 * is never exposed. The SDD lists getWorkspaceFolders for completeness;
@@ -114,6 +122,10 @@ export class ObsidianEditorAdapter implements EditorAdapter {
 		// openLinkText(linktext, sourcePath, newLeaf?) — source is "" when there
 		// is no originating note. Existence check is deferred to the tool layer.
 		void this.app.workspace.openLinkText(vaultRelativePath, "", false);
+	}
+
+	fileExists(vaultRelativePath: string): boolean {
+		return this.app.vault.getAbstractFileByPath(vaultRelativePath) !== null;
 	}
 
 	workspaceRoot(): string {

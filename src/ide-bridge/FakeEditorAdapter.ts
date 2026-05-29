@@ -40,6 +40,10 @@ export class FakeEditorAdapter implements EditorAdapter {
 		this.opened.push(vaultRelativePath);
 	}
 
+	fileExists(vaultRelativePath: string): boolean {
+		return this.files.has(vaultRelativePath);
+	}
+
 	workspaceRoot(): string {
 		return this.workspaceRootValue;
 	}
