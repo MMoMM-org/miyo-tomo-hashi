@@ -1,6 +1,6 @@
 import "obsidian";
 
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { FakeEditorAdapter } from "../../../src/ide-bridge/FakeEditorAdapter";
 import { openFile } from "../../../src/ide-bridge/tools/openFile";
