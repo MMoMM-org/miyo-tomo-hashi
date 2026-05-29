@@ -175,7 +175,7 @@ Each phase is defined in a separate file. Tasks follow red-green-refactor: **Pri
 Dependency order is strict bottom-up: protocol/transport primitives → domain (adapter, tools, selection) → server + orchestrator → plugin integration (settings, UI, lifecycle) → end-to-end + docs.
 
 - [x] [Phase 1: Protocol & Transport Primitives](phase-1.md)
-- [ ] [Phase 2: Editor Adapter, Tools & Selection Tracking](phase-2.md)
+- [x] [Phase 2: Editor Adapter, Tools & Selection Tracking](phase-2.md)
 - [ ] [Phase 3: WebSocket Server & Orchestrator](phase-3.md)
 - [ ] [Phase 4: Plugin Integration — Settings, UI, Commands & Lifecycle](phase-4.md)
 - [ ] [Phase 5: End-to-End Integration & Documentation](phase-5.md)

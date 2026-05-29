@@ -1,6 +1,6 @@
 ---
 title: "Phase 2: Editor Adapter, Tools & Selection Tracking"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 2
 ---
@@ -83,7 +83,7 @@ This phase delivers the editor seam and every tool handler, plus the selection t
   4. Validate: Unit tests pass; lint clean; types check.
   5. Success: `tools/list` lists the in-scope set only; unknown tool → `-32601` `[ref: PRD/F8; ref: SDD/Tool registry; line: 357]`.
 
-- [ ] **T2.6 Selection tracker (debounce + dedup + broadcast)** `[activity: backend-api]`
+- [x] **T2.6 Selection tracker (debounce + dedup + broadcast)** `[activity: backend-api]`
 
   1. Prime: Read the broadcast example `[ref: SDD/Implementation Examples; lines: 381-411]`, the primary flow `[ref: SDD/Runtime View; lines: 465-489]`, ADR-5 `[ref: SDD; lines: 609-612]`, and **all seven Business Rules + edge cases** `[ref: PRD/Feature F5; lines: 260-274]`. Needs T2.1 adapter + an injected `broadcast(msg)` fn (the real one arrives in T3.1).
   2. Test (with fake adapter + injected broadcast spy + fake timers):
@@ -98,6 +98,6 @@ This phase delivers the editor seam and every tool handler, plus the selection t
   4. Validate: Unit tests pass under fake timers; lint clean; types check; no synchronous heavy work in the activity handler (Constitution L1).
   5. Success: Exactly one debounced, deduped broadcast per settled change with ≤100KB text and vault-relative path; no broadcast in non-editor contexts `[ref: PRD/F5; ref: SDD/ADR-5, ADR-7]`.
 
-- [ ] **T2.7 Phase Validation** `[activity: validate]`
+- [x] **T2.7 Phase Validation** `[activity: validate]`
 
   - Run all Phase 2 tests, `npm run lint`, `npm run build`. Verify every tool's return shape against `[ref: SDD/Tool registry; lines: 341-359]` and that all F5 Business Rules have a corresponding passing test. Confirm no tool emits a host-absolute path or a custom path field (ADR-7), and all logic ran against the fake adapter (no live Obsidian).
