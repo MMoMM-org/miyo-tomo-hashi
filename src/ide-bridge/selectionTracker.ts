@@ -39,7 +39,7 @@ const MAX_TEXT = 100_000;
 // ---------------------------------------------------------------------------
 
 /** JSON-RPC 2.0 selection_changed notification shape. */
-type SelectionChangedNotification = {
+export type SelectionChangedNotification = {
 	jsonrpc: "2.0";
 	method: "selection_changed";
 	params: SelectionChangedParams;
