@@ -2,7 +2,7 @@ import "obsidian";
 
 import { describe, expect, it } from "vitest";
 
-import { FakeEditorAdapter } from "./FakeEditorAdapter.js";
+import { FakeEditorAdapter } from "../../../src/ide-bridge/FakeEditorAdapter.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

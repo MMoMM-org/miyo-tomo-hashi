@@ -3,11 +3,13 @@
  *
  * Implements EditorAdapter with settable state so unit tests can exercise
  * tool and tracker logic without a live Obsidian instance (Constitution L1/L3).
- * Co-located with the adapter tests it serves.
+ * Mirrors the FakeVaultFS pattern: lives in src/ alongside the production
+ * adapter so the interface and fake travel together, but is never imported
+ * by the production graph (main.ts → ...).
  */
 
-import type { EditorAdapter } from "../../../src/ide-bridge/ObsidianEditorAdapter.js";
-import type { SelectionChangedParams } from "../../../src/ide-bridge/protocol.js";
+import type { EditorAdapter } from "./ObsidianEditorAdapter.js";
+import type { SelectionChangedParams } from "./protocol.js";
 
 export class FakeEditorAdapter implements EditorAdapter {
 	/** Settable active selection. null means no active MarkdownView. */
