@@ -8,8 +8,8 @@
  * by the production graph (main.ts → ...).
  */
 
-import type { EditorAdapter } from "./ObsidianEditorAdapter.js";
-import type { SelectionChangedParams } from "./protocol.js";
+import type { EditorAdapter } from "./ObsidianEditorAdapter";
+import type { SelectionChangedParams } from "./protocol";
 
 export class FakeEditorAdapter implements EditorAdapter {
 	/** Settable active selection. null means no active MarkdownView. */
@@ -21,11 +21,7 @@ export class FakeEditorAdapter implements EditorAdapter {
 	/** Capture of every openFile() call, in order. */
 	readonly opened: string[] = [];
 
-	private readonly _workspaceRoot: string;
-
-	constructor(workspaceRoot = "") {
-		this._workspaceRoot = workspaceRoot;
-	}
+	constructor(private readonly workspaceRootValue = "") {}
 
 	/** Test helper — set or clear the active selection. */
 	setActiveSelection(params: SelectionChangedParams | null): void {
@@ -45,6 +41,6 @@ export class FakeEditorAdapter implements EditorAdapter {
 	}
 
 	workspaceRoot(): string {
-		return this._workspaceRoot;
+		return this.workspaceRootValue;
 	}
 }

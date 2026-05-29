@@ -1,8 +1,10 @@
 import "obsidian";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { App, MarkdownView, TFile, WorkspaceLeaf } from "obsidian";
 
-import { FakeEditorAdapter } from "../../../src/ide-bridge/FakeEditorAdapter.js";
+import { ObsidianEditorAdapter } from "../../../src/ide-bridge/ObsidianEditorAdapter";
+import { FakeEditorAdapter } from "../../../src/ide-bridge/FakeEditorAdapter";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -171,5 +173,92 @@ describe("workspaceRoot", () => {
 	it("returns empty string by default", () => {
 		const adapter = makeAdapter();
 		expect(adapter.workspaceRoot()).toBe("");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// ObsidianEditorAdapter — real impl via mock
+// ---------------------------------------------------------------------------
+
+describe("ObsidianEditorAdapter — real impl via mock", () => {
+	function makeRealAdapter() {
+		return { app: new App(), adapter: null as unknown as ObsidianEditorAdapter };
+	}
+
+	// (a) — no active view → null
+	it("getCurrentSelection returns null when getActiveViewOfType returns null", () => {
+		const { app } = makeRealAdapter();
+		vi.mocked(app.workspace.getActiveViewOfType).mockReturnValue(null);
+		const adapter = new ObsidianEditorAdapter(app);
+		expect(adapter.getCurrentSelection()).toBeNull();
+	});
+
+	// (b) — view present but file is null → null
+	it("getCurrentSelection returns null when view.file is null", () => {
+		const { app } = makeRealAdapter();
+		const view = new MarkdownView(new WorkspaceLeaf());
+		view.file = null;
+		vi.mocked(app.workspace.getActiveViewOfType).mockReturnValue(view);
+		const adapter = new ObsidianEditorAdapter(app);
+		expect(adapter.getCurrentSelection()).toBeNull();
+	});
+
+	// (c) — configured view with cursor and selection
+	it("getCurrentSelection returns correct shape with non-zero cursor and non-empty selection", () => {
+		const { app } = makeRealAdapter();
+
+		const file = new TFile();
+		file.path = "notes/plan.md";
+
+		const view = new MarkdownView(new WorkspaceLeaf());
+		view.file = file;
+		vi.mocked(view.editor.getCursor).mockImplementation((side?: string) =>
+			side === "from" ? { line: 2, ch: 4 } : { line: 2, ch: 14 },
+		);
+		vi.mocked(view.editor.getSelection).mockReturnValue("hello world");
+
+		vi.mocked(app.workspace.getActiveViewOfType).mockReturnValue(view);
+
+		const adapter = new ObsidianEditorAdapter(app);
+		const result = adapter.getCurrentSelection();
+
+		expect(result).not.toBeNull();
+		// filePath is the plain vault-relative TFile.path — no host prefix
+		expect(result?.filePath).toBe("notes/plan.md");
+		expect(result?.filePath.startsWith("/")).toBe(false);
+		// fileUrl carries vault-relative path only (ADR-7)
+		expect(result?.fileUrl).toBe("file:///notes/plan.md");
+		// fileUrl must not contain an OS-level absolute path segment
+		expect(result?.fileUrl).not.toMatch(/file:\/\/\/\//);
+		// selection coords
+		expect(result?.selection.start).toEqual({ line: 2, character: 4 });
+		expect(result?.selection.end).toEqual({ line: 2, character: 14 });
+		expect(result?.selection.isEmpty).toBe(false);
+		expect(result?.text).toBe("hello world");
+	});
+
+	// (d) — getOpenEditors excludes a leaf whose view is not a MarkdownView
+	it("getOpenEditors excludes leaves whose view is not a MarkdownView", () => {
+		const { app } = makeRealAdapter();
+
+		const markdownLeaf = new WorkspaceLeaf();
+		const mdView = new MarkdownView(markdownLeaf);
+		const mdFile = new TFile();
+		mdFile.path = "notes/open.md";
+		mdView.file = mdFile;
+		markdownLeaf.view = mdView;
+
+		// A leaf with a non-markdown view (plain WorkspaceLeaf has view: undefined)
+		const otherLeaf = new WorkspaceLeaf();
+		// view remains undefined — not an instance of MarkdownView
+
+		vi.mocked(app.workspace.getLeavesOfType).mockReturnValue([markdownLeaf, otherLeaf]);
+
+		const adapter = new ObsidianEditorAdapter(app);
+		const editors = adapter.getOpenEditors();
+
+		expect(editors).toHaveLength(1);
+		expect(editors[0]?.filePath).toBe("notes/open.md");
+		expect(editors[0]?.isDirty).toBe(false);
 	});
 });

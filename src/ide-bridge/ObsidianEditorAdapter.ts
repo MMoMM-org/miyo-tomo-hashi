@@ -22,7 +22,7 @@
 
 import { MarkdownView } from "obsidian";
 import type { App } from "obsidian";
-import type { SelectionChangedParams } from "./protocol.js";
+import type { SelectionChangedParams } from "./protocol";
 
 // ---------------------------------------------------------------------------
 // Port — EditorAdapter interface
