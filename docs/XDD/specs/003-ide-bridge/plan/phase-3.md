@@ -1,6 +1,6 @@
 ---
 title: "Phase 3: WebSocket Server & Orchestrator"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 3
 ---
@@ -52,7 +52,7 @@ This phase assembles the transport server and the lifecycle orchestrator: a runn
   4. Validate: Integration-style tests pass against a loopback server; lint clean; types check; confirm `0.0.0.0` is impossible to configure (review blocker per Quality Requirements).
   5. Success: 401 before handshake on bad/missing token and 101 + working broadcast on a valid one `[ref: PRD/F1, F4]`; dead clients reaped at 30s, server stays up at zero clients `[ref: PRD/F9]`; rejected token is `warn`-logged without a remote address `[ref: PRD/F16]`.
 
-- [ ] **T3.2 IdeBridge orchestrator (lifecycle + token)** `[activity: backend-api]`
+- [x] **T3.2 IdeBridge orchestrator (lifecycle + token)** `[activity: backend-api]`
 
   1. Prime: Read the orchestrator API `[ref: SDD/Internal API Changes; lines: 323-339]`, the token getter-vs-snapshot gotcha `[ref: SDD/Implementation Gotchas; line: 685]`, and the deployment/rollback notes `[ref: SDD/Deployment View; lines: 524-527]`. Reuse Phase 1 `token.ts` + `ideBridgeStore`, Phase 2 `selectionTracker`, T3.1 `wsServer`.
   2. Test (with a fake wsServer + fake adapter + injected `persist` spy):
@@ -67,6 +67,6 @@ This phase assembles the transport server and the lifecycle orchestrator: a runn
   4. Validate: Unit tests pass (fake server/adapter); lint clean; types check.
   5. Success: Idempotent start/stop; `regenerateToken` rotates the token, persists it, disconnects clients, and writes no lock file `[ref: PRD/F3; ref: SDD/ADR-8 superseded]`; store transitions match `IdeBridgeState` `[ref: SDD; lines: 294-298]`.
 
-- [ ] **T3.3 Phase Validation** `[activity: validate]`
+- [x] **T3.3 Phase Validation** `[activity: validate]`
 
   - Run all Phase 3 tests, `npm run lint`, `npm run build`. Verify the full connect→handshake→broadcast→reap path against `[ref: SDD/Runtime View; lines: 465-497]`. Confirm: bind is `127.0.0.1`-only, 401 happens pre-handshake, no file is ever written by the bridge (grep for `writeFile`/`mkdir` in `src/ide-bridge/` → none), and start/stop are idempotent.
