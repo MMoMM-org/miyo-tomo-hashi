@@ -130,6 +130,17 @@ if (typeof globalThis !== "undefined" && typeof document !== "undefined") {
 	if (g.activeDocument === undefined) g.activeDocument = document;
 }
 
+// In real Obsidian, `activeWindow` is the Window of the currently-active
+// leaf (handles popout windows). jsdom has no equivalent — point it at
+// globalThis so production code calling `activeWindow.setTimeout` /
+// `activeWindow.clearTimeout` resolves to the same timer functions that
+// `vi.useFakeTimers()` patches, keeping fake-timer tests correct.
+// Idempotent guard prevents double-assignment across test worker reloads.
+if (typeof globalThis !== "undefined") {
+	const g = globalThis as typeof globalThis & { activeWindow?: typeof globalThis };
+	if (g.activeWindow === undefined) g.activeWindow = globalThis;
+}
+
 // --- App & Workspace ---
 
 export class Component {
