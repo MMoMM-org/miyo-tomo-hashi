@@ -133,7 +133,7 @@ The F2 number is retained (not reused) so existing F-references stay stable.
   - [ ] Given the user drags to select text (rapid intermediate changes), When the selection stabilizes after debounce, Then exactly one `selection_changed` notification is sent (not one per pixel of drag)
   - [ ] Given the user switches to a different open file, When the active leaf changes, Then a `selection_changed` notification is sent with the new file's path and cursor position
   - [ ] Given no markdown editor is active (canvas view, graph view, settings panel, PDF), When the user is in a non-editor context, Then no `selection_changed` notifications are sent
-  - [ ] Given the selected text exceeds 100KB, When the notification is constructed, Then the text is truncated to 100KB to prevent pathological memory or bandwidth use
+  - [ ] Given the selected text exceeds 100KB, When the notification is constructed, Then the text is truncated to 100KB to bound per-notification memory and bandwidth use
   - [ ] Given the cursor position has not changed since the last broadcast, When the debounce fires, Then no notification is sent (deduplication)
 
 #### Feature F6: getCurrentSelection and getLatestSelection Tools
@@ -223,6 +223,7 @@ The F2 number is retained (not reused) so existing F-references stay stable.
 - **Acceptance Criteria:**
   - [ ] Given the WebSocket server crashes unexpectedly, When the crash is detected, Then the server restarts automatically after a 2-second delay
   - [ ] Given the auto-restart also fails, When the second failure is detected, Then the bridge transitions to an error state with a user-visible notice and no further auto-retry
+- **Scope note:** Deferred to a post-v0.1 iteration. It is distinct from the **in-scope** single 500ms `EADDRINUSE` re-listen (one retry for the Kado hot-reload race, then `error` state — see plan T3.1); F15 is the broader crash auto-restart loop.
 
 #### Feature F16: Failed Auth Attempt Logging
 
@@ -261,7 +262,7 @@ The F2 number is retained (not reused) so existing F-references stay stable.
 - Rule 1: Only markdown editors produce selection events. Canvas, graph view, PDF viewer, and settings panels are non-editor contexts — no broadcasts.
 - Rule 2: Debounce is trailing-edge at 100ms. Each new event resets the timer. Only the final resting state is broadcast.
 - Rule 3: Deduplication compares the full state (file path + selection range + text). If identical to the previous broadcast, no message is sent.
-- Rule 4: Selected text is capped at 100KB. Selections exceeding this limit are truncated. This prevents pathological memory use when a user selects an entire large file.
+- Rule 4: Selected text is capped at 100KB. Selections exceeding this limit are truncated. This bounds memory and bandwidth use when a user selects an entire large file.
 - Rule 5: Active leaf changes (switching tabs) trigger an immediate broadcast of the new file's cursor position, subject to the same debounce.
 - Rule 6: The selected text content is ephemeral — it is never persisted to disk, never written to logs, and never included in audit records (per MiYo Constitution L2).
 - Rule 7: The broadcast emits **plain vault-relative paths** in the standard `selection_changed` path fields — the same namespace Kado addresses, with **no `kado:` prefix and no custom path-field extensions** (Kokoro ADR-019 §2.3, §5). No absolute host path is sent; no separate `vaultRelativePath` field is added. `getWorkspaceFolders` (Hashi's WebSocket response) and the container lock file's `workspaceFolders` (Tomo-generated) are kept **empty** so Claude has no local root to anchor on — Kado routing (via Tomo's CLAUDE.md rule) is the only path. Mechanism (b) — emitting `kado:`-prefixed references — was considered and rejected by Kokoro; do not build it.
@@ -347,7 +348,7 @@ Note: All tracking is local developer-console logging only. No telemetry, no ext
 | Port conflict with other local services | Medium — server fails to start | Low — 23027 is not a well-known port | User-configurable port. Clear error message naming the conflicting port. |
 | Auth token read by another same-user process | Medium — editor context exposed to local attacker | Low — requires same-user compromise (same threat model as SSH agent, VS Code IDE bridge) | The token is cleartext in `data.json` (and Tomo's container lock file — no file-mode hardening, single-user container FS, per ADR-019 §6). An accepted, inherent limitation of localhost services. Documented in PRIVACY.md. |
 | Obsidian Sync propagates token via data.json | Low — token is inert on devices that don't run this bridge instance | Medium — Sync replicates data.json | Accepted per Kado ADR-5 precedent. The token only authenticates against the WebSocket server on the host where it runs; a copy on another device authenticates nothing. |
-| Typing lag from selection event handling | High — violates Constitution L1 | Very low — the reference implementation proves no measurable impact | 100ms debounce, JSON deduplication, async I/O. |
+| Typing lag from selection event handling | High — violates Constitution L1 | Very low — the reference implementation proves no measurable impact | 100ms debounce, JSON deduplication, async I/O. Target: no main-thread blocking, `<200ms` editor-change→frame (SDD Quality Requirements). |
 | Token drift after regenerate | Medium — Tomo can't connect until re-copied | Medium — easy to forget the re-copy step | Regenerate shows a notice reminding the user to update the Tomo config. (No host lock file to keep in sync since lock-file generation is Tomo-side.) |
 | Lock-file ownership change vs ratified ADR-019 | Medium — spec/ADR divergence until accepted | High — ADR-019 §6 currently says Hashi writes it | Kokoro ADR-019 amendment handoff raised 2026-05-28; Tomo already implementing container-side generation. Hashi spec updated to the new contract. |
 
