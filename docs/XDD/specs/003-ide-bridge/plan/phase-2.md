@@ -1,6 +1,6 @@
 ---
 title: "Phase 2: Editor Adapter, Tools & Selection Tracking"
-status: pending
+status: in_progress
 version: "1.0"
 phase: 2
 ---
@@ -41,7 +41,7 @@ phase: 2
 
 This phase delivers the editor seam and every tool handler, plus the selection tracker that produces broadcasts. All logic is exercised through a `FakeEditorAdapter` so it runs without Obsidian.
 
-- [ ] **T2.1 Obsidian editor adapter + fake** `[activity: backend-api]`
+- [x] **T2.1 Obsidian editor adapter + fake** `[activity: backend-api]`
 
   1. Prime: Read the adapter responsibilities `[ref: SDD/Directory Map; line: 256]`, the tool return shapes `[ref: SDD/Tool registry; lines: 345-349]`, and the existing `src/vault/VaultFS.ts` + `src/vault/FakeVaultFS.ts` pair (the established real/fake seam pattern to mirror). Note `getCursor` is 0-based.
   2. Test (against the fake): `getCurrentSelection()` returns `{ text, filePath (vault-relative), fileUrl, selection }` when a markdown editor is active and `null` when not; `getOpenEditors()` lists vault-relative paths with `isDirty:false`; `openFile(path)` records the opened path; `workspaceRoot()` behavior. The fake exposes a settable active selection + a `files` set + an `opened` capture.
