@@ -1,6 +1,6 @@
 ---
 title: "Phase 3: WebSocket Server & Orchestrator"
-status: pending
+status: in_progress
 version: "1.0"
 phase: 3
 ---
@@ -35,7 +35,7 @@ phase: 3
 
 This phase assembles the transport server and the lifecycle orchestrator: a running WebSocket endpoint that authenticates, completes the MCP handshake, broadcasts `selection_changed`, reaps dead clients, and is driven by an idempotent `start`/`stop`/`regenerateToken` API.
 
-- [ ] **T3.1 WebSocket server (upgrade, broadcast, keepalive)** `[activity: backend-api]`
+- [x] **T3.1 WebSocket server (upgrade, broadcast, keepalive)** `[activity: backend-api]`
 
   1. Prime: Read the upgrade-auth example `[ref: SDD/Implementation Examples; lines: 414-435]`, the connect/handshake flow `[ref: SDD/Runtime View; lines: 491-497]`, error handling `[ref: SDD/Error Handling; lines: 506-512]`, and F1/F4/F9 criteria. Reuse Phase 1 `frame.ts`, `handshake.ts`, `jsonRpc.ts`.
   2. Test (use a real loopback `http` server on an ephemeral port + a raw TCP/WS client, or a socket double):
