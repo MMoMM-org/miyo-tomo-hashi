@@ -145,7 +145,7 @@ describe("SelectionTracker", () => {
 
 	// Rule 1 — non-editor context
 	it("produces NO broadcast when adapter returns null (Rule 1)", () => {
-		const { adapter, broadcast, tracker } = makeHarness();
+		const { broadcast, tracker } = makeHarness();
 		// adapter has no active selection by default — getCurrentSelection returns null
 
 		tracker.onEditorActivity();
@@ -195,11 +195,45 @@ describe("SelectionTracker", () => {
 		vi.advanceTimersByTime(DEBOUNCE_MS);
 
 		expect(broadcast).toHaveBeenCalledTimes(1);
-		const payload = broadcast.mock.calls[0]?.[0] as SelectionChangedParams & { params?: SelectionChangedParams };
-		const params = payload.params ?? payload;
-		expect(params.text.length).toBe(MAX);
+		const notification = broadcast.mock.calls[0]?.[0] as {
+			jsonrpc: "2.0";
+			method: "selection_changed";
+			params: SelectionChangedParams;
+		};
+		expect(notification.params.text.length).toBe(MAX);
 		// Selection range must still reflect the original full range
-		expect(params.selection.end.character).toBe(MAX + 500);
+		expect(notification.params.selection.end.character).toBe(MAX + 500);
+	});
+
+	// Rule 3 × Rule 4 — dedup key is built from the TRUNCATED text
+	// If the key were built from the pre-truncation raw text it would include the
+	// extra 500 chars and differ from the truncated params, so the second settle
+	// cycle would fire a second broadcast instead of being deduped. This test
+	// catches that regression without touching the implementation.
+	it("deduplicates a second cycle with the same >100KB content — key is built after truncation (Rule 3 × Rule 4)", () => {
+		const { adapter, broadcast, tracker } = makeHarness();
+		const MAX = 100_000;
+		const longText = "x".repeat(MAX + 500);
+		const sel = makeSelection({
+			text: longText,
+			selection: {
+				start: { line: 0, character: 0 },
+				end: { line: 0, character: MAX + 500 },
+				isEmpty: false,
+			},
+		});
+		adapter.setActiveSelection(sel);
+
+		// First settle — produces one broadcast (truncated)
+		tracker.onEditorActivity();
+		vi.advanceTimersByTime(DEBOUNCE_MS);
+		expect(broadcast).toHaveBeenCalledTimes(1);
+
+		// Second settle — same adapter state (identical raw text, file, range)
+		// Must be deduped: the key must equal the first key (built from truncated text)
+		tracker.onEditorActivity();
+		vi.advanceTimersByTime(DEBOUNCE_MS);
+		expect(broadcast).toHaveBeenCalledTimes(1); // still 1 — deduped
 	});
 
 	// getLatest before any broadcast
