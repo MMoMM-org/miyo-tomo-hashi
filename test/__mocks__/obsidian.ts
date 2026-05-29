@@ -162,6 +162,7 @@ export class App {
 		off: vi.fn(),
 		getLeavesOfType: vi.fn(() => [] as WorkspaceLeaf[]),
 		getRightLeaf: vi.fn(() => new WorkspaceLeaf()),
+		openLinkText: vi.fn<(linktext: string, sourcePath: string, newLeaf?: boolean) => Promise<void>>(async () => {}),
 		getLeaf: vi.fn(() => new WorkspaceLeaf()),
 		revealLeaf: vi.fn(),
 		setActiveLeaf: vi.fn(),
@@ -396,6 +397,28 @@ export class ItemView extends Component {
 
 	onClose(): void | Promise<void> {
 		// default: no-op; subclasses override
+	}
+}
+
+// --- MarkdownView ---
+
+// Minimal Editor shape used by ObsidianEditorAdapter — only the methods
+// the adapter calls. Tests that exercise the real adapter via this mock
+// can override individual vi.fn() returns.
+interface MockEditor {
+	getCursor: ReturnType<typeof vi.fn>;
+	getSelection: ReturnType<typeof vi.fn>;
+}
+
+export class MarkdownView extends ItemView {
+	file: TFile | null = null;
+	editor: MockEditor = {
+		getCursor: vi.fn(() => ({ line: 0, ch: 0 })),
+		getSelection: vi.fn(() => ""),
+	};
+
+	getViewType(): string {
+		return "markdown";
 	}
 }
 
