@@ -51,7 +51,7 @@ This phase delivers the editor seam and every tool handler, plus the selection t
   4. Validate: Unit tests pass (fake only); lint clean; types check.
   5. Success: Adapter returns plain vault-relative paths and `null` outside markdown editors `[ref: PRD/F5; ref: SDD/ADR-7]`; the fake satisfies the same interface, enabling Obsidian-free tests `[ref: SDD/Test Examples; lines: 438-461]`.
 
-- [ ] **T2.2 Selection & workspace tools** `[activity: backend-api]` `[parallel: true]`
+- [x] **T2.2 Selection & workspace tools** `[activity: backend-api]` `[parallel: true]`
 
   1. Prime: Read tool shapes `[ref: SDD/Tool registry; lines: 345-349]` and F6/F11/F8 criteria `[ref: PRD/F6; ref: PRD/F11; ref: PRD/F8, line: 160]`. `getLatestSelection` reads the last-broadcast cache via an **injected `getLatest(): SelectionChangedParams | null` getter** — an abstraction stubbed in this task's tests; the real getter comes from the tracker (T2.6) wired by the orchestrator (T3.2). No build dependency on T2.6.
   2. Test: `getCurrentSelection` → adapter snapshot when a markdown editor is active; **empty result = `null`** when no editor (pin this exact shape; the e2e client in T5.1 asserts it). `getLatestSelection` → the injected getter's value (stub returns canned params); `null` when the stub returns `null`. `getOpenEditors` → tab list with vault-relative paths + `isDirty:false`, `{ tabs: [] }` when no markdown tabs. `getWorkspaceFolders` → **always** `{ workspaceFolders: [] }` regardless of editor state.
