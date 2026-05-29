@@ -1,6 +1,6 @@
 ---
 title: "Phase 1: Protocol & Transport Primitives"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 1
 ---
@@ -54,7 +54,7 @@ This phase establishes the pure, Obsidian-free building blocks: protocol types a
   4. Validate: Unit tests pass (table-driven across length boundaries); lint clean; types check.
   5. Success: Masked client frames unmask correctly and server frames are emitted unmasked `[ref: SDD; line: 681]`; codec never throws on a partial buffer `[ref: SDD/Error Handling; line: 510]`.
 
-- [ ] **T1.3 WebSocket handshake & auth** `[activity: backend-api]` `[parallel: true]`
+- [x] **T1.3 WebSocket handshake & auth** `[activity: backend-api]` `[parallel: true]`
 
   1. Prime: Read the upgrade-auth example `[ref: SDD/Implementation Examples; lines: 414-435]`, the Sec-WebSocket-Accept gotcha `[ref: SDD/Implementation Gotchas; line: 680]`, and the auth interface spec `[ref: SDD/Interface Specifications; lines: 167-172]`.
   2. Test: `secWebSocketAccept(key)` returns the RFC value (SHA-1 of key + magic GUID `258EAFA5-E914-47DA-95CA-C5AB0DC85B11`, base64) for a known fixture — the canonical RFC 6455 §1.3 example: key `dGhlIHNhbXBsZSBub25jZQ==` → accept `s3pPLMBiTxaQ9kYGzzhZRbK+xOo=` (corrected 2026-05-29: an earlier draft mistyped the GUID suffix as `B16`, which silently breaks interop with real Claude Code clients); auth check **rejects** a missing header, **rejects** a wrong token, **accepts** the exact stored token; a non-string header value is rejected.
@@ -62,7 +62,7 @@ This phase establishes the pure, Obsidian-free building blocks: protocol types a
   4. Validate: Unit tests pass against a fixed key→accept fixture; lint clean; types check.
   5. Success: Correct `Sec-WebSocket-Accept` for a known key `[ref: SDD; line: 680]`; auth returns false for missing/wrong token and true only for an exact match `[ref: PRD/F4]`.
 
-- [ ] **T1.4 Auth token lifecycle (pure)** `[activity: domain-modeling]` `[parallel: true]`
+- [x] **T1.4 Auth token lifecycle (pure)** `[activity: domain-modeling]` `[parallel: true]`
 
   1. Prime: Read the token rules `[ref: PRD/Feature: Auth Token Lifecycle (F3); lines: 288-292]` and ADR-4 `[ref: SDD; lines: 604-607]`. Note `kado_<UUID>` precedent.
   2. Test: `generateToken()` returns a `hashi_`-prefixed string with a valid UUID body and two calls differ; `ensureToken(current)` returns the existing token when non-empty and a freshly generated one when empty.
@@ -70,7 +70,7 @@ This phase establishes the pure, Obsidian-free building blocks: protocol types a
   4. Validate: Unit tests pass; lint clean; types check.
   5. Success: Token matches `hashi_<UUID>` `[ref: PRD/F3; ref: SDD/ADR-4]`; no lock-file module is created `[ref: SDD/ADR-8 superseded; lines: 625-630]`.
 
-- [ ] **T1.5 JSON-RPC dispatch & error envelopes** `[activity: backend-api]`
+- [x] **T1.5 JSON-RPC dispatch & error envelopes** `[activity: backend-api]`
 
   1. Prime: Read the error-handling spec `[ref: SDD/Error Handling; lines: 506-513]`, the dispatch responsibility `[ref: SDD/Directory Map; line: 253]`, and F8's unknown-method criterion `[ref: PRD/F8; line: 164]`. Depends on T1.1 types.
   2. Test: parse error on malformed JSON → `-32700`; invalid request envelope → `-32600`; unknown method → `-32601`; a registered method routes to its handler and wraps the result in a `{ jsonrpc:"2.0", id, result }` envelope; a notification (no `id`) produces no response; a handler that throws is caught and mapped to an error envelope (never propagates out of the loop).
@@ -78,6 +78,6 @@ This phase establishes the pure, Obsidian-free building blocks: protocol types a
   4. Validate: Unit tests cover each error code + happy path + throw-isolation; lint clean; types check.
   5. Success: Each malformed/unknown input maps to the correct JSON-RPC code and nothing throws out of dispatch `[ref: SDD/Error Handling; lines: 510-511]`; unknown method → `-32601` `[ref: PRD/F8]`.
 
-- [ ] **T1.6 Phase Validation** `[activity: validate]`
+- [x] **T1.6 Phase Validation** `[activity: validate]`
 
   - Run all Phase 1 tests (`npm test`), `npm run lint`, and `npm run build` (tsc gate). Verify against SDD layer-1/layer-2 design and PRD F4/F8 criteria. Confirm zero new runtime dependencies in `package.json` (ADR-1 / Constitution L1). Confirm no `lockFile.ts` exists.
