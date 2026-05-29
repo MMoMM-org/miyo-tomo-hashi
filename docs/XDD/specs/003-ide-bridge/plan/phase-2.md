@@ -67,7 +67,7 @@ This phase delivers the editor seam and every tool handler, plus the selection t
   4. Validate: Unit tests (mirror the SDD test example) pass; lint clean; types check.
   5. Success: Traversal/absolute paths rejected with `-32602`; existing file opens `[ref: PRD/F7; ref: SDD/Test Examples; lines: 442-452]`.
 
-- [ ] **T2.4 Protocol stubs** `[activity: backend-api]` `[parallel: true]`
+- [x] **T2.4 Protocol stubs** `[activity: backend-api]` `[parallel: true]`
 
   1. Prime: Read the stub set `[ref: SDD/Tool registry; lines: 351-358]` and F8 criteria `[ref: PRD/F8; lines: 161-164]`.
   2. Test: `getDiagnostics → { diagnostics: [] }`; `checkDocumentDirty → { isDirty: false }`; `saveDocument → { saved: true }`; `close_tab → { closed: true }`; `closeAllDiffTabs → { closed: 0 }`. (`openDiff`/`executeCode` are NOT registered.)
