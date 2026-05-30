@@ -46,6 +46,25 @@ function makeRequest(
 	return { jsonrpc: "2.0", id, method, ...(params !== undefined && { params }) };
 }
 
+/**
+ * Build a `tools/call` request envelope: tools are invoked through the single
+ * MCP `tools/call` dispatcher, with the tool name and its arguments nested in
+ * `params`.
+ */
+function makeToolCall(
+	id: number,
+	name: string,
+	args?: unknown,
+): RpcRequest {
+	return makeRequest(id, "tools/call", { name, ...(args !== undefined && { arguments: args }) });
+}
+
+/** Parse the MCP content envelope and return the embedded tool result. */
+function unwrapContent(res: { result?: unknown } | null): unknown {
+	const result = res?.result as { content: Array<{ type: string; text: string }> };
+	return JSON.parse(result.content[0]!.text);
+}
+
 // ---------------------------------------------------------------------------
 // buildToolsList
 // ---------------------------------------------------------------------------
@@ -105,117 +124,130 @@ describe("buildToolsList", () => {
 // buildHandlerRegistry — dispatch integration
 // ---------------------------------------------------------------------------
 
-describe("buildHandlerRegistry + dispatch", () => {
-	it("getWorkspaceFolders returns { workspaceFolders: [] }", async () => {
-		const adapter = makeAdapter();
-		const ctx = makeCtx();
-		const registry: HandlerRegistry = buildHandlerRegistry(adapter, ctx);
+describe("buildHandlerRegistry + dispatch (MCP tools/call)", () => {
+	it("exposes exactly one method: tools/call (no per-tool direct methods)", () => {
+		const registry = buildHandlerRegistry(makeAdapter(), makeCtx());
+		expect(Object.keys(registry)).toEqual(["tools/call"]);
+	});
+
+	it("direct tool-name method is unknown → -32601 (tools are only reachable via tools/call)", async () => {
+		const registry: HandlerRegistry = buildHandlerRegistry(makeAdapter(), makeCtx());
 
 		const res = await dispatch(makeRequest(1, "getWorkspaceFolders"), registry);
 
 		expect(res).toEqual({
 			jsonrpc: "2.0",
 			id: 1,
-			result: { workspaceFolders: [] },
-		});
-	});
-
-	it("unknown method returns -32601 error envelope", async () => {
-		const adapter = makeAdapter();
-		const ctx = makeCtx();
-		const registry: HandlerRegistry = buildHandlerRegistry(adapter, ctx);
-
-		const res = await dispatch(makeRequest(2, "nope"), registry);
-
-		expect(res).toEqual({
-			jsonrpc: "2.0",
-			id: 2,
 			error: { code: -32601, message: "Method not found" },
 		});
 	});
 
-	it("error bridge: openFile with unsafe path returns -32602 error ENVELOPE (not result wrapping error)", async () => {
+	it("tools/call routes to the named tool and wraps the return in the MCP content envelope", async () => {
+		const registry: HandlerRegistry = buildHandlerRegistry(makeAdapter(), makeCtx());
+
+		const res = await dispatch(makeToolCall(2, "getWorkspaceFolders"), registry);
+
+		expect(res).toEqual({
+			jsonrpc: "2.0",
+			id: 2,
+			result: { content: [{ type: "text", text: JSON.stringify({ workspaceFolders: [] }) }] },
+		});
+		expect(unwrapContent(res)).toEqual({ workspaceFolders: [] });
+	});
+
+	it("tools/call with an unknown tool name → -32602 invalid params", async () => {
+		const registry: HandlerRegistry = buildHandlerRegistry(makeAdapter(), makeCtx());
+
+		const res = await dispatch(makeToolCall(3, "noSuchTool"), registry);
+
+		expect(res!.result).toBeUndefined();
+		expect(res!.error!.code).toBe(-32602);
+		expect(res!.error!.message).toMatch(/noSuchTool/);
+	});
+
+	it("tools/call with a missing/non-string name → -32602 invalid params", async () => {
+		const registry: HandlerRegistry = buildHandlerRegistry(makeAdapter(), makeCtx());
+
+		const res = await dispatch(makeRequest(4, "tools/call", { arguments: {} }), registry);
+
+		expect(res!.result).toBeUndefined();
+		expect(res!.error!.code).toBe(-32602);
+	});
+
+	it("error bridge: openFile with unsafe path via tools/call → -32602 error ENVELOPE (not a content result)", async () => {
 		const adapter = makeAdapter();
-		// No files added — any traversal path will be rejected at safety step
-		const ctx = makeCtx();
-		const registry: HandlerRegistry = buildHandlerRegistry(adapter, ctx);
+		// No files added — the traversal path is rejected at the safety step.
+		const registry: HandlerRegistry = buildHandlerRegistry(adapter, makeCtx());
 
 		const res = await dispatch(
-			makeRequest(3, "openFile", { filePath: "../../etc/passwd" }),
+			makeToolCall(5, "openFile", { filePath: "../../etc/passwd" }),
 			registry,
 		);
 
-		// Must be an error envelope, not { result: { error: ... } }
-		expect(res).toBeDefined();
+		// Must be an error envelope, not a content envelope wrapping the error.
 		expect(res!.result).toBeUndefined();
 		expect(res!.error).toBeDefined();
 		expect(res!.error!.code).toBe(-32602);
 		expect(res!.error!.message).toMatch(/unsafe/);
 	});
 
-	it("error bridge: openFile success returns { result: { success: true } }", async () => {
-		const adapter = makeAdapter();
-		adapter.files.add("notes/plan.md");
-		const ctx = makeCtx();
-		const registry: HandlerRegistry = buildHandlerRegistry(adapter, ctx);
+	it("error bridge: openFile with absolute path via tools/call → -32602", async () => {
+		const registry: HandlerRegistry = buildHandlerRegistry(makeAdapter(), makeCtx());
 
 		const res = await dispatch(
-			makeRequest(4, "openFile", { filePath: "notes/plan.md" }),
+			makeToolCall(6, "openFile", { filePath: "/etc/passwd" }),
 			registry,
 		);
 
-		expect(res).toEqual({
-			jsonrpc: "2.0",
-			id: 4,
-			result: { success: true },
-		});
+		expect(res!.result).toBeUndefined();
+		expect(res!.error!.code).toBe(-32602);
+	});
+
+	it("openFile happy path via tools/call → content envelope wrapping { success: true }", async () => {
+		const adapter = makeAdapter();
+		adapter.files.add("notes/plan.md");
+		const registry: HandlerRegistry = buildHandlerRegistry(adapter, makeCtx());
+
+		const res = await dispatch(
+			makeToolCall(7, "openFile", { filePath: "notes/plan.md" }),
+			registry,
+		);
+
+		expect(res!.error).toBeUndefined();
+		expect(unwrapContent(res)).toEqual({ success: true });
 		expect(adapter.opened).toContain("notes/plan.md");
 	});
 
-	it("null pass-through: getCurrentSelection returns result:null (not error) when no active editor", async () => {
-		const adapter = makeAdapter();
-		// No active selection set — adapter returns null
-		const ctx = makeCtx();
-		const registry: HandlerRegistry = buildHandlerRegistry(adapter, ctx);
+	it("null tool return: getCurrentSelection with no active editor → content text \"null\"", async () => {
+		const registry: HandlerRegistry = buildHandlerRegistry(makeAdapter(), makeCtx());
 
-		const res = await dispatch(makeRequest(5, "getCurrentSelection"), registry);
+		const res = await dispatch(makeToolCall(8, "getCurrentSelection"), registry);
 
 		expect(res).toEqual({
 			jsonrpc: "2.0",
-			id: 5,
-			result: null,
+			id: 8,
+			result: { content: [{ type: "text", text: "null" }] },
 		});
-		// Must not be an error envelope
 		expect(res!.error).toBeUndefined();
+		expect(unwrapContent(res)).toBeNull();
 	});
 
-	it("null pass-through: getLatestSelection returns result:null when ctx.getLatest returns null", async () => {
-		const adapter = makeAdapter();
+	it("getLatestSelection via tools/call → content text \"null\" when ctx.getLatest returns null", async () => {
 		const ctx: ToolContext = { getLatest: () => null };
-		const registry: HandlerRegistry = buildHandlerRegistry(adapter, ctx);
+		const registry: HandlerRegistry = buildHandlerRegistry(makeAdapter(), ctx);
 
-		const res = await dispatch(makeRequest(6, "getLatestSelection"), registry);
+		const res = await dispatch(makeToolCall(9, "getLatestSelection"), registry);
 
-		expect(res).toEqual({
-			jsonrpc: "2.0",
-			id: 6,
-			result: null,
-		});
+		expect(unwrapContent(res)).toBeNull();
 		expect(res!.error).toBeUndefined();
 	});
 
-	it("sync stub handler: getDiagnostics returns { diagnostics: [] } without error-bridge corruption", async () => {
-		const adapter = makeAdapter();
-		const ctx = makeCtx();
-		const registry: HandlerRegistry = buildHandlerRegistry(adapter, ctx);
+	it("sync stub handler: getDiagnostics via tools/call → content wrapping { diagnostics: [] }", async () => {
+		const registry: HandlerRegistry = buildHandlerRegistry(makeAdapter(), makeCtx());
 
-		const res = await dispatch(makeRequest(7, "getDiagnostics"), registry);
+		const res = await dispatch(makeToolCall(10, "getDiagnostics"), registry);
 
-		expect(res).toEqual({
-			jsonrpc: "2.0",
-			id: 7,
-			result: { diagnostics: [] },
-		});
+		expect(unwrapContent(res)).toEqual({ diagnostics: [] });
 		expect(res!.error).toBeUndefined();
 	});
 });

@@ -1,5 +1,11 @@
+import "obsidian";
+
 import { describe, expect, it } from "vitest";
 
+import { FakeEditorAdapter } from "../../../src/ide-bridge/FakeEditorAdapter";
+import { dispatch } from "../../../src/ide-bridge/jsonRpc";
+import { buildHandlerRegistry } from "../../../src/ide-bridge/tools/index";
+import type { ToolContext } from "../../../src/ide-bridge/tools/types";
 import type {
 	Pos,
 	RpcError,
@@ -52,6 +58,33 @@ describe("protocol types", () => {
 		// standard filePath IS the vault-relative path. Guard against a future
 		// reintroduction of vaultRelativePath at runtime.
 		expect("vaultRelativePath" in params).toBe(false);
+	});
+
+	it("tools are invoked through tools/call, not as direct JSON-RPC methods", async () => {
+		const ctx: ToolContext = { getLatest: () => null };
+		const registry = buildHandlerRegistry(new FakeEditorAdapter(), ctx);
+
+		// A direct tool-name method is no longer registered → -32601.
+		const direct = await dispatch(
+			{ jsonrpc: "2.0", id: 1, method: "getCurrentSelection" },
+			registry,
+		);
+		expect(direct!.error!.code).toBe(-32601);
+
+		// The same tool reached through the MCP tools/call dispatcher succeeds and
+		// is wrapped in the content envelope.
+		const viaCall = await dispatch(
+			{
+				jsonrpc: "2.0",
+				id: 2,
+				method: "tools/call",
+				params: { name: "getCurrentSelection" },
+			},
+			registry,
+		);
+		const result = viaCall!.result as { content: Array<{ type: string; text: string }> };
+		expect(result.content[0]!.type).toBe("text");
+		expect(JSON.parse(result.content[0]!.text)).toBeNull();
 	});
 
 	it("ToolName union accepts every tool method name", () => {

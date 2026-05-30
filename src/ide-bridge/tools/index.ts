@@ -7,14 +7,19 @@
  *      sent to Claude Code so it knows which tools are available and how to
  *      invoke them (name + description + inputSchema).
  *   2. `buildHandlerRegistry(adapter, ctx)` — produce a `HandlerRegistry` that
- *      can be passed directly to `dispatch()`. Each entry in the registry is a
- *      curried wrapper that calls the underlying tool handler with (params,
- *      adapter, ctx). The wrapper also contains the "error bridge": if a handler
- *      returns an object with an `"error"` key, the wrapper throws the error
- *      object so that `dispatch` produces a proper JSON-RPC error envelope
- *      (code -32602) rather than a `result` wrapping the error. Null results
- *      pass through as-is so that `getCurrentSelection`/`getLatestSelection`
- *      can legitimately return `result: null`.
+ *      can be passed directly to `dispatch()`. The registry exposes exactly ONE
+ *      method, `"tools/call"`, an MCP dispatcher that routes by tool name. Tools
+ *      are NOT exposed as direct JSON-RPC methods — a direct `getCurrentSelection`
+ *      method correctly resolves to `-32601` (method not found). The dispatcher:
+ *        - reads `params` as `{ name, arguments? }`; an unknown/non-string name
+ *          throws `{ code: -32602 }` (invalid params);
+ *        - invokes the tool handler with the tool's own `arguments`;
+ *        - preserves the "error bridge": if a handler returns an object with an
+ *          `"error"` key, the wrapper throws it so `dispatch` produces the
+ *          handler's numeric code (e.g. openFile traversal → -32602);
+ *        - on success wraps the (JSON-stringified) return value in the MCP
+ *          content envelope `{ content: [{ type: "text", text }] }`. The stringify
+ *          is uniform: a null tool return becomes content text `"null"`.
  *
  * The exact set of registered names is exhaustively derived from `ToolName`
  * (protocol.ts). `openDiff` and `executeCode` are intentionally absent per the
@@ -150,36 +155,75 @@ export function buildToolsList(): ToolListEntry[] {
 	});
 }
 
+/** Parameters of an MCP `tools/call` request. */
+type ToolsCallParams = { name?: unknown; arguments?: unknown };
+
+/**
+ * Error carrying a JSON-RPC numeric `code`. `dispatch`'s `thrownToEnvelope`
+ * reads `.code`/`.message` off any thrown object, so throwing a real Error (vs.
+ * a plain object literal) keeps the same wire behaviour while satisfying the
+ * `@typescript-eslint/only-throw-error` rule.
+ */
+class RpcCodeError extends Error {
+	constructor(readonly code: number, message: string) {
+		super(message);
+		this.name = "RpcCodeError";
+	}
+}
+
+/** Re-throw a handler's `{ code, message }` error shape as an RpcCodeError. */
+function asRpcError(error: unknown): RpcCodeError {
+	if (error !== null && typeof error === "object" && "code" in error) {
+		const { code, message } = error as { code: unknown; message?: unknown };
+		if (typeof code === "number") {
+			return new RpcCodeError(code, typeof message === "string" ? message : "Internal error");
+		}
+	}
+	return new RpcCodeError(-32603, "Internal error");
+}
+
+/** Wrap a tool's return value in the MCP content envelope. */
+function toContentEnvelope(result: unknown): { content: [{ type: "text"; text: string }] } {
+	// Uniform stringify: null → "null". The `?? "null"` fallback guards against a
+	// future handler accidentally returning `undefined` (JSON.stringify(undefined)
+	// returns the JS value undefined, not a string), keeping text unconditionally
+	// well-shaped.
+	return { content: [{ type: "text", text: JSON.stringify(result) ?? "null" }] };
+}
+
 /**
  * Produce a `HandlerRegistry` suitable for passing to `dispatch()`.
  *
- * Each entry is a curried wrapper around the tool handler with:
- * - `(params, adapter, ctx)` supplied at registry build time.
+ * The registry exposes a single method, `"tools/call"`, an MCP dispatcher:
+ * - Reads `{ name, arguments? }` from the request params. A missing/non-string
+ *   name or one not in TOOL_REGISTRY throws `{ code: -32602 }` (invalid params).
+ * - Invokes `TOOL_REGISTRY[name].handler(arguments, adapter, ctx)`.
  * - Error bridge: if the (awaited) result is a non-null object with an `"error"`
- *   key, the wrapper throws `result.error` so that `dispatch`'s `thrownToEnvelope`
- *   picks up the numeric code and produces a proper -32602 error envelope.
- * - Null pass-through: null results are returned as-is so that tools like
- *   `getCurrentSelection` can legitimately produce `result: null`.
+ *   key, throws `result.error` so `dispatch`'s `thrownToEnvelope` picks up the
+ *   numeric code (e.g. openFile traversal → -32602) and produces an error envelope.
+ * - On success wraps the JSON-stringified return value in the MCP content
+ *   envelope. A null tool return becomes content text `"null"` — no special-casing.
  */
 export function buildHandlerRegistry(
 	adapter: EditorAdapter,
 	ctx: ToolContext,
 ): HandlerRegistry {
-	const registry: HandlerRegistry = {};
+	const dispatcher = async (params: unknown): Promise<unknown> => {
+		const { name, arguments: args } = (params ?? {}) as ToolsCallParams;
+		if (typeof name !== "string" || !(name in TOOL_REGISTRY)) {
+			throw new RpcCodeError(-32602, `Unknown tool: ${String(name)}`);
+		}
 
-	for (const name of Object.keys(TOOL_REGISTRY) as ToolName[]) {
-		const { handler } = TOOL_REGISTRY[name];
-		registry[name] = async (params: unknown): Promise<unknown> => {
-			const result = await handler(params, adapter, ctx);
-			// Error bridge: translate returned { error } into a throw so dispatch
-			// produces a proper JSON-RPC error envelope. Guard against null (which
-			// is a valid result for getCurrentSelection/getLatestSelection).
-			if (result !== null && typeof result === "object" && "error" in result) {
-				throw (result as { error: unknown }).error;
-			}
-			return result;
-		};
-	}
+		const { handler } = TOOL_REGISTRY[name as ToolName];
+		const result = await handler(args, adapter, ctx);
+		// Error bridge: translate a returned { error } into a throw so dispatch
+		// produces a proper JSON-RPC error envelope. Guard against null (a valid
+		// result for getCurrentSelection/getLatestSelection).
+		if (result !== null && typeof result === "object" && "error" in result) {
+			throw asRpcError((result as { error: unknown }).error);
+		}
+		return toContentEnvelope(result);
+	};
 
-	return registry;
+	return { "tools/call": dispatcher };
 }

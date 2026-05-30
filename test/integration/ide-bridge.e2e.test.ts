@@ -494,16 +494,16 @@ describe("IdeBridge — end-to-end protocol integration (T5.1)", () => {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Helper: connect, call a tool by its direct JSON-RPC method name, and await
-	 * the response. Tools are registered by name in the HandlerRegistry (e.g.
-	 * "getCurrentSelection"), NOT via a "tools/call" wrapper method.
+	 * Helper: connect, invoke a tool through the MCP `tools/call` method, and await
+	 * the raw JSON-RPC response. Tools are NOT reachable as direct JSON-RPC methods;
+	 * the dispatcher routes `tools/call` { name, arguments } to the named tool.
 	 */
 	async function callTool(
 		port: number,
 		token: string,
 		id: number,
 		toolName: string,
-		toolParams?: unknown,
+		toolArgs?: unknown,
 	): Promise<Record<string, unknown>> {
 		const client = trackClient(connectClient(port, token));
 		await client.waitFor((b) => b.includes("\r\n\r\n"));
@@ -512,8 +512,8 @@ describe("IdeBridge — end-to-end protocol integration (T5.1)", () => {
 				JSON.stringify({
 					jsonrpc: "2.0",
 					id,
-					method: toolName,
-					params: toolParams ?? {},
+					method: "tools/call",
+					params: { name: toolName, arguments: toolArgs ?? {} },
 				}),
 			),
 		);
@@ -524,6 +524,15 @@ describe("IdeBridge — end-to-end protocol integration (T5.1)", () => {
 		const resp = findResponse(client.frames(), id);
 		if (!resp) throw new Error(`No response for id ${id}`);
 		return resp;
+	}
+
+	/**
+	 * Parse the MCP content envelope from a successful tools/call response and
+	 * return the embedded tool return value.
+	 */
+	function unwrapToolResult(resp: Record<string, unknown>): unknown {
+		const result = resp.result as { content: Array<{ type: string; text: string }> };
+		return JSON.parse(result.content[0]!.text);
 	}
 
 	it("(8) getCurrentSelection → result: null when no active selection", async () => {
@@ -539,8 +548,8 @@ describe("IdeBridge — end-to-end protocol integration (T5.1)", () => {
 		if (state.kind !== "listening" && state.kind !== "connected") throw new Error("not listening");
 
 		const resp = await callTool(state.port, token, 10, "getCurrentSelection");
-		expect(resp.result).toBeNull();
 		expect(resp.error).toBeUndefined();
+		expect(unwrapToolResult(resp)).toBeNull();
 	});
 
 	it("(9) getLatestSelection → result: null before any broadcast", async () => {
@@ -555,7 +564,8 @@ describe("IdeBridge — end-to-end protocol integration (T5.1)", () => {
 		if (state.kind !== "listening" && state.kind !== "connected") throw new Error("not listening");
 
 		const resp = await callTool(state.port, token, 11, "getLatestSelection");
-		expect(resp.result).toBeNull();
+		expect(resp.error).toBeUndefined();
+		expect(unwrapToolResult(resp)).toBeNull();
 	});
 
 	it("(10) getOpenEditors → tabs array with the fake adapter's open files", async () => {
@@ -571,7 +581,7 @@ describe("IdeBridge — end-to-end protocol integration (T5.1)", () => {
 		if (state.kind !== "listening" && state.kind !== "connected") throw new Error("not listening");
 
 		const resp = await callTool(state.port, token, 12, "getOpenEditors");
-		const result = resp.result as { tabs: Array<{ filePath: string; isDirty: boolean }> };
+		const result = unwrapToolResult(resp) as { tabs: Array<{ filePath: string; isDirty: boolean }> };
 		expect(result.tabs).toHaveLength(1);
 		expect(result.tabs[0]?.filePath).toBe("notes/todo.md");
 		expect(result.tabs[0]?.isDirty).toBe(false);
@@ -589,7 +599,7 @@ describe("IdeBridge — end-to-end protocol integration (T5.1)", () => {
 		if (state.kind !== "listening" && state.kind !== "connected") throw new Error("not listening");
 
 		const resp = await callTool(state.port, token, 13, "getWorkspaceFolders");
-		const result = resp.result as { workspaceFolders: unknown[] };
+		const result = unwrapToolResult(resp) as { workspaceFolders: unknown[] };
 		expect(result.workspaceFolders).toEqual([]);
 	});
 
@@ -609,7 +619,7 @@ describe("IdeBridge — end-to-end protocol integration (T5.1)", () => {
 			filePath: "notes/plan.md",
 		});
 		expect(resp.error).toBeUndefined();
-		expect(resp.result).toEqual({ success: true });
+		expect(unwrapToolResult(resp)).toEqual({ success: true });
 		expect(adapter.opened).toContain("notes/plan.md");
 	});
 
@@ -680,6 +690,24 @@ describe("IdeBridge — end-to-end protocol integration (T5.1)", () => {
 		const resp = findResponse(client.frames(), 17);
 		const error = resp?.error as { code: number };
 		expect(error.code).toBe(-32601);
+	});
+
+	it("(15b) tools/call with an unknown tool name → JSON-RPC error -32602 invalid params", async () => {
+		const { bridge } = trackBridge(makeHarness());
+		await bridge.start();
+
+		const token = bridge.getToken();
+		const { ideBridgeStore } = await import(
+			"../../src/ide-bridge/ideBridgeStore"
+		);
+		const state = ideBridgeStore.get();
+		if (state.kind !== "listening" && state.kind !== "connected") throw new Error("not listening");
+
+		const resp = await callTool(state.port, token, 18, "noSuchTool");
+		expect(resp.result).toBeUndefined();
+		const error = resp.error as { code: number; message: string };
+		expect(error.code).toBe(-32602);
+		expect(error.message).toMatch(/noSuchTool/);
 	});
 
 	// -------------------------------------------------------------------------
