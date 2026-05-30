@@ -49,6 +49,9 @@ const defaultSettings: PluginSettings = {
 	hooksDir: ".tomo-hashi/hooks",
 	hooksPolicy: "enabled",
 	debugLogging: false,
+	ideBridgeEnabled: false,
+	ideBridgePort: 23027,
+	ideBridgeAuthToken: "",
 };
 
 function makeSettings(overrides?: Partial<PluginSettings>): PluginSettings {

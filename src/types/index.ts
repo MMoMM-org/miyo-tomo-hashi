@@ -82,10 +82,29 @@ export interface PluginSettings {
 	 * Spec: PRD F11.
 	 */
 	debugLogging: boolean;
+
+	// --- 003 fields (NEW — ide-bridge) ---
+
+	/**
+	 * Whether the IDE bridge WebSocket server is active. Persisted so the user's
+	 * preference survives plugin reload. Spec: docs/XDD/specs/003-ide-bridge — SDD lines 300-308.
+	 */
+	ideBridgeEnabled: boolean;
+	/**
+	 * Port the IDE bridge WebSocket server listens on.
+	 * Spec: docs/XDD/specs/003-ide-bridge — SDD lines 300-308.
+	 */
+	ideBridgePort: number;
+	/**
+	 * Bearer token used to authenticate IDE clients.
+	 * Empty string until first enable; format: `hashi_<UUID>`.
+	 * Spec: docs/XDD/specs/003-ide-bridge — SDD lines 300-308.
+	 */
+	ideBridgeAuthToken: string;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
-	settings_version: 1,
+	settings_version: 2,
 	// 001 defaults
 	chosenInstanceName: null,
 	zoomLevel: 1,
@@ -96,4 +115,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	hooksDir: ".tomo-hashi/hooks",
 	hooksPolicy: "ask",
 	debugLogging: false,
+	// 003 defaults
+	ideBridgeEnabled: false,
+	ideBridgePort: 23027,
+	ideBridgeAuthToken: "",
 };

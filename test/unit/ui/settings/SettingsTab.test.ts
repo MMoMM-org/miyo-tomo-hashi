@@ -592,6 +592,10 @@ describe("SettingsTab — instruction executor controls", () => {
 			"hooksDir",
 			"hooksPolicy",
 			"debugLogging",
+			// 003 fields (ide-bridge)
+			"ideBridgeEnabled",
+			"ideBridgePort",
+			"ideBridgeAuthToken",
 		]);
 
 		// No extra keys (e.g. hookAskDecisions) in persisted data
