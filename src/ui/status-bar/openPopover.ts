@@ -1,14 +1,16 @@
 /**
  * Status bar popover — pure builder that constructs an Obsidian Menu with the
- * three actions defined by the SDD's "UI Visualization / Status bar icon"
- * section and PRD F3/AC4: Force Reconnect, Open Chat Window, Go to Settings.
+ * actions defined by the SDD's "UI Visualization / Status bar icon" section
+ * and PRD F3/AC4: Force Reconnect, Open Chat Window, Go to Settings, plus
+ * the IDE Bridge status line and optional Copy auth token action (T4.4).
  *
  * Decoupled from the StatusBarIcon view: callers wire concrete behavior via
  * the `actions` parameter so the popover can be reused (and tested) without
  * pulling in the connection store, plugin instance, or workspace.
  *
  * Spec refs: spec 001-session-view phase-4 T4.2; PRD F3 (all ACs);
- * SDD ADR-9, "UI Visualization / Status bar icon".
+ * spec 003-ide-bridge phase-4 T4.4; SDD ADR-9,
+ * "UI Visualization / Status bar icon".
  */
 
 import { Menu } from "obsidian";
@@ -23,15 +25,36 @@ export interface PopoverActions {
 	onForceReconnect: () => void;
 	onOpenChat: () => void;
 	onOpenSettings: () => void;
+	/** Human-readable IDE Bridge state, e.g. "IDE Bridge: connected(1) :23027". */
+	ideStatusLine: string;
+	/** `true` when the bridge is accepting connections (listening or connected). */
+	ideRunning: boolean;
+	/** Called when the user clicks "Copy auth token". */
+	onCopyToken: () => void;
 }
 
 export function openPopover(evt: MouseEvent, actions: PopoverActions): Menu {
 	const menu = new Menu();
 
 	// UI text uses Obsidian sentence-case (enforced by obsidianmd/ui/sentence-case).
-	// The spec drafts these as Title-Case but Obsidian's community style guide
-	// — which the eslint plugin codifies — is sentence-case.
-	//
+
+	// IDE Bridge status info — always shown, disabled (display only).
+	// Per SDD layout it sits near the top under the Docker connection line.
+	menu.addItem((item) => {
+		item.setTitle(actions.ideStatusLine);
+		item.setDisabled(true);
+	});
+
+	// Copy auth token — only visible while the bridge is running.
+	if (actions.ideRunning) {
+		menu.addItem((item) => {
+			item.setTitle("Copy auth token").setIcon("key");
+			item.onClick(() => {
+				actions.onCopyToken();
+			});
+		});
+	}
+
 	// Order: Open chat → Force reconnect → Go to settings. The most-frequent
 	// user action (resume the chat session) sits at the top; force-reconnect
 	// is mid because it's a recovery action; settings is last as it's

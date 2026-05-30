@@ -96,6 +96,11 @@
 	opacity: 0.6;
 }
 
+.hashi-status-bar.is-error .hashi-status-bar-glyph {
+	color: var(--text-error);
+	opacity: 1;
+}
+
 /* --- Chat-view zoom controls (ADR-6 — theme-bound CSS vars only) --- */
 
 .hashi-chat-view-zoom-group {

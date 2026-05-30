@@ -219,6 +219,7 @@ export default class TomoHashiPlugin extends Plugin {
 				},
 			},
 			getChosenInstanceName,
+			() => this.ideBridge?.getToken() ?? "",
 		);
 		this.statusBarIcon.mount();
 
