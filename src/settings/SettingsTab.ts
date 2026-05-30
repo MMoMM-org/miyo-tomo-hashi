@@ -1,6 +1,7 @@
 /**
  * Settings tab — exposes the Tomo connection lifecycle (Connect /
- * Disconnect + open picker) and instruction-executor settings.
+ * Disconnect + open picker), the IDE bridge section, and instruction-executor
+ * settings.
  *
  * The tab subscribes to `connectionStore` while visible so the button +
  * label reflect live state transitions, and unsubscribes on `hide()` to
@@ -16,6 +17,10 @@
  *   - PRD F11: 6 new settings fields + "Instruction executor" section.
  *   - Deviation: radio control → addDropdown (radio not native in Obsidian
  *     Setting API). Logged in plan/README.md.
+ *
+ * Spec: docs/XDD/specs/003-ide-bridge — SDD lines 361-377 (settings UI).
+ *   T4.3: IDE bridge section with status, enable toggle, port control-swap,
+ *   and auth token display/copy/regenerate.
  */
 
 import type TomoHashiPlugin from "../main";
@@ -25,7 +30,10 @@ import { connectionStore, displayInstanceName } from "../connection/connectionSt
 import type { ConnectionState } from "../connection/state";
 import type { TomoConnection } from "../connection/TomoConnection";
 import type { ExecutionMode } from "../executor/state";
+import { ideBridgeStore } from "../ide-bridge/ideBridgeStore";
+import type { IdeBridgeState } from "../ide-bridge/state";
 import type { PluginSettings } from "../types/index";
+import { ConfirmModal } from "../ui/ConfirmModal";
 import { HeaderSection } from "./HeaderSection";
 import { InstancePickerModal } from "./InstancePickerModal";
 
@@ -153,10 +161,86 @@ export function buildSettingsHandlers(
 }
 
 
+// ---------------------------------------------------------------------------
+// IDE bridge settings handlers — pure factory (T4.3)
+//
+// The IdeBridgeController interface declares exactly the methods the settings
+// UI needs. IdeBridge satisfies it structurally — no import cycle.
+// ---------------------------------------------------------------------------
+
+/**
+ * Structural interface for the IdeBridge controller as seen by the settings
+ * section. IdeBridge (src/ide-bridge/IdeBridge.ts) satisfies this interface
+ * without importing it; tests inject a fake.
+ */
+export interface IdeBridgeController {
+	start(): Promise<void>;
+	stop(): Promise<void>;
+	isRunning(): boolean;
+	regenerateToken(): Promise<void>;
+	getToken(): string;
+}
+
+/** Handlers returned by buildIdeBridgeHandlers. */
+export interface IdeBridgeHandlerMap {
+	port: (v: string) => Promise<void>;
+	enable: (v: boolean) => Promise<void>;
+	regenerate: () => Promise<void>;
+}
+
+/**
+ * Pure factory for IDE bridge settings handlers.
+ *
+ * port: validates integer in [1024, 65535] and not 23026 (Kado collision);
+ *       persists on valid, no-ops on invalid (preserves prior value).
+ * enable: persists ideBridgeEnabled, calls start() or stop(), then re-renders.
+ * regenerate: calls regenerateToken(), then re-renders.
+ *
+ * @param controller  The IdeBridge controller (or a test fake).
+ * @param persistence Provides the live settings object + a save function.
+ * @param rerender    Optional callback invoked after state-changing operations
+ *                    so the tab re-renders (production passes `this.display`).
+ */
+export function buildIdeBridgeHandlers(
+	controller: IdeBridgeController,
+	persistence: SettingsPersistence,
+	rerender: () => void = () => { /* no-op */ },
+): IdeBridgeHandlerMap {
+	const portHandler = async (v: string): Promise<void> => {
+		const n = Number(v);
+		if (!Number.isInteger(n) || n < 1024 || n > 65535 || n === 23026) return;
+		persistence.settings.ideBridgePort = n;
+		await persistence.saveSettings();
+	};
+
+	const enableHandler = async (v: boolean): Promise<void> => {
+		persistence.settings.ideBridgeEnabled = v;
+		await persistence.saveSettings();
+		if (v) {
+			await controller.start();
+		} else {
+			await controller.stop();
+		}
+		rerender();
+	};
+
+	const regenerateHandler = async (): Promise<void> => {
+		await controller.regenerateToken();
+		rerender();
+	};
+
+	return {
+		port: portHandler,
+		enable: enableHandler,
+		regenerate: regenerateHandler,
+	};
+}
+
 export class SettingsTab extends PluginSettingTab {
 	plugin: TomoHashiPlugin;
 	private unsubscribe: (() => void) | null = null;
 	private readonly headerSection: HeaderSection;
+	private readonly ideBridge: IdeBridgeController;
 
 	/**
 	 * Test seam (review M19): rebuilds handlers on demand via the pure
@@ -166,6 +250,15 @@ export class SettingsTab extends PluginSettingTab {
 	 */
 	_getHandlersForTest(): Readonly<HandlerMap> {
 		return buildSettingsHandlers(this.persistence());
+	}
+
+	/**
+	 * Test seam for IDE bridge handlers — mirrors _getHandlersForTest().
+	 * Returns handlers built from the live persistence object; tests drive
+	 * onChange behavior without DOM event simulation.
+	 */
+	_getIdeBridgeHandlersForTest(): Readonly<IdeBridgeHandlerMap> {
+		return buildIdeBridgeHandlers(this.ideBridge, this.persistence());
 	}
 
 	private persistence(): SettingsPersistence {
@@ -179,10 +272,20 @@ export class SettingsTab extends PluginSettingTab {
 		app: App,
 		plugin: TomoHashiPlugin,
 		private readonly connection: TomoConnection,
+		ideBridge?: IdeBridgeController,
 	) {
 		super(app, plugin);
 		this.plugin = plugin;
 		this.headerSection = new HeaderSection({ plugin });
+		// Defensive/test-convenience fallback when no controller is provided.
+		// Production always passes the real IdeBridge from main.ts onload.
+		this.ideBridge = ideBridge ?? {
+			start: async () => { /* no-op */ },
+			stop: async () => { /* no-op */ },
+			isRunning: () => false,
+			regenerateToken: async () => { /* no-op */ },
+			getToken: () => "",
+		};
 	}
 
 	display(): void {
@@ -253,7 +356,115 @@ export class SettingsTab extends PluginSettingTab {
 		}
 		this.unsubscribe = connectionStore.subscribe(render);
 
+		this.renderIdeBridgeSection(containerEl);
 		this.renderExecutorSection(containerEl);
+	}
+
+	/**
+	 * Renders the "IDE bridge" section between "Tomo connection" and
+	 * "Instruction executor" (SDD lines 361-377, T4.3).
+	 */
+	private renderIdeBridgeSection(containerEl: HTMLElement): void {
+		const handlers = buildIdeBridgeHandlers(
+			this.ideBridge,
+			this.persistence(),
+			() => this.display(),
+		);
+
+		new Setting(containerEl).setName("IDE bridge").setHeading();
+
+		// Status (desc-only) — reads current store state at render time.
+		const state: IdeBridgeState = ideBridgeStore.get();
+		const statusText = this.ideBridgeStatusText(state);
+		new Setting(containerEl)
+			.setName("Status")
+			.setDesc(statusText);
+
+		// Enable toggle
+		new Setting(containerEl)
+			.setName("Enable")
+			.setDesc("Run the bridge server.")
+			.addToggle(toggle => {
+				toggle.setValue(this.plugin.settings.ideBridgeEnabled);
+				toggle.onChange(handlers.enable);
+			});
+
+		// Port — control-swap: locked desc when running, text input when stopped
+		const portSetting = new Setting(containerEl).setName("Port");
+		if (this.ideBridge.isRunning()) {
+			portSetting.setDesc(`${this.plugin.settings.ideBridgePort} (locked while running)`);
+		} else {
+			portSetting.addText(text => {
+				text.setValue(String(this.plugin.settings.ideBridgePort));
+				text.onChange(async (v) => {
+					const prev = this.plugin.settings.ideBridgePort;
+					await handlers.port(v);
+					// Revert if the value was rejected (no-persist guard).
+					if (this.plugin.settings.ideBridgePort === prev && Number(v) !== prev) {
+						text.setValue(String(prev));
+					}
+				});
+			});
+		}
+
+		// Auth token — cleartext display, Copy + Regenerate buttons
+		const tokenSetting = new Setting(containerEl)
+			.setName("Auth token");
+
+		const token = this.ideBridge.getToken();
+		const descSpan = tokenSetting.settingEl.createSpan({
+			cls: "hashi-ide-bridge-token",
+			text: token,
+		});
+		// Suppress unused-variable lint — the span is appended for DOM display.
+		void descSpan;
+
+		tokenSetting.addButton(btn => {
+			btn.setButtonText("Copy");
+			btn.buttonEl.setAttribute("aria-live", "polite");
+			btn.onClick(() => {
+				void navigator.clipboard.writeText(token).then(
+					() => {
+						btn.setButtonText("Copied!");
+						activeWindow.setTimeout(() => { btn.setButtonText("Copy"); }, 1500);
+					},
+					() => { new Notice("Failed to copy to clipboard"); },
+				);
+			});
+		});
+
+		tokenSetting.addButton(btn => {
+			btn.setButtonText("Regenerate");
+			btn.onClick(() => {
+				new ConfirmModal(
+					this.app,
+					"Regenerate token?",
+					"Connected clients will be disconnected and must use the new token.",
+					async () => {
+						await handlers.regenerate();
+						new Notice("IDE bridge token regenerated");
+					},
+				).open();
+			});
+		});
+	}
+
+	/** Map IdeBridgeState to the human-facing status string for the settings UI. */
+	private ideBridgeStatusText(state: IdeBridgeState): string {
+		switch (state.kind) {
+			case "stopped":
+				return "Stopped";
+			case "listening":
+				return `Running on 127.0.0.1:${state.port} — 0 client(s)`;
+			case "connected":
+				return `Running on 127.0.0.1:${state.port} — ${state.clientCount} client(s)`;
+			case "error":
+				return `Error: ${state.reason}`;
+			default: {
+				const _exhaustive: never = state;
+				return _exhaustive;
+			}
+		}
 	}
 
 	private renderExecutorSection(containerEl: HTMLElement): void {

@@ -82,6 +82,7 @@ import { registerCommands, registerExecutorCommands } from "./commands/registerC
 import { registerFileMenu, registerExecutorFileMenu } from "./commands/fileMenu";
 import { TomoConnection } from "./connection/TomoConnection";
 import { loadSettings, saveSettings } from "./connection/settingsPersistence";
+import { IdeBridge } from "./ide-bridge/IdeBridge";
 import { executionStore } from "./executor/executionStore";
 import { InstructionExecutor } from "./executor/InstructionExecutor";
 import { FsHookLoader } from "./hooks/FsHookLoader";
@@ -128,6 +129,7 @@ export default class TomoHashiPlugin extends Plugin {
 	private connection: TomoConnection | null = null;
 	private statusBarIcon: StatusBarIcon | null = null;
 	private executor: InstructionExecutor | null = null;
+	private ideBridge: IdeBridge | null = null;
 	private cleanups: Array<() => void> = [];
 	private loaded = false;
 
@@ -179,7 +181,21 @@ export default class TomoHashiPlugin extends Plugin {
 		);
 
 		// 2. Settings tab (T4.1 — already wired; kept here for SDD ordering).
-		this.addSettingTab(new SettingsTab(this.app, this, conn));
+		// Construct IdeBridge for T4.3 settings section wiring. Start/stop and
+		// lifecycle (T4.5) are deferred — only constructing + passing here.
+		this.ideBridge = new IdeBridge({
+			app: this.app,
+			getSettings: () => this.settings,
+			persist,
+			log: {
+				debug: (...a: unknown[]) => {
+					if (this.settings.debugLogging) console.debug("[hashi/ide-bridge]", ...a);
+				},
+				warn: console.warn.bind(console),
+				error: console.error.bind(console),
+			},
+		});
+		this.addSettingTab(new SettingsTab(this.app, this, conn, this.ideBridge));
 
 		// 3. Status bar icon (T4.2).
 		this.statusBarIcon = new StatusBarIcon(

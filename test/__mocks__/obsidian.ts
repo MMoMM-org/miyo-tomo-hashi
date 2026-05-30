@@ -323,15 +323,17 @@ export class Setting {
 				setButtonText: ReturnType<typeof vi.fn>;
 				setCta: ReturnType<typeof vi.fn>;
 				onClick: ReturnType<typeof vi.fn>;
+				buttonEl: HTMLButtonElement;
 			}) => void,
 		) => {
-			cb({
-				setButtonText: vi.fn(() => ({
-					setCta: vi.fn(() => ({ onClick: vi.fn() })),
-				})),
-				setCta: vi.fn(),
-				onClick: vi.fn(),
-			});
+			const buttonEl = document.createElement("button");
+			const component = {
+				setButtonText: vi.fn((text: string) => { buttonEl.textContent = text; return component; }),
+				setCta: vi.fn(() => component),
+				onClick: vi.fn((fn: () => void) => { buttonEl.addEventListener("click", fn); return component; }),
+				buttonEl,
+			};
+			cb(component);
 			return this;
 		},
 	);

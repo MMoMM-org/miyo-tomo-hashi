@@ -1,6 +1,6 @@
 ---
 title: "Phase 4: Plugin Integration — Settings, UI, Commands & Lifecycle"
-status: pending
+status: in_progress
 version: "1.0"
 phase: 4
 ---
@@ -34,7 +34,7 @@ phase: 4
 
 This phase makes the bridge user-facing and lifecycle-managed: persisted settings with a safe migration, the IDE bridge settings section, combined status on the 友 kanji + popover, a toggle command, and Component C construction/teardown in `main.ts`.
 
-- [ ] **T4.1 Settings schema & v1→v2 migration** `[activity: data-architecture]`
+- [x] **T4.1 Settings schema & v1→v2 migration** `[activity: data-architecture]`
 
   1. Prime: Read the settings model `[ref: SDD; lines: 300-308]`, `src/types/index.ts` (current `PluginSettings`/`DEFAULT_SETTINGS`), and `src/connection/settingsPersistence.ts` (migration anchor that reads `settings_version` before the DEFAULT merge).
   2. Test: `loadSettings` on a v1 blob (no IDE fields) returns the 3 new fields at defaults (`ideBridgeEnabled:false`, `ideBridgePort:23027`, `ideBridgeAuthToken:""`) **and preserves** every existing 001/002 field, with `settings_version` now `2`; a v2 blob round-trips unchanged; an existing token is never overwritten by migration.
@@ -42,7 +42,7 @@ This phase makes the bridge user-facing and lifecycle-managed: persisted setting
   4. Validate: Unit tests pass; lint clean; types check.
   5. Success: v1 settings migrate to v2 with all prior fields intact and the 3 IDE fields defaulted `[ref: SDD/Implementation Boundaries; line: 131; ref: SDD; lines: 300-308]`.
 
-- [ ] **T4.2 ConfirmModal** `[activity: frontend-ui]` `[parallel: true]`
+- [x] **T4.2 ConfirmModal** `[activity: frontend-ui]` `[parallel: true]`
 
   1. Prime: Read the regenerate UX `[ref: SDD/Settings UI; line: 375]` + accessibility note (Cancel focused by default) `[ref: SDD/User Interface & UX; line: 579]`; mirror `../Kado/src/settings/tabs/ApiKeyTab.ts` `ConfirmModal(app, title, message, onConfirm)`. Note Hashi has no ConfirmModal yet (existing modals: `ExecutionModal`, `HookDisclosureModal`).
   2. Test: renders title + message + Cancel/Confirm; Confirm invokes the async `onConfirm`; Cancel/Esc closes without calling it; Cancel is the default focus.
@@ -50,7 +50,7 @@ This phase makes the bridge user-facing and lifecycle-managed: persisted setting
   4. Validate: Unit tests pass (jsdom + obsidian mock; `import "obsidian"` first); lint clean; types check.
   5. Success: Confirm runs the callback; Cancel/Esc is a safe no-op with default focus on Cancel `[ref: SDD; lines: 375, 579]`.
 
-- [ ] **T4.3 IDE bridge settings section** `[activity: frontend-ui]`
+- [x] **T4.3 IDE bridge settings section** `[activity: frontend-ui]`
 
   1. Prime: Read the settings spec `[ref: SDD/Settings UI; lines: 361-377]`, F10/F3 criteria `[ref: PRD/F10; ref: PRD/F3]`, `src/settings/SettingsTab.ts` (`display()`, `buildSettingsHandlers`, full re-render on change), and the Kado port-lock/control-swap + Copy/Regenerate patterns `[ref: ../Kado/src/settings/tabs/GeneralTab.ts; ref: ../Kado/src/settings/tabs/ApiKeyTab.ts]`.
   2. Test (handlers are pure/testable like `buildSettingsHandlers`): port validation accepts integers 1024–65535, rejects out-of-range/non-numeric/`23026` (Kado collision) and restores the previous valid value; the enable handler flips `ideBridgeEnabled`, persists, and calls `start()`/`stop()`; regenerate handler calls `ideBridge.regenerateToken()` then re-renders.
