@@ -76,9 +76,14 @@
 
 import { createRequire } from "node:module";
 
+import { EditorView } from "@codemirror/view";
 import { Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 
-import { registerCommands, registerExecutorCommands } from "./commands/registerCommands";
+import {
+	registerCommands,
+	registerExecutorCommands,
+	registerIdeBridgeCommand,
+} from "./commands/registerCommands";
 import { registerFileMenu, registerExecutorFileMenu } from "./commands/fileMenu";
 import { TomoConnection } from "./connection/TomoConnection";
 import { loadSettings, saveSettings } from "./connection/settingsPersistence";
@@ -98,7 +103,7 @@ import {
 } from "./types/index";
 import { TomoChatView, VIEW_TYPE_TOMO_CHAT } from "./ui/chat-view/index";
 import { showChatWindow } from "./ui/chat-view/showChatWindow";
-import { StatusBarIcon } from "./ui/status-bar/StatusBarIcon";
+import { StatusBarIcon, copyAuthToken } from "./ui/status-bar/StatusBarIcon";
 import { ExecutionModal } from "./ui/ExecutionModal";
 import { mountStatusBar } from "./ui/statusBar";
 import { ObsidianVaultFS } from "./vault/ObsidianVaultFS";
@@ -197,6 +202,54 @@ export default class TomoHashiPlugin extends Plugin {
 		});
 		this.addSettingTab(new SettingsTab(this.app, this, conn, this.ideBridge));
 
+		// 2b. IDE Bridge lifecycle (T4.5) — editor-activity wiring, start-if-
+		//     enabled, toggle command, teardown. Per ADR-5, selection tracking is
+		//     driven by two signals: CM6 selection/doc updates (per-editor) and
+		//     active-leaf-change (switching the focused note). The bridge debounces
+		//     the resulting broadcasts internally.
+		const ideBridge = this.ideBridge;
+
+		// CM6 update listener — forward only real selection/content changes (a
+		// pure scroll/viewport update sets neither flag). registerEditorExtension
+		// is auto-torn-down by Obsidian on unload — do NOT unregister manually.
+		this.registerEditorExtension(
+			EditorView.updateListener.of((update) => {
+				if (update.selectionSet || update.docChanged) {
+					ideBridge.onEditorActivity();
+				}
+			}),
+		);
+
+		// active-leaf-change must wait for layout-ready (SDD gotcha 683): the
+		// workspace is not fully constructed during onload, so registering the
+		// event earlier can miss or mis-fire. registerEvent is auto-torn-down.
+		this.app.workspace.onLayoutReady(() => {
+			this.registerEvent(
+				this.app.workspace.on("active-leaf-change", () => {
+					ideBridge.onEditorActivity();
+				}),
+			);
+		});
+
+		// Start the bridge if enabled. Fire-and-forget — onload must not block on
+		// a TCP bind; the bridge routes any listen failure to ideBridgeStore for
+		// the UI surfaces (mirrors conn.autoReconnectIfRemembered below).
+		if (this.settings.ideBridgeEnabled) void ideBridge.start();
+
+		// Toggle command (PRD F13). getPort reads the configured port live so a
+		// settings change reaches the started-Notice fallback without a restart.
+		registerIdeBridgeCommand(this, {
+			ideBridge,
+			getPort: () => this.settings.ideBridgePort,
+		});
+
+		// Teardown — stop() disposes the tracker timer + closes the server. The
+		// editor extension and active-leaf-change event auto-unregister; only the
+		// server/timer need an explicit stop. Drained LIFO in onunload.
+		this.cleanups.push(() => {
+			void this.ideBridge?.stop();
+		});
+
 		// 3. Status bar icon (T4.2).
 		this.statusBarIcon = new StatusBarIcon(
 			this,
@@ -219,7 +272,7 @@ export default class TomoHashiPlugin extends Plugin {
 				},
 			},
 			getChosenInstanceName,
-			() => this.ideBridge?.getToken() ?? "",
+			() => { copyAuthToken(() => this.ideBridge?.getToken() ?? ""); },
 		);
 		this.statusBarIcon.mount();
 

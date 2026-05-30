@@ -131,8 +131,14 @@ vi.mock("../../src/ui/statusBar", async (importOriginal) => {
 import { TomoConnection } from "../../src/connection/TomoConnection";
 import { executionStore } from "../../src/executor/executionStore";
 import { FsHookLoader } from "../../src/hooks/FsHookLoader";
+import { IdeBridge } from "../../src/ide-bridge/IdeBridge";
+import { ideBridgeStore } from "../../src/ide-bridge/ideBridgeStore";
 import TomoHashiPlugin from "../../src/main";
 import { SettingsTab } from "../../src/settings/SettingsTab";
+import {
+	EditorView,
+	lastUpdateListener,
+} from "../__mocks__/codemirror-view";
 
 import type { Store } from "../../src/util/store";
 import type { RunState } from "../../src/executor/state";
@@ -161,6 +167,12 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 		// Don't actually fire the 001 auto-reconnect path (see main.integration.test.ts).
 		vi.spyOn(TomoConnection.prototype, "autoReconnectIfRemembered").mockResolvedValue();
 		vi.spyOn(TomoConnection.prototype, "dispose").mockResolvedValue();
+
+		// Spy IdeBridge.start/stop so onload's start-if-enabled and onunload's
+		// teardown never bind a real TCP socket. Reset the singleton store.
+		vi.spyOn(IdeBridge.prototype, "start").mockResolvedValue();
+		vi.spyOn(IdeBridge.prototype, "stop").mockResolvedValue();
+		ideBridgeStore.set({ kind: "stopped" });
 
 		// statusBar teardown spy — assert that onunload invokes it.
 		mountStatusBarTeardown = vi.fn();
@@ -255,25 +267,29 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 			expect(ids).toContain("execute-instructions-document");
 		});
 
-		it("registers a file-menu listener for the executor entry", async () => {
+		it("registers the executor + IDE-bridge file-menu / leaf-change listeners", async () => {
 			await plugin.onload();
-			// Two file-menu registrations are expected: 001's @file prefill +
-			// 002's "Execute instructions…" peer entry. registerEvent is the
-			// shared seam.
-			expect(plugin.registerEvent).toHaveBeenCalledTimes(2);
+			// Three registerEvent registrations are expected after T4.5:
+			//   1. 001's @file-prefill file-menu entry,
+			//   2. 002's "Execute instructions…" peer file-menu entry,
+			//   3. 003's active-leaf-change → IDE-bridge selection tracking
+			//      (registered inside onLayoutReady, which the mock fires sync).
+			// registerEvent is the shared seam for all three.
+			expect(plugin.registerEvent).toHaveBeenCalledTimes(3);
 		});
 
-		it("preserves 001 commands (reconnect-to-tomo + show-chat-window) alongside 002", async () => {
+		it("preserves 001/002 commands and adds the 003 toggle alongside them", async () => {
 			await plugin.onload();
 			const ids = vi
 				.mocked(plugin.addCommand)
 				.mock.calls.map((call) => (call[0] as { id: string }).id);
-			// 001 is unchanged: both palette commands still registered.
+			// 001 + 002 are unchanged; 003 adds the IDE-bridge toggle.
 			expect(new Set(ids)).toEqual(
 				new Set([
 					"reconnect-to-tomo",
 					"show-chat-window",
 					"execute-instructions-document",
+					"toggle-ide-bridge",
 				]),
 			);
 		});
@@ -335,6 +351,105 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 			expect(call).toBeDefined();
 			const loader = call?.[1];
 			expect(loader).toBeInstanceOf(FsHookLoader);
+		});
+	});
+
+	// ---------------------------------------------------------------------------
+	// 003 wiring (T4.5) — IDE Bridge lifecycle
+	// ---------------------------------------------------------------------------
+	//
+	// Spec refs: spec 003-ide-bridge phase-4 T4.5; ADR-5 (editor activity →
+	// selection tracking via CM6 updateListener + active-leaf-change deferred to
+	// layout-ready); PRD F13 (toggle command + start-if-enabled).
+
+	type WorkspaceOnCalls = ReadonlyArray<readonly unknown[]>;
+
+	function workspaceOnCalls(p: TomoHashiPlugin): WorkspaceOnCalls {
+		return vi.mocked(p.app.workspace.on).mock.calls as WorkspaceOnCalls;
+	}
+
+	describe("onload — IDE Bridge lifecycle wired (003 / T4.5)", () => {
+		it("registers a CM6 editor extension via registerEditorExtension", async () => {
+			await plugin.onload();
+			expect(plugin.registerEditorExtension).toHaveBeenCalledTimes(1);
+			// The extension is the EditorView.updateListener.of(...) result.
+			expect(EditorView.updateListener.of).toHaveBeenCalledTimes(1);
+		});
+
+		it("forwards selection-set / doc-changed CM6 updates to onEditorActivity", async () => {
+			const activitySpy = vi.spyOn(IdeBridge.prototype, "onEditorActivity");
+			await plugin.onload();
+
+			const listener = lastUpdateListener.fn;
+			expect(listener).not.toBeNull();
+			// A pure cursor-position update with neither flag must NOT forward.
+			listener?.({ selectionSet: false, docChanged: false });
+			expect(activitySpy).not.toHaveBeenCalled();
+			// selectionSet → forward.
+			listener?.({ selectionSet: true, docChanged: false });
+			// docChanged → forward.
+			listener?.({ selectionSet: false, docChanged: true });
+			expect(activitySpy).toHaveBeenCalledTimes(2);
+		});
+
+		it("registers active-leaf-change after layout-ready (deferred per SDD gotcha 683)", async () => {
+			await plugin.onload();
+			// onLayoutReady mock invokes its callback synchronously, so the
+			// active-leaf-change registration has already happened.
+			expect(plugin.app.workspace.onLayoutReady).toHaveBeenCalledTimes(1);
+			const leafChangeRegs = workspaceOnCalls(plugin).filter(
+				(args) => args[0] === "active-leaf-change",
+			);
+			expect(leafChangeRegs).toHaveLength(1);
+		});
+
+		it("active-leaf-change handler forwards to onEditorActivity", async () => {
+			const activitySpy = vi.spyOn(IdeBridge.prototype, "onEditorActivity");
+			await plugin.onload();
+			const leafChangeReg = workspaceOnCalls(plugin).find(
+				(args) => args[0] === "active-leaf-change",
+			);
+			expect(leafChangeReg).toBeDefined();
+			const handler = leafChangeReg?.[1] as (() => void) | undefined;
+			expect(typeof handler).toBe("function");
+			handler?.();
+			expect(activitySpy).toHaveBeenCalledTimes(1);
+		});
+
+		it("registers the toggle-ide-bridge command", async () => {
+			await plugin.onload();
+			const ids = vi
+				.mocked(plugin.addCommand)
+				.mock.calls.map((call) => (call[0] as { id: string }).id);
+			expect(ids).toContain("toggle-ide-bridge");
+		});
+
+		it("starts the bridge on load when ideBridgeEnabled is true", async () => {
+			vi.mocked(plugin.loadData).mockResolvedValue({ ideBridgeEnabled: true });
+			await plugin.onload();
+			expect(IdeBridge.prototype.start).toHaveBeenCalledTimes(1);
+		});
+
+		it("does NOT start the bridge on load when ideBridgeEnabled is false", async () => {
+			vi.mocked(plugin.loadData).mockResolvedValue({ ideBridgeEnabled: false });
+			await plugin.onload();
+			expect(IdeBridge.prototype.start).not.toHaveBeenCalled();
+		});
+
+		it("does NOT start the bridge on load when the flag is absent (default off)", async () => {
+			// loadData → null means DEFAULT_SETTINGS, where ideBridgeEnabled is false.
+			vi.mocked(plugin.loadData).mockResolvedValue(null);
+			await plugin.onload();
+			expect(IdeBridge.prototype.start).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("onunload — IDE Bridge torn down (003 / T4.5)", () => {
+		it("stops the bridge via the LIFO cleanup drain", async () => {
+			await plugin.onload();
+			expect(IdeBridge.prototype.stop).not.toHaveBeenCalled();
+			plugin.onunload();
+			expect(IdeBridge.prototype.stop).toHaveBeenCalledTimes(1);
 		});
 	});
 });

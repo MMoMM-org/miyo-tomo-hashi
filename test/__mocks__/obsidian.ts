@@ -171,6 +171,12 @@ export class App {
 		getActiveFile: vi.fn<() => TFile | null>(() => null),
 		on: vi.fn(),
 		off: vi.fn(),
+		// Invoke the callback synchronously so layout-ready-deferred wiring
+		// (e.g. T4.5's active-leaf-change registration) is testable without a
+		// real Obsidian workspace bootstrap.
+		onLayoutReady: vi.fn((cb: () => void) => {
+			cb();
+		}),
 		getLeavesOfType: vi.fn(() => [] as WorkspaceLeaf[]),
 		getRightLeaf: vi.fn(() => new WorkspaceLeaf()),
 		openLinkText: vi.fn<(linktext: string, sourcePath: string, newLeaf?: boolean) => Promise<void>>(async () => {}),
@@ -236,6 +242,10 @@ export class Plugin extends Component {
 	registerView = vi.fn();
 	register = vi.fn();
 	removeCommand = vi.fn();
+	// CM6 editor extension registration (T4.5 — IDE Bridge selection tracking).
+	// Obsidian auto-tears-down registered extensions on unload, so this is a
+	// fire-and-forget vi.fn for assertion only.
+	registerEditorExtension = vi.fn();
 }
 
 // --- UI Components ---
