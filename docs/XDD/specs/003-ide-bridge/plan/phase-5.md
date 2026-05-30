@@ -1,6 +1,6 @@
 ---
 title: "Phase 5: End-to-End Integration & Documentation"
-status: pending
+status: completed
 version: "1.0"
 phase: 5
 ---
@@ -32,7 +32,7 @@ phase: 5
 
 This phase proves the assembled system end-to-end, documents the network surface, and runs the full specification-compliance gate before the plan is marked done.
 
-- [ ] **T5.1 End-to-end protocol integration test** `[activity: integration-testing]`
+- [x] **T5.1 End-to-end protocol integration test** `[activity: integration-testing]`
 
   1. Prime: Read the connect/handshake + primary flows `[ref: SDD/Runtime View; lines: 465-497]` and the SDD acceptance list `[ref: SDD/Acceptance Criteria; lines: 639-666]`. Reuse the loopback-server harness from T3.1; drive it with a raw WebSocket client (hand-rolled frames from `frame.ts`) on an ephemeral port.
   2. Test (true end-to-end, real `IdeBridge.start()` on `127.0.0.1:0`):
@@ -46,7 +46,7 @@ This phase proves the assembled system end-to-end, documents the network surface
   4. Validate: `npm test` green incl. the new suite; no port leakage between tests (each uses an ephemeral port and tears down); lint clean; types check.
   5. Success: A representative end-to-end set (handshake + each tool + broadcast + keepalive + auth reject) passes against a real loopback WebSocket `[ref: SDD/Acceptance Criteria; lines: 639-666; ref: Constitution L1 Testing]`.
 
-- [ ] **T5.2 PRIVACY.md + README documentation** `[activity: documentation]` `[parallel: true]`
+- [x] **T5.2 PRIVACY.md + README documentation** `[activity: documentation]` `[parallel: true]`
 
   1. Prime: Read F14 `[ref: PRD/F14]`, the security/UX surface `[ref: SDD/System-Wide Patterns; line: 582; ref: SDD/Interface Specifications; lines: 167-174]`, and the existing `PRIVACY.md` + `README.md` at the repo root (match tone/structure).
   2. Test: documentation review (no automated test) — confirm `PRIVACY.md` states the WebSocket surface, the `127.0.0.1`-only bind, the data transmitted (file paths, cursor positions, selected text — **ephemeral only, never logged/persisted**), and the auth mechanism (`x-claude-code-ide-authorization`); confirm it notes Hashi writes **no** lock file (Tomo, container-side).
@@ -54,7 +54,7 @@ This phase proves the assembled system end-to-end, documents the network surface
   4. Validate: `npm run lint` (manifest/markdown unaffected); a reader can verify exactly what the bridge exposes and to whom.
   5. Success: PRIVACY.md documents bind address, data sent (ephemeral), and auth; no undocumented network surface `[ref: PRD/F14; ref: Constitution L1 Privacy]`.
 
-- [ ] **T5.3 Full specification-compliance validation** `[activity: validate]`
+- [x] **T5.3 Full specification-compliance validation** `[activity: validate]`
 
   1. Prime: Read the SDD acceptance list `[ref: SDD/Acceptance Criteria; lines: 639-666]`, Quality Requirements `[ref: SDD/Quality Requirements; lines: 632-637]`, and the PRD success metrics `[ref: PRD; lines: 299-319]`.
   2. Verify (release gate):
