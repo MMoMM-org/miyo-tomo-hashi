@@ -177,7 +177,7 @@ Dependency order is strict bottom-up: protocol/transport primitives → domain (
 - [x] [Phase 1: Protocol & Transport Primitives](phase-1.md)
 - [x] [Phase 2: Editor Adapter, Tools & Selection Tracking](phase-2.md)
 - [x] [Phase 3: WebSocket Server & Orchestrator](phase-3.md)
-- [ ] [Phase 4: Plugin Integration — Settings, UI, Commands & Lifecycle](phase-4.md)
+- [x] [Phase 4: Plugin Integration — Settings, UI, Commands & Lifecycle](phase-4.md)
 - [ ] [Phase 5: End-to-End Integration & Documentation](phase-5.md)
 
 ---

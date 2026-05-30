@@ -1,6 +1,6 @@
 ---
 title: "Phase 4: Plugin Integration — Settings, UI, Commands & Lifecycle"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 4
 ---
@@ -58,7 +58,7 @@ This phase makes the bridge user-facing and lifecycle-managed: persisted setting
   4. Validate: Unit tests for the validation/handler logic pass; manual render check in the test vault (`HASHI_DEPLOY_VAULT=1 npm run build`); lint clean; types check.
   5. Success: Port read-only while running / validated 1024–65535 (≠23026) while stopped; token shown cleartext with working Copy + confirmed Regenerate `[ref: PRD/F10; ref: PRD/F3; ref: SDD/Settings UI]`.
 
-- [ ] **T4.4 Status-bar integration (友 combined health + popover)** `[activity: frontend-ui]`
+- [x] **T4.4 Status-bar integration (友 combined health + popover)** `[activity: frontend-ui]`
 
   1. Prime: Read ADR-6 `[ref: SDD; lines: 614-618]`, the combined-color rule + popover layout + accessibility `[ref: SDD/User Interface & UX; lines: 547-579]`, F12 criteria `[ref: PRD/F12]`, and `src/ui/status-bar/StatusBarIcon.ts` (single `connectionStore` subscription + `STATE_CLASSES`) and `src/ui/status-bar/openPopover.ts` (Menu builder).
   2. Test: a pure `combinedColor(connState, ideState)` (or class) applies worst-state precedence — `error` when the IDE axis is `error` (Docker has no `error` kind), the degraded color when **either** axis is `reconnecting`/`disconnected`, and `connected` only when both are healthy; Docker alone drives the color when the bridge is disabled (`stopped` contributes nothing) — F12; the popover renders an "IDE Bridge: <state> :<port>" line with client count and shows "Copy auth token" **only while running**.
@@ -68,7 +68,7 @@ This phase makes the bridge user-facing and lifecycle-managed: persisted setting
   4. Validate: Unit tests for `combinedColor` pass; manual check in the test vault (toggle bridge → kanji + popover update); lint clean; types check; existing Docker-only coloring still correct when bridge disabled (regression).
   5. Success: 友 color = combined worst-state, popover shows the IDE line + port + client count + Copy-token, no separate dot `[ref: PRD/F12; ref: SDD/ADR-6]`.
 
-- [ ] **T4.5 Toggle command & main.ts wiring** `[activity: backend-api]`
+- [x] **T4.5 Toggle command & main.ts wiring** `[activity: backend-api]`
 
   1. Prime: Read F13 `[ref: PRD/F13]`, the integration approach `[ref: SDD/Solution Strategy; lines: 210-212]`, the workspace-ready/teardown gotchas `[ref: SDD/Implementation Gotchas; lines: 683-685]`, `src/commands/registerCommands.ts`, and `src/main.ts` (component construction in `onload`, `this.cleanups` LIFO drain, `getSettings` getter).
   2. Test: a "Toggle IDE bridge" command is registered; executing it when stopped calls `start()` + Notice "IDE Bridge started on :{port}"; when running calls `stop()` + Notice "IDE Bridge stopped"; `main.ts` constructs `IdeBridge` once, calls `start()` only when `ideBridgeEnabled`, and pushes a teardown (stop + unsubscribe + tracker dispose) to `cleanups` (verified via the existing `main.test.ts` lifecycle harness).
@@ -78,6 +78,6 @@ This phase makes the bridge user-facing and lifecycle-managed: persisted setting
   4. Validate: `main.test.ts`-style lifecycle tests pass; manual check in the test vault (enable in settings → server starts; command toggles; disable/Obsidian-close tears down cleanly); lint clean; types check.
   5. Success: Command toggles the bridge with the correct notices; the bridge starts-if-enabled on load and tears down on unload without leaking timers/sockets `[ref: PRD/F13; ref: SDD/Solution Strategy; ref: SDD/Implementation Boundaries; lines: 129-131]`.
 
-- [ ] **T4.6 Phase Validation** `[activity: validate]`
+- [x] **T4.6 Phase Validation** `[activity: validate]`
 
   - Run all tests, `npm run lint`, `npm run build`. Verify Component A (connection/chat/status) and Component B (executor) behavior is preserved `[ref: SDD/Implementation Boundaries; lines: 129-131]` — especially the 友 kanji's Docker-only coloring when the bridge is disabled. Confirm Kado, the executor, and vault read/write paths are untouched. Manual end-to-end smoke in the test vault: enable → token visible → port locks → toggle command works → disable stops cleanly.
