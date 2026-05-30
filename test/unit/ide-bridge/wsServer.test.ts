@@ -421,4 +421,144 @@ describe("WsServer", () => {
 		);
 		expect(client.socket.destroyed).toBe(true);
 	});
+
+	// ---------------------------------------------------------------------------
+	// Observability logging (connection-lifecycle debug logs)
+	// ---------------------------------------------------------------------------
+
+	it("debug-logs 'listening on' after listen() resolves", async () => {
+		const log = makeLog();
+		const server = build({ log });
+		await server.listen();
+
+		const calls = log.debug.mock.calls.map((c) => String(c[0]));
+		expect(calls.some((s) => s.includes("[hashi/ide] listening on 127.0.0.1:"))).toBe(true);
+	});
+
+	it("debug-logs the upgrade-received shape with hasAuth/hasKey, NO token value", async () => {
+		const log = makeLog();
+		const server = build({ log });
+		const port = await server.listen();
+
+		const client = track(connectClient(port, TOKEN));
+		await client.waitFor((b) => b.includes("\r\n\r\n"));
+
+		// Wait for upgrade-received log (at least one debug call with the shape object)
+		await vi.waitFor(
+			() => {
+				const shapeCalls = log.debug.mock.calls.filter(
+					(c) => typeof c[1] === "object" && c[1] !== null && "hasAuth" in (c[1] as object),
+				);
+				expect(shapeCalls.length).toBeGreaterThan(0);
+			},
+			{ timeout: 1000 },
+		);
+
+		const shapeCall = log.debug.mock.calls.find(
+			(c) => typeof c[1] === "object" && c[1] !== null && "hasAuth" in (c[1] as object),
+		);
+		expect(shapeCall).toBeDefined();
+		const shape = shapeCall![1] as Record<string, unknown>;
+		expect(shape.hasAuth).toBe(true);
+		expect(shape.hasKey).toBe(true);
+
+		// The actual token value must NOT appear in any debug call
+		const allDebugText = log.debug.mock.calls.map((c) => JSON.stringify(c)).join("\n");
+		expect(allDebugText).not.toContain(TOKEN);
+	});
+
+	it("debug-logs 'auth ok' after a valid upgrade is accepted", async () => {
+		const log = makeLog();
+		const server = build({ log });
+		const port = await server.listen();
+
+		const client = track(connectClient(port, TOKEN));
+		await client.waitFor((b) => b.includes("101 Switching Protocols"));
+
+		await vi.waitFor(
+			() => {
+				const calls = log.debug.mock.calls.map((c) => String(c[0]));
+				expect(calls.some((s) => s.includes("[hashi/ide] auth ok"))).toBe(true);
+			},
+			{ timeout: 1000 },
+		);
+	});
+
+	it("debug-logs 'client connected' with count after a client connects", async () => {
+		const log = makeLog();
+		const server = build({ log });
+		const port = await server.listen();
+
+		const client = track(connectClient(port, TOKEN));
+		await client.waitFor((b) => b.includes("101 Switching Protocols"));
+
+		await vi.waitFor(
+			() => {
+				const calls = log.debug.mock.calls.map((c) => String(c[0]));
+				expect(calls.some((s) => s.includes("[hashi/ide] client connected (count=1)"))).toBe(true);
+			},
+			{ timeout: 1000 },
+		);
+	});
+
+	it("debug-logs 'client disconnected' with decremented count when client closes", async () => {
+		const log = makeLog();
+		const server = build({ log });
+		const port = await server.listen();
+
+		const client = track(connectClient(port, TOKEN));
+		await client.waitFor((b) => b.includes("101 Switching Protocols"));
+
+		// Send a WebSocket CLOSE frame
+		client.send(maskedFrame(0x8, Buffer.alloc(0)));
+
+		await vi.waitFor(
+			() => {
+				const calls = log.debug.mock.calls.map((c) => String(c[0]));
+				expect(calls.some((s) => s.includes("[hashi/ide] client disconnected (count=0)"))).toBe(true);
+			},
+			{ timeout: 1000 },
+		);
+	});
+
+	it("debug-logs the RPC method name for a valid JSON-RPC request", async () => {
+		const log = makeLog();
+		const server = build({ log });
+		const port = await server.listen();
+
+		const client = track(connectClient(port, TOKEN));
+		await client.waitFor((b) => b.includes("101 Switching Protocols"));
+
+		client.send(maskedText(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" })));
+		await client.waitFor(() => findResponse(client.frames(), 1) !== undefined);
+
+		const calls = log.debug.mock.calls.map((c) => String(c[0]));
+		expect(calls.some((s) => s.includes("[hashi/ide] rpc method: initialize"))).toBe(true);
+	});
+
+	it("debug-logs rpc parse failure for non-JSON frames, does not log frame content", async () => {
+		const log = makeLog();
+		const server = build({ log });
+		const port = await server.listen();
+
+		const client = track(connectClient(port, TOKEN));
+		await client.waitFor((b) => b.includes("101 Switching Protocols"));
+
+		client.send(maskedText("{ not json *** SECRET_DATA ***"));
+
+		// Wait for the parse-error response
+		await client.waitFor(() => findResponse(client.frames(), null) !== undefined);
+
+		await vi.waitFor(
+			() => {
+				const calls = log.debug.mock.calls.map((c) => String(c[0]));
+				expect(calls.some((s) => s.includes("[hashi/ide] rpc parse: non-JSON or invalid frame"))).toBe(true);
+			},
+			{ timeout: 1000 },
+		);
+
+		// Frame content must not be logged
+		const allDebugText = log.debug.mock.calls.map((c) => JSON.stringify(c)).join("\n");
+		expect(allDebugText).not.toContain("SECRET_DATA");
+	});
 });

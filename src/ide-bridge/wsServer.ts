@@ -148,8 +148,9 @@ export class WsServer {
 		return new Promise<number>((resolve, reject) => {
 			let retried = false;
 
-			const server = createServer((_req, res) => {
+			const server = createServer((req, res) => {
 				// Plain HTTP requests are not part of the contract — close them.
+				this.opts.log.debug(`[hashi/ide] non-upgrade HTTP request: ${req.method} ${req.url}`);
 				res.statusCode = 426; // Upgrade Required
 				res.end();
 			});
@@ -186,6 +187,7 @@ export class WsServer {
 				// lifecycle is unambiguous (a later error must not reject a settled
 				// promise). Behaviourally a no-op, but it removes the dangling listener.
 				server.removeListener("error", onError);
+				this.opts.log.debug(`[hashi/ide] listening on ${this.host}:${port}`);
 				this.startKeepalive();
 				resolve(port);
 			});
@@ -226,6 +228,14 @@ export class WsServer {
 	// -----------------------------------------------------------------------
 
 	private handleUpgrade(req: IncomingMessage, socket: Duplex): void {
+		this.opts.log.debug("[hashi/ide] upgrade received", {
+			url: req.url,
+			hasAuth: AUTH_HEADER in req.headers,
+			hasKey: typeof req.headers["sec-websocket-key"] === "string",
+			subprotocol: req.headers["sec-websocket-protocol"],
+			wsVersion: req.headers["sec-websocket-version"],
+		});
+
 		const presented = req.headers[AUTH_HEADER];
 		const token = this.opts.getToken();
 
@@ -245,6 +255,7 @@ export class WsServer {
 		}
 
 		const accept = secWebSocketAccept(key);
+		this.opts.log.debug("[hashi/ide] auth ok — sending 101 Switching Protocols");
 		socket.write(
 			"HTTP/1.1 101 Switching Protocols\r\n" +
 				"Upgrade: websocket\r\n" +
@@ -262,11 +273,13 @@ export class WsServer {
 		socket.on("close", () => this.removeClient(client));
 		socket.on("error", () => this.removeClient(client));
 
+		this.opts.log.debug(`[hashi/ide] client connected (count=${this.clients.size})`);
 		this.opts.onClientCountChange(this.clients.size);
 	}
 
 	private removeClient(client: Client): void {
 		if (!this.clients.delete(client)) return;
+		this.opts.log.debug(`[hashi/ide] client disconnected (count=${this.clients.size})`);
 		this.opts.onClientCountChange(this.clients.size);
 	}
 
@@ -326,10 +339,12 @@ export class WsServer {
 		if ("code" in parsed) {
 			// parseMessage returned an RpcError (no envelope) — wrap it. A parse
 			// failure has no id to echo, so use null per JSON-RPC.
+			this.opts.log.debug("[hashi/ide] rpc parse: non-JSON or invalid frame");
 			this.writeResponse(client, this.errorEnvelope(parsed));
 			return;
 		}
 
+		this.opts.log.debug(`[hashi/ide] rpc method: ${parsed.method}`);
 		const response = await dispatch(parsed, this.registry);
 		if (response !== null) {
 			this.writeResponse(client, response);
