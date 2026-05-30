@@ -218,6 +218,7 @@ function makeHarness(): E2EHarness {
 	let settings = makeDefaultSettings();
 	const deps: IdeBridgeDeps = {
 		app: {} as IdeBridgeDeps["app"],
+		version: "0.5.2",
 		getSettings: () => settings,
 		persist: async (next) => {
 			settings = next as typeof settings;
@@ -352,8 +353,16 @@ describe("IdeBridge — end-to-end protocol integration (T5.1)", () => {
 		const resp = findResponse(client.frames(), 1);
 		const result = resp?.result as Record<string, unknown>;
 		expect(result.protocolVersion).toBeTypeOf("string");
+		expect((result.protocolVersion as string).length).toBeGreaterThan(0);
 		expect(result.capabilities).toEqual({ tools: {} });
-		expect(result.serverInfo).toMatchObject({ name: expect.any(String) });
+		const serverInfo = result.serverInfo as Record<string, unknown>;
+		expect(typeof serverInfo.name).toBe("string");
+		expect((serverInfo.name as string).length).toBeGreaterThan(0);
+		// Claude Code's MCP client Zod-validates this as required string — the
+		// missing version was THE cause of "Connection failed: serverInfo.version
+		// — expected string, received undefined" (Tomo mcp.log.jsonl).
+		expect(typeof serverInfo.version).toBe("string");
+		expect((serverInfo.version as string).length).toBeGreaterThan(0);
 	});
 
 	it("(5) notifications/initialized → NO reply frame", async () => {
@@ -751,6 +760,7 @@ describe("IdeBridge — end-to-end protocol integration (T5.1)", () => {
 
 		const deps: IdeBridgeDeps = {
 			app: {} as IdeBridgeDeps["app"],
+			version: "0.5.2",
 			getSettings: () => settings,
 			persist: async (next) => {
 				settings = next as typeof settings;

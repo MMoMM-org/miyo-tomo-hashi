@@ -31,6 +31,7 @@ type ServerOpts = {
 	getToken: () => string;
 	onClientCountChange: (count: number) => void;
 	onListenError: (reason: string) => void;
+	serverInfo?: { name: string; version: string };
 };
 
 /**
@@ -142,6 +143,7 @@ function makeHarness(): Harness {
 		// App is only forwarded to the (overridden) adapter factory; an empty
 		// object is fine because makeAdapter is injected below.
 		app: {} as IdeBridgeDeps["app"],
+		version: "0.5.2",
 		getSettings,
 		persist,
 		log: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -347,6 +349,20 @@ describe("IdeBridge", () => {
 		h.bridge.onEditorActivity();
 		expect(h.tracker.onEditorActivity).toHaveBeenCalledTimes(1);
 	});
+
+	it("makeServer opts carry serverInfo.version equal to the injected version dep", async () => {
+		// The version injected into IdeBridge must be threaded through to
+		// makeServer so serverInfo.version is never undefined in the initialize
+		// response (Claude Code Zod validator requires it as a string).
+		const h = makeHarness();
+		await h.bridge.start();
+		const serverInfo = h.servers[0]?.opts.serverInfo;
+		expect(serverInfo).toBeDefined();
+		expect(typeof serverInfo?.version).toBe("string");
+		expect((serverInfo?.version as string).length).toBeGreaterThan(0);
+		// The version echoed must match what was injected into IdeBridgeDeps.
+		expect(serverInfo?.version).toBe("0.5.2");
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -374,6 +390,7 @@ function makeArmedBridge(reason: string, mode: "callback" | "silent" = "callback
 	let settings = makeSettings();
 	const deps: IdeBridgeDeps = {
 		app: {} as IdeBridgeDeps["app"],
+		version: "0.5.2",
 		getSettings: () => settings,
 		persist: vi.fn(async () => {
 			settings = { ...settings };

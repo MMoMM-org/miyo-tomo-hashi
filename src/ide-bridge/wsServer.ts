@@ -85,7 +85,9 @@ export type WsServerOptions = {
 	getToken: () => string;
 	registry: HandlerRegistry;
 	toolsList?: ToolListEntry[];
-	serverInfo?: { name: string; version?: string };
+	/** When supplied, version is REQUIRED so the MCP initialize response always
+	 * carries serverInfo.version — Claude Code's Zod validator requires a string. */
+	serverInfo?: { name: string; version: string };
 	protocolVersion?: string;
 	onClientCountChange: (count: number) => void;
 	onListenError: (reason: string) => void;
@@ -106,7 +108,7 @@ type Client = {
 /** Build the MCP `initialize` result. */
 function initializeResult(
 	protocolVersion: string,
-	serverInfo: { name: string; version?: string },
+	serverInfo: { name: string; version: string },
 ): Record<string, unknown> {
 	return {
 		protocolVersion,
@@ -370,8 +372,12 @@ export class WsServer {
 	/** Layer the MCP handshake methods on top of the injected tool registry. */
 	private buildRegistry(): HandlerRegistry {
 		const protocolVersion = this.opts.protocolVersion ?? DEFAULT_PROTOCOL_VERSION;
+		/** Fallback version: only used by callers/tests that do not inject serverInfo.
+		 * Production always threads the real manifest version through IdeBridge. */
+		const FALLBACK_SERVER_VERSION = "0.0.0";
 		const serverInfo = this.opts.serverInfo ?? {
 			name: "miyo-tomo-hashi",
+			version: FALLBACK_SERVER_VERSION,
 		};
 		const toolsList = this.opts.toolsList ?? [];
 

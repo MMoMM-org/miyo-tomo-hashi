@@ -190,6 +190,7 @@ export default class TomoHashiPlugin extends Plugin {
 		// lifecycle (T4.5) are deferred — only constructing + passing here.
 		this.ideBridge = new IdeBridge({
 			app: this.app,
+			version: this.manifest.version,
 			getSettings: () => this.settings,
 			persist,
 			log: {

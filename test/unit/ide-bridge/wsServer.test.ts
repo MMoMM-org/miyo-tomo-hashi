@@ -267,6 +267,65 @@ describe("WsServer", () => {
 		expect(idResponses).toHaveLength(1);
 	});
 
+	// ---------------------------------------------------------------------------
+	// MCP initialize response shape — regression guards for the Claude Code
+	// Zod validator that REQUIRES serverInfo.version to be a string.
+	// RED: these fail before the fix because the default serverInfo has no version.
+	// ---------------------------------------------------------------------------
+
+	it("initialize result: serverInfo carries both name (non-empty string) AND version (non-empty string) — default fallback", async () => {
+		// No serverInfo injected → default fallback must still supply a version.
+		const server = build();
+		const port = await server.listen();
+
+		const client = track(connectClient(port, TOKEN));
+		await client.waitFor((b) => b.includes("\r\n\r\n"));
+
+		client.send(maskedText(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" })));
+		await client.waitFor(() => findResponse(client.frames(), 1) !== undefined);
+		const init = findResponse(client.frames(), 1);
+		const result = init?.result as Record<string, unknown>;
+		const serverInfo = result.serverInfo as Record<string, unknown>;
+
+		expect(typeof serverInfo.name).toBe("string");
+		expect((serverInfo.name as string).length).toBeGreaterThan(0);
+		expect(typeof serverInfo.version).toBe("string");
+		expect((serverInfo.version as string).length).toBeGreaterThan(0);
+	});
+
+	it("initialize result: injected serverInfo.version is echoed back verbatim", async () => {
+		const server = build({ serverInfo: { name: "test-server", version: "1.2.3" } });
+		const port = await server.listen();
+
+		const client = track(connectClient(port, TOKEN));
+		await client.waitFor((b) => b.includes("\r\n\r\n"));
+
+		client.send(maskedText(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" })));
+		await client.waitFor(() => findResponse(client.frames(), 1) !== undefined);
+		const init = findResponse(client.frames(), 1);
+		const result = init?.result as Record<string, unknown>;
+		const serverInfo = result.serverInfo as Record<string, unknown>;
+
+		expect(serverInfo.name).toBe("test-server");
+		expect(serverInfo.version).toBe("1.2.3");
+	});
+
+	it("initialize result: protocolVersion is a non-empty string", async () => {
+		const server = build();
+		const port = await server.listen();
+
+		const client = track(connectClient(port, TOKEN));
+		await client.waitFor((b) => b.includes("\r\n\r\n"));
+
+		client.send(maskedText(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize" })));
+		await client.waitFor(() => findResponse(client.frames(), 1) !== undefined);
+		const init = findResponse(client.frames(), 1);
+		const result = init?.result as Record<string, unknown>;
+
+		expect(typeof result.protocolVersion).toBe("string");
+		expect((result.protocolVersion as string).length).toBeGreaterThan(0);
+	});
+
 	it("broadcast frames an UNMASKED TEXT JSON-RPC notification to every client", async () => {
 		const server = build();
 		const port = await server.listen();

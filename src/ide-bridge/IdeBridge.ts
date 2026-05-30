@@ -70,6 +70,10 @@ type IdeBridgeSettings = PluginSettings & {
 /** Constructor dependencies. Factories are optional — production defaults below. */
 export interface IdeBridgeDeps {
 	app: App;
+	/** Plugin manifest version (e.g. "0.5.2") — threaded into serverInfo.version
+	 * so the MCP initialize response always carries it. Claude Code's Zod
+	 * validator requires serverInfo.version to be a string. */
+	version: string;
 	getSettings: () => PluginSettings;
 	persist: (next: PluginSettings) => Promise<void>;
 	log: {
@@ -128,6 +132,7 @@ export class IdeBridge {
 				getToken: () => this.token,
 				registry,
 				toolsList: buildToolsList(),
+				serverInfo: { name: "miyo-tomo-hashi", version: this.deps.version },
 				onClientCountChange: (n) => this.transitionClientCount(n),
 				onListenError: (reason) => this.transitionError(reason),
 				log: this.deps.log,
