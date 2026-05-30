@@ -5,8 +5,8 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-05-27 |
-| **Current Phase** | PLAN |
-| **Last Updated** | 2026-05-28 |
+| **Current Phase** | Implemented |
+| **Last Updated** | 2026-05-30 |
 
 ## Documents
 
@@ -72,6 +72,7 @@ Approved in Kokoro ADR-019. Constraints: localhost-only, auth-gated, single purp
 | 2026-05-30 | T5.1a protocol correction: tools/call dispatcher | **During T5.1 e2e the server was found to route tools as DIRECT JSON-RPC methods with no `tools/call` handler — contradicting the SDD (lines 172/341/501/652-666) and the claudecode.nvim reference (verified: real client sends `tools/call {name,arguments}` and expects `{content:[{type:text,text}]}`).** A real Claude Code client would have received -32601 for every tool. Implementation brought into compliance with the already-correct SDD: single `tools/call` dispatcher, MCP content envelope, unknown tool → -32602, openFile traversal → -32602 preserved, direct tool-name methods removed (→ -32601). No SDD change. User chose "fix now". |
 | 2026-05-30 | Performance NFRs verified by-construction (deliberate gap) | `<200ms` editor-change→frame, `<1MB` overhead, no measurable typing latency are NOT asserted by a latency/memory measurement test in v0.1. They are satisfied by-construction (100ms trailing debounce + JSON dedup + 100KB text cap + async socket I/O off the CM6 update path + the proven obsidian-claude-ide reference). Recorded explicitly so the absence of a perf-measurement test is acknowledged, not silent (per SDD Quality Requirements). |
 | 2026-05-30 | Phase 5 complete + release gate green (T5.1/T5.1a/T5.2/T5.3) | 18-scenario e2e protocol suite (auth/handshake/tools-via-tools-call/broadcast/keepalive/lifecycle); PRIVACY.md corrected (stale "zero inbound surfaces" claim fixed) + README IDE Bridge section; full validation: 1106 tests + build + lint green, all F1/F3–F16 traced, security gates (loopback-only hard guard, 401-pre-handshake, no selection in logs, no fs write), zero new runtime deps. `/validate` drift sweep: 6 PASS / 0 WARN / 0 FAIL — implementation matches PRD↔SDD↔Plan. |
+| 2026-05-30 | Implementation complete | Phases 4-5 implemented on feat/xdd-003-ide-bridge (commits 665666a..c70e03a). Delivered: IDE settings fields + v1→v2 migration, ConfirmModal, IDE-bridge settings section (enable/port-lock/token copy+regenerate), 友 combined worst-state status + popover, Toggle IDE bridge command, IdeBridge lifecycle wired into main.ts (CM6 selection tracking + LIFO teardown), 18-scenario e2e protocol integration suite, T5.1a MCP tools/call protocol fix (server previously had no tools/call dispatcher — would have -32601'd every real tool call), PRIVACY.md + README IDE Bridge documentation. Release gate: 1106 tests + build + lint green; /validate drift sweep 6 PASS / 0 WARN / 0 FAIL; all PRD F1/F3-F16 traced; perf NFRs verified by-construction (recorded). Not yet merged to main (PR pending). |
 
 ## Sources
 
