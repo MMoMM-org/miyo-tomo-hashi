@@ -30,6 +30,7 @@ import {
 	StatusBarIcon,
 	type StatusBarActions,
 	combinedClass,
+	copyAuthToken,
 	ideStatusLine,
 } from "../../../../src/ui/status-bar/StatusBarIcon";
 import { openPopover } from "../../../../src/ui/status-bar/openPopover";
@@ -80,11 +81,11 @@ interface Harness {
 	icon: StatusBarIcon;
 	actions: StatusBarActions;
 	getChosenInstanceName: ReturnType<typeof vi.fn>;
-	getToken: ReturnType<typeof vi.fn>;
+	onCopyToken: ReturnType<typeof vi.fn>;
 	getRoot: () => HTMLElement;
 }
 
-const mountIcon = (chosenId: string | null = null, token = ""): Harness => {
+const mountIcon = (chosenId: string | null = null): Harness => {
 	const created: HTMLElement[] = [];
 	const plugin: PluginStub = {
 		addStatusBarItem: vi.fn(() => {
@@ -101,15 +102,15 @@ const mountIcon = (chosenId: string | null = null, token = ""): Harness => {
 	};
 	const actions = makeActions();
 	const getChosenInstanceName = vi.fn(() => chosenId);
-	const getToken = vi.fn(() => token);
-	const icon = new StatusBarIcon(asPlugin(plugin), actions, getChosenInstanceName, getToken);
+	const onCopyToken = vi.fn();
+	const icon = new StatusBarIcon(asPlugin(plugin), actions, getChosenInstanceName, onCopyToken);
 	icon.mount();
 	return {
 		plugin,
 		icon,
 		actions,
 		getChosenInstanceName,
-		getToken,
+		onCopyToken,
 		getRoot: () => {
 			const root = created[0];
 			if (root === undefined) throw new Error("status bar item not created");
@@ -182,18 +183,44 @@ describe("ideStatusLine", () => {
 	});
 });
 
+// --- copyAuthToken W2 tests --------------------------------------------------
+
+describe("copyAuthToken", () => {
+	it("writes the token to the clipboard and notifies success", async () => {
+		const writeText = vi.fn(() => Promise.resolve());
+		Object.defineProperty(navigator, "clipboard", {
+			value: { writeText },
+			configurable: true,
+		});
+		const notify = vi.fn();
+		copyAuthToken(() => "my-token", notify);
+		// Allow the resolved promise microtask to run
+		await Promise.resolve();
+		expect(writeText).toHaveBeenCalledWith("my-token");
+		expect(notify).toHaveBeenCalledWith("Auth token copied");
+	});
+
+	it("shows a failure Notice when clipboard write is rejected (no unhandled rejection)", async () => {
+		const writeText = vi.fn(() => Promise.reject(new Error("permission denied")));
+		Object.defineProperty(navigator, "clipboard", {
+			value: { writeText },
+			configurable: true,
+		});
+		const notify = vi.fn();
+		// Should not throw an unhandled rejection — the rejection is handled
+		// in the .then second callback.
+		copyAuthToken(() => "my-token", notify);
+		await Promise.resolve();
+		expect(notify).toHaveBeenCalledWith("Could not copy token — clipboard access denied");
+	});
+});
+
 // --- StatusBarIcon integration tests ----------------------------------------
 
 describe("StatusBarIcon", () => {
 	beforeEach(() => {
 		connectionStore.set({ kind: "disconnected" });
 		ideBridgeStore.set({ kind: "stopped" });
-		// jsdom does not provide navigator.clipboard — stub it so tests that
-		// exercise the Copy auth token path do not fail on the writeText call.
-		Object.defineProperty(navigator, "clipboard", {
-			value: { writeText: vi.fn(() => Promise.resolve()) },
-			configurable: true,
-		});
 		vi.clearAllMocks();
 	});
 
@@ -455,17 +482,17 @@ describe("StatusBarIcon", () => {
 		expect(callArgs![1].ideRunning).toBe(false);
 	});
 
-	it("click passes onCopyToken callback that calls getToken", () => {
-		const h = mountIcon("any-id", "secret-token-abc");
+	it("click passes onCopyToken callback that delegates to the injected callback", () => {
+		const h = mountIcon("any-id");
 		ideBridgeStore.set({ kind: "listening", port: 23027 });
 		h.getRoot().dispatchEvent(new MouseEvent("click"));
 		const callArgs = vi.mocked(openPopover).mock.calls[0];
 		expect(callArgs).toBeDefined();
 		const { onCopyToken } = callArgs![1];
 		expect(onCopyToken).toBeTypeOf("function");
-		// Invoking it should call getToken
+		// Invoking it should call the injected onCopyToken spy
 		onCopyToken();
-		expect(h.getToken).toHaveBeenCalled();
+		expect(h.onCopyToken).toHaveBeenCalledTimes(1);
 	});
 
 	it("Enter key triggers openPopover", () => {

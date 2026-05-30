@@ -25,11 +25,17 @@
  * `unmount()` during `onunload()`. `unmount()` releases BOTH store
  * subscriptions so neither listener leaks.
  *
+ * Clipboard ownership: `StatusBarIcon` accepts an `onCopyToken: () => void`
+ * callback and passes it straight through to `openPopover`. The clipboard
+ * write and failure-path Notice live in the caller (main.ts via
+ * `copyAuthToken`), keeping this class side-effect-free and testable.
+ *
  * Spec refs: spec 001-session-view phase-4 T4.2; PRD F3 (all ACs);
  * spec 003-ide-bridge phase-4 T4.4; SDD ADR-6, ADR-9,
  * "UI Visualization / Status bar icon".
  */
 
+import { Notice } from "obsidian";
 import type { Plugin } from "obsidian";
 
 import {
@@ -102,6 +108,24 @@ function tooltipFor(state: ConnectionState): string {
 	return "Tomo: disconnected";
 }
 
+/**
+ * Write `getToken()` to the clipboard and show a user-visible Notice on
+ * success or failure. Exported so main.ts can pass it as `onCopyToken` and
+ * tests can exercise both paths without coupling to the plugin lifecycle.
+ *
+ * The `notify` parameter defaults to `(msg) => new Notice(msg)` and is
+ * injectable for testing.
+ */
+export function copyAuthToken(
+	getToken: () => string,
+	notify: (msg: string) => void = (msg) => { new Notice(msg); },
+): void {
+	navigator.clipboard.writeText(getToken()).then(
+		() => { notify("Auth token copied"); },
+		() => { notify("Could not copy token — clipboard access denied"); },
+	);
+}
+
 export class StatusBarIcon {
 	private el: HTMLElement | null = null;
 	private unsubscribeConn: (() => void) | null = null;
@@ -114,10 +138,10 @@ export class StatusBarIcon {
 		private readonly actions: StatusBarActions,
 		// Dep-injected so phase-5 can wire it to the persisted settings.
 		private readonly getChosenInstanceName: () => string | null,
-		// Dep-injected callback for the Copy auth token popover action.
-		// The caller (main.ts) owns the clipboard write + Notice so this
-		// class stays free of side effects and testable without a clipboard.
-		private readonly getToken: () => string,
+		// Dep-injected callback passed straight through to openPopover.
+		// Clipboard write + Notice live in the caller (main.ts via
+		// copyAuthToken) — this class stays side-effect-free.
+		private readonly onCopyToken: () => void,
 	) {}
 
 	mount(): void {
@@ -151,10 +175,7 @@ export class StatusBarIcon {
 				onOpenSettings: this.actions.onOpenSettings,
 				ideStatusLine: ideStatusLine(ide),
 				ideRunning,
-				onCopyToken: () => {
-					const token = this.getToken();
-					void navigator.clipboard.writeText(token);
-				},
+				onCopyToken: this.onCopyToken,
 			});
 		};
 
@@ -167,11 +188,8 @@ export class StatusBarIcon {
 		});
 
 		this.el = root;
-		// Initialize from current store values before subscribing so we hold
-		// them for use in applyState() when only one store fires.
-		this.lastConn = connectionStore.get();
-		this.lastIde = ideBridgeStore.get();
-
+		// subscribe() fires immediately with the current value, so lastConn
+		// and lastIde are populated on the first callback — no pre-load needed.
 		this.unsubscribeConn = connectionStore.subscribe((state) => {
 			this.lastConn = state;
 			this.applyState();
