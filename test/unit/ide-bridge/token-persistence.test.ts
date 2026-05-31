@@ -211,3 +211,122 @@ describe("IDE bridge auth-token persistence across reload / enable-disable", () 
 		expect(reloaded.getToken()).toBe(t1);
 	});
 });
+
+/**
+ * Cross-subsystem clobber regression (the case the suite above MISSED).
+ *
+ * The prior tests model `persist` with a single mutable `live` binding that
+ * BOTH `getSettings()` and `persist()` read/write — so every subsystem always
+ * sees the latest object. The real plugin does NOT work that way:
+ *
+ *   - main.ts builds a `persist` closure that REASSIGNED `this.settings = next`.
+ *   - TomoConnection captures the settings object reference AT CONSTRUCTION
+ *     (`private settings: PluginSettings`) and persists THAT captured object
+ *     (`await this.persist(this.settings)`), never observing the reassignment.
+ *   - IdeBridge mints a token and persists `{ ...live, ideBridgeAuthToken }`.
+ *
+ * Reassign-persist therefore lets TomoConnection's STALE snapshot (token "")
+ * overwrite the freshly-minted token in data.json. The fix is to persist in
+ * place (mutate the shared object) so no subsystem can hold a divergent copy.
+ *
+ * This test models BOTH subsystems against one fake data store and asserts the
+ * token survives a TomoConnection save that happens AFTER the bridge minted it.
+ * It FAILS on the reassign-persist closure and PASSES on the in-place one.
+ */
+describe("settings persist must not let one subsystem clobber another's fields", () => {
+	/**
+	 * A fake plugin data host: an in-memory `store` plays data.json. `loadData`
+	 * / `saveData` mirror Obsidian's Plugin hooks. `this.settings` is the live
+	 * object the subsystems share. `persist` is built EXACTLY like main.ts.
+	 */
+	function makePluginHost(
+		mode: "reassign" | "in-place",
+		initial: BridgeSettings,
+	) {
+		const host = {
+			store: { ...initial } as PluginSettings,
+			// `this.settings` — the field every subsystem reads through main.ts.
+			settings: initial as PluginSettings,
+			async saveData(data: PluginSettings): Promise<void> {
+				host.store = { ...data };
+			},
+			async loadData(): Promise<PluginSettings> {
+				return { ...host.store };
+			},
+		};
+
+		// The persist closure — the unit under test. `reassign` is the old buggy
+		// behaviour; `in-place` is the fix.
+		const persist = async (next: PluginSettings): Promise<void> => {
+			if (mode === "in-place") {
+				if (next !== host.settings) Object.assign(host.settings, next);
+				await host.saveData(host.settings);
+			} else {
+				await host.saveData(next);
+				host.settings = next; // ← the bug: reassigns to a new object
+			}
+		};
+
+		return { host, persist };
+	}
+
+	it("a TomoConnection save (stale snapshot) must NOT clobber the bridge's minted token", async () => {
+		const run = async (
+			mode: "reassign" | "in-place",
+		): Promise<PluginSettings> => {
+			// Fresh settings per run — each `makePluginHost` owns its own object
+			// graph, so the in-place run can't leak mutations into the reassign run.
+			const initial = makeSettings({
+				ideBridgeAuthToken: "",
+				chosenInstanceName: null,
+			});
+			const { host, persist } = makePluginHost(mode, initial);
+
+			// TomoConnection captures the settings object reference AT
+			// CONSTRUCTION — exactly like `new TomoConnection(this.settings, …)`.
+			const tomoCapturedSettings = host.settings;
+
+			// 1. Bridge mints a token and persists `{ ...live, token }` (IdeBridge
+			//    .persistToken semantics).
+			await persist({ ...host.settings, ideBridgeAuthToken: "hashi_T1" });
+
+			// 2. User connects to Tomo: TomoConnection mutates its captured
+			//    reference's chosenInstanceName and persists THAT reference
+			//    (persistChosenInstanceBestEffort semantics).
+			tomoCapturedSettings.chosenInstanceName = "tomo";
+			await persist(tomoCapturedSettings);
+
+			return host.store;
+		};
+
+		// In-place persist: both fields survive.
+		const fixed = await run("in-place");
+		expect(fixed.ideBridgeAuthToken).toBe("hashi_T1");
+		expect(fixed.chosenInstanceName).toBe("tomo");
+
+		// Reassign persist (the bug): the stale TomoConnection snapshot clobbers
+		// the token back to "". This asserts the OLD behaviour was broken — it
+		// documents the regression the fix removes.
+		const broken = await run("reassign");
+		expect(broken.ideBridgeAuthToken).toBe(""); // clobbered — the bug
+		expect(broken.chosenInstanceName).toBe("tomo");
+	});
+
+	it("after the cross-subsystem saves a fresh loadSettings reload still returns the minted token", async () => {
+		const initial = makeSettings({
+			ideBridgeAuthToken: "",
+			chosenInstanceName: null,
+		});
+		const { host, persist } = makePluginHost("in-place", initial);
+		const tomoCapturedSettings = host.settings;
+
+		await persist({ ...host.settings, ideBridgeAuthToken: "hashi_T1" });
+		tomoCapturedSettings.chosenInstanceName = "tomo";
+		await persist(tomoCapturedSettings);
+
+		// Simulate a plugin reload — read the persisted store back.
+		const reloaded = await host.loadData();
+		expect(reloaded.ideBridgeAuthToken).toBe("hashi_T1");
+		expect(reloaded.chosenInstanceName).toBe("tomo");
+	});
+});

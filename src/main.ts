@@ -159,9 +159,20 @@ export default class TomoHashiPlugin extends Plugin {
 
 		this.settings = await loadSettings(this);
 
+		// Persist in place: merge the incoming snapshot onto the ONE shared
+		// `this.settings` object instead of reassigning the reference. Every
+		// subsystem (TomoConnection, IdeBridge, SettingsTab) captures or reads
+		// `this.settings`; if persist reassigned the reference, a subsystem that
+		// captured the object at construction time (TomoConnection) would keep a
+		// stale snapshot and, on its next save, clobber fields another subsystem
+		// had written in the meantime (e.g. IdeBridge's freshly-minted auth
+		// token → token regenerated on every reload). Mutating in place keeps
+		// the reference identical forever, so divergence is impossible.
 		const persist = async (settings: PluginSettings): Promise<void> => {
-			await saveSettings(this, settings);
-			this.settings = settings;
+			if (settings !== this.settings) {
+				Object.assign(this.settings, settings);
+			}
+			await saveSettings(this, this.settings);
 		};
 		this.connection = new TomoConnection(this.settings, persist);
 		const conn = this.connection;
@@ -388,8 +399,10 @@ export default class TomoHashiPlugin extends Plugin {
 		});
 
 		// 10. InstructionExecutor — singleton per plugin load.
-		// Pass settings as a getter (review M4): persist() reassigns
-		// `this.settings` to a new object; a snapshot would freeze the
+		// Pass settings as a getter (review M4): the executor must always see
+		// live values. persist() now mutates `this.settings` in place, so a
+		// captured reference would also stay current — but the getter is kept as
+		// the contract so any future reassignment can't silently freeze the
 		// executor at load-time values.
 		this.executor = new InstructionExecutor({
 			vault,
