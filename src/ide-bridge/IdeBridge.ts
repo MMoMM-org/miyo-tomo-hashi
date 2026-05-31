@@ -195,9 +195,23 @@ export class IdeBridge {
 		}
 	}
 
-	/** Current bearer token (for the settings "Copy" action). */
+	/**
+	 * Current bearer token, for the settings UI (display + "Copy") AND the
+	 * WsServer auth getter. Falls back to the PERSISTED token when no in-memory
+	 * token is set yet — i.e. before `ensurePersistedToken()` runs.
+	 *
+	 * WHY the fallback: a fresh IdeBridge (after a plugin reload or a
+	 * disable→reload) starts with `this.token === ""`. `ensurePersistedToken()`
+	 * only runs inside `start()`, which is skipped when the bridge is disabled
+	 * and is fire-and-forget when enabled — so a `display()` that reads the
+	 * token before `start()` resolves would otherwise show an EMPTY token and
+	 * the user perceives the token as lost/regenerated. Reading the persisted
+	 * source of truth here makes a reload never surface an empty/changed token.
+	 * Returning the persisted token to the auth getter is correct: it is the
+	 * exact token clients are expected to present.
+	 */
 	getToken(): string {
-		return this.token;
+		return this.token || (this.settings().ideBridgeAuthToken ?? "");
 	}
 
 	/**
