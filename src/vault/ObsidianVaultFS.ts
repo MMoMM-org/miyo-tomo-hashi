@@ -122,7 +122,6 @@ export class ObsidianVaultFS implements VaultFS {
   async trash(path: string): Promise<void> {
     const file = this.requireFile(path);
     // SDD mandates vault.trash(file, true) — system trash flag for v0.1.
-    // eslint-disable-next-line obsidianmd/prefer-file-manager-trash-file
     await this.app.vault.trash(file, true);
   }
 
