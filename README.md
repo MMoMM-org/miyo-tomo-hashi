@@ -76,6 +76,7 @@ All three components share the plugin process and the settings tab, but **nothin
 | [How It Works](docs/how-it-works.md) | Vault owners | Two-component architecture, layer boundaries |
 | [Session View](docs/session-view.md) | Tomo users | Chat tab, terminal, zoom, file-prefill — branch A |
 | [Connection](docs/connection.md) | Tomo users | Picker, reconnect schedule, status bar 友 — branch A |
+| [IDE Bridge](docs/ide-bridge.md) | Tomo users | Enable + Tomo wiring, auth token, connection troubleshooting — branch C |
 | [Instruction Executor](docs/instruction-executor.md) | Tomo users | Modal stages, modes, partial-resume, status bar 橋 — branch B |
 | [Action Reference](docs/action-reference.md) | Tomo users | All 9 action kinds with idempotency rules — branch B |
 | [Hooks](docs/hooks.md) | Power users | `.cjs` hook authoring, policy, disclosure modal — branch B |
