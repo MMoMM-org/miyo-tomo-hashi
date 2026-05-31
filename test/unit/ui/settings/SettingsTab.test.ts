@@ -736,7 +736,7 @@ describe("buildIdeBridgeHandlers — regenerate", () => {
 });
 
 describe("SettingsTab — IDE bridge section", () => {
-	it("renders 'IDE bridge' heading", () => {
+	it("renders 'Tomo context' heading", () => {
 		const conn = makeConnection();
 		const app = new App();
 		const plugin = makePlugin();
@@ -745,7 +745,7 @@ describe("SettingsTab — IDE bridge section", () => {
 
 		tab.display();
 
-		expect(tab.containerEl.textContent).toContain("IDE bridge");
+		expect(tab.containerEl.textContent).toContain("Tomo context");
 	});
 
 	it("renders status 'Stopped' when store is stopped", () => {
@@ -852,14 +852,14 @@ describe("SettingsTab — IDE bridge section", () => {
 		tab.display();
 
 		const text = tab.containerEl.textContent ?? "";
-		const ideBridgePos = text.indexOf("IDE bridge");
+		const tomoContextPos = text.indexOf("Tomo context");
 		const executorPos = text.indexOf("Instruction executor");
-		expect(ideBridgePos).toBeGreaterThan(-1);
+		expect(tomoContextPos).toBeGreaterThan(-1);
 		expect(executorPos).toBeGreaterThan(-1);
-		expect(ideBridgePos).toBeLessThan(executorPos);
+		expect(tomoContextPos).toBeLessThan(executorPos);
 	});
 
-	it("IDE section is placed AFTER 'Tomo connection'", () => {
+	it("IDE section is placed AFTER 'Tomo chat'", () => {
 		const conn = makeConnection();
 		const app = new App();
 		const plugin = makePlugin();
@@ -869,11 +869,11 @@ describe("SettingsTab — IDE bridge section", () => {
 		tab.display();
 
 		const text = tab.containerEl.textContent ?? "";
-		const connPos = text.indexOf("Tomo connection");
-		const ideBridgePos = text.indexOf("IDE bridge");
-		expect(connPos).toBeGreaterThan(-1);
-		expect(ideBridgePos).toBeGreaterThan(-1);
-		expect(connPos).toBeLessThan(ideBridgePos);
+		const chatPos = text.indexOf("Tomo chat");
+		const tomoContextPos = text.indexOf("Tomo context");
+		expect(chatPos).toBeGreaterThan(-1);
+		expect(tomoContextPos).toBeGreaterThan(-1);
+		expect(chatPos).toBeLessThan(tomoContextPos);
 	});
 
 	it("_getIdeBridgeHandlersForTest() exposes port, enable, regenerate handlers", () => {

@@ -300,7 +300,7 @@ export class SettingsTab extends PluginSettingTab {
 		});
 		this.headerSection.render(headerContainer);
 
-		new Setting(containerEl).setName("Tomo connection").setHeading();
+		new Setting(containerEl).setName("Tomo chat").setHeading();
 		const wrapper = containerEl.createDiv({
 			cls: "hashi-settings-connection",
 		});
@@ -361,7 +361,7 @@ export class SettingsTab extends PluginSettingTab {
 	}
 
 	/**
-	 * Renders the "IDE bridge" section between "Tomo connection" and
+	 * Renders the "Tomo context" section between "Tomo chat" and
 	 * "Instruction executor" (SDD lines 361-377, T4.3).
 	 */
 	private renderIdeBridgeSection(containerEl: HTMLElement): void {
@@ -371,7 +371,7 @@ export class SettingsTab extends PluginSettingTab {
 			() => this.display(),
 		);
 
-		new Setting(containerEl).setName("IDE bridge").setHeading();
+		new Setting(containerEl).setName("Tomo context").setHeading();
 
 		// Status (desc-only) — reads current store state at render time.
 		const state: IdeBridgeState = ideBridgeStore.get();
@@ -410,6 +410,7 @@ export class SettingsTab extends PluginSettingTab {
 		// Auth token — cleartext display, Copy + Regenerate buttons
 		const tokenSetting = new Setting(containerEl)
 			.setName("Auth token");
+		tokenSetting.settingEl.addClass("hashi-ide-bridge-token-row");
 
 		const token = this.ideBridge.getToken();
 		const descSpan = tokenSetting.settingEl.createSpan({
