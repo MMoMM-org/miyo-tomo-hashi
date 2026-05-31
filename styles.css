@@ -332,22 +332,23 @@
 
 /* H12: non-color cue so the running/error states are distinguishable
  * without relying on hue alone (red-green color blindness affects ~8% of
- * males). text-decoration is ignored by screen readers, so it's
- * redundant cue only — no extra noise in the a11y tree. */
+ * males). We carry the cue on `border-bottom` rather than
+ * `text-decoration-*`: border styles are fully supported by Obsidian's
+ * Electron, whereas text-decoration-line/-style is only partially
+ * supported in 1.6.5 (flagged by the community-plugin CSS linter). The
+ * border omits a color so it inherits `currentColor` and tracks each
+ * state's hue, and like text-decoration it is ignored by screen readers —
+ * a redundant visual cue only, no extra noise in the a11y tree.
+ * Solid underline = running, dotted = error (distinct without hue). */
 .hashi-status-bar-bridge.is-running {
 	color: var(--color-green);
 	cursor: pointer;
-	/* Shorthand (not the -line/-style longhands) — the longhands are only
-	 * partially supported by Obsidian 1.6.5's Electron; the shorthand is fully
-	 * supported and carries the same solid-underline cue. */
-	text-decoration: underline solid;
-	text-underline-offset: 2px;
+	border-bottom: 1px solid;
 }
 
 .hashi-status-bar-bridge.is-error {
 	color: var(--color-red);
-	text-decoration: underline wavy;
-	text-underline-offset: 2px;
+	border-bottom: 1px dotted;
 }
 
 /* The screen-reader announcement span carries text-node updates on every
