@@ -1,4 +1,4 @@
-# IDE Bridge
+# Tomo context
 
 How Hashi gives Claude Code — running inside your Tomo container — live ambient editor context (active file, cursor position, current selection) over a loopback WebSocket.
 
@@ -14,7 +14,7 @@ This is **Component C**. It is independent of the [Session View](session-view.md
 
 ## Enable it (Hashi side)
 
-**Settings → MiYo Tomo Hashi → IDE bridge.**
+**Settings → MiYo Tomo Hashi → Tomo context.**
 
 | Control | What it does |
 |---|---|
@@ -51,7 +51,7 @@ Use the **same `{port}` everywhere** — Hashi's `ideBridgePort`, Tomo's socat l
 ```
 Obsidian (host)                         Tomo container
 ┌────────────────────────┐              ┌───────────────────────────────┐
-│ Hashi IDE Bridge        │              │ Claude Code CLI               │
+│ Hashi context           │              │ Claude Code CLI               │
 │ ws 127.0.0.1:23027 ◄────┼──────────────┼─ socat 127.0.0.1:23027        │
 │   ▲ token check (401)   │  host.docker │     → host.docker.internal    │
 │   │                     │  .internal   │   reads ~/.claude/ide/        │
@@ -76,7 +76,7 @@ This is a **TCP-level** failure: socat reached the host but **nothing accepted t
 
 | Cause | Check / fix |
 |---|---|
-| **IDE Bridge is disabled** in Hashi | Settings → IDE bridge → **Enable** is off, or Status shows `Stopped`. Turn it on. |
+| **Tomo context is disabled** in Hashi | Settings → Tomo context → **Enable** is off, or Status shows `Stopped`. Turn it on. |
 | **Port mismatch** between Tomo and Hashi | The port in Tomo's socat command / `CLAUDE_CODE_SSE_PORT` / lock file must equal Hashi's `ideBridgePort`. A custom port on one side and the default `23027` on the other produces exactly this error. Align them. |
 | **Obsidian / Hashi not running** | The host server only exists while Obsidian is open with the plugin loaded and the bridge enabled. |
 | **Bridge errored on start** | Settings Status shows `Error: port {p} in use` — another process holds the port. Pick a free port (remember to update Tomo too). |
@@ -103,5 +103,5 @@ These logs record the discovery attempt, the socat/WebSocket connection, and the
 ## See also
 
 - [Configuration](configuration.md) — settings reference, where `data.json` lives
-- [Connection](connection.md) — the Docker attach for the chat view (branch A; independent of the bridge)
+- [Chat](chat.md) — the Docker attach for the chat view (branch A; independent of the bridge)
 - [Privacy](../PRIVACY.md) — what the bridge sends and what it never logs

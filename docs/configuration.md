@@ -4,26 +4,26 @@ All settings live under **Settings → MiYo Tomo Hashi**. The tab is split by co
 
 > Screenshot — full settings tab with both sections collapsed for overview.
 <p align="center">
-  <img src="../assets/settings-tab-overview.png" alt="MiYo Tomo Hashi settings tab — Tomo connection + Instruction executor sections" width="720" />
+  <img src="../assets/settings-tab-overview.png" alt="MiYo Tomo Hashi settings tab — Tomo chat, Tomo context, and Instruction executor sections" width="720" />
 </p>
 
 ---
 
-## A — Tomo connection
+## A — Tomo chat
 
 > Screenshot — connection section, Disconnected state showing the **Connect** button.
 <p align="center">
-  <img src="../assets/settings-connection.png" alt="Tomo connection section in Settings — Connect button + last-used label" width="720" />
+  <img src="../assets/settings-connection.png" alt="Tomo chat section in Settings — Connect button + last-used label" width="720" />
 </p>
 
 | Setting | What it does | Default |
 |---|---|---|
 | **Status row** | Live state from `connectionStore` — Disconnected / Attaching / Reconnecting (attempt N) / Connected to *label* | n/a |
-| **Connect / Disconnect button** | Opens the [instance picker](connection.md#picking-a-tomo-instance) when disconnected; gracefully tears down when connected | n/a |
-| (persisted) **`chosenInstanceName`** | Last instance label the user selected. Used for [auto-reconnect](connection.md#auto-reconnect-on-load) on plugin load. Survives Obsidian Sync — see warning in [Connection](connection.md#sync-warning). | `null` |
+| **Connect / Disconnect button** | Opens the [instance picker](chat.md#picking-a-tomo-instance) when disconnected; gracefully tears down when connected | n/a |
+| (persisted) **`chosenInstanceName`** | Last instance label the user selected. Used for [auto-reconnect](chat.md#auto-reconnect-on-load) on plugin load. Survives Obsidian Sync — see warning in [Chat](chat.md#sync-warning). | `null` |
 | (persisted) **`zoomLevel`** | Terminal zoom (0.5× / 1× / 1.5×). Set in the chat-view header, not in this tab. | `1` |
 
-Connection state itself is **not** persisted — only the chosen-instance name. A plugin reload always re-attaches via the [auto-reconnect](connection.md#auto-reconnect-on-load) path.
+Connection state itself is **not** persisted — only the chosen-instance name. A plugin reload always re-attaches via the [auto-reconnect](chat.md#auto-reconnect-on-load) path.
 
 ---
 
@@ -56,7 +56,7 @@ Rejected input shows a Notice (`Invalid path (<reason>): "<value>"`) and the fie
 
 ### Where it's stored
 
-All settings live in `<vault>/.obsidian/plugins/miyo-tomo-hashi/data.json`. Obsidian Sync replicates this file across devices — the executor settings are device-agnostic, but the persisted `chosenInstanceName` may not match a container that exists on every device. See [Connection / Sync warning](connection.md#sync-warning) for the implication.
+All settings live in `<vault>/.obsidian/plugins/miyo-tomo-hashi/data.json`. Obsidian Sync replicates this file across devices — the executor settings are device-agnostic, but the persisted `chosenInstanceName` may not match a container that exists on every device. See [Chat / Sync warning](chat.md#sync-warning) for the implication.
 
 ## Feature compatibility
 
@@ -73,5 +73,5 @@ The executor side has zero Docker dependency — you can use Hashi for instructi
 
 ## Next
 
-- [Session View](session-view.md) and [Connection](connection.md) — branch A
+- [Session View](session-view.md) and [Chat](chat.md) — branch A
 - [Instruction Executor](instruction-executor.md), [Actions](action-reference.md), [Hooks](hooks.md), [Run Log](run-log.md) — branch B

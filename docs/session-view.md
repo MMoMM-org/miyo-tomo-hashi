@@ -28,7 +28,7 @@ If no Tomo instance has been chosen yet, the picker modal opens first; once you 
 
 - **Indicator** — text + state class (`is-connected` / `is-reconnecting` / `is-attaching` / `is-disconnected`). The text reads `Connected — <name>`, `Connecting to <name>…`, `Reconnecting (attempt N)…`, or `Disconnected — <reason>`.
 - **Zoom group** — three buttons (0.5× / 1× / 1.5×) that scale xterm's font size relative to a 14 px base. Persisted across reloads. Active zoom is communicated via `aria-pressed=true` for screen readers.
-- **Force reconnect** — disabled when no instance has ever been chosen (no name to reconnect *to*). Otherwise drops the current attach and starts a fresh attach to the same `chosenInstanceName`. See [Force reconnect](connection.md#force-reconnect).
+- **Force reconnect** — disabled when no instance has ever been chosen (no name to reconnect *to*). Otherwise drops the current attach and starts a fresh attach to the same `chosenInstanceName`. See [Force reconnect](chat.md#force-reconnect).
 
 ### Terminal
 
@@ -86,5 +86,5 @@ A separate `disconnected → connected` edge in the indicator's render loop fire
 
 ## See also
 
-- [Connection](connection.md) — picker, reconnect schedule, force-reconnect semantics
-- [Status bar 友](connection.md#status-bar-) — three-state icon + popover
+- [Chat](chat.md) — picker, reconnect schedule, force-reconnect semantics
+- [Status bar 友](chat.md#status-bar-) — three-state icon + popover

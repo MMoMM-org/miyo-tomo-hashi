@@ -12,12 +12,12 @@
   `\\.\pipe\docker_engine` on Windows; named-pipe path is the same idea)
   to discover and attach to local Tomo containers running on **your
   machine**. That's it.
-- **One opt-in inbound surface.** The IDE Bridge (`ideBridgeEnabled`,
+- **One opt-in inbound surface.** Tomo context (`ideBridgeEnabled`,
   **disabled by default**) opens a WebSocket server bound to
   `127.0.0.1:23027` (loopback-only, never `0.0.0.0`). It is
   auth-gated (bearer token, HTTP 401 on mismatch) and serves a single
   local consumer: Claude Code inside your Tomo Docker container, over
-  loopback/socat. See [IDE Bridge inbound surface](#ide-bridge-inbound-surface)
+  loopback/socat. See [Tomo context inbound surface](#tomo-context-inbound-surface)
   below. If the bridge is disabled (the default), there is still no inbound
   surface of any kind.
 - **Vault data stays in the vault.** Container stdout, hook output, and
@@ -49,9 +49,9 @@ no other transport is opened.
 
 ## Inbound surfaces
 
-### IDE Bridge inbound surface
+### Tomo context inbound surface
 
-The IDE Bridge is **disabled by default** (`ideBridgeEnabled: false`).
+Tomo context is **disabled by default** (`ideBridgeEnabled: false`).
 The user explicitly enables it in plugin settings. When disabled, no
 socket is opened and this section is inert.
 
@@ -85,7 +85,7 @@ is written to `data.json`, written to disk, or included in any log.
 writing vault files is Kado's responsibility; the bridge carries only
 the editor state the user's cursor is already showing.
 
-Reaffirmation: the IDE Bridge is inbound-only and loopback-only. It
+Reaffirmation: Tomo context is inbound-only and loopback-only. It
 does not add any outbound surface, telemetry, or analytics. The
 "no telemetry / no outbound HTTPS / no third-party services" guarantees
 in the TL;DR remain unconditionally true.
@@ -94,7 +94,7 @@ in the TL;DR remain unconditionally true.
 
 | Item | Where | Notes |
 |---|---|---|
-| Plugin settings (`PluginSettings`) | `data.json` in the plugin directory via `plugin.saveData()` | Includes `chosenInstanceName`, `tomoInboxFolder`, `hooksDir`, `executionMode`, `hooksPolicy`, `runLogRetention`, `debugLogging`, `zoomLevel`, `settings_version`, `ideBridgeEnabled`, `ideBridgePort`, `ideBridgeAuthToken`. The IDE Bridge token (`hashi_<UUID>`) is stored cleartext by design — see auth row in the IDE Bridge table above. **No other credentials, no vault content.** |
+| Plugin settings (`PluginSettings`) | `data.json` in the plugin directory via `plugin.saveData()` | Includes `chosenInstanceName`, `tomoInboxFolder`, `hooksDir`, `executionMode`, `hooksPolicy`, `runLogRetention`, `debugLogging`, `zoomLevel`, `settings_version`, `ideBridgeEnabled`, `ideBridgePort`, `ideBridgeAuthToken`. The Tomo context token (`hashi_<UUID>`) is stored cleartext by design — see auth row in the Tomo context table above. **No other credentials, no vault content.** |
 | Run logs | Vault file in your Tomo inbox folder (`tomo-hashi-run-log_*.md`) | Per-run audit trail. **Metadata only** — paths, action IDs, outcome kinds, durations. Pre-fix used to leak `line_to_add` / tracker `value` content into the `summary` column; closed in spec-002 review H1. Verified by `test/unit/executor/planner.test.ts`. |
 | Hook session decisions | In-memory only (HookRunner) | "Enable for session" / "Disable" choices live in the runtime map and are cleared on plugin reload. Never persisted. |
 
@@ -126,7 +126,7 @@ spec-002 review M1 + the security review notes).
 - Read or write outside the configured vault (deny-list enforces
   `.obsidian/`, `.git/`, `.trash/`, the configured hooks dir, and any
   path that escapes the vault root — see `src/util/paths.ts`)
-- Open inbound network sockets when the IDE Bridge is disabled (the default)
+- Open inbound network sockets when Tomo context is disabled (the default)
 - Persist any container output, chat content, or hook output beyond
   the explicit run-log file (which is metadata-only)
 - Collect telemetry of any kind
@@ -147,4 +147,4 @@ the file:line reference.
 
 ---
 
-*Last reviewed: 2026-05-30 (feat/xdd-003-ide-bridge — IDE Bridge inbound surface documented; stale "zero inbound surfaces" TL;DR corrected — T5.2).*
+*Last reviewed: 2026-05-30 (feat/xdd-003-ide-bridge — Tomo context inbound surface documented; stale "zero inbound surfaces" TL;DR corrected — T5.2).*

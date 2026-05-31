@@ -8,7 +8,7 @@ Three things in one Obsidian plugin:
 
 - **A** — A live chat tab that attaches to a running [Tomo](https://github.com/MMoMM-org/miyo-tomo) Docker container. Talk to Claude Code from inside Obsidian.
 - **B** — An instruction executor that runs `_instructions.json` files Tomo emits, applying batch vault edits with full preview, run logs, and idempotent re-runs.
-- **C** — An IDE Bridge that gives Claude Code (running in your Tomo container) live editor context — active file, cursor position, and current selection — over a localhost WebSocket. Disabled by default; opt-in.
+- **C** — **Tomo context**: a loopback bridge that gives Claude Code (running in your Tomo container) live editor context — active file, cursor position, and current selection — over a localhost WebSocket. Disabled by default; opt-in.
 
 > Part of the **MiYo** family. The plugin is referred to as **MiYo Tomo Hashi** in the Obsidian community-plugin index and in the settings UI; "Hashi" alone is used as a short form throughout this README and the source. 橋 means *bridge*.
 
@@ -31,7 +31,7 @@ If you're already using Tomo for inbox processing or daily-note summaries, Hashi
   <img src="assets/two-components-overview.svg" alt="MiYo Tomo Hashi architecture overview — A: Tomo Session GUI with the 友 status-bar icon (chat view ↔ xterm.js, Docker container attach, force reconnect, zoom, no external surface); B: Instruction Executor with the 橋 status-bar icon (_instructions.json runner, preview / progress / summary, hooks, run log per execution). The two share the plugin process and settings tab, nothing else." width="900" />
 </p>
 
-All three components share the plugin process and the settings tab, but **nothing else**. You can use Hashi for instruction sets without ever connecting to a Tomo container, enable the IDE Bridge without using the chat view, or use any combination independently. See [How It Works](docs/how-it-works.md) for the architectural boundary.
+All three components share the plugin process and the settings tab, but **nothing else**. You can use Hashi for instruction sets without ever connecting to a Tomo container, enable Tomo context without using the chat view, or use any combination independently. See [How It Works](docs/how-it-works.md) for the architectural boundary.
 
 ## Features
 
@@ -46,11 +46,11 @@ All three components share the plugin process and the settings tab, but **nothin
 - **Sync-aware** — the persisted instance name handles Obsidian Sync correctly (with a visible warning)
 - **No external surface** — Docker socket is *outbound only*, no ports opened
 
-### C — IDE Bridge (ambient editor context for Tomo)
+### C — Tomo context (ambient editor context for Tomo)
 
 - **Localhost WebSocket server** bound to `127.0.0.1` (default port `23027`, configurable). Loopback-only — not reachable from any other host.
 - **Claude Code IDE protocol** — gives Claude Code in your Tomo container live ambient context: the active file path (vault-relative), cursor position, and currently selected text.
-- **Disabled by default** (`ideBridgeEnabled: false`). Enable it in **Settings → MiYo Tomo Hashi → IDE Bridge** and copy the generated token + port into your Tomo settings.
+- **Disabled by default** (`ideBridgeEnabled: false`). Enable it in **Settings → MiYo Tomo Hashi → Tomo context** and copy the generated token + port into your Tomo settings.
 - **Auth-gated** — the `x-claude-code-ide-authorization` bearer token is checked before the WebSocket handshake completes; wrong or missing token gets HTTP 401.
 - **Tomo handles its side** — after you copy the token and port into Tomo, Tomo writes the container-side discovery lock file. Hashi doesn't touch that side.
 - **Ephemeral only** — the bridge streams editor state live; nothing it sends is logged or persisted.
@@ -75,8 +75,8 @@ All three components share the plugin process and the settings tab, but **nothin
 | [Configuration](docs/configuration.md) | Vault owners | Settings reference, both components |
 | [How It Works](docs/how-it-works.md) | Vault owners | Two-component architecture, layer boundaries |
 | [Session View](docs/session-view.md) | Tomo users | Chat tab, terminal, zoom, file-prefill — branch A |
-| [Connection](docs/connection.md) | Tomo users | Picker, reconnect schedule, status bar 友 — branch A |
-| [IDE Bridge](docs/ide-bridge.md) | Tomo users | Enable + Tomo wiring, auth token, connection troubleshooting — branch C |
+| [Chat](docs/chat.md) | Tomo users | Picker, reconnect schedule, status bar 友 — branch A |
+| [Context](docs/context.md) | Tomo users | Enable + Tomo wiring, auth token, connection troubleshooting — branch C |
 | [Instruction Executor](docs/instruction-executor.md) | Tomo users | Modal stages, modes, partial-resume, status bar 橋 — branch B |
 | [Action Reference](docs/action-reference.md) | Tomo users | All 9 action kinds with idempotency rules — branch B |
 | [Hooks](docs/hooks.md) | Power users | `.cjs` hook authoring, policy, disclosure modal — branch B |
@@ -114,7 +114,7 @@ All three components share the plugin process and the settings tab, but **nothin
 
 > Screenshot — full settings tab with both sections expanded.
 <p align="center">
-  <img src="assets/settings-tab-overview.png" alt="MiYo Tomo Hashi settings tab — Tomo connection + Instruction executor sections" width="720" />
+  <img src="assets/settings-tab-overview.png" alt="MiYo Tomo Hashi settings tab — Tomo chat, Tomo context, and Instruction executor sections" width="720" />
 </p>
 
 
@@ -154,9 +154,9 @@ Hashi is part of **MiYo**, a small family of Obsidian-adjacent tools focused on 
 
 - [**MiYo Kado**](https://github.com/MMoMM-org/miyo-kado) — security-first MCP gateway. The *external-inbound* surface for AI assistants. Default-deny, per-key scopes, audit log.
 - [**MiYo Tomo**](https://github.com/MMoMM-org/miyo-tomo) — Claude Code AI workflows. The session you talk to from Hashi's chat view, and the source of the `_instructions.json` Hashi runs.
-- **MiYo Tomo Hashi** — *this plugin*. Paired with Tomo. Outbound Docker socket + optional loopback IDE Bridge; no external surface off-host.
+- **MiYo Tomo Hashi** — *this plugin*. Paired with Tomo. Outbound Docker socket + optional loopback context bridge; no external surface off-host.
 
-Scope boundary: Kado is the only external-inbound vault surface in the MiYo family. Hashi's IDE Bridge is an **opt-in loopback-only** inbound surface (`127.0.0.1`, disabled by default) for its single consumer — Claude Code in your local Tomo container. It is not reachable from any other host and exposes no vault read/write capability (that's Kado's domain).
+Scope boundary: Kado is the only external-inbound vault surface in the MiYo family. Hashi's Tomo context bridge is an **opt-in loopback-only** inbound surface (`127.0.0.1`, disabled by default) for its single consumer — Claude Code in your local Tomo container. It is not reachable from any other host and exposes no vault read/write capability (that's Kado's domain).
 
 ## Privacy
 

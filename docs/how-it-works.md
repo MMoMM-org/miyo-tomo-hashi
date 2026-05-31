@@ -31,7 +31,7 @@ The Session View (chat tab + status-bar 友 icon) is a thin wrapper over a runni
 - **Reconnect:** fixed-schedule backoff (5 attempts: 500/1000/2000/4000/8000 ms). The persisted `chosenInstanceName` survives container stop+start, so a Hashi reload finds the same container by name.
 - **No vault writes from this side.** The session view is read-only with respect to your vault — it only renders bytes from a container.
 
-Details: [Session View](session-view.md), [Connection](connection.md).
+Details: [Session View](session-view.md), [Chat](chat.md).
 
 ## B — Instruction Executor
 
