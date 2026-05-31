@@ -286,11 +286,8 @@ export function registerIdeBridgeCommand(
 
 // "IDE Bridge" is the proper-noun feature name; the Notice strings below are
 // mandated verbatim by PRD F13 AC ("IDE Bridge started on :23027", "IDE Bridge
-// stopped") and asserted by tests. Sentence-case lowering ("IDE bridge
-// stopped") would break the AC and the test equality, so the rule is disabled
-// for this function with a rationale per MiYo Constitution L2 (lint disables
-// require justification).
-/* eslint-disable obsidianmd/ui/sentence-case */
+// stopped") and asserted by tests. Do not sentence-case them ("IDE bridge
+// stopped") — that would break the AC and the test equality.
 async function toggleIdeBridge(deps: IdeBridgeCommandDeps): Promise<void> {
 	if (deps.ideBridge.isRunning()) {
 		await deps.ideBridge.stop();
@@ -309,4 +306,3 @@ async function toggleIdeBridge(deps: IdeBridgeCommandDeps): Promise<void> {
 			: deps.getPort();
 	new Notice(`IDE Bridge started on :${port}`);
 }
-/* eslint-enable obsidianmd/ui/sentence-case */
