@@ -53,7 +53,17 @@ removes the vulnerable parser regardless, as defense-in-depth.
 argument**. The advisory only affects `v3`/`v5`/`v6` when a caller-supplied `buf`
 is provided — `v4()` with no buffer is unaffected. (Hashi does not use Docker
 sessions at all, so even this call is not exercised in practice.) The override to
-`uuid@11.1.1` keeps the API identical (`.v4`) while clearing the warning.
+`uuid@11.1.1` keeps the API identical (`.v4`) — and per the advisory, `11.1.1`
+**is the patched release** for the 11.x line (`< 11.1.1` is affected, `11.1.1`
+is fixed), so `npm audit --omit=dev` reports it clean.
+
+> **Note for automated scanners.** A scanner that does not resolve npm
+> `overrides` (the Obsidian community-plugin bot among them) reads
+> `dockerode`'s *declared* range `uuid@^10.0.0` and may keep reporting this
+> advisory even though the installed and shipped version is `11.1.1`. This is
+> a false positive: the resolved dependency is the patched `11.1.1`, **and**
+> the vulnerable `v3/v5/v6`-with-`buf` API is never called regardless of
+> version. `npm ls uuid` confirms the only resolved version is `11.1.1`.
 
 ## Reproduce
 
@@ -61,6 +71,7 @@ sessions at all, so even this call is not exercised in practice.) The override t
 npm install                       # applies package.json "overrides"
 npm run build                     # produces build/main.js
 npm audit --omit=dev              # → found 0 vulnerabilities
+npm ls uuid                       # → uuid@11.1.1 overridden (the patched release)
 grep -c "protobufjs" build/main.js  # → 0 (grpc/protobuf severed by the buildkit stub)
 ```
 
