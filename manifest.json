@@ -1,7 +1,7 @@
 {
 	"id": "miyo-tomo-hashi",
 	"name": "MiYo Tomo Hashi",
-	"version": "0.6.1",
+	"version": "0.6.2",
 	"minAppVersion": "1.7.2",
 	"description": "Direct integration with Tomo, the Claude Code agent, for session interaction and automated vault updates.",
 	"author": "Marcus Breiden",

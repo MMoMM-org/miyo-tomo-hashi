@@ -1,3 +1,10 @@
+## [0.6.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.6.1...0.6.2) (2026-05-31)
+
+
+### Bug Fixes
+
+* **css:** carry status-bar state cue on border-bottom, not text-decoration ([e8bd095](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/e8bd095247b3cf4c62b7409ad54025ade78866f1))
+
 ## [0.6.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.6.0...0.6.1) (2026-05-31)
 
 
