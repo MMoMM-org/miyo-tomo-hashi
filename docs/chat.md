@@ -1,4 +1,4 @@
-# Connection
+# Chat
 
 How Hashi finds, attaches to, and reconnects to a Tomo Docker container.
 
@@ -11,7 +11,7 @@ How Hashi finds, attaches to, and reconnects to a Tomo Docker container.
 
 The picker (`InstancePickerModal`) opens on demand:
 
-- From **Settings → Tomo connection → Connect** (when disconnected)
+- From **Settings → Tomo chat → Connect** (when disconnected)
 - From the [status-bar 友 popover](#status-bar-) → "Open chat" if no instance has ever been chosen
 
 Hashi calls Docker's `GET /containers/json?filters={"label":["miyo.tomo.role=session"]}` to enumerate. Each row shows:
@@ -141,5 +141,5 @@ The **Force reconnect** entry is disabled when no `chosenInstanceName` has been 
 ## See also
 
 - [Session View](session-view.md) — chat tab, terminal, input row
-- [Configuration / Tomo connection](configuration.md#a--tomo-connection) — settings reference
+- [Configuration / Tomo chat](configuration.md#a--tomo-chat) — settings reference
 - [Privacy](../PRIVACY.md) — what leaves the local machine and what doesn't (spoiler: nothing)

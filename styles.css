@@ -5,6 +5,36 @@
 	font-size: var(--font-small);
 }
 
+/* --- Tomo chat connection block ---
+ *
+ * The connection block is a plain <div> rendered outside Obsidian's
+ * Setting row structure. The rules below align it with the Setting rows
+ * (task d: matching left inset) and add a little breathing room between
+ * the status line and the button (task c: one-line gap).
+ *
+ * Obsidian's `.setting-item` uses 16px left padding; we mirror that value
+ * so the text/button left edge lands on the same column.
+ */
+
+.hashi-settings-connection {
+	padding-left: 16px;
+}
+
+.hashi-settings-status {
+	margin-bottom: 1em;
+}
+
+/* --- Tomo context — auth token row ---
+ *
+ * Shifts the Copy + Regenerate button group a little left of Obsidian's
+ * default far-right control alignment. `margin-right` on the control
+ * container creates the inset without reflowing the token text span.
+ */
+
+.hashi-ide-bridge-token-row .setting-item-control {
+	margin-right: 12px;
+}
+
 /* --- Manifest-driven settings header (HeaderSection) ---
  *
  * Two-column flex strip rendered above the rest of the settings UI.
@@ -94,6 +124,11 @@
 .hashi-status-bar.is-disconnected .hashi-status-bar-glyph {
 	color: var(--text-muted);
 	opacity: 0.6;
+}
+
+.hashi-status-bar.is-error .hashi-status-bar-glyph {
+	color: var(--text-error);
+	opacity: 1;
 }
 
 /* --- Chat-view zoom controls (ADR-6 — theme-bound CSS vars only) --- */

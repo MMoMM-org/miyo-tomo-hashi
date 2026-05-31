@@ -130,6 +130,17 @@ if (typeof globalThis !== "undefined" && typeof document !== "undefined") {
 	if (g.activeDocument === undefined) g.activeDocument = document;
 }
 
+// In real Obsidian, `activeWindow` is the Window of the currently-active
+// leaf (handles popout windows). jsdom has no equivalent — point it at
+// globalThis so production code calling `activeWindow.setTimeout` /
+// `activeWindow.clearTimeout` resolves to the same timer functions that
+// `vi.useFakeTimers()` patches, keeping fake-timer tests correct.
+// Idempotent guard prevents double-assignment across test worker reloads.
+if (typeof globalThis !== "undefined") {
+	const g = globalThis as typeof globalThis & { activeWindow?: typeof globalThis };
+	if (g.activeWindow === undefined) g.activeWindow = globalThis;
+}
+
 // --- App & Workspace ---
 
 export class Component {
@@ -160,8 +171,15 @@ export class App {
 		getActiveFile: vi.fn<() => TFile | null>(() => null),
 		on: vi.fn(),
 		off: vi.fn(),
+		// Invoke the callback synchronously so layout-ready-deferred wiring
+		// (e.g. T4.5's active-leaf-change registration) is testable without a
+		// real Obsidian workspace bootstrap.
+		onLayoutReady: vi.fn((cb: () => void) => {
+			cb();
+		}),
 		getLeavesOfType: vi.fn(() => [] as WorkspaceLeaf[]),
 		getRightLeaf: vi.fn(() => new WorkspaceLeaf()),
+		openLinkText: vi.fn<(linktext: string, sourcePath: string, newLeaf?: boolean) => Promise<void>>(async () => {}),
 		getLeaf: vi.fn(() => new WorkspaceLeaf()),
 		revealLeaf: vi.fn(),
 		setActiveLeaf: vi.fn(),
@@ -224,6 +242,10 @@ export class Plugin extends Component {
 	registerView = vi.fn();
 	register = vi.fn();
 	removeCommand = vi.fn();
+	// CM6 editor extension registration (T4.5 — IDE Bridge selection tracking).
+	// Obsidian auto-tears-down registered extensions on unload, so this is a
+	// fire-and-forget vi.fn for assertion only.
+	registerEditorExtension = vi.fn();
 }
 
 // --- UI Components ---
@@ -311,15 +333,17 @@ export class Setting {
 				setButtonText: ReturnType<typeof vi.fn>;
 				setCta: ReturnType<typeof vi.fn>;
 				onClick: ReturnType<typeof vi.fn>;
+				buttonEl: HTMLButtonElement;
 			}) => void,
 		) => {
-			cb({
-				setButtonText: vi.fn(() => ({
-					setCta: vi.fn(() => ({ onClick: vi.fn() })),
-				})),
-				setCta: vi.fn(),
-				onClick: vi.fn(),
-			});
+			const buttonEl = document.createElement("button");
+			const component = {
+				setButtonText: vi.fn((text: string) => { buttonEl.textContent = text; return component; }),
+				setCta: vi.fn(() => component),
+				onClick: vi.fn((fn: () => void) => { buttonEl.addEventListener("click", fn); return component; }),
+				buttonEl,
+			};
+			cb(component);
 			return this;
 		},
 	);
@@ -396,6 +420,28 @@ export class ItemView extends Component {
 
 	onClose(): void | Promise<void> {
 		// default: no-op; subclasses override
+	}
+}
+
+// --- MarkdownView ---
+
+// Minimal Editor shape used by ObsidianEditorAdapter — only the methods
+// the adapter calls. Tests that exercise the real adapter via this mock
+// can override individual vi.fn() returns.
+interface MockEditor {
+	getCursor: ReturnType<typeof vi.fn>;
+	getSelection: ReturnType<typeof vi.fn>;
+}
+
+export class MarkdownView extends ItemView {
+	file: TFile | null = null;
+	editor: MockEditor = {
+		getCursor: vi.fn(() => ({ line: 0, ch: 0 })),
+		getSelection: vi.fn(() => ""),
+	};
+
+	getViewType(): string {
+		return "markdown";
 	}
 }
 

@@ -44,6 +44,8 @@ import type {
 	InstructionExecutor,
 	Invocation,
 } from "../executor/InstructionExecutor";
+import type { IdeBridge } from "../ide-bridge/IdeBridge";
+import { ideBridgeStore } from "../ide-bridge/ideBridgeStore";
 import type { VaultFS } from "../vault/VaultFS";
 import type { PluginSettings } from "../types/index";
 
@@ -223,3 +225,88 @@ export async function resolveActiveInvocation(
 	}
 	return { kind: "batch" };
 }
+
+// ---------------------------------------------------------------------------
+// 003 spec — IDE Bridge toggle command (T4.5)
+// ---------------------------------------------------------------------------
+//
+// Spec refs: spec 003-ide-bridge phase-4 T4.5; PRD F13 (toggle command +
+// AC Notice strings "IDE Bridge started on :23027" / "IDE Bridge stopped").
+//
+// Decisions:
+//
+// 1. The command is a pure toggle: `isRunning()` decides start-vs-stop. start()
+//    and stop() are idempotent on IdeBridge, so a stale `isRunning()` read can
+//    at worst issue a redundant (harmless) call — no lock needed at this layer.
+//
+// 2. The started Notice's port is read from `ideBridgeStore.get()` AFTER start()
+//    resolves: `listening{port}` / `connected{port}` both carry the *actually
+//    bound* port (which may differ from settings if the OS reassigned it). The
+//    `getPort` dep is a fallback for the unreachable case where the post-start
+//    state has no port. If start() landed in `error`, we surface that reason
+//    instead of a misleading "started" Notice (robustness; not an AC).
+//
+// 3. Deps are narrowed to `Pick<IdeBridge,…>` so tests inject vi.fn spies
+//    without constructing a real bridge / binding a TCP port. Production passes
+//    the full `this.ideBridge` — assignment-compatible.
+
+const TOGGLE_IDE_BRIDGE_ID = "toggle-ide-bridge";
+const TOGGLE_IDE_BRIDGE_LABEL = "Toggle IDE bridge";
+
+export interface IdeBridgeCommandDeps {
+	/**
+	 * Narrow surface of `IdeBridge` — only the toggle needs these three. Tests
+	 * pass a vi.fn-bag; production passes the full bridge.
+	 */
+	readonly ideBridge: Pick<IdeBridge, "isRunning" | "start" | "stop">;
+	/**
+	 * Fallback port for the started Notice when the post-start store state
+	 * carries no port. Reads `settings.ideBridgePort` in production.
+	 */
+	readonly getPort: () => number;
+}
+
+/**
+ * Register the 003 "Toggle IDE bridge" palette command (PRD F13).
+ * Called separately from the 001/002 registrars so the bridge wiring stays
+ * decoupled — main.ts (T4.5) calls it after constructing the bridge.
+ */
+export function registerIdeBridgeCommand(
+	plugin: Plugin,
+	deps: IdeBridgeCommandDeps,
+): void {
+	plugin.addCommand({
+		id: TOGGLE_IDE_BRIDGE_ID,
+		name: TOGGLE_IDE_BRIDGE_LABEL,
+		callback: () => {
+			void toggleIdeBridge(deps);
+		},
+	});
+}
+
+// "IDE Bridge" is the proper-noun feature name; the Notice strings below are
+// mandated verbatim by PRD F13 AC ("IDE Bridge started on :23027", "IDE Bridge
+// stopped") and asserted by tests. Sentence-case lowering ("IDE bridge
+// stopped") would break the AC and the test equality, so the rule is disabled
+// for this function with a rationale per MiYo Constitution L2 (lint disables
+// require justification).
+/* eslint-disable obsidianmd/ui/sentence-case */
+async function toggleIdeBridge(deps: IdeBridgeCommandDeps): Promise<void> {
+	if (deps.ideBridge.isRunning()) {
+		await deps.ideBridge.stop();
+		new Notice("IDE Bridge stopped");
+		return;
+	}
+	await deps.ideBridge.start();
+	const state = ideBridgeStore.get();
+	if (state.kind === "error") {
+		new Notice(`IDE Bridge error: ${state.reason}`);
+		return;
+	}
+	const port =
+		state.kind === "listening" || state.kind === "connected"
+			? state.port
+			: deps.getPort();
+	new Notice(`IDE Bridge started on :${port}`);
+}
+/* eslint-enable obsidianmd/ui/sentence-case */

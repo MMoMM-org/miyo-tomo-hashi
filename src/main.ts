@@ -76,12 +76,18 @@
 
 import { createRequire } from "node:module";
 
+import { EditorView } from "@codemirror/view";
 import { Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 
-import { registerCommands, registerExecutorCommands } from "./commands/registerCommands";
+import {
+	registerCommands,
+	registerExecutorCommands,
+	registerIdeBridgeCommand,
+} from "./commands/registerCommands";
 import { registerFileMenu, registerExecutorFileMenu } from "./commands/fileMenu";
 import { TomoConnection } from "./connection/TomoConnection";
 import { loadSettings, saveSettings } from "./connection/settingsPersistence";
+import { IdeBridge } from "./ide-bridge/IdeBridge";
 import { executionStore } from "./executor/executionStore";
 import { InstructionExecutor } from "./executor/InstructionExecutor";
 import { FsHookLoader } from "./hooks/FsHookLoader";
@@ -97,7 +103,7 @@ import {
 } from "./types/index";
 import { TomoChatView, VIEW_TYPE_TOMO_CHAT } from "./ui/chat-view/index";
 import { showChatWindow } from "./ui/chat-view/showChatWindow";
-import { StatusBarIcon } from "./ui/status-bar/StatusBarIcon";
+import { StatusBarIcon, copyAuthToken } from "./ui/status-bar/StatusBarIcon";
 import { ExecutionModal } from "./ui/ExecutionModal";
 import { mountStatusBar } from "./ui/statusBar";
 import { ObsidianVaultFS } from "./vault/ObsidianVaultFS";
@@ -128,6 +134,7 @@ export default class TomoHashiPlugin extends Plugin {
 	private connection: TomoConnection | null = null;
 	private statusBarIcon: StatusBarIcon | null = null;
 	private executor: InstructionExecutor | null = null;
+	private ideBridge: IdeBridge | null = null;
 	private cleanups: Array<() => void> = [];
 	private loaded = false;
 
@@ -152,9 +159,20 @@ export default class TomoHashiPlugin extends Plugin {
 
 		this.settings = await loadSettings(this);
 
+		// Persist in place: merge the incoming snapshot onto the ONE shared
+		// `this.settings` object instead of reassigning the reference. Every
+		// subsystem (TomoConnection, IdeBridge, SettingsTab) captures or reads
+		// `this.settings`; if persist reassigned the reference, a subsystem that
+		// captured the object at construction time (TomoConnection) would keep a
+		// stale snapshot and, on its next save, clobber fields another subsystem
+		// had written in the meantime (e.g. IdeBridge's freshly-minted auth
+		// token → token regenerated on every reload). Mutating in place keeps
+		// the reference identical forever, so divergence is impossible.
 		const persist = async (settings: PluginSettings): Promise<void> => {
-			await saveSettings(this, settings);
-			this.settings = settings;
+			if (settings !== this.settings) {
+				Object.assign(this.settings, settings);
+			}
+			await saveSettings(this, this.settings);
 		};
 		this.connection = new TomoConnection(this.settings, persist);
 		const conn = this.connection;
@@ -179,7 +197,70 @@ export default class TomoHashiPlugin extends Plugin {
 		);
 
 		// 2. Settings tab (T4.1 — already wired; kept here for SDD ordering).
-		this.addSettingTab(new SettingsTab(this.app, this, conn));
+		// Construct IdeBridge for T4.3 settings section wiring. Start/stop and
+		// lifecycle (T4.5) are deferred — only constructing + passing here.
+		this.ideBridge = new IdeBridge({
+			app: this.app,
+			version: this.manifest.version,
+			getSettings: () => this.settings,
+			persist,
+			log: {
+				debug: (...a: unknown[]) => {
+					if (this.settings.debugLogging) console.debug("[hashi/ide-bridge]", ...a);
+				},
+				warn: console.warn.bind(console),
+				error: console.error.bind(console),
+			},
+		});
+		this.addSettingTab(new SettingsTab(this.app, this, conn, this.ideBridge));
+
+		// 2b. IDE Bridge lifecycle (T4.5) — editor-activity wiring, start-if-
+		//     enabled, toggle command, teardown. Per ADR-5, selection tracking is
+		//     driven by two signals: CM6 selection/doc updates (per-editor) and
+		//     active-leaf-change (switching the focused note). The bridge debounces
+		//     the resulting broadcasts internally.
+		const ideBridge = this.ideBridge;
+
+		// CM6 update listener — forward only real selection/content changes (a
+		// pure scroll/viewport update sets neither flag). registerEditorExtension
+		// is auto-torn-down by Obsidian on unload — do NOT unregister manually.
+		this.registerEditorExtension(
+			EditorView.updateListener.of((update) => {
+				if (update.selectionSet || update.docChanged) {
+					ideBridge.onEditorActivity();
+				}
+			}),
+		);
+
+		// active-leaf-change must wait for layout-ready (SDD gotcha 683): the
+		// workspace is not fully constructed during onload, so registering the
+		// event earlier can miss or mis-fire. registerEvent is auto-torn-down.
+		this.app.workspace.onLayoutReady(() => {
+			this.registerEvent(
+				this.app.workspace.on("active-leaf-change", () => {
+					ideBridge.onEditorActivity();
+				}),
+			);
+		});
+
+		// Start the bridge if enabled. Fire-and-forget — onload must not block on
+		// a TCP bind; the bridge routes any listen failure to ideBridgeStore for
+		// the UI surfaces (mirrors conn.autoReconnectIfRemembered below).
+		if (this.settings.ideBridgeEnabled) void ideBridge.start();
+
+		// Toggle command (PRD F13). getPort reads the configured port live so a
+		// settings change reaches the started-Notice fallback without a restart.
+		registerIdeBridgeCommand(this, {
+			ideBridge,
+			getPort: () => this.settings.ideBridgePort,
+		});
+
+		// Teardown — stop() disposes the tracker timer + closes the server. The
+		// editor extension and active-leaf-change event auto-unregister; only the
+		// server/timer need an explicit stop. Drained LIFO in onunload.
+		this.cleanups.push(() => {
+			void this.ideBridge?.stop();
+		});
 
 		// 3. Status bar icon (T4.2).
 		this.statusBarIcon = new StatusBarIcon(
@@ -203,6 +284,7 @@ export default class TomoHashiPlugin extends Plugin {
 				},
 			},
 			getChosenInstanceName,
+			() => { copyAuthToken(() => this.ideBridge?.getToken() ?? ""); },
 		);
 		this.statusBarIcon.mount();
 
@@ -317,8 +399,10 @@ export default class TomoHashiPlugin extends Plugin {
 		});
 
 		// 10. InstructionExecutor — singleton per plugin load.
-		// Pass settings as a getter (review M4): persist() reassigns
-		// `this.settings` to a new object; a snapshot would freeze the
+		// Pass settings as a getter (review M4): the executor must always see
+		// live values. persist() now mutates `this.settings` in place, so a
+		// captured reference would also stay current — but the getter is kept as
+		// the contract so any future reassignment can't silently freeze the
 		// executor at load-time values.
 		this.executor = new InstructionExecutor({
 			vault,

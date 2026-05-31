@@ -49,6 +49,9 @@ const defaultSettings: PluginSettings = {
 	hooksDir: ".tomo-hashi/hooks",
 	hooksPolicy: "enabled",
 	debugLogging: false,
+	ideBridgeEnabled: false,
+	ideBridgePort: 23027,
+	ideBridgeAuthToken: "",
 };
 
 function makeSettings(overrides?: Partial<PluginSettings>): PluginSettings {
@@ -443,10 +446,10 @@ describe("InstructionExecutor — cancellation", () => {
 
 describe("InstructionExecutor — settings as getter (M4)", () => {
 	it("uses the latest settings on each execute when constructed with a getter", async () => {
-		// Pre-fix the executor froze settings at construction. main.ts's
-		// persist() reassigns its `this.settings` to a new object, so the
-		// executor would silently use stale values for the rest of the
-		// session. The getter form binds late.
+		// Pre-fix the executor froze settings at construction. The getter form
+		// binds late so the executor always reads the current settings — this
+		// test flips the backing reference mid-run to prove late binding,
+		// independent of how main.ts's persist() updates the object.
 		const vault = new FakeVaultFS();
 		await vault.createFolder(INBOX);
 		await vault.createFolder("inbox");
@@ -497,7 +500,7 @@ describe("InstructionExecutor — settings as getter (M4)", () => {
 		);
 		expect(afterFirstB.actions.find((a) => a.id === "I02")?.applied).toBeUndefined();
 
-		// Simulate persist() reassigning settings
+		// Flip the backing settings reference the getter reads from.
 		liveSettings = makeSettings({ tomoInboxFolder: inboxB });
 
 		await executor.execute({ kind: "batch" });

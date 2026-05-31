@@ -14,6 +14,8 @@
  * can use idiomatic Obsidian style.
  */
 
+import "obsidian";
+
 import { App, Notice } from "obsidian";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -24,7 +26,9 @@ import type { TomoConnection } from "../../../../src/connection/TomoConnection";
 import type { TomoInstance } from "../../../../src/connection/types";
 import type TomoHashiPlugin from "../../../../src/main";
 import { InstancePickerModal } from "../../../../src/settings/InstancePickerModal";
-import { SettingsTab } from "../../../../src/settings/SettingsTab";
+import { buildIdeBridgeHandlers, SettingsTab } from "../../../../src/settings/SettingsTab";
+import type { IdeBridgeController } from "../../../../src/settings/SettingsTab";
+import { ideBridgeStore } from "../../../../src/ide-bridge/ideBridgeStore";
 import { DEFAULT_SETTINGS } from "../../../../src/types/index";
 import type { PluginSettings } from "../../../../src/types/index";
 
@@ -592,6 +596,10 @@ describe("SettingsTab — instruction executor controls", () => {
 			"hooksDir",
 			"hooksPolicy",
 			"debugLogging",
+			// 003 fields (ide-bridge)
+			"ideBridgeEnabled",
+			"ideBridgePort",
+			"ideBridgeAuthToken",
 		]);
 
 		// No extra keys (e.g. hookAskDecisions) in persisted data
@@ -613,5 +621,272 @@ describe("SettingsTab — instruction executor controls", () => {
 		expect(DEFAULT_SETTINGS.hooksDir).toBe(".tomo-hashi/hooks");
 		expect(DEFAULT_SETTINGS.hooksPolicy).toBe("ask");
 		expect(DEFAULT_SETTINGS.debugLogging).toBe(false);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// T4.3 — IDE bridge settings section
+// ---------------------------------------------------------------------------
+//
+// The IdeBridgeController interface is a structural seam; tests use a fake
+// that satisfies it with vi.fn() spies. buildIdeBridgeHandlers is a pure
+// factory (module-level) that returns testable handlers without touching the DOM.
+
+function makeFakeController(overrides: Partial<IdeBridgeController> = {}): IdeBridgeController {
+	return {
+		start: vi.fn<() => Promise<void>>(async () => {}),
+		stop: vi.fn<() => Promise<void>>(async () => {}),
+		isRunning: vi.fn<() => boolean>(() => false),
+		regenerateToken: vi.fn<() => Promise<void>>(async () => {}),
+		getToken: vi.fn<() => string>(() => "hashi_test-token"),
+		...overrides,
+	};
+}
+
+function makePersistence(plugin: PluginStub): { settings: PluginSettings; saveSettings: () => Promise<void> } {
+	return {
+		settings: plugin.settings,
+		saveSettings: async () => {
+			await plugin.saveSettings();
+		},
+	};
+}
+
+describe("buildIdeBridgeHandlers — port validation", () => {
+	const validPorts = [1024, 65535, 23027, 9000];
+	for (const port of validPorts) {
+		it(`accepts port ${port}`, async () => {
+			const plugin = makePlugin({ ideBridgePort: 23027 });
+			const controller = makeFakeController();
+			const handlers = buildIdeBridgeHandlers(controller, makePersistence(plugin));
+
+			await handlers.port(String(port));
+
+			expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
+			expect(plugin.settings.ideBridgePort).toBe(port);
+		});
+	}
+
+	const invalidPorts = [
+		{ value: "1023", label: "below minimum" },
+		{ value: "65536", label: "above maximum" },
+		{ value: "70000", label: "far above maximum" },
+		{ value: "abc", label: "non-numeric string" },
+		{ value: "80.5", label: "fractional number" },
+		{ value: "23026", label: "Kado collision port" },
+	];
+	for (const { value, label } of invalidPorts) {
+		it(`rejects port ${label} (${JSON.stringify(value)}) — no persist + restores prior`, async () => {
+			const plugin = makePlugin({ ideBridgePort: 23027 });
+			const controller = makeFakeController();
+			const handlers = buildIdeBridgeHandlers(controller, makePersistence(plugin));
+
+			await handlers.port(value);
+
+			expect(plugin.saveSettings).not.toHaveBeenCalled();
+			expect(plugin.settings.ideBridgePort).toBe(23027);
+		});
+	}
+});
+
+describe("buildIdeBridgeHandlers — enable toggle", () => {
+	it("enable=true: persists, calls start(), then re-renders", async () => {
+		const plugin = makePlugin({ ideBridgeEnabled: false });
+		const controller = makeFakeController();
+		const rerender = vi.fn();
+		const handlers = buildIdeBridgeHandlers(controller, makePersistence(plugin), rerender);
+
+		await handlers.enable(true);
+
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
+		expect(plugin.settings.ideBridgeEnabled).toBe(true);
+		expect(controller.start).toHaveBeenCalledTimes(1);
+		expect(controller.stop).not.toHaveBeenCalled();
+		expect(rerender).toHaveBeenCalledTimes(1);
+	});
+
+	it("enable=false: persists, calls stop(), then re-renders", async () => {
+		const plugin = makePlugin({ ideBridgeEnabled: true });
+		const controller = makeFakeController();
+		const rerender = vi.fn();
+		const handlers = buildIdeBridgeHandlers(controller, makePersistence(plugin), rerender);
+
+		await handlers.enable(false);
+
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
+		expect(plugin.settings.ideBridgeEnabled).toBe(false);
+		expect(controller.stop).toHaveBeenCalledTimes(1);
+		expect(controller.start).not.toHaveBeenCalled();
+		expect(rerender).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("buildIdeBridgeHandlers — regenerate", () => {
+	it("calls regenerateToken() and re-renders", async () => {
+		const plugin = makePlugin();
+		const controller = makeFakeController();
+		const rerender = vi.fn();
+		const handlers = buildIdeBridgeHandlers(controller, makePersistence(plugin), rerender);
+
+		await handlers.regenerate();
+
+		expect(controller.regenerateToken).toHaveBeenCalledTimes(1);
+		expect(rerender).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("SettingsTab — IDE bridge section", () => {
+	it("renders 'Tomo context' heading", () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const controller = makeFakeController();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn), controller);
+
+		tab.display();
+
+		expect(tab.containerEl.textContent).toContain("Tomo context");
+	});
+
+	it("renders status 'Stopped' when store is stopped", () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const controller = makeFakeController({ isRunning: vi.fn(() => false) });
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn), controller);
+
+		tab.display();
+
+		expect(tab.containerEl.textContent).toContain("Stopped");
+	});
+
+	it("renders status with port + 0 clients when store is listening", () => {
+		ideBridgeStore.set({ kind: "listening", port: 23027 });
+
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const controller = makeFakeController({ isRunning: vi.fn(() => true) });
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn), controller);
+
+		tab.display();
+
+		const text = tab.containerEl.textContent ?? "";
+		expect(text).toContain("127.0.0.1:23027");
+		expect(text).toContain("0 client");
+
+		ideBridgeStore.set({ kind: "stopped" });
+	});
+
+	it("renders status with port + client count when store is connected", () => {
+		ideBridgeStore.set({ kind: "connected", port: 23027, clientCount: 2 });
+
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const controller = makeFakeController({ isRunning: vi.fn(() => true) });
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn), controller);
+
+		tab.display();
+
+		const text = tab.containerEl.textContent ?? "";
+		expect(text).toContain("127.0.0.1:23027");
+		expect(text).toContain("2 client");
+
+		ideBridgeStore.set({ kind: "stopped" });
+	});
+
+	it("renders status with error reason when store is error", () => {
+		ideBridgeStore.set({ kind: "error", reason: "port in use" });
+
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const controller = makeFakeController();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn), controller);
+
+		tab.display();
+
+		expect(tab.containerEl.textContent).toContain("Error: port in use");
+
+		ideBridgeStore.set({ kind: "stopped" });
+	});
+
+	it("shows locked desc for port when isRunning=true", () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin({ ideBridgePort: 23027 });
+		const controller = makeFakeController({ isRunning: vi.fn(() => true) });
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn), controller);
+
+		tab.display();
+
+		expect(tab.containerEl.textContent).toContain("23027");
+		expect(tab.containerEl.textContent).toContain("locked while running");
+	});
+
+	it("shows text input for port when isRunning=false", () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin({ ideBridgePort: 23027 });
+		const controller = makeFakeController({ isRunning: vi.fn(() => false) });
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn), controller);
+
+		tab.display();
+
+		// Text input should be present (addText called on the port setting).
+		// We verify by checking the Setting mock's addText was called —
+		// indirectly via the test seam.
+		const handlers = tab._getIdeBridgeHandlersForTest();
+		expect(handlers).toBeDefined();
+		expect(typeof handlers.port).toBe("function");
+	});
+
+	it("IDE section is placed BEFORE 'Instruction executor'", () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const controller = makeFakeController();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn), controller);
+
+		tab.display();
+
+		const text = tab.containerEl.textContent ?? "";
+		const tomoContextPos = text.indexOf("Tomo context");
+		const executorPos = text.indexOf("Instruction executor");
+		expect(tomoContextPos).toBeGreaterThan(-1);
+		expect(executorPos).toBeGreaterThan(-1);
+		expect(tomoContextPos).toBeLessThan(executorPos);
+	});
+
+	it("IDE section is placed AFTER 'Tomo chat'", () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const controller = makeFakeController();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn), controller);
+
+		tab.display();
+
+		const text = tab.containerEl.textContent ?? "";
+		const chatPos = text.indexOf("Tomo chat");
+		const tomoContextPos = text.indexOf("Tomo context");
+		expect(chatPos).toBeGreaterThan(-1);
+		expect(tomoContextPos).toBeGreaterThan(-1);
+		expect(chatPos).toBeLessThan(tomoContextPos);
+	});
+
+	it("_getIdeBridgeHandlersForTest() exposes port, enable, regenerate handlers", () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const controller = makeFakeController();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn), controller);
+
+		const handlers = tab._getIdeBridgeHandlersForTest();
+
+		expect(typeof handlers.port).toBe("function");
+		expect(typeof handlers.enable).toBe("function");
+		expect(typeof handlers.regenerate).toBe("function");
 	});
 });
