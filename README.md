@@ -82,6 +82,7 @@ All three components share the plugin process and the settings tab, but **nothin
 | [Hooks](docs/hooks.md) | Power users | `.cjs` hook authoring, policy, disclosure modal — branch B |
 | [Run Log](docs/run-log.md) | Vault owners | Log format, retention, hook output — branch B |
 | [Development](docs/development.md) | Contributors | Build, test, lint, architecture, test vault |
+| [Dependency Security](docs/dependency-security.md) | Contributors / reviewers | Supply-chain advisories, bundle-level reachability, `overrides` rationale |
 
 ## Quick start — A — Tomo session GUI
 
