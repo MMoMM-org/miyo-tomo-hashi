@@ -1,3 +1,11 @@
+## [0.6.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.6.0...0.6.1) (2026-05-31)
+
+
+### Bug Fixes
+
+* **css:** use text-decoration shorthand for Obsidian 1.6.5 compat ([c3dfaa9](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/c3dfaa9fe34c48db3a23d7bb128555440055abb7))
+* **deps:** override fast-uri/uuid/protobufjs to patched versions ([94fc886](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/94fc886f699b24267d940fff711a0c2889b38d65))
+
 # [0.6.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.5.3...0.6.0) (2026-05-31)
 
 
