@@ -337,15 +337,16 @@
 .hashi-status-bar-bridge.is-running {
 	color: var(--color-green);
 	cursor: pointer;
-	text-decoration-line: underline;
-	text-decoration-style: solid;
+	/* Shorthand (not the -line/-style longhands) — the longhands are only
+	 * partially supported by Obsidian 1.6.5's Electron; the shorthand is fully
+	 * supported and carries the same solid-underline cue. */
+	text-decoration: underline solid;
 	text-underline-offset: 2px;
 }
 
 .hashi-status-bar-bridge.is-error {
 	color: var(--color-red);
-	text-decoration-line: underline;
-	text-decoration-style: wavy;
+	text-decoration: underline wavy;
 	text-underline-offset: 2px;
 }
 
