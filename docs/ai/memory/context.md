@@ -1,5 +1,19 @@
 # Context Memory
 
+## Next up — documentation refresh pass (queued 2026-05-31, after PR #15 / 0.6.0)
+
+The IDE Bridge feature shipped and the user-facing naming was changed to **Tomo chat** / **Tomo context** (was Connection / IDE Bridge). The docs *text* is aligned, but the visual + structural layer lags. Do a dedicated pass covering:
+
+- **Screenshots** — recapture to reflect the renamed three-section settings tab and new labels:
+  - `assets/settings-tab-overview.png` — now **three** sections (Tomo chat / Tomo context / Instruction executor); current shot/alt predates Tomo context.
+  - `assets/settings-connection.png` — content says "Tomo connection"; recapture as "Tomo chat" (and rename the asset file → update refs in `docs/configuration.md`, `docs/chat.md`).
+  - **No screenshots exist yet for Tomo context** — add the IDE-bridge settings section + the 友 popover showing the IDE state line. `docs/context.md` currently has none.
+  - Verify `instance-picker.png`, `settings-executor.png`, `status-bar-tomo*.png` still current.
+- **Logos / diagrams** — `assets/two-components-overview.svg` is now wrong: there are **three** components (A chat, B executor, C context). File name, content, and the README alt text all say "two". Redraw + rename. Re-check `tomo-hashi-hanko.png`.
+- **Structure** — `docs/configuration.md` still has no **Tomo context** settings section (only A — Tomo chat + B — Instruction executor); add it. Reconcile the "branch A/B/C" labels across README + docs. Sanity-check that `chat.md` (connection mechanics) vs `session-view.md` (chat UI) naming is still unambiguous now both read as "chat".
+- **Naming scheme** — asset filenames still encode the old terms (`settings-connection.png`, `two-components-overview.svg`); decide rename-files-vs-leave and update all refs. XDD specs + AI memory were intentionally left under the old names as historical records (scope decision 2026-05-31) — confirm that's still the desired boundary.
+- **etc** — bump `PRIVACY.md` "Last reviewed" date when touched; grep the README MiYo-family blurb for any remaining "two components" phrasing.
+
 ## Release pipeline — operational from 0.2.0 forward
 
 Releases are automated by **semantic-release** on every push to `main`. The workflow (`.github/workflows/release.yml`) runs `npx semantic-release`, which analyses conventional-commit subjects since the last tag, computes the next semver, runs `version-bump.mjs` (propagates version to `manifest.json` and `versions.json`), tags the commit, and drafts a GitHub release with `build/main.js`, `manifest.json`, and `styles.css` as assets.
