@@ -34,10 +34,13 @@ The default `vitest run` covers ~800 unit tests across 56 files. Live tests are 
 ## Lint
 
 ```bash
-npm run lint         # eslint with eslint-plugin-obsidianmd rules
+npm run lint         # eslint (src/ + manifest.json) AND stylelint (styles.css)
+npm run lint:css     # stylelint styles.css only
 ```
 
-Obsidian-specific rules check for forbidden DOM patterns, raw `fs` writes to vault paths, and the patterns enumerated in our internal audit (see [the registerDomEvent hardening PR](https://github.com/MMoMM-org/miyo-tomo-hashi/pull/1) for an example).
+ESLint's Obsidian-specific rules check for forbidden DOM patterns, raw `fs` writes to vault paths, and the patterns enumerated in our internal audit (see [the registerDomEvent hardening PR](https://github.com/MMoMM-org/miyo-tomo-hashi/pull/1) for an example).
+
+`npm run lint` also runs **stylelint** with `stylelint-no-unsupported-browser-features`, which mirrors the Obsidian community-plugin bot's CSS check: it reports any CSS feature only *partially* supported by Obsidian's Chromium (pinned via the `browserslist` floor `chrome 124`, the engine in Obsidian 1.6.5 / Electron 30). This is what catches `text-decoration` with a style value (`solid`/`wavy`) — the bot flags it even though ESLint never lints CSS. Prefer `border-bottom` for underline-style state cues (see `styles.css`).
 
 ## Test vault
 
