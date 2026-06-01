@@ -1,3 +1,10 @@
+# [0.7.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.6.2...0.7.0) (2026-06-01)
+
+
+### Features
+
+* **settings:** folder autocomplete for Tomo inbox + hooks directory paths ([86e91d1](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/86e91d1a7be1d2f9cace65cf237ea56f0f3f22c0))
+
 ## [0.6.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.6.1...0.6.2) (2026-05-31)
 
 
