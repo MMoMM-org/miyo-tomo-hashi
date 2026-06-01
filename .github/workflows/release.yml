@@ -8,6 +8,8 @@ permissions:
     contents: write
     issues: write
     pull-requests: write
+    id-token: write # OIDC token for sigstore signing of build provenance
+    attestations: write # write the artifact attestation for released assets
 
 jobs:
     release:
@@ -33,3 +35,16 @@ jobs:
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: npx semantic-release
+
+            # Provenance for the released assets. semantic-release rebuilds
+            # build/ during its prepare step (version-bump + npm run build), so
+            # by the time it finishes the on-disk files are the exact bytes it
+            # uploaded — attesting them here yields matching digests. Verify a
+            # downloaded asset with: gh attestation verify main.js --repo MMoMM-org/miyo-tomo-hashi
+            - name: Attest build provenance
+              uses: actions/attest-build-provenance@v2
+              with:
+                  subject-path: |
+                      build/main.js
+                      build/manifest.json
+                      build/styles.css

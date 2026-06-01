@@ -34,6 +34,7 @@ import { ideBridgeStore } from "../ide-bridge/ideBridgeStore";
 import type { IdeBridgeState } from "../ide-bridge/state";
 import type { PluginSettings } from "../types/index";
 import { ConfirmModal } from "../ui/ConfirmModal";
+import { FolderSuggest } from "./FolderSuggest";
 import { HeaderSection } from "./HeaderSection";
 import { InstancePickerModal } from "./InstancePickerModal";
 
@@ -538,12 +539,18 @@ export class SettingsTab extends PluginSettingTab {
 				// Wrap the pure handler with UI-revert on rejection: the pure
 				// handler doesn't update plugin.settings[key] when invalid, so
 				// re-stamping the input from the (unchanged) settings restores
-				// the prior safe value.
-				text.onChange(async (v) => {
+				// the prior safe value. Shared by both the text onChange and the
+				// folder-autocomplete selection so a picked folder runs the same
+				// path-safety guard as a typed one.
+				const apply = async (v: string): Promise<void> => {
 					await handler(v);
 					if (this.plugin.settings[key] !== v) {
 						text.setValue(this.plugin.settings[key]);
 					}
+				};
+				text.onChange(apply);
+				new FolderSuggest(this.app, text.inputEl, (path) => {
+					void apply(path);
 				});
 			});
 	}
