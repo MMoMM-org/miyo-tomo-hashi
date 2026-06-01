@@ -165,6 +165,8 @@ export class App {
 			async () => {},
 		),
 		createFolder: vi.fn<(path: string) => Promise<void>>(async () => {}),
+		// FolderSuggest enumerates folders for the path-setting autocomplete.
+		getAllFolders: vi.fn<(includeRoot?: boolean) => TFolder[]>(() => []),
 	};
 	workspace = {
 		getActiveViewOfType: vi.fn(),
@@ -304,6 +306,9 @@ export class Setting {
 			// component returns itself from setValue/setPlaceholder/onChange so
 			// both fluent chaining and separate-call patterns work in tests.
 			const component = {
+				// Real Obsidian exposes the underlying <input> as `inputEl`;
+				// FolderSuggest attaches its type-ahead to it.
+				inputEl: document.createElement("input"),
 				setValue: vi.fn(() => component),
 				setPlaceholder: vi.fn(() => component),
 				onChange: vi.fn(() => component),
@@ -508,6 +513,34 @@ export class Modal {
 	onClose(): void | Promise<void> {
 		// default: no-op; subclasses override
 	}
+}
+
+// --- Input suggest (folder autocomplete base) ---
+//
+// Mirrors the surface FolderSuggest relies on: constructor (app, inputEl),
+// app field, setValue/getValue on the input, and no-op popover lifecycle.
+// `getSuggestions` / `renderSuggestion` / `selectSuggestion` are provided by
+// the subclass under test; tests can call `getSuggestions` directly to assert
+// the vault-backed filtering without driving the real popover.
+export abstract class AbstractInputSuggest<T> {
+	app: App;
+	limit = 100;
+
+	constructor(app: App, protected inputEl: HTMLInputElement) {
+		this.app = app;
+	}
+
+	setValue = vi.fn((value: string) => {
+		this.inputEl.value = value;
+	});
+	getValue = vi.fn(() => this.inputEl.value);
+	close = vi.fn();
+	open = vi.fn();
+	onSelect = vi.fn(() => this);
+
+	protected abstract getSuggestions(query: string): T[] | Promise<T[]>;
+	abstract renderSuggestion(value: T, el: HTMLElement): void;
+	abstract selectSuggestion(value: T, evt?: MouseEvent | KeyboardEvent): void;
 }
 
 // --- Event ref (opaque marker) ---
