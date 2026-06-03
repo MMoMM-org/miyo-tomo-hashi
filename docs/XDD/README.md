@@ -43,6 +43,10 @@ Open items from the 2026-04-25 multi-batch spec review (classified **Defer**).
 Re-triaged 2026-06-03: M20, M25, L1 verified **resolved** (latency budgets dropped
 in the 2026-04-28 pass; 50-file batch documented as acceptable for v0.1; 001 scope
 no longer counts the 002-owned palette command) and M3 was already closed.
+Resolved in the 2026-06-03 docs pass and pruned from the table below: **M26** (#26 —
+Docker Engine API floor + host-runtime compatibility table), **M27** (#27 — no per-OS
+runtime gating, document-not-gate decision), and **M24** (#25 — Test seam strategy
+sections added to all three plan READMEs).
 
 The remaining open items are tracked as GitHub issues — label
 [`deferred-review`](https://github.com/MMoMM-org/miyo-tomo-hashi/labels/deferred-review):
@@ -50,7 +54,4 @@ The remaining open items are tracked as GitHub issues — label
 | Item | Issue |
 |------|-------|
 | M23 — partial-failure tests (leaked folder, no cleanup in v0.1) | [#24](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/24) |
-| M24 — "Test seam strategy" section in both plan READMEs | [#25](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/25) |
-| M26 — Docker Engine API floor + tested runtimes | [#26](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/26) |
-| M27 — OS-tier runtime guard / document no per-OS gating | [#27](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/27) |
 | H25 — prefers-reduced-motion test plan | [#28](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/28) |
