@@ -136,6 +136,22 @@ npm run dev                 # esbuild watch mode with inline sourcemaps
 
 ---
 
+## Test seam strategy
+
+Every external boundary this spec touches is exercised through one explicit, named seam — there are no production-only test hooks and no incidental reliance on real wall-clock time. Pick the matching seam when adding a test; do not invent a new one without logging a deviation.
+
+| Boundary | Seam | Mechanism | Where (representative) |
+|---|---|---|---|
+| Docker daemon | `vi.mock('dockerode')` | Module mock; resolve/reject the hijacked stream + container list per case (daemon-down, EACCES, empty list, vanish-mid-session) | `test/unit/connection/docker.test.ts` |
+| Real Docker (live) | none — real daemon | `npm run test:live` (node env, 90 s timeout); the one boundary deliberately left un-mocked per ADR-10 | `test/live/docker-attach.live.test.ts` |
+| Time / reconnect backoff | `vi.useFakeTimers()` | Drive the `[500, 1000, 2000, 4000, 8000]` ms delay ladder with `await vi.advanceTimersByTimeAsync(ms)` | `test/unit/connection/reconnectLoop.test.ts`, `TomoConnection.test.ts` |
+| Obsidian API + DOM | `test/__mocks__/obsidian.ts` | **Side-effect** `import "obsidian"` at the top of every test file installs the `HTMLElement.prototype` shim (`createDiv`/`createEl`/…). Type-only imports erase before resolution — the shim never runs, `createDiv` is missing | all UI tests |
+| Terminal (xterm.js) | constructor injection | Pass a fake terminal handle; assert OSC 8/52 disabled and write/resize calls — no real xterm runtime | `test/unit/ui/chat-view/terminalHost.test.ts`, `TomoChatView.test.ts` |
+
+**Async-ordering mandate.** Any test that asserts the *order or timing* of asynchronous events — reconnect-delay progression, detach-while-write-in-flight interleave, autoReconnect fail-clean — MUST control time and the event loop explicitly via `vi.useFakeTimers()` plus `await vi.advanceTimersByTimeAsync(...)` (and explicit microtask flushes where needed). A bare real-time `setTimeout`/`sleep` in an ordering test is rejected in review: racing the real clock is this project's primary flake source. The live boundary is the sole exception — it owns a generous real timeout because it cannot fake the daemon's clock.
+
+---
+
 ## Canonical Task Shape (RED → GREEN → REFACTOR)
 
 Every task in every phase file follows this exact gate. The `Test:` step is NOT documentation — it is a *failing test must exist and be observed to fail* gate before any production code is written.

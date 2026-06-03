@@ -179,6 +179,22 @@ npm run lint                # ESLint with obsidianmd rules
 
 ---
 
+## Test seam strategy
+
+Every external boundary this spec touches is exercised through one explicit, named seam — there are no production-only test hooks and no incidental reliance on real wall-clock time. Pick the matching seam when adding a test; do not invent a new one without logging a deviation.
+
+| Boundary | Seam | Mechanism | Where (representative) |
+|---|---|---|---|
+| Vault filesystem | `FakeVaultFS` | In-memory implementation of the `VaultFS` port (`src/vault/FakeVaultFS.ts`); `createFolder`/`exists`/`process`/`renameFile` semantics mirror Obsidian. Both the real adapter and the fake run the shared `VaultFS.contract.test.ts` | all `test/unit/actions/*` + `test/unit/executor/*` |
+| Hook loader | `.cjs` fixtures + `createRequire` | Fixture hooks in `test/__fixtures__/hooks/` (`.cjs` because `package.json` is `"type": "module"`); loaded via `createRequire` with per-run `delete require.cache[...]`. Covers throws / returns-errors / async-resolves / malformed / async-infinite-loop | `test/unit/hooks/HookRunner.test.ts`, `FsHookLoader.test.ts` |
+| Schema validator | scripted `validate()` | ajv compiled once at module load (ADR-1 v2); tests call `validate(fixture)` over a valid baseline mutated per case (version `0`/`2`, missing fields, 0 actions) — no codegen step, no separate validator class | `test/unit/schema/validator.test.ts`, `vendored-schema.test.ts` |
+| Time / clock | injected `clock` + `vi.useFakeTimers()` | `HandlerContext.clock` supplies deterministic timestamps (run-log filenames, `at_time` prefixes); `vi.useFakeTimers()` drives the hook timeout (`timeoutMs`) and same-minute run-log `_2` suffix | `test/unit/hooks/HookRunner.test.ts`, `test/unit/executor/runLog.test.ts` |
+| Obsidian API + DOM | `test/__mocks__/obsidian.ts` | **Side-effect** `import "obsidian"` at the top of every test file installs the `HTMLElement.prototype` shim. Type-only imports erase before resolution — the shim never runs | all UI tests (modal, settings, status bar) |
+
+**Async-ordering mandate.** Any test that asserts the *order or timing* of asynchronous events — mid-run cancellation between actions, an in-flight run ignoring a mid-run policy toggle, an async-hanging hook hitting its timeout, two runs colliding in the same minute — MUST control time and the event loop explicitly via `vi.useFakeTimers()` plus `await vi.advanceTimersByTimeAsync(...)` (and explicit microtask flushes where needed). A bare real-time `setTimeout`/`sleep` in an ordering test is rejected in review: racing the real clock is this project's primary flake source. Note the hook-timeout fixture is deliberately **async-hanging** (`await new Promise(() => {})`), not a synchronous `while(true)` — a sync loop blocks the event loop and no `Promise.race` timeout can fire against it.
+
+---
+
 ## Canonical Task Shape (RED → GREEN → REFACTOR)
 
 Every task in every phase file follows this exact gate. The `Test:` step is NOT documentation — it is a *failing test must exist and be observed to fail* gate before any production code is written.

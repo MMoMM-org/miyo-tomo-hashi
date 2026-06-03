@@ -37,8 +37,8 @@ The following items from the 2026-04-25 multi-batch spec review on branch `feat/
 - **M23 — F4 partial-failure tests.** When a vault write fails after a partial side effect (e.g., destination folder created, then `fileManager.renameFile` throws), the leaked folder is currently undocumented. Add unit tests in T3.2 / T3.3 that pin the actual behaviour ("leaked folder, no cleanup in v0.1") and document in PRD F4 Edge Cases.
   - Location: 002 plan/phase-3.md handler tasks.
 
-- **M24 — Test seam strategy section.** Each plan README should list the seams (dockerode via `vi.mock`, Vault via FakeVaultFS, time via `vi.useFakeTimers`, hook loader via fixtures, schema validator scripted) and mandate explicit timer/event-loop control for any test asserting async ordering. Currently implicit.
-  - Location: both `plan/README.md` files — add a "Test seam strategy" section.
+- **M24 — Test seam strategy section.** ✅ RESOLVED 2026-06-03 (issue #25). Added a "Test seam strategy" section to **all three** plan READMEs (scoped to all three, not just the two named at review time, since 003 has its own async seams). Each lists its boundaries → named seam (001: dockerode `vi.mock` / real-Docker live / reconnect-backoff fake timers / obsidian mock / xterm injection; 002: `FakeVaultFS` / `.cjs` hook fixtures + createRequire / scripted ajv `validate()` / injected clock + fake timers; 003: real-loopback `WsServer` port:0 / pure frame+JSON-RPC / CM6 editor mock / 100ms debounce fake timers) and carries an **async-ordering mandate**: ordering tests MUST use `vi.useFakeTimers()` + `advanceTimersByTimeAsync` (or deterministic byte-buffer `waitFor` for the real-loopback transport) — never a bare real-time `setTimeout`/`sleep`.
+  - Location: all three `plan/README.md` files — "Test seam strategy" section.
 
 - **M25 — 50-file batch perf bound.** PRD-002 edge case mentions 50-file batch with no upper bound or perf test. Decide: (a) hard upper bound + Notice-on-exceed, (b) perf test in live tests with 30 s end-to-end budget, or (c) lazy/streaming validation. Currently allows silent runaway.
   - Location: 002 PRD F1/F2 Constraints; 002 plan/phase-2 or phase-6 perf test.
