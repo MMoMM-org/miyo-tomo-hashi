@@ -42,8 +42,7 @@ All three components share the plugin process and the settings tab, but **nothin
 
 ### A — Tomo session GUI
 
-A way to directly talk to Tomo from inside Obsidian. It displays the docker console 1:1 and allows you to interact with Tomo directly, letting the Tomo docker run in the background.
-It doesn't manage Tomo though.
+A way to talk to Tomo directly from inside Obsidian. It displays the Docker console 1:1 and lets you interact with Tomo while the Tomo Docker container runs in the background — it doesn't manage Tomo, though.
 
 - **Unified chat tab** rendering the Tomo container's TUI via xterm.js
 - **Bidirectional input** — type directly into the terminal; `@file` references are injected into the session via the file-menu action
@@ -56,8 +55,7 @@ It doesn't manage Tomo though.
 
 ### B — Tomo context (ambient editor context for Tomo)
 
-A way to directly let Tomo know what you are working on. Which note is open, which text is selected.. allows you to ask Tomo: "Can you find more material like this in my vault?" 
-Tomo will have the selected text directly as context (this means you can circumvent [MiYo Kado](https://github.com/MMoMM-org/miyo-kado) access control to files for this part), but for any further information Tomo will use Kado again.
+A way to let Tomo know what you're working on — which note is open, which text is selected. That lets you ask Tomo things like: "Can you find more material like this in my vault?" Tomo gets the selected text directly as context (so for this part you can circumvent [MiYo Kado](https://github.com/MMoMM-org/miyo-kado) access control to files), but for anything further Tomo uses Kado again.
 
 - **Localhost WebSocket server** bound to `127.0.0.1` (default port `23027`, configurable). Loopback-only — not reachable from any other host.
 - **Claude Code IDE protocol** — gives Claude Code in your Tomo container live ambient context: the active file path (vault-relative), cursor position, and currently selected text.
