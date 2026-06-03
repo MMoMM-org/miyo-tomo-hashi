@@ -68,9 +68,13 @@ Tomo will have the selected text directly as context (this means you can circumv
 
 ### C — Instruction executor
 
-A way to delegate the tedious work of moving, renaming, editing notes from your Inbox to the right place AFTER you approved the suggestion document. Hashi will do the same steps you would do, plus some more by using extensible hooks.
-Need an alias reconfigured after renaming a note from the inbox => hook. Need an update in a different note after you deleted a note => hook. Don't know how to write those hooks => Ask Tomo 🙂
-Cut down on tedious work.. have the peace of mind that Hashi will do only the things you want. (Backup in place recommended 🙂)
+Delegate the tedious work — moving, renaming, and editing notes from your Inbox to the right place — *after* you've approved the suggestion document. Hashi does the same steps you would, plus a few more via extensible hooks:
+
+- Alias needs reconfiguring after a rename? → a hook does it.
+- A different note needs updating after a delete? → a hook.
+- Don't know how to write one? → ask Tomo 🙂
+
+Cut down on the busywork — with the peace of mind that Hashi does only what you want. (A backup is still recommended 🙂)
 
 - **Three execution modes**: Confirm before run / Auto-run with preview / Silent
 - **Preview → progress → summary** modal, all stages in one Modal instance
