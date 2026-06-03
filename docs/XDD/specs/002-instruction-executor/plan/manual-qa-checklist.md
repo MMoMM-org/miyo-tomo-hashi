@@ -1,12 +1,26 @@
 ---
 title: "Manual QA Checklist — 002 Instruction Executor"
-status: pending
-version: "1.0"
+status: superseded-by-live-walks
+version: "1.1"
 generated: 2026-04-29
+closed: 2026-06-03
 target_vault: ../temp/Privat-Test
 ---
 
 # Manual QA Checklist
+
+> **CLOSED 2026-06-03 — gate met by live Tomo→Hashi walks, not by a row-by-row
+> pass of this file.** This synthetic 177-row checklist tests Hashi against
+> invented data; every real defect found in v0.1 was **Tomo↔Hashi drift**
+> (schema-drift-018, the format-spec deltas, the `link_to_moc` anchor-model
+> change) — drift that from-scratch fixtures would never have surfaced. The
+> effective gate was running real Tomo output through Hashi on a full note set,
+> with a user-authored `.cjs` alias-rewrite hook, and feeding every regression
+> back as a unit test. See the 002 README Decisions Log (2026-06-03) for the
+> evidence trail (`_walks/2026-04-30T1131_run-log.md` + the two fix waves). The
+> rows below are retained as a reference inventory of observable behaviour, not
+> as an open obligation. A repeatable Tomo-emitted fixture set is the noted
+> future option if automated integration coverage is ever wanted.
 
 > Run this checklist in real Obsidian against `../temp/Privat-Test` before
 > declaring v0.1 release-gate met. Build deploy enabled via
@@ -280,11 +294,24 @@ target_vault: ../temp/Privat-Test
 
 ## Release gate
 
-- [ ] All checklist rows above marked Y in Pass column
-- [ ] No deviations discovered that contradict shipped spec — any issues logged in `docs/XDD/specs/002-instruction-executor/README.md` Decisions Log
-- [ ] Tomo `applied: false` round-trip verified end-to-end (Tomo writes `false`; Hashi flips to `true`; Tomo's next session reads both states correctly) — architecture-06 §10
-- [ ] Manifest `isDesktopOnly: true` confirmed (already shipped per spec 001)
-- [ ] No console errors in DevTools after a full run
+> Closed 2026-06-03 by owner acceptance. The original "all rows Y" definition is
+> intentionally **not** satisfied — see the CLOSED note at the top of this file.
+> Boxes below reflect what the live Tomo→Hashi walks actually established; the
+> first box (full row-by-row pass) is left unchecked on purpose to keep the
+> record honest.
+
+- [ ] All checklist rows above marked Y in Pass column — *not done; superseded by live walks (see top-of-file note)*
+- [x] No deviations discovered that contradict shipped spec — deviations that *were* found became contract deltas + fixes, all logged in `docs/XDD/specs/002-instruction-executor/README.md` Decisions Log and shipped with regression tests
+- [x] Tomo `applied: false` round-trip verified end-to-end (Tomo writes `false`; Hashi flips to `true`; Tomo's next session reads both states correctly) — architecture-06 §10
+- [x] Manifest `isDesktopOnly: true` confirmed (already shipped per spec 001)
+- [x] No console errors in DevTools after a full run (real-vault walks, 2026-04-30 + 2026-05-27)
+
+### Not exercised by the live walks (unit-tested only — accepted gap for v0.1)
+
+The real note sets did not contain inputs that trigger these paths, so they were
+covered by the unit suite rather than eyeballed in real Obsidian: path-safety
+deny-list rejection (F9), `schema_version: 2` rejection (F2), mid-run
+cancellation, silent-mode runs, and missing-`.md`-peer runs.
 
 ## Notes / observations
 
