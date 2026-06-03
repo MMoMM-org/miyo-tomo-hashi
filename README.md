@@ -72,7 +72,7 @@ Delegate the tedious work — moving, renaming, and editing notes from your Inbo
 - A different note needs updating after a delete? → a hook.
 - Don't know how to write one? → ask Tomo 🙂
 
-Cut down on the busywork — with the peace of mind that Hashi does only what you want. (A backup is still recommended 🙂)
+Cut down on the busywork — with the peace of mind that Hashi does only what you want. (A backup is still recommended 🙂 — shameless plug: my own [Obsidian Archivist](https://github.com/MMoMM-org/obsidian-archivist) does exactly that.)
 
 - **Three execution modes**: Confirm before run / Auto-run with preview / Silent
 - **Preview → progress → summary** modal, all stages in one Modal instance
