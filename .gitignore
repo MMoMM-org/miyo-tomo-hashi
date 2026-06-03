@@ -39,6 +39,11 @@ _archive/
 # Claude Code
 .claude/
 
+# tcs-git-helpers runtime + user-local hook config (the *.example templates ARE committed)
+.githooks/.setup.lock
+.githooks/.config
+.githooks/exclude-paths
+
 # Docker-based dev environment (deployed by ~/Kouzou/scripts/) — anchored to repo root
 /claude-docker/
 /claude-docker-home/
