@@ -68,7 +68,7 @@ The following items from the 2026-04-25 multi-batch spec review on branch `feat/
 
 ### Architectural / process
 
-- **M12 — Hierarchical CLAUDE.md cull.** Three of four hierarchical CLAUDE.md files (`docs/`, `docs/ai/`, `test/`) restate global rules from `~/Kouzou/standards/`. `docs/CLAUDE.md` was rewritten in the 2026-04-25 drift batch; the others remain. Decide later whether to delete them once implementation starts and we know what scoped guidance the implementer actually needs.
+- **M12 — Hierarchical CLAUDE.md cull. RESOLVED 2026-06-03 (issue #29, keep-and-fix).** Decision: keep all hierarchical CLAUDE.md files as navigational anchors, but rewrite to point at where rules live instead of restating global standards. `src/CLAUDE.md` and `test/CLAUDE.md` rewritten Hashi-specific (test/ had Python-naming residue `test_<module>.py` in a vitest repo); `docs/ai/CLAUDE.md` and `docs/CLAUDE.md` already curated, left as-is.
   - Location: `docs/ai/CLAUDE.md`, `test/CLAUDE.md`, `src/CLAUDE.md`.
 
 ### Push back closed

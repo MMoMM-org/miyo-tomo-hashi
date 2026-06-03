@@ -50,5 +50,4 @@ The remaining open items are tracked as GitHub issues — label
 | M26 — Docker Engine API floor + tested runtimes | [#26](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/26) |
 | M27 — OS-tier runtime guard / document no per-OS gating | [#27](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/27) |
 | H25 — prefers-reduced-motion test plan | [#28](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/28) |
-| M12 — hierarchical CLAUDE.md cull decision | [#29](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/29) |
 | L3, L11, L12 — docs polish (MoSCoW totals, test-data isolation, UI assertion tags) | [#30](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/30) |
