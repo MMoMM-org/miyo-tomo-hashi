@@ -88,3 +88,4 @@ A separate `disconnected → connected` edge in the indicator's render loop fire
 
 - [Chat](chat.md) — picker, reconnect schedule, force-reconnect semantics
 - [Status bar 友](chat.md#status-bar-) — three-state icon + popover
+- [Tomo context](context.md) — feed your editor context to Tomo (opt-in, off by default)

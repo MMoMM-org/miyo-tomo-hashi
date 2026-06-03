@@ -1,25 +1,22 @@
 # How It Works
 
-Hashi is two independent components living inside one Obsidian plugin. They share nothing at runtime — different code paths, different state, different status-bar icons.
+Hashi is three independent components living inside one Obsidian plugin. They share nothing at runtime — different code paths, different state, different status-bar icons.
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                  Obsidian (desktop only)                    │
-│                                                             │
-│  ┌──────────────────────┐     ┌─────────────────────────┐  │
-│  │ A. Tomo Session GUI  │     │ B. Instruction Executor │  │
-│  │  (status bar 友)      │     │  (status bar 橋)         │  │
-│  │                       │     │                         │  │
-│  │ Chat view ←→ xterm   │     │ Reads _instructions.json│  │
-│  │ Docker container     │     │ Validates → preview     │  │
-│  │ attach / reconnect   │     │ Executes via Vault API  │  │
-│  └──────────┬───────────┘     └────────────┬────────────┘  │
-│             │                              │                │
-│             ▼                              ▼                │
-│   Docker socket (Unix)              Obsidian Vault API     │
-│   /var/run/docker.sock               vault.create / move / │
-│   → running Tomo container           process / trash …    │
-└────────────────────────────────────────────────────────────┘
+┌─ Obsidian (desktop only) ── one plugin · three independent components ───
+│
+│  A. Tomo session          (status bar 友)
+│       Chat view ←→ xterm.js · attaches to a Tomo Docker container
+│       └─▶ Docker socket  /var/run/docker.sock           · outbound
+│
+│  B. Tomo context          (opt-in · off by default)
+│       Streams active file · cursor · selection to Tomo (Claude Code)
+│       └─▶ 127.0.0.1:23027 WebSocket · auth-gated        · inbound, loopback
+│
+│  C. Instruction executor  (status bar 橋)
+│       Reads _instructions.json → validate → preview → apply
+│       └─▶ Obsidian Vault API · create / move / process  · local only
+└──────────────────────────────────────────────────────────────────────────
 ```
 
 ## A — Tomo Session GUI
@@ -33,7 +30,18 @@ The Session View (chat tab + status-bar 友 icon) is a thin wrapper over a runni
 
 Details: [Session View](session-view.md), [Chat](chat.md).
 
-## B — Instruction Executor
+## B — Tomo context
+
+The Tomo context bridge (opt-in, **off by default**) runs a loopback WebSocket server that hands Claude Code inside your Tomo container live editor context. It is the *only* inbound surface Hashi has, and it never leaves your machine.
+
+- **Transport:** WebSocket on `127.0.0.1:{port}` (default `23027`), Claude Code IDE / JSON-RPC protocol. Loopback only — never `0.0.0.0`.
+- **What it sends:** the active file's vault-relative path, the cursor position, and the current selection — streamed live. Nothing is logged or persisted.
+- **Opt-in + auth-gated:** no socket is opened until you enable it; an `x-claude-code-ide-authorization` bearer token (`hashi_<UUID>`) is checked before the handshake — a wrong or missing token gets HTTP 401.
+- **Tomo handles its side.** You copy the token + port into Tomo; Tomo writes the container-side discovery file. Hashi never reaches into the container.
+
+Details: [Context](context.md). Trust statement: [PRIVACY.md](../PRIVACY.md).
+
+## C — Instruction Executor
 
 The executor (modal + status-bar 橋 icon) reads `_instructions.json` files emitted by Tomo, validates them against a vendored JSON Schema, and runs each action against your vault through Obsidian's Vault API.
 
@@ -47,7 +55,7 @@ Details: [Instruction Executor](instruction-executor.md), [Actions](action-refer
 
 ## What Hashi does NOT do
 
-- **No external surface.** Unlike its sibling [Kado](https://github.com/MMoMM-org/miyo-kado), Hashi opens no ports, exposes no MCP server, accepts no inbound network traffic. The Docker socket is *outbound* — Hashi initiates the connection.
+- **No external surface off-host.** Hashi's only inbound surface is the **Tomo context** bridge — an opt-in, loopback-only (`127.0.0.1`) WebSocket, **disabled by default** and unreachable from any other host. When it is off (the default) there is no inbound surface at all. Unlike its sibling [Kado](https://github.com/MMoMM-org/miyo-kado), Hashi exposes no MCP server and opens no off-host port; the Docker socket is *outbound* — Hashi initiates that connection.
 - **No approval gate.** The preview modal shows what will happen but is informational, not a permission boundary. Approval lives upstream in Tomo's review step.
 - **No vault rollback in v0.1.** The run log records what happened; reversing it is your responsibility.
 - **No telemetry.** No crash reports, no analytics, no background network calls. See [PRIVACY.md](../PRIVACY.md).
@@ -63,6 +71,7 @@ Actions targeting `.obsidian/`, `.git/`, `.trash/`, the configured hooks directo
 | Plugin entry | `src/main.ts` | Registers everything; double-onload-guarded |
 | Connection | `src/connection/` | Docker dial, attach stream, reconnect loop |
 | Chat UI | `src/ui/chat-view/`, `src/ui/status-bar/` | xterm host, status-bar 友 |
+| Tomo context | `src/ide-bridge/` | Loopback WS server + Claude Code IDE protocol, token, selection tracker (`IdeBridge`, `wsServer`, `token`, `selectionTracker`, `ideBridgeStore`) |
 | Schema | `src/schema/` | Vendored Tomo schema + ajv validator |
 | Executor | `src/executor/` | RunState store, planner, per-action handler |
 | Actions | `src/actions/` | One handler per action kind (`create_moc`, `move_note`, …) |

@@ -30,6 +30,6 @@
 ## Next steps
 
 - [Configure the plugin](configuration.md) — settings reference
-- [How It Works](how-it-works.md) — architecture and the two-component model
+- [How It Works](how-it-works.md) — architecture and the three-component model
 - [Session View](session-view.md) — connect to a Tomo container
 - [Instruction executor](instruction-executor.md) — run vault updates from `_instructions.json`

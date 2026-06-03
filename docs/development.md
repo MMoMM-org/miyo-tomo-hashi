@@ -57,7 +57,7 @@ After the manual-QA pass, walk the checklist at `docs/XDD/specs/002-instruction-
 
 ## Architecture
 
-See [How It Works](how-it-works.md) for the runtime architecture — the two-component split, the layer boundaries, and what each module owns.
+See [How It Works](how-it-works.md) for the runtime architecture — the three-component split, the layer boundaries, and what each module owns.
 
 | Layer | Module | Notes |
 |---|---|---|

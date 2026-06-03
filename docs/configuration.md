@@ -1,6 +1,6 @@
 # Configuration
 
-All settings live under **Settings → MiYo Tomo Hashi**. The tab is split by component — the connection settings drive the [Session View](session-view.md), the executor settings drive the [Instruction Executor](instruction-executor.md).
+All settings live under **Settings → MiYo Tomo Hashi**. The tab is split by component — the chat settings drive the [Session View](session-view.md), the **Tomo context** settings drive the loopback [context bridge](context.md), and the executor settings drive the [Instruction Executor](instruction-executor.md).
 
 > Screenshot — full settings tab with both sections collapsed for overview.
 <p align="center">
@@ -27,7 +27,26 @@ Connection state itself is **not** persisted — only the chosen-instance name. 
 
 ---
 
-## B — Instruction executor
+## B — Tomo context
+
+Tomo context is **off by default**. When enabled it runs a loopback-only WebSocket bridge that hands Tomo (Claude Code) your live editor context — active file, cursor, and selection. The full enable + Tomo-wiring walkthrough lives in [Context](context.md).
+
+<p align="center">
+  <img src="../assets/settings-tab-chat-context.png" alt="Tomo context section in Settings — Status row, Enable toggle, Port, and Auth token with Copy and Regenerate buttons" width="720" />
+</p>
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Status row** | Live state from `ideBridgeStore` — Stopped / Running on `127.0.0.1:{port}` — N client(s) / Error. | n/a |
+| **Enable** (`ideBridgeEnabled`) | Starts/stops the loopback WebSocket server. Off = no socket is opened at all. | **Off** |
+| **Port** (`ideBridgePort`) | Loopback port for the bridge (1024–65535). `23026` is rejected — reserved for [Kado](https://github.com/MMoMM-org/miyo-kado). Editable only while the bridge is stopped. | `23027` |
+| **Auth token** (`ideBridgeAuthToken`) | Bearer token (`hashi_<UUID>`) checked in the `x-claude-code-ide-authorization` header before the WebSocket handshake; a wrong or missing token gets HTTP 401. **Copy** and **Regenerate** buttons. Stored cleartext by design — loopback-only + single-user, no named threat actor. | *generated* |
+
+The bridge binds `127.0.0.1` only and never `0.0.0.0`; it is not reachable from any other host. Copying the token/port into Tomo and troubleshooting the connection are covered in [Context](context.md); the inbound-surface trust statement is in [PRIVACY.md](../PRIVACY.md).
+
+---
+
+## C — Instruction executor
 
 > Screenshot — executor section showing all 6 controls.
 <p align="center">
@@ -65,6 +84,7 @@ All settings live in `<vault>/.obsidian/plugins/miyo-tomo-hashi/data.json`. Obsi
 | Open chat view | ✓ | ✓ |
 | Force reconnect | ✓ | ✓ |
 | Status bar 友 | ✓ | — (icon shows disconnected) |
+| Tomo context bridge (opt-in) | — | — (server runs; useful once Tomo connects) |
 | Run instruction set (palette / file menu) | — | — |
 | Status bar 橋 | — | — |
 | Hooks | — | — |
@@ -74,4 +94,5 @@ The executor side has zero Docker dependency — you can use Hashi for instructi
 ## Next
 
 - [Session View](session-view.md) and [Chat](chat.md) — branch A
-- [Instruction Executor](instruction-executor.md), [Actions](action-reference.md), [Hooks](hooks.md), [Run Log](run-log.md) — branch B
+- [Context](context.md) — branch B
+- [Instruction Executor](instruction-executor.md), [Actions](action-reference.md), [Hooks](hooks.md), [Run Log](run-log.md) — branch C
