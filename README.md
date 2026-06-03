@@ -2,13 +2,14 @@
   <img src="assets/tomo-hashi-banner.svg" alt="MiYo Tomo Hashi" width="480" />
 </p>
 
-# MiYo Tomo Hashi — Obsidian ↔ Tomo Bridge
+# MiYo Tomo Hashi — Obsidian ↔ MiYo Tomo Bridge
 
 Three things in one Obsidian plugin:
 
-- **A** — A live chat tab that attaches to a running [Tomo](https://github.com/MMoMM-org/miyo-tomo) Docker container. Talk to Claude Code from inside Obsidian.
-- **B** — An instruction executor that runs `_instructions.json` files Tomo emits, applying batch vault edits with full preview, run logs, and idempotent re-runs.
-- **C** — **Tomo context**: a loopback bridge that gives Claude Code (running in your Tomo container) live editor context — active file, cursor position, and current selection — over a localhost WebSocket. Disabled by default; opt-in.
+- **A** — **Tomo session:** A live chat tab that attaches to a running [MiYo Tomo](https://github.com/MMoMM-org/miyo-tomo) (called Tomo further) Docker container. Talk to Tomo from inside Obsidian.
+- **B** — **Tomo context:** A loopback bridge that gives Tomo (running Claude Code) live editor context — active file, cursor position, and current selection — over a localhost WebSocket. Disabled by default; opt-in.
+- **C** — **Tomo instruction executor:** An instruction executor that runs `_instructions.json` files Tomo emits, applying batch vault edits with full preview, run logs, and idempotent re-runs.
+
 
 > Part of the **MiYo** family. The plugin is referred to as **MiYo Tomo Hashi** in the Obsidian community-plugin index and in the settings UI; "Hashi" alone is used as a short form throughout this README and the source. 橋 means *bridge*.
 
@@ -18,17 +19,21 @@ Three things in one Obsidian plugin:
 
 ## Why MiYo Tomo Hashi?
 
-Tomo (Claude Code) generates a lot of vault-shaped output — MOCs to create, notes to move, daily logs to update — and Tomo's review step is where you decide *what* to apply. Hashi is what runs the apply step, with two opinions baked in:
+tldr; you don't need, or can't really use this plugin without [MiYo Tomo](https://github.com/MMoMM-org/miyo-tomo)
+
+Tomo (Claude Code) generates a lot of vault-shaped output — MOCs to create, notes to move, daily logs to update — and Tomo's review step is where you decide *what* to apply. Hashi is what runs the apply step automated, with two opinions baked in:
 
 - **Apply happens locally, with a preview.** Nothing in your vault changes until you've seen the action list. Even auto-run mode shows the preview *first*, just without blocking. And if you have the peace of mind.. Tomo Hashi even does everything in the background.. your choice.
 - **Re-running is safe.** Every action has an idempotency probe. Hashi writes `applied: true` next to each action it commits, so a re-trigger picks up where it stopped — after a crash, after manual cleanup, after a partial cancellation.
 
 If you're already using Tomo for inbox processing or daily-note summaries, Hashi turns its review-output into one click.
 
+Hashi itself doesn't have any AI component, it is pure code.
+
 ## Three components, one plugin
 
 <p align="center">
-  <img src="assets/two-components-overview.svg" alt="MiYo Tomo Hashi architecture overview — A: Tomo Session GUI with the 友 status-bar icon (chat view ↔ xterm.js, Docker container attach, force reconnect, zoom, no external surface); B: Instruction Executor with the 橋 status-bar icon (_instructions.json runner, preview / progress / summary, hooks, run log per execution). The two share the plugin process and settings tab, nothing else." width="900" />
+  <img src="assets/three-components-overview.svg" alt="MiYo Tomo Hashi architecture overview — left column: A) Tomo session, a live chat tab over the Tomo container with the 友 status-bar icon, and B) Tomo context, an opt-in loopback WebSocket bridge (127.0.0.1) that streams the active file, cursor and selection to Tomo; right column: C) Instruction executor with the 橋 status-bar icon (_instructions.json runner, preview / progress / summary, hooks, run log per execution). The three share one plugin process and one settings tab, nothing else." width="900" />
 </p>
 
 All three components share the plugin process and the settings tab, but **nothing else**. You can use Hashi for instruction sets without ever connecting to a Tomo container, enable Tomo context without using the chat view, or use any combination independently. See [How It Works](docs/how-it-works.md) for the architectural boundary.
@@ -36,6 +41,9 @@ All three components share the plugin process and the settings tab, but **nothin
 ## Features
 
 ### A — Tomo session GUI
+
+A way to directly talk to Tomo from inside Obsidian. It displays the docker console 1:1 and allows you to interact with Tomo directly, letting the Tomo docker run in the background.
+It doesn't manage Tomo though.
 
 - **Unified chat tab** rendering the Tomo container's TUI via xterm.js
 - **Bidirectional input** — type directly into the terminal; `@file` references are injected into the session via the file-menu action
@@ -46,7 +54,10 @@ All three components share the plugin process and the settings tab, but **nothin
 - **Sync-aware** — the persisted instance name handles Obsidian Sync correctly (with a visible warning)
 - **No external surface** — Docker socket is *outbound only*, no ports opened
 
-### C — Tomo context (ambient editor context for Tomo)
+### B — Tomo context (ambient editor context for Tomo)
+
+A way to directly let Tomo know what you are working on. Which note is open, which text is selected.. allows you to ask Tomo: "Can you find more material like this in my vault?" 
+Tomo will have the selected text directly as context (this means you can circumvent [MiYo Kado](https://github.com/MMoMM-org/miyo-kado) access control to files for this part), but for any further information Tomo will use Kado again.
 
 - **Localhost WebSocket server** bound to `127.0.0.1` (default port `23027`, configurable). Loopback-only — not reachable from any other host.
 - **Claude Code IDE protocol** — gives Claude Code in your Tomo container live ambient context: the active file path (vault-relative), cursor position, and currently selected text.
@@ -55,10 +66,14 @@ All three components share the plugin process and the settings tab, but **nothin
 - **Tomo handles its side** — after you copy the token and port into Tomo, Tomo writes the container-side discovery lock file. Hashi doesn't touch that side.
 - **Ephemeral only** — the bridge streams editor state live; nothing it sends is logged or persisted.
 
-### B — Instruction executor
+### C — Instruction executor
+
+A way to delegate the tedious work of moving, renaming, editing notes from your Inbox to the right place AFTER you approved the suggestion document. Hashi will do the same steps you would do, plus some more by using extensible hooks.
+Need an alias reconfigured after renaming a note from the inbox => hook. Need an update in a different note after you deleted a note => hook. Don't know how to write those hooks => Ask Tomo 🙂
+Cut down on tedious work.. have the peace of mind that Hashi will do only the things you want. (Backup in place recommended 🙂)
 
 - **Three execution modes**: Confirm before run / Auto-run with preview / Silent
-- **Preview → progress → summary** modal, all stages in one Modal instance (no flicker)
+- **Preview → progress → summary** modal, all stages in one Modal instance
 - **Idempotent re-runs** with a partial-resume banner ("N of M remaining (X already applied)")
 - **Per-run log** as a markdown file in your inbox folder, with retention policy
 - **Status bar 橋** indicator (idle / running / error)
@@ -72,39 +87,70 @@ All three components share the plugin process and the settings tab, but **nothin
 | Document | Audience | Content |
 |---|---|---|
 | [Installation](docs/installation.md) | Everyone | Community Plugins, BRAT, manual install |
-| [Configuration](docs/configuration.md) | Vault owners | Settings reference, both components |
-| [How It Works](docs/how-it-works.md) | Vault owners | Two-component architecture, layer boundaries |
+| [Configuration](docs/configuration.md) | Vault owners | Settings reference, all three components |
+| [How It Works](docs/how-it-works.md) | Vault owners | Three-component architecture, layer boundaries |
 | [Session View](docs/session-view.md) | Tomo users | Chat tab, terminal, zoom, file-prefill — branch A |
 | [Chat](docs/chat.md) | Tomo users | Picker, reconnect schedule, status bar 友 — branch A |
-| [Context](docs/context.md) | Tomo users | Enable + Tomo wiring, auth token, connection troubleshooting — branch C |
-| [Instruction Executor](docs/instruction-executor.md) | Tomo users | Modal stages, modes, partial-resume, status bar 橋 — branch B |
-| [Action Reference](docs/action-reference.md) | Tomo users | All 9 action kinds with idempotency rules — branch B |
-| [Hooks](docs/hooks.md) | Power users | `.cjs` hook authoring, policy, disclosure modal — branch B |
-| [Run Log](docs/run-log.md) | Vault owners | Log format, retention, hook output — branch B |
+| [Context](docs/context.md) | Tomo users | Enable + Tomo wiring, auth token, connection troubleshooting — branch B |
+| [Instruction Executor](docs/instruction-executor.md) | Tomo users | Modal stages, modes, partial-resume, status bar 橋 — branch C |
+| [Action Reference](docs/action-reference.md) | Tomo users | All 9 action kinds with idempotency rules — branch C |
+| [Hooks](docs/hooks.md) | Power users | `.cjs` hook authoring, policy, disclosure modal — branch C |
+| [Run Log](docs/run-log.md) | Vault owners | Log format, retention, hook output — branch C |
 | [Development](docs/development.md) | Contributors | Build, test, lint, architecture, test vault |
 | [Dependency Security](docs/dependency-security.md) | Contributors / reviewers | Supply-chain advisories, bundle-level reachability, `overrides` rationale |
 
-## Quick start — A — Tomo session GUI
+## Quick Start
 
-1. [Install the plugin](docs/installation.md)
-2. Start a Tomo container with the right label (`docker run --label miyo.tomo.role=session …`)
-3. **Settings → MiYo Tomo Hashi → Connect** → pick the container in the picker
-4. The chat view opens automatically; type to interact, watch Claude Code's TUI render inline
+1. Install [Tomo](https://github.com/MMoMM-org/miyo-tomo) and [Kado](https://github.com/MMoMM-org/miyo-kado)
+2. Configure both
+3. [Install the plugin](docs/installation.md)
+4. Start the Tomo Instance for your Vault.
 
-> Screenshot — chat view connected, Claude Code's TUI visible in the terminal area.
+
+
+### Quick start — A — Tomo session GUI
+
+
+5. **Settings → MiYo Tomo Hashi → Tomo chat → Connect** → pick the container in the picker
+6. Run the command: MiYo Tomo Hashi: Show chat window
+7. The chat view opens automatically; type to interact, watch Claude Code's TUI render inline
+
 <p align="center">
   <img src="assets/session-view-connected.png" alt="MiYo Tomo Hashi chat view connected to a Tomo container, xterm rendering Claude Code's TUI" width="800" />
 </p>
 
-## Quick start — B — Instruction executor
 
-1. [Install the plugin](docs/installation.md)
-2. **Settings → MiYo Tomo Hashi → Tomo inbox folder** → set your inbox path (e.g., `100 Inbox`)
-3. Drop an `_instructions.json` from Tomo into that folder
-4. **Command palette → "Execute instructions document"** → review the action list → **Execute**
-5. Watch progress; check the run log file (`tomo-hashi-run-log_…md`) afterwards
+### Quick start — B — Tomo context
 
-> Screenshot — execution modal at the preview stage, actions grouped by source file, **Execute** button.
+
+5. **Settings → MiYo Tomo Hashi → Tomo context** 
+6. Configure the port if necessary
+7. Enable the bridge server
+8. Copy the Auth token
+9. Stop Tomo container
+10. Run <Tomo-Repo>/scripts/update-tomo.sh
+11. Pick your instance if necessary
+12. Choose to enable Hashi context
+13. Paste the Auth token
+14. Make sure port is correct
+15. run Tomo container
+
+<p align="center">
+  <img src="assets/active-file-in-claude.png" alt="Tomo's Claude Code session receiving the currently open Obsidian note as ambient context via the Tomo context bridge" width="800" />
+</p>
+
+
+
+
+### Quick start — C — Instruction executor
+
+
+5. **Settings → MiYo Tomo Hashi → Instruction executor**
+6. **Tomo inbox folder** → set your inbox path (e.g., `100 Inbox`)
+7. Run the full inbox process in Tomo till you have your instruction documents
+8. **Command palette → "Execute instructions document"** → review the action list → **Execute**
+9. Watch progress; check the run log file (`tomo-hashi-run-log_…md`) afterwards
+
 <p align="center">
   <img src="assets/executor-preview.png" alt="Execution modal preview view — actions grouped by source file, Execute and Cancel buttons" width="800" />
 </p>
@@ -113,9 +159,12 @@ All three components share the plugin process and the settings tab, but **nothin
 
 ### Settings
 
-> Screenshot — full settings tab with both sections expanded.
 <p align="center">
-  <img src="assets/settings-tab-overview.png" alt="MiYo Tomo Hashi settings tab — Tomo chat, Tomo context, and Instruction executor sections" width="720" />
+  <img src="assets/settings-tab-chat-context.png" alt="MiYo Tomo Hashi settings tab — Tomo chat, Tomo context, and Instruction executor sections" width="720" />
+</p>
+
+<p align="center">
+  <img src="assets/settings-tab-instruction-executor.png" alt="MiYo Tomo Hashi settings tab — Tomo chat, Tomo context, and Instruction executor sections" width="720" />
 </p>
 
 

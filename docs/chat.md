@@ -142,4 +142,5 @@ The **Force reconnect** entry is disabled when no `chosenInstanceName` has been 
 
 - [Session View](session-view.md) — chat tab, terminal, input row
 - [Configuration / Tomo chat](configuration.md#a--tomo-chat) — settings reference
+- [Tomo context](context.md) — give Tomo your active file + selection (opt-in, off by default)
 - [Privacy](../PRIVACY.md) — what leaves the local machine and what doesn't (spoiler: nothing)
