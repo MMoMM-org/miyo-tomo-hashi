@@ -1,3 +1,10 @@
+## [0.7.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.7.0...0.7.1) (2026-06-03)
+
+
+### Bug Fixes
+
+* **deps:** bump vitest to 4.1.8 to clear critical UI-server CVE ([117fa2b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/117fa2bbb126cc9456d224d410224e4838184382))
+
 # [0.7.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.6.2...0.7.0) (2026-06-01)
 
 
