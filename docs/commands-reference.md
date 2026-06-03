@@ -11,7 +11,7 @@ they all appear under that prefix.
 | **Show chat window** | Opens the [Session View](session-view.md) attached to a Tomo container. The view is a singleton — if it's already open, this focuses it instead of spawning a duplicate. | None. If no Tomo instance has been chosen yet, the picker modal opens first. | None |
 | **Reconnect to *&lt;name&gt;*** | Drops the current attach and starts a fresh one to the chosen Tomo instance. | A Tomo instance must have been chosen. If none is, it shows the Notice *"No Tomo instance chosen — open Settings → Connect."* and does nothing. | None |
 | **Execute instructions document** | Runs the [instruction executor](instruction-executor.md). With an `_instructions.json` (or its `.md` peer) active, runs that single set; with no relevant file active, batch-runs every `*_instructions.json` in your configured inbox folder, in lexicographic order. | None — behaviour depends on the active file. | None |
-| **Toggle IDE bridge** | Starts the IDE Bridge if it's stopped, stops it if it's running. On start, shows *"IDE Bridge started on :&lt;port&gt;"*; on stop, *"IDE Bridge stopped"*. | None. The port defaults to **23027** and is configurable in Settings (locked while the bridge is running). | None |
+| **Toggle IDE bridge** | Starts or stops the [Tomo context](context.md) server (the command and its Notices use the internal name *"IDE Bridge"*). On start, shows *"IDE Bridge started on :&lt;port&gt;"*; on stop, *"IDE Bridge stopped"*. | None. The port defaults to **23027** and is configurable in Settings (locked while the bridge is running). | None |
 
 ## Notes
 

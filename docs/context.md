@@ -2,7 +2,7 @@
 
 How Hashi gives Claude Code — running inside your Tomo container — live ambient editor context (active file, cursor position, current selection) over a loopback WebSocket.
 
-This is **Component C**. It is independent of the [Session View](session-view.md) and the [Instruction Executor](instruction-executor.md) — you can enable it without ever opening the chat tab.
+This is **Component B**. It is independent of the [Session View](session-view.md) and the [Instruction Executor](instruction-executor.md) — you can enable it without ever opening the chat tab.
 
 ## At a glance
 
