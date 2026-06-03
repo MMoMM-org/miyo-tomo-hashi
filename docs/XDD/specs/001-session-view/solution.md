@@ -19,6 +19,7 @@ CON-6 **One connection, one chat view**: enforced at the service layer (connecti
 CON-7 **Bundle budget**: informal target ≤ 1000 KB minified for `main.js` (revised 2026-04-28 — original 500 KB assumed dockerode would be `external` at runtime, but Obsidian plugins ship as a single `main.js` with no adjacent `node_modules/`, so dockerode + docker-modem must be bundled; xterm.js ~150 KB + dockerode/docker-modem ~250 KB minified + xterm CSS + app code ≈ 940 KB). The native transitive deps `ssh2` / `cpu-features` are stubbed at build time via the `stubMissingNativeDeps` esbuild plugin (only loaded in the SSH transport branch, which we never reach — dockerode is constructed with `socketPath` per ADR-1).
 CON-8 **Trust boundary**: all bytes from the container are untrusted text. xterm.js handles them as terminal text — no HTML rendering, no URI handling from stream output.
 CON-9 **Tomo handoff dependency**: picker labels and reconnect-command label benefit from Tomo exposing an instance-name Docker label (`miyo.tomo.instance-name=<name>`). PRD mandates graceful fallback if missing; SDD must implement fallback as first-class behavior, not an error path.
+CON-10 **Docker Engine API floor**: Hashi pins **no** API version — `dockerode` is constructed with `socketPath` only (ADR-1) and negotiates the API with whatever daemon answers the platform-default socket. It calls only long-stable endpoints (`GET /containers/json` with a label filter, `GET /containers/{id}/json` inspect, and a raw hijacked attach stream), all present since well before **Engine API v1.41 (Docker Engine 20.10, December 2020)** — the conservative supported floor. The `docs.docker.com/engine/api/v1.45/` links elsewhere in this SDD are dockerode's reference-doc version, **not** a minimum requirement. Per-runtime compatibility (verified / expected / unsupported) is in the Deployment View → Host Runtime Compatibility.
 
 ## Implementation Context
 
@@ -104,9 +105,9 @@ CON-9 **Tomo handoff dependency**: picker labels and reconnect-command label ben
 #### External APIs
 ```yaml
 - service: Docker Engine API
-  doc: https://docs.docker.com/engine/api/v1.45/
+  doc: https://docs.docker.com/engine/api/v1.45/   # reference-doc version only — Hashi pins no API version; floor is v1.41 (see CON-10)
   relevance: HIGH
-  why: "Endpoints used: GET /containers/json?filters={label: miyo.component=tomo}, POST /containers/{id}/attach?stream=1&stdout=1&stderr=1&stdin=1&logs=0, GET /containers/{id}/json (inspect for labels/started-at). Accessed via dockerode, not raw HTTP."
+  why: "Endpoints used: GET /containers/json?filters={label: miyo.component=tomo}, POST /containers/{id}/attach?stream=1&stdout=1&stderr=1&stdin=1&logs=0, GET /containers/{id}/json (inspect for labels/started-at). Accessed via dockerode, not raw HTTP. All predate Engine API v1.41."
 
 - service: Obsidian Plugin API
   doc: https://docs.obsidian.md/Reference/TypeScript+API/
@@ -537,7 +538,7 @@ Not applicable — no HTTP/RPC endpoints; all integration is in-process function
 ```yaml
 # Docker Engine API (via dockerode)
 Docker_Engine:
-  - doc: https://docs.docker.com/engine/api/v1.45/
+  - doc: https://docs.docker.com/engine/api/v1.45/   # reference-doc version only; no API version is pinned — floor v1.41 (CON-10)
   - ops_used:
       list_containers: GET /containers/json?filters={"label":["miyo.component=tomo"]}
       inspect: GET /containers/{id}/json
@@ -807,6 +808,18 @@ OUTPUT: TomoInstance[]
 - **Dependencies**: Local Docker daemon reachable via socket. No network dependencies. No outbound HTTP other than Docker socket.
 - **Performance**: Idle CPU near-zero (one attached TCP-over-socket stream, Node event loop). Memory bounded by xterm scrollback cap (`scrollback: 5000` lines configured in `terminalHost.ts`; ~500 KB for typical sessions, hard-bounded for floods). Plugin bundle ≤ 1000 KB minified (CON-7 revised 2026-04-28).
 - **Distribution**: Community plugin listing (post-v0.1 release) + manual + BRAT (beta), per `README.md`.
+
+### Host Runtime Compatibility
+
+Hashi talks to whatever Docker-compatible daemon owns the platform-default socket (`/var/run/docker.sock` on macOS/Linux; `\\.\pipe\docker_engine` on Windows). It does **not** detect or branch on the runtime brand, and pins no API version (CON-10). Minimum supported Engine API: **v1.41 (Docker Engine 20.10+)** — conservative; the endpoints used predate it, so older daemons likely work but are unsupported.
+
+| Runtime | Tier | Notes |
+|---|---|---|
+| OrbStack (macOS) | **Verified (v0.1)** | Dev + QA host; the 001 connection/chat and 003 IDE-bridge flows were exercised against it. OrbStack symlinks the standard `/var/run/docker.sock`, so dockerode reaches it with no configuration. |
+| Docker Desktop (macOS / Windows) | Expected to work | Same default socket and API surface; **not independently verified in v0.1** (the project's `docker` CLI resolves to OrbStack). The named-error paths (`daemon-unreachable`, `socket-permission-denied`) are runtime-agnostic. |
+| Docker Engine (Linux) | Expected to work | Native `/var/run/docker.sock`; user must have `docker`-group access — a missing membership surfaces as `socket-permission-denied` with Linux-specific help text. |
+| Podman | **Not supported in v0.1** | Even via its Docker-compatible socket, Podman's API negotiation and attach-hijack behavior are untested; no v0.1 support claim. Revisit post-v0.1 if requested. |
+| Colima / Rancher Desktop / other | Untested | Likely work where they expose the default socket and a v1.41+ API, but unverified — no support claim. |
 
 ### Rollback Strategy
 Plugin disable via Obsidian Settings → Community Plugins is sufficient. No migrations, no external state to unwind.
