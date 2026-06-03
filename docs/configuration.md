@@ -4,7 +4,7 @@ All settings live under **Settings → MiYo Tomo Hashi**. The tab is split by co
 
 > Screenshot — full settings tab with both sections collapsed for overview.
 <p align="center">
-  <img src="../assets/settings-tab-overview.png" alt="MiYo Tomo Hashi settings tab — Tomo chat, Tomo context, and Instruction executor sections" width="720" />
+  <img src="../assets/settings-tab-chat-context.png" alt="MiYo Tomo Hashi settings tab — Tomo chat, Tomo context, and Instruction executor sections" width="720" />
 </p>
 
 ---
@@ -31,7 +31,7 @@ Connection state itself is **not** persisted — only the chosen-instance name. 
 
 > Screenshot — executor section showing all 6 controls.
 <p align="center">
-  <img src="../assets/settings-executor.png" alt="Instruction executor section in Settings — 6 controls: inbox folder, execution mode, run log retention, hooks dir, hooks policy, debug logging" width="720" />
+  <img src="../assets/settings-tab-instruction-executor.png" alt="Instruction executor section in Settings — 6 controls: inbox folder, execution mode, run log retention, hooks dir, hooks policy, debug logging" width="720" />
 </p>
 
 | Setting | What it does | Default |

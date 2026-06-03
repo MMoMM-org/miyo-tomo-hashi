@@ -1,0 +1,48 @@
+<svg width="100%" viewBox="0 0 1280 720" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>MiYo Tomo Hashi — Three components, one plugin</title>
+  <desc>Architecture overview of MiYo Tomo Hashi's three functional components. Left column, under one 友 kanji: A) Tomo session — a live chat tab over the Tomo container — and B) Tomo context — an opt-in loopback editor-context bridge for Tomo. Together: chat with Tomo and let it see the note and text you are working on. Right column, under the 橋 kanji: C) Instruction executor — applies the vault edits Tomo proposes with preview, hooks, idempotent re-runs and a run log. The three share one plugin process and one settings tab and nothing else.</desc>
+
+  <!-- Outer frame -->
+  <rect x="40" y="40" width="1200" height="640" rx="6" fill="#ffffff" stroke="#111111" stroke-width="2"/>
+
+  <!-- Title block -->
+  <text x="640" y="98" font-family="serif" font-size="22" fill="#111111" text-anchor="middle" font-weight="500">MiYo Tomo Hashi</text>
+  <text x="640" y="124" font-family="monospace" font-size="12" fill="#888888" text-anchor="middle" letter-spacing="1.5" xml:space="preserve">T H R E E  C O M P O N E N T S  ·  O N E  P L U G I N</text>
+
+  <!-- Divider under title -->
+  <line x1="160" y1="148" x2="1120" y2="148" stroke="#111111" stroke-width="1" opacity="0.25"/>
+
+  <!-- Vertical column divider: left holds A + B, right holds C -->
+  <line x1="640" y1="180" x2="640" y2="600" stroke="#111111" stroke-width="1" opacity="0.5" stroke-dasharray="2 4"/>
+
+  <!-- ===================== LEFT COLUMN  (A + B over one 友) ===================== -->
+
+  <!-- Headings, stacked above the kanji -->
+  <text x="340" y="212" text-anchor="middle" font-family="monospace" font-size="14" fill="#111111" letter-spacing="1"><tspan font-family="serif" font-size="18" font-weight="600">A</tspan>  —  TOMO SESSION</text>
+  <text x="340" y="240" text-anchor="middle" font-family="monospace" font-size="14" fill="#111111" letter-spacing="1"><tspan font-family="serif" font-size="18" font-weight="600">B</tspan>  —  TOMO CONTEXT</text>
+
+  <!-- Big kanji 友 (shared by A + B) -->
+  <text x="340" y="448" font-family="serif" font-size="168" fill="#111111" text-anchor="middle" font-weight="400">友</text>
+
+  <!-- Short caption: what both do -->
+  <text x="340" y="512" text-anchor="middle" font-family="monospace" font-size="13" fill="#444444">Chat with Tomo in a tab — and</text>
+  <text x="340" y="534" text-anchor="middle" font-family="monospace" font-size="13" fill="#444444">let it see the note and text</text>
+  <text x="340" y="556" text-anchor="middle" font-family="monospace" font-size="13" fill="#444444">you're working on.</text>
+
+  <!-- ===================== RIGHT COLUMN  (C over 橋) ===================== -->
+
+  <!-- Heading -->
+  <text x="960" y="226" text-anchor="middle" font-family="monospace" font-size="14" fill="#111111" letter-spacing="1"><tspan font-family="serif" font-size="18" font-weight="600">C</tspan>  —  INSTRUCTION EXECUTOR</text>
+
+  <!-- Big kanji 橋 -->
+  <text x="960" y="448" font-family="serif" font-size="168" fill="#111111" text-anchor="middle" font-weight="400">橋</text>
+
+  <!-- Short caption -->
+  <text x="960" y="512" text-anchor="middle" font-family="monospace" font-size="13" fill="#444444">Apply the vault edits Tomo</text>
+  <text x="960" y="534" text-anchor="middle" font-family="monospace" font-size="13" fill="#444444">proposes — preview, hooks,</text>
+  <text x="960" y="556" text-anchor="middle" font-family="monospace" font-size="13" fill="#444444">idempotent re-runs, run log.</text>
+
+  <!-- ===================== BOTTOM STRIP ===================== -->
+  <line x1="160" y1="610" x2="1120" y2="610" stroke="#111111" stroke-width="1" opacity="0.25"/>
+  <text x="640" y="640" font-family="monospace" font-size="11" fill="#888888" text-anchor="middle">Shared: one plugin process + one settings tab.  Nothing else.</text>
+</svg>
