@@ -23,7 +23,7 @@
  */
 
 import { App, Modal } from "obsidian";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { ExecutionModal } from "../../../src/ui/ExecutionModal";
 import { Store } from "../../../src/util/store";
@@ -61,15 +61,15 @@ function counts(overrides: Partial<RunCounts> = {}): RunCounts {
 
 interface FakeExecutor {
 	state: Store<RunState>;
-	cancel: ReturnType<typeof vi.fn>;
-	proceed: ReturnType<typeof vi.fn>;
+	cancel: Mock<() => void>;
+	proceed: Mock<() => void>;
 }
 
 function makeExecutor(initial: RunState = { kind: "idle" }): FakeExecutor {
 	return {
 		state: new Store<RunState>(initial),
-		cancel: vi.fn(),
-		proceed: vi.fn(),
+		cancel: vi.fn<() => void>(),
+		proceed: vi.fn<() => void>(),
 	};
 }
 

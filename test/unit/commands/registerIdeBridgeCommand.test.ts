@@ -17,7 +17,7 @@
 import "obsidian";
 import { Notice, type Plugin } from "obsidian";
 import { Plugin as PluginMock } from "../../__mocks__/obsidian";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import {
 	registerIdeBridgeCommand,
@@ -55,7 +55,7 @@ describe("registerIdeBridgeCommand (003 / T4.5)", () => {
 	let pluginMock: PluginMock;
 	let plugin: Plugin;
 	let ideBridge: IdeBridgeStub;
-	let getPort: ReturnType<typeof vi.fn>;
+	let getPort: Mock<() => number>;
 	let deps: IdeBridgeCommandDeps;
 
 	beforeEach(() => {

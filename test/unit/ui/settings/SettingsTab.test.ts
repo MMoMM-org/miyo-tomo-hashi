@@ -17,7 +17,7 @@
 import "obsidian";
 
 import { App, Notice } from "obsidian";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { connectionStore } from "../../../../src/connection/connectionStore";
 import { ConnectionFailure } from "../../../../src/connection/docker";
@@ -81,7 +81,7 @@ function asConnection(fake: FakeConnection): TomoConnection {
 // of `display()` (manifest-driven identity strip — handoff from miyo-kado).
 interface PluginStub {
 	settings: PluginSettings;
-	saveSettings: ReturnType<typeof vi.fn>;
+	saveSettings: Mock<() => Promise<void>>;
 	manifest: {
 		id: string;
 		name: string;
