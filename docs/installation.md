@@ -27,6 +27,23 @@
 - **Desktop only** — `isDesktopOnly: true` in the manifest. Hashi uses Node APIs (Docker socket, filesystem) that are unavailable on Obsidian Mobile.
 - **Docker** (only for the [Session View](session-view.md) — talking to Tomo containers). The instruction executor works without Docker.
 
+## Verify the installation
+
+After enabling the plugin, confirm it loaded — **no Docker or Tomo container is
+needed for this check**:
+
+1. Open **Settings → MiYo Tomo Hashi**. The settings tab should show three
+   sections: **Tomo chat**, **Tomo context**, and **Instruction executor**.
+2. Look at the status bar (bottom of the Obsidian window). You should see the
+   **友** icon (Tomo session) and the **橋** icon (instruction executor, idle state).
+3. Open the command palette (`Ctrl/Cmd+P`) and type **MiYo Tomo Hashi** — commands
+   such as *Show chat window* and *Execute instructions document* should appear.
+
+If all three are present, the plugin is installed and running. Connecting to a Tomo
+container (chat) additionally requires Docker and a running container — see
+[Session View](session-view.md) — but that is a separate step from verifying the
+install itself.
+
 ## Next steps
 
 - [Configure the plugin](configuration.md) — settings reference
