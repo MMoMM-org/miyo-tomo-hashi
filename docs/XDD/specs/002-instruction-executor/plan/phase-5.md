@@ -28,24 +28,26 @@ phase: 5
 
 This phase implements the four UI surfaces — the execution modal (state-machine), the 橋 status bar (color states), the hook disclosure modal, and the run-end Notice helper. The first three are independent files and can be developed in parallel.
 
+> **Assertion venue tags:** each `2. Test:` row below is tagged `[jsdom]` (fully verified by the automated vitest/jsdom unit suite), `[manual]` (requires real-Obsidian observation — recorded in `manual-qa-checklist.md`), or `[jsdom][manual]` (structural assertion automated in jsdom, with a perceptual or assistive-technology confirmation in manual QA).
+
 - [x] **T5.1 ExecutionModal — state-machine UI** `[parallel: true]` `[activity: frontend-ui]`
 
   1. Prime: Read PRD F3 (tri-state behavior + button labels) `[ref: PRD/F3]`. Read PRD F6 (banner) and F7 (sticky error banner during run) `[ref: PRD/F6, F7]`. Read SDD ADR-5 + Component States diagram `[ref: SDD/Architecture Decisions; ADR-5]` `[ref: SDD/Cross-Cutting Concepts; Component States]`.
   2. Test: `test/unit/ui/ExecutionModal.test.ts`:
-     - **Preview subview** (mode=confirm, state=previewing):
+     - **Preview subview** (mode=confirm, state=previewing): `[jsdom]`
        - Header shows source-file count and partial-resume banner if remaining < total
        - Body shows action rows grouped by source file with `## <filename>` headers; each row has glyph + I## + kind + summary
        - Already-applied rows render greyed-out with ✓ glyph
        - Footer disclosure: "Approval lives in Tomo's review step. This preview is informational."
        - Buttons: **Execute** (primary) + **Cancel** (secondary). No "Dismiss".
-     - **Preview subview** (mode=auto-run, state=running): banner present; rows present; **Cancel** button visible; **Execute** absent (run already started).
-     - **Progress subview** (state=running): row glyphs animate ⏺ → ⟳ → ✓/✗/⊘ as outcomes arrive; sticky error banner accumulates failures; Cancel halts after current action.
-     - **Summary subview** (state=summary): stats line *"✓ A · ⊘ S · ✗ F (Xs)"*; **View errors** button when F > 0; **Close** button.
-     - **0-of-M-remaining state** (all actions already applied): banner *"0 of M remaining — all actions already applied"*; **Execute** button is disabled (asserted via `disabled` attribute) in *Confirm* mode; the test verifies the AC at PRD F6 line 193 `[ref: PRD/F6]`.
-     - **Validation-failed** state: per-file errors displayed in a tabular layout; only **Close** button.
-     - State transitions: each transition rebuilds the modal body in place (no Modal.close + Modal.open between phases).
-     - Cancel during preview → `executor.cancel()` not invoked (no run started); Cancel during running → `executor.cancel()` invoked exactly once.
-     - Esc key follows the button mapping (preview: cancel; running: cancel; summary/validation-failed: close).
+     - **Preview subview** (mode=auto-run, state=running): banner present; rows present; **Cancel** button visible; **Execute** absent (run already started). `[jsdom]`
+     - **Progress subview** (state=running): row glyphs animate ⏺ → ⟳ → ✓/✗/⊘ as outcomes arrive; sticky error banner accumulates failures; Cancel halts after current action. `[jsdom]`
+     - **Summary subview** (state=summary): stats line *"✓ A · ⊘ S · ✗ F (Xs)"*; **View errors** button when F > 0; **Close** button. `[jsdom]`
+     - **0-of-M-remaining state** (all actions already applied): banner *"0 of M remaining — all actions already applied"*; **Execute** button is disabled (asserted via `disabled` attribute) in *Confirm* mode; the test verifies the AC at PRD F6 line 193 `[ref: PRD/F6]` `[jsdom]`.
+     - **Validation-failed** state: per-file errors displayed in a tabular layout; only **Close** button. `[jsdom]`
+     - State transitions: each transition rebuilds the modal body in place (no Modal.close + Modal.open between phases). `[jsdom]`
+     - Cancel during preview → `executor.cancel()` not invoked (no run started); Cancel during running → `executor.cancel()` invoked exactly once. `[jsdom]`
+     - Esc key follows the button mapping (preview: cancel; running: cancel; summary/validation-failed: close). `[jsdom]`
   3. Implement:
      - `src/ui/ExecutionModal.ts` — Modal subclass; subscribes to `executionStore`; on each state change, calls into `previewView` / `progressView` / `summaryView` to render `contentEl`.
      - `src/ui/modalContent/previewView.ts`, `progressView.ts`, `summaryView.ts` — pure DOM render functions taking `(contentEl: HTMLElement, state: RunState, callbacks: ModalCallbacks)`. The callbacks bundle the `onExecute`, `onCancel`, `onClose` action handlers.
@@ -60,16 +62,16 @@ This phase implements the four UI surfaces — the execution modal (state-machin
 
   1. Prime: Read PRD F10 ACs `[ref: PRD/F10]`. Read SDD ADR-6 (revised; color states only) `[ref: SDD/Architecture Decisions; ADR-6]`. Read 001's status-bar implementation if shipped (`src/ui/status-bar/StatusBarIcon.ts`) for class-naming conventions.
   2. Test: `test/unit/ui/statusBar.test.ts`:
-     - On plugin load, status bar item renders 橋 kanji with class `is-idle`
-     - When `executionStore` transitions to `running`, the item swaps to class `is-running` (asserted by classList)
-     - When the run ends with ≥ 1 failure, the item swaps to `is-error` and remains for ~10s, then returns to `is-idle`
-     - When the run ends with 0 failures, the item returns directly to `is-idle`
-     - Tooltip text per state: idle / `running — N of M actions` / `last run had F failures — see <log filename>`
-     - Click on running state focuses the active modal (asserted via spy on `app.workspace.setActiveLeaf` or modal-focus method)
-     - Click on idle state is a no-op
-     - **No animation**: assert that the element has no inline style `animation` and no `@keyframes` rule applies (CSS class names checked)
-     - Reduced-motion: no special handling needed (test verifies that no media-query CSS rules toggle animation)
-     - **ARIA live region**: the status-bar item has `role="status"` and `aria-live="polite"`; state changes append a brief text node (e.g., "Hashi running", "Hashi error", "Hashi idle") that screen readers announce. Asserted by jsdom — verifies the AC at PRD F10 line 256 `[ref: PRD/F10]`.
+     - On plugin load, status bar item renders 橋 kanji with class `is-idle` `[jsdom][manual]`
+     - When `executionStore` transitions to `running`, the item swaps to class `is-running` (asserted by classList) `[jsdom][manual]`
+     - When the run ends with ≥ 1 failure, the item swaps to `is-error` and remains for ~10s, then returns to `is-idle` `[jsdom][manual]`
+     - When the run ends with 0 failures, the item returns directly to `is-idle` `[jsdom]`
+     - Tooltip text per state: idle / `running — N of M actions` / `last run had F failures — see <log filename>` `[jsdom][manual]`
+     - Click on running state focuses the active modal (asserted via spy on `app.workspace.setActiveLeaf` or modal-focus method) `[jsdom]`
+     - Click on idle state is a no-op `[jsdom]`
+     - **No animation**: assert that the element has no inline style `animation` and no `@keyframes` rule applies (CSS class names checked) `[jsdom]`
+     - Reduced-motion: no special handling needed (test verifies that no media-query CSS rules toggle animation) `[jsdom]`
+     - **ARIA live region**: the status-bar item has `role="status"` and `aria-live="polite"`; state changes append a brief text node (e.g., "Hashi running", "Hashi error", "Hashi idle") that screen readers announce. Asserted by jsdom — verifies the AC at PRD F10 line 256 `[ref: PRD/F10]`. `[jsdom][manual]`
   3. Implement:
      - `src/ui/statusBar.ts` — registers an `addStatusBarItem`; subscribes to `executionStore`; class swap on state change; tooltip set via `setAttr('aria-label', text)` and `title`
      - `styles.css` rules: `.hashi-status-bar-bridge.is-idle { color: var(--text-muted); }`, `.is-running { color: var(--color-green); }`, `.is-error { color: var(--color-red); }`. No animation rules.
@@ -83,10 +85,10 @@ This phase implements the four UI surfaces — the execution modal (state-machin
 
   1. Prime: Read PRD F8 ACs about disclosure modal `[ref: PRD/F8]`. Read SDD `HookDisclosureModal` directory entry `[ref: SDD/Directory Map; hooks]`.
   2. Test: `test/unit/hooks/HookDisclosureModal.test.ts`:
-     - Modal opens with: hook path (relative to vault root), file size in bytes, three buttons **Enable**, **Enable once**, **Disable**
-     - Each button resolves a Promise with the chosen decision (`"enable"`, `"enable-once"`, `"disable"`)
-     - Esc resolves with `"disable"` (defensive default)
-     - Modal does NOT carry state across opens — fresh resolution every time
+     - Modal opens with: hook path (relative to vault root), file size in bytes, three buttons **Enable**, **Enable once**, **Disable** `[jsdom]`
+     - Each button resolves a Promise with the chosen decision (`"enable"`, `"enable-once"`, `"disable"`) `[jsdom]`
+     - Esc resolves with `"disable"` (defensive default) `[jsdom]`
+     - Modal does NOT carry state across opens — fresh resolution every time `[jsdom]`
   3. Implement: `src/hooks/HookDisclosureModal.ts` — Obsidian `Modal` subclass. Constructor takes `(app, hookInfo): Promise<Decision>`-style callback. Wired into Phase 4's `HookRunner` callback signature.
   4. Validate: Tests pass; modal interaction round-trips.
   5. Success:

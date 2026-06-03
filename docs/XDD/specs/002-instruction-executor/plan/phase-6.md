@@ -80,6 +80,7 @@ This phase wires every surface together in `main.ts`, exercises the full system 
   3. Implement:
      - In `esbuild.config.mjs`, uncomment the `VAULT_PLUGIN_DIR = "../temp/Privat-Test/.obsidian/plugins/miyo-tomo-hashi"` block (or add a flag-gated equivalent) so `npm run build` copies output into the test vault.
      - Run the build. Open `../temp/Privat-Test` in Obsidian (Insider or stable). Walk through the manual checklist with at least one Tomo-emitted instruction set in the inbox.
+     - **Test-data isolation:** the eight scenarios listed under T6.3 are state-mutating (create folders/MOCs, write files, flip `applied` flags) and several share targets — happy-path's created MOCs would otherwise pre-satisfy partial-resume, and halt-on-dependency's restricted folder would linger into later runs. Reset `../temp/Privat-Test` to a clean baseline **before each scenario** (restore from the vault's `Archive.zip` snapshot the way `test/Hashi/reset-vault.sh` does for the QA vault), so every scenario starts from a fresh, known state and outcomes can't leak across runs.
   4. Validate: All checklist rows marked passed; observations recorded for any failures; deviations logged in spec README.
   5. Success:
      - [x] Manual checklist 100% passed in real Obsidian `[ref: SDD/ADR-9]`

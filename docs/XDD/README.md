@@ -16,11 +16,15 @@
 
 ## Implementation Specs
 
-| ID | Name | Phase | Status |
-|----|------|-------|--------|
-| 001 | [Session View](specs/001-session-view/) | Done | Implemented & released (v0.7.1) |
-| 002 | [Instruction Executor](specs/002-instruction-executor/) | Done | Implemented & released (v0.7.1) |
-| 003 | [IDE Bridge (Tomo context)](specs/003-ide-bridge/) | Done | Implemented & released (v0.7.1) |
+| ID | Name | MoSCoW | Phase | Status |
+|----|------|--------|-------|--------|
+| 001 | [Session View](specs/001-session-view/) | 9 Must · 2 Should · 0 Could | Done | Implemented & released (v0.7.1) |
+| 002 | [Instruction Executor](specs/002-instruction-executor/) | 11 Must · 0 Should · 0 Could | Done | Implemented & released (v0.7.1) |
+| 003 | [IDE Bridge (Tomo context)](specs/003-ide-bridge/) | 9 Must · 4 Should · 2 Could | Done | Implemented & released (v0.7.1) |
+
+> MoSCoW totals count scoped feature blocks (Fx), not acceptance criteria. 002 is all-Must by
+> design (a deterministic executor has no optional surface); 001 carries 2 Should (file `@`-prefill,
+> remembered instance). 003's removed F2 (lock-file ownership moved to Tomo) is not counted.
 
 ## Status Legend
 
@@ -50,4 +54,3 @@ The remaining open items are tracked as GitHub issues — label
 | M26 — Docker Engine API floor + tested runtimes | [#26](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/26) |
 | M27 — OS-tier runtime guard / document no per-OS gating | [#27](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/27) |
 | H25 — prefers-reduced-motion test plan | [#28](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/28) |
-| L3, L11, L12 — docs polish (MoSCoW totals, test-data isolation, UI assertion tags) | [#30](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/30) |

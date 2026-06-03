@@ -29,16 +29,18 @@ phase: 4
 
 Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `TomoConnection` methods (write). Can be developed concurrently by different agents or in any order; none depend on another's DOM.
 
+> **Assertion venue tags:** each `2. Test:` row below is tagged `[jsdom]` (fully verified by the automated vitest/jsdom unit suite), `[manual]` (requires real-Obsidian observation — recorded in `manual-qa-checklist.md`), or `[jsdom][manual]` (structural assertion automated in jsdom, with a perceptual or assistive-technology confirmation in manual QA).
+
 - [x] **T4.1 Settings pane — Connect/Disconnect + open picker** `[activity: frontend-ui] [parallel: true]`
 
   1. Prime: Read PRD F1, F2 acceptance criteria and SDD "Directory Map" entry for `src/settings/` `[ref: PRD/F1; PRD/F2; SDD/Directory Map]`.
   2. Test: Write `test/unit/ui/settings/SettingsTab.test.ts`:
-     - `display()` renders a Connect button when state is Disconnected
-     - `display()` renders a Disconnect button when state is Connected, showing the instance name
-     - Clicking Connect opens the InstancePickerModal
-     - Clicking Disconnect calls `TomoConnection.disconnect()`
-     - On state change while tab is open, the DOM updates (subscribe is live)
-     - On `hide()` / `display()` re-entry, subscriptions don't leak (count active listeners before and after)
+     - `display()` renders a Connect button when state is Disconnected `[jsdom]`
+     - `display()` renders a Disconnect button when state is Connected, showing the instance name `[jsdom]`
+     - Clicking Connect opens the InstancePickerModal `[jsdom]`
+     - Clicking Disconnect calls `TomoConnection.disconnect()` `[jsdom]`
+     - On state change while tab is open, the DOM updates (subscribe is live) `[jsdom]`
+     - On `hide()` / `display()` re-entry, subscriptions don't leak (count active listeners before and after) `[jsdom]`
   3. Implement:
      - Modify `src/settings/SettingsTab.ts` — constructor takes `(app, plugin, connection: TomoConnection)`; `display()` builds DOM via Obsidian's `Setting` API; subscribes to `connectionStore` for live updates; stores unsubscribe handle; calls it in `hide()`.
      - Create `src/settings/InstancePickerModal.ts` — extends Obsidian `Modal`; `onOpen()` triggers `connection.openPicker()`, renders each `TomoInstance` as a row showing instance name (or short ID fallback) + formatted uptime via `formatUptime`; on selection calls `connection.connect(instance)` and closes modal; Cancel closes without effect.
@@ -53,13 +55,13 @@ Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `
 
   1. Prime: Read PRD F3 all ACs; SDD ADR-9 and "UI Visualization / Status bar icon" `[ref: PRD/F3; SDD/ADR-9; SDD/UI Visualization]`.
   2. Test: Write `test/unit/ui/status-bar/StatusBarIcon.test.ts` and `openPopover.test.ts`:
-     - Icon element created with `hashi-status-bar` class
-     - Icon state-class updates on connection state change (`is-connected`, `is-reconnecting`, `is-disconnected`)
-     - Hover tooltip text matches current state (connected: instance name; reconnecting: "Reconnecting…"; disconnected: "Tomo: disconnected")
-     - Click opens a Menu with exactly 3 items: "Force Reconnect", "Open Chat Window", "Go to Settings"
-     - Force Reconnect item is disabled (with tooltip) when `chosenInstanceId` is null
-     - Invoking "Open Chat Window" calls the workspace-leaf opener callback (mocked via dep injection)
-     - Invoking "Go to Settings" calls the settings-opener callback (mocked via dep injection)
+     - Icon element created with `hashi-status-bar` class `[jsdom]`
+     - Icon state-class updates on connection state change (`is-connected`, `is-reconnecting`, `is-disconnected`) `[jsdom][manual]`
+     - Hover tooltip text matches current state (connected: instance name; reconnecting: "Reconnecting…"; disconnected: "Tomo: disconnected") `[jsdom][manual]`
+     - Click opens a Menu with exactly 3 items: "Force Reconnect", "Open Chat Window", "Go to Settings" `[jsdom]`
+     - Force Reconnect item is disabled (with tooltip) when `chosenInstanceId` is null `[jsdom]`
+     - Invoking "Open Chat Window" calls the workspace-leaf opener callback (mocked via dep injection) `[jsdom]`
+     - Invoking "Go to Settings" calls the settings-opener callback (mocked via dep injection) `[jsdom]`
   3. Implement:
      - Create `src/ui/status-bar/StatusBarIcon.ts` — registers status bar item via `plugin.addStatusBarItem()`; builds a `<div class="hashi-status-bar">` with inner `<span>` for the Tomo kanji (friendly fallback: icon text `友`, with a small state dot via CSS pseudo-element); subscribes to `connectionStore` to update state-class and tooltip.
      - Create `src/ui/status-bar/openPopover.ts` — pure function taking `(evt, actions: { forceReconnectEnabled, onForceReconnect, onOpenChat, onOpenSettings })`; builds `new Menu()` with three items per spec; shows at mouse event.
@@ -74,15 +76,15 @@ Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `
 
   1. Prime: Read PRD F4, F5; SDD ADR-2, ADR-6, "Directory Map / src/ui/chat-view/", and xterm.js docs for `Terminal`, `FitAddon`, `onData`, `write` `[ref: PRD/F4; PRD/F5; SDD/ADR-2; SDD/ADR-6]`.
   2. Test: Write `test/unit/ui/chat-view/TomoChatView.test.ts`:
-     - `onOpen()` creates the DOM skeleton (header area, indicator, Force Reconnect button, terminal host, chat input)
-     - Chat input is disabled when state is not Connected
-     - Chat input is enabled + focused when state transitions to Connected
-     - Submitting a message calls `connection.write("text\n")`
-     - Stream bytes from `connection.onData` are forwarded to the terminal's write method
-     - Force Reconnect button calls `connection.forceReconnect()`
-     - Force Reconnect button disabled when `chosenInstanceId` is null (parity with F3/AC5)
-     - State changes update the in-view indicator element
-     - `onClose()` unsubscribes and disposes the xterm instance
+     - `onOpen()` creates the DOM skeleton (header area, indicator, Force Reconnect button, terminal host, chat input) `[jsdom]`
+     - Chat input is disabled when state is not Connected `[jsdom]`
+     - Chat input is enabled + focused when state transitions to Connected `[jsdom]`
+     - Submitting a message calls `connection.write("text\n")` `[jsdom]`
+     - Stream bytes from `connection.onData` are forwarded to the terminal's write method `[jsdom]`
+     - Force Reconnect button calls `connection.forceReconnect()` `[jsdom]`
+     - Force Reconnect button disabled when `chosenInstanceId` is null (parity with F3/AC5) `[jsdom]`
+     - State changes update the in-view indicator element `[jsdom][manual]`
+     - `onClose()` unsubscribes and disposes the xterm instance `[jsdom]`
   3. Implement:
      - Create `src/ui/chat-view/index.ts` exporting `VIEW_TYPE_TOMO_CHAT = "miyo-tomo-hashi-chat"`.
      - Create `src/ui/chat-view/TomoChatView.ts` extending `ItemView`; builds skeleton DOM with `hashi-chat-view` class; wires subscribe; renders message input below terminal host.
@@ -99,12 +101,12 @@ Four parallel UI surfaces — each consumes `connectionStore` (read) and calls `
 
   1. Prime: Read PRD FS1 all ACs; SDD "Directory Map / src/commands/fileMenu.ts" `[ref: PRD/FS1; SDD/Directory Map]`.
   2. Test: Write `test/unit/commands/fileMenu.test.ts`:
-     - Right-click on any file appends "Open Tomo chat with `@file` reference" entry to the Menu
-     - Entry label format exact match
-     - When chat view is open: invoking the entry inserts `@<vault-relative-path> ` at caret position
-     - When chat view is closed: invoking opens the view and prefills the input
-     - When disconnected: the chat view opens in Not-Connected state, prefill still present
-     - Works for any file type (test with `.md`, `.pdf`, `.png` mock files)
+     - Right-click on any file appends "Open Tomo chat with `@file` reference" entry to the Menu `[jsdom]`
+     - Entry label format exact match `[jsdom]`
+     - When chat view is open: invoking the entry inserts `@<vault-relative-path> ` at caret position `[jsdom]`
+     - When chat view is closed: invoking opens the view and prefills the input `[jsdom]`
+     - When disconnected: the chat view opens in Not-Connected state, prefill still present `[jsdom]`
+     - Works for any file type (test with `.md`, `.pdf`, `.png` mock files) `[jsdom]`
   3. Implement:
      - Create `src/commands/fileMenu.ts` exporting `registerFileMenu(plugin, { getOrOpenChatView, resolveVaultPath })`.
      - Uses `plugin.registerEvent(plugin.app.workspace.on("file-menu", (menu, file, source) => { menu.addItem(item => ...) }))`.
