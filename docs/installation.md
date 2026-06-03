@@ -23,7 +23,7 @@
 
 ## Requirements
 
-- **Obsidian** ≥ 1.5.0
+- **Obsidian** ≥ 1.7.2
 - **Desktop only** — `isDesktopOnly: true` in the manifest. Hashi uses Node APIs (Docker socket, filesystem) that are unavailable on Obsidian Mobile.
 - **Docker** (only for the [Session View](session-view.md) — talking to Tomo containers). The instruction executor works without Docker.
 
