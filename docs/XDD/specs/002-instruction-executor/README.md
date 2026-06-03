@@ -5,8 +5,8 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-04-24 |
-| **Current Phase** | Ready for implementation — readiness HIGH |
-| **Last Updated** | 2026-04-24 |
+| **Current Phase** | Done — implemented & released (v0.7.1) |
+| **Last Updated** | 2026-06-03 |
 
 ## Documents
 
