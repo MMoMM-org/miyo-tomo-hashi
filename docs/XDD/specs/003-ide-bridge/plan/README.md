@@ -166,6 +166,22 @@ HASHI_DEPLOY_VAULT=1 npm run build   # build + deploy into test/Hashi/.obsidian/
 
 ---
 
+## Test seam strategy
+
+Every external boundary this spec touches is exercised through one explicit, named seam — there are no production-only test hooks and no incidental reliance on real wall-clock time. Pick the matching seam when adding a test; do not invent a new one without logging a deviation.
+
+| Boundary | Seam | Mechanism | Where (representative) |
+|---|---|---|---|
+| WebSocket transport | real loopback server + raw client | `WsServer` binds `port: 0` (ephemeral) and `server.listen()` returns the actual port; a raw `node:net` client speaks hand-encoded RFC 6455 (client-masked frames, computed `Sec-WebSocket-Accept`). No mock — the hand-rolled `node:http` upgrade IS the unit under test (ADR-1) | `test/unit/ide-bridge/wsServer.test.ts`, `handshake.test.ts` |
+| Frame codec / JSON-RPC | pure functions | `decodeFrames`/encode and the JSON-RPC dispatch are I/O-free; tested over byte buffers and message objects, no transport | `test/unit/ide-bridge/frame.test.ts`, `jsonRpc.test.ts`, `stubs.test.ts` |
+| Editor / selection source | Obsidian + CM6 mock | Fake editor/`EditorView` handles drive `getCurrentSelection`/`getOpenEditors`/`openFile`; path validation reuses `normalizeAndContain` | `test/unit/ide-bridge/editor-adapter.test.ts` |
+| Time / debounce + keepalive | `vi.useFakeTimers()` | Drive the 100 ms trailing selection debounce + JSON dedup with `await vi.advanceTimersByTimeAsync(...)`; ping/pong keepalive timing is asserted the same way | `test/unit/ide-bridge/selectionTracker.test.ts` |
+| Obsidian API + DOM | `test/__mocks__/obsidian.ts` | **Side-effect** `import "obsidian"` first in every test file installs the `HTMLElement.prototype` shim — even transport tests that touch no DOM need it because the suite shares the alias. Type-only imports erase before resolution | every `test/unit/ide-bridge/*` file |
+
+**Async-ordering mandate.** Any test that asserts the *order or timing* of asynchronous events — selection-change debounce coalescing, dedup of identical selections, ping/pong keepalive, EADDRINUSE single re-listen, client-count transitions — MUST control time and the event loop explicitly. For timer-driven logic use `vi.useFakeTimers()` plus `await vi.advanceTimersByTimeAsync(...)`. For the real-loopback transport (which cannot fake the OS socket clock) drive ordering with **deterministic byte-buffer awaits** — `await client.waitFor(buf => buf.includes(...))` — never a bare `sleep`. A real-time `setTimeout` standing in for "the bytes should have arrived by now" is rejected in review: racing the real clock is this project's primary flake source.
+
+---
+
 ## Implementation Phases
 
 Each phase is defined in a separate file. Tasks follow red-green-refactor: **Prime** (understand context), **Test** (red), **Implement** (green), **Validate** (refactor + verify).

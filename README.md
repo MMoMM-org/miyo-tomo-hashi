@@ -198,6 +198,7 @@ Cut down on the busywork — with the peace of mind that Hashi does only what yo
 
 ## Known edge cases
 
+- **Operating systems.** Desktop only (`isDesktopOnly: true`). **macOS** is the primary, verified platform; **Linux** is experimental and **Windows** is user-contributed — Hashi runs the same code on all three (no per-OS gating), but only macOS is regularly exercised. On any OS, Docker reachability is the real gate, surfaced as a named error if the daemon or socket isn't available.
 - **Auto-reconnect across Obsidian Sync devices.** The persisted `chosenInstanceName` is replicated by Sync. On a second device, the auto-attach may land on a same-labelled but unrelated container. Hashi shows a Notice naming the instance it just attached to so a wrong-container connect is detectable.
 
 ## Part of MiYo
