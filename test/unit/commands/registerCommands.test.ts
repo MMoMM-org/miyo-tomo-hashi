@@ -23,7 +23,7 @@ import { Notice, type Plugin } from "obsidian";
 // `asPlugin()` widens the structural mock to the abstract `Plugin` once at
 // the seam (same pattern as test/unit/commands/fileMenu.test.ts).
 import { Plugin as PluginMock } from "../../__mocks__/obsidian";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import {
 	registerCommands,
@@ -51,7 +51,7 @@ function inst(overrides: Partial<TomoInstance> = {}): TomoInstance {
 }
 
 interface ForceReconnectOnly {
-	forceReconnect: ReturnType<typeof vi.fn>;
+	forceReconnect: Mock<() => Promise<void>>;
 }
 
 interface CommandSpec {
@@ -71,8 +71,8 @@ describe("registerCommands", () => {
 	let pluginMock: PluginMock;
 	let plugin: Plugin;
 	let connection: ForceReconnectOnly;
-	let showChatWindow: ReturnType<typeof vi.fn>;
-	let getChosenInstanceName: ReturnType<typeof vi.fn>;
+	let showChatWindow: Mock<() => Promise<void>>;
+	let getChosenInstanceName: Mock<() => string | null>;
 	let deps: CommandDeps;
 
 	beforeEach(() => {
@@ -82,8 +82,8 @@ describe("registerCommands", () => {
 
 		pluginMock = new PluginMock();
 		plugin = asPlugin(pluginMock);
-		connection = { forceReconnect: vi.fn(async () => {}) };
-		showChatWindow = vi.fn(async () => {});
+		connection = { forceReconnect: vi.fn<() => Promise<void>>(async () => {}) };
+		showChatWindow = vi.fn<() => Promise<void>>(async () => {});
 		getChosenInstanceName = vi.fn<() => string | null>(() => null);
 		deps = {
 			connection,

@@ -75,8 +75,52 @@ npm ls uuid                       # → uuid@11.1.1 overridden (the patched rele
 grep -c "protobufjs" build/main.js  # → 0 (grpc/protobuf severed by the buildkit stub)
 ```
 
+## Development-only advisories (never shipped)
+
+These advisories sit entirely in **devDependencies** — test runner, release
+tooling. None of them is in `build/main.js` (`npm audit --omit=dev` reports
+**0 vulnerabilities**), so they cannot affect an installed plugin. They are
+recorded here for the Dependabot/Obsidian-bot audit trail.
+
+| Advisory | Dependency | Reaches via | Resolution |
+|---|---|---|---|
+| [GHSA-5xrq-8626-4rwp](https://github.com/advisories/GHSA-5xrq-8626-4rwp) / CVE-2026-47429 — **critical**, Vitest UI server arbitrary file read/execute | `vitest` (`< 4.1.0`) | direct devDependency (test runner) | **Bumped `vitest` → `^4.1.8`** |
+| [GHSA-58qx-3vcg-4xpx](https://github.com/advisories/GHSA-58qx-3vcg-4xpx) — moderate, `ws` uninitialized memory disclosure | `ws` | transitive under the vitest/jsdom test tree | Cleared via `npm audit fix` |
+| [GHSA-jxxr-4gwj-5jf2](https://github.com/advisories/GHSA-jxxr-4gwj-5jf2) — moderate, `brace-expansion` DoS | `brace-expansion@5.0.5` | `@semantic-release/npm` → **vendored `npm` CLI** (`node_modules/npm/node_modules/…`) | **Accepted** — see below |
+
+### `vitest` — critical, but the vulnerable path was never reachable
+
+The advisory only triggers "when the Vitest UI server is listening". Hashi has
+**no `@vitest/ui` dependency** and no script runs `vitest --ui` (tests run as
+`vitest run`, which starts no server), so the vulnerable code was never
+installed or executed. The bump to `vitest@^4.1.8` removes the package version
+entirely and keeps Dependabot green; the v3→v4 upgrade required only a small
+test-typing migration (`ReturnType<typeof vi.fn>` → `Mock<…>` where a mock is
+assigned to a concrete signature). All 1134 tests pass on v4.
+
+### `brace-expansion` — bundled inside the npm CLI, accepted
+
+The remaining moderate advisory is **not** in Hashi's own dependency graph: it
+lives in the full `npm` CLI that `@semantic-release/npm` vendors under
+`node_modules/npm/node_modules/brace-expansion`. It cannot be fixed with a
+top-level `overrides` entry (the vendored copy is isolated) and is never
+reachable from the plugin — `npm` runs only inside the CI release job, against
+first-party arguments, and ships nothing. Bumping it would mean replacing the
+`@semantic-release/npm` wrapper, which is out of proportion to a moderate DoS in
+a release-only tool. Accepted and tracked here.
+
+## Reproduce (dev advisories)
+
+```bash
+npm audit --omit=dev   # → 0 vulnerabilities (nothing reaches the bundle)
+npm ls vitest          # → vitest@4.1.8
+npm ls brace-expansion # → only the vendored npm@… copy remains (release-only)
+```
+
 ---
 
-*Last reviewed: 2026-05-31 — fast-uri / protobufjs / uuid advisories from the
-Obsidian community-plugin bot; resolved via pinned `overrides` after
-bundle-level reachability verification.*
+*Last reviewed: 2026-06-03 — added development-only advisory section: vitest
+critical (GHSA-5xrq-8626-4rwp) bumped to 4.1.8, ws cleared, brace-expansion in
+the vendored npm CLI accepted. Earlier: fast-uri / protobufjs / uuid runtime
+advisories resolved via pinned `overrides` after bundle-level reachability
+verification.*
