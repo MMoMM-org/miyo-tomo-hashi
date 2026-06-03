@@ -1,18 +1,14 @@
 # src/ — Code Area Rules
 
-## TDD
-- RED: Write failing test first. No implementation before a failing test.
-- GREEN: Minimal code to make the test pass. Nothing more.
-- REFACTOR: Clean up only after GREEN. Run tests again.
+Hashi source. The `obsidian` API is mocked in tests (`test/__mocks__/obsidian.ts`); production code must stay testable against that mock rather than the live Obsidian runtime.
 
-## Contracts
-- Domain rules live in docs/ai/memory/domain.md — link implementations to these
-- Public interfaces must match the SDD contract
+## Where the rules already live — don't restate here
+- TDD cycle, strict TS, `no any`, import order → enforced by `tcs-workflow:xdd-tdd`, ESLint (`eslint-plugin-obsidianmd`), and `tsconfig.json` (`strict` + `noUncheckedIndexedAccess`)
+- Domain rules an implementation must honor → `docs/ai/memory/domain.md` (e.g. vault filename `:` → `-` sanitization)
+- Architectural patterns to follow → `docs/ai/memory/decisions.md` (epoch-counter guard for async state machines; plan-wins-over-SDD on drift)
+- Public interfaces must match the SDD contract in `docs/XDD/specs/<spec>/solution.md`
 
-## Conventions
-
-## TypeScript Rules
-- Strict mode: `"strict": true` in tsconfig — no exceptions
-- No `any` — use `unknown` + narrowing or define a proper type
-- Import order: node builtins → external → internal (enforced by ESLint/biome)
-- Prefer explicit return types on public functions
+## Hashi-specific code traps (index into tools.md)
+- `obsidian`'s `Plugin` is `abstract` — type helpers against a structural slice (`Pick<Plugin, "loadData" | "saveData">`), never `new Plugin()`.
+- `Modal` / `SettingTab` do **not** extend `Component` → `registerDomEvent` is unavailable; attach listeners directly and clean them up by hand.
+- User hooks load as `.cjs` only — Electron treats `.js` as ESM and `module.exports` comes back empty.
