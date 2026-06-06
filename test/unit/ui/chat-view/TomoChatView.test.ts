@@ -32,6 +32,7 @@ import { TomoChatView } from "../../../../src/ui/chat-view/TomoChatView";
 interface TerminalHooks {
 	onDataCb: ((data: string) => void) | null;
 	onResizeCb: ((dims: { rows: number; cols: number }) => void) | null;
+	keyEventCb: ((e: KeyboardEvent) => boolean) | null;
 	rows: number;
 	cols: number;
 	options: { fontSize: number };
@@ -40,6 +41,7 @@ interface TerminalHooks {
 const terminalHooks: TerminalHooks = {
 	onDataCb: null,
 	onResizeCb: null,
+	keyEventCb: null,
 	rows: 24,
 	cols: 80,
 	options: { fontSize: 14 },
@@ -71,6 +73,14 @@ vi.mock("../../../../src/ui/chat-view/terminalHost", () => ({
 					(cb: (dims: { rows: number; cols: number }) => void) => {
 						terminalHooks.onResizeCb = cb;
 						return { dispose: vi.fn() };
+					},
+				),
+				// Shift+Enter newline interception (multiline input). xterm's
+				// custom key-event handler returns void; tests capture the
+				// callback to drive synthetic keydown events.
+				attachCustomKeyEventHandler: vi.fn(
+					(cb: (e: KeyboardEvent) => boolean) => {
+						terminalHooks.keyEventCb = cb;
 					},
 				),
 				get rows() {
@@ -305,6 +315,66 @@ describe("TomoChatView — stream forwarding", () => {
 		const calls = vi.mocked(terminalHost.writeChunk).mock.calls;
 		expect(calls[0]![1]).toBe(a);
 		expect(calls[1]![1]).toBe(b);
+	});
+});
+
+describe("TomoChatView — Shift+Enter newline (multiline input)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		terminalHooks.keyEventCb = null;
+		connectionStore.set({ kind: "connected", instance: inst() });
+	});
+
+	afterEach(() => {
+		connectionStore.set({ kind: "disconnected" });
+	});
+
+	it("registers a custom key-event handler on the terminal", async () => {
+		await mountView();
+		expect(terminalHooks.keyEventCb).not.toBeNull();
+	});
+
+	it("Shift+Enter sends LF (0x0A) to the container and suppresses xterm's default CR", async () => {
+		// xterm encodes Shift+Enter identically to Enter (CR, 0x0D); without
+		// interception Claude Code submits the prompt instead of inserting a
+		// newline. LF is the byte Ctrl+J produces — Claude Code's universal
+		// `chat:newline` binding.
+		const h = await mountView();
+		const handled = terminalHooks.keyEventCb!(
+			new KeyboardEvent("keydown", { key: "Enter", shiftKey: true }),
+		);
+		// Returning false tells xterm NOT to process the event (no CR emitted).
+		expect(handled).toBe(false);
+		expect(h.connection.write).toHaveBeenCalledTimes(1);
+		expect(h.connection.write).toHaveBeenCalledWith("\n");
+	});
+
+	it("plain Enter is not intercepted — handler returns true, no direct write", async () => {
+		const h = await mountView();
+		const handled = terminalHooks.keyEventCb!(
+			new KeyboardEvent("keydown", { key: "Enter", shiftKey: false }),
+		);
+		// true = let xterm handle it normally (it emits CR through onData).
+		expect(handled).toBe(true);
+		expect(h.connection.write).not.toHaveBeenCalled();
+	});
+
+	it("Shift+Enter on keyup is ignored (only keydown acts, no double newline)", async () => {
+		const h = await mountView();
+		const handled = terminalHooks.keyEventCb!(
+			new KeyboardEvent("keyup", { key: "Enter", shiftKey: true }),
+		);
+		expect(handled).toBe(true);
+		expect(h.connection.write).not.toHaveBeenCalled();
+	});
+
+	it("non-Enter keys pass through untouched", async () => {
+		const h = await mountView();
+		const handled = terminalHooks.keyEventCb!(
+			new KeyboardEvent("keydown", { key: "a", shiftKey: true }),
+		);
+		expect(handled).toBe(true);
+		expect(h.connection.write).not.toHaveBeenCalled();
 	});
 });
 
