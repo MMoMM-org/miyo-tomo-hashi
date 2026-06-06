@@ -49,6 +49,8 @@ xterm onData (your keystrokes) → docker.write → container stdin
 
 All input goes through the terminal — there is no separate line-input field. Type directly into the xterm surface the same way you would type into any terminal emulator.
 
+**Shift+Enter inserts a newline** instead of submitting the prompt. A plain terminal can't tell Shift+Enter from Enter — both emit CR (`0x0D`) — so Hashi intercepts Shift+Enter and sends LF (`0x0A`) to the container instead. That is the same byte Ctrl+J produces, which Claude Code binds to its "newline" action in every terminal. Plain Enter still submits.
+
 ## File-menu @file injection
 
 Right-click any file in the file explorer → **Open Tomo chat with @file reference**. Hashi:

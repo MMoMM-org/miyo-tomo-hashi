@@ -236,16 +236,26 @@ export class TomoChatView extends ItemView {
 		// stdin. This is the sole input path — all typing (keyboard and
 		// programmatic writes via writeToSession) flows through the terminal.
 		this.terminalInputDisposable = this.terminal.terminal.onData((data) => {
-			try {
-				this.connection.write(data);
-			} catch {
-				// not connected — drop silently; render() shows the disconnected
-				// state and the user can re-Connect / Force Reconnect.
+			this.forwardInput(data);
+		});
+
+		// Shift+Enter must insert a newline, not submit. xterm encodes
+		// Shift+Enter identically to plain Enter — both emit CR (0x0D) through
+		// onData — so the Shift modifier never reaches the container and Claude
+		// Code submits the prompt instead of breaking the line. Intercept the
+		// keydown here and send LF (0x0A) instead: that is exactly the byte
+		// Ctrl+J produces, which Claude Code binds to its `chat:newline` action
+		// in every terminal with no setup (code.claude.com/docs/en/terminal-config).
+		// The kitty/CSI-u sequence (ESC[13;2u) is deliberately NOT used — it
+		// requires the extended-keys protocol to be negotiated, which an
+		// embedded xterm.js over a Docker PTY does not reliably trigger.
+		// Returning false stops xterm from also emitting CR for this event.
+		this.terminal.terminal.attachCustomKeyEventHandler((e) => {
+			if (e.type === "keydown" && e.key === "Enter" && e.shiftKey) {
+				this.forwardInput("\n");
+				return false;
 			}
-			if (this.showGapNotice) {
-				this.showGapNotice = false;
-				this.render(connectionStore.get());
-			}
+			return true;
 		});
 
 		// Forward xterm geometry to the container PTY. `docker run -it`
@@ -289,6 +299,23 @@ export class TomoChatView extends ItemView {
 
 	focus(): void {
 		this.terminal?.terminal.focus();
+	}
+
+	// Single funnel for user-originated input → container stdin. Shared by the
+	// xterm onData hook (raw keystrokes) and the Shift+Enter handler (synthetic
+	// LF). Clearing the continuity-gap notice here means any user input — typed
+	// or a deliberate newline — counts as acknowledging recovery (PRD F8/AC5).
+	private forwardInput(data: string): void {
+		try {
+			this.connection.write(data);
+		} catch {
+			// not connected — drop silently; render() shows the disconnected
+			// state and the user can re-Connect / Force Reconnect.
+		}
+		if (this.showGapNotice) {
+			this.showGapNotice = false;
+			this.render(connectionStore.get());
+		}
 	}
 
 	override async onClose(): Promise<void> {
