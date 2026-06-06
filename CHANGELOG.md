@@ -1,3 +1,10 @@
+## [0.7.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.7.1...0.7.2) (2026-06-06)
+
+
+### Bug Fixes
+
+* **session-view:** send LF on Shift+Enter so newlines don't submit ([52b73e7](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/52b73e79363ee155515983d1f8baf2ae9c64ad2e))
+
 ## [0.7.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.7.0...0.7.1) (2026-06-03)
 
 
