@@ -3,9 +3,11 @@
  * with a verbatim `line` value.
  *
  * Locator: scan the target MOC top-down for the first line whose stripped
- * content (after optional `> ` callout prefix and surrounding whitespace)
- * starts with `marker`. Replace that whole line. If the matched line had
- * a leading `> ` callout prefix, the replacement preserves it.
+ * content (after an optional `> ` callout prefix, an optional list-item
+ * bullet `- `/`* `/`+ `/`1. `, and surrounding whitespace) starts with
+ * `marker`. Replace that whole line, preserving any callout prefix AND the
+ * list-item bullet — so a `> - up::` Dataview-in-callout list item stays a
+ * list item after rewrite.
  *
  * No anchor/section context — the marker IS the locator. Multi-link
  * aggregation (e.g., `related:: [[A]], [[B]], [[C]]`) is done Tomo-side
@@ -28,6 +30,10 @@ import type { HandlerContext } from "./types.js";
 type RelOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
 
 const CALLOUT_PREFIX_RE = /^>\s*/;
+// Optional Markdown list-item bullet: `-`, `*`, `+`, or an ordered `N.`,
+// followed by whitespace. Capture group 1 is the bullet token, re-emitted
+// with a single trailing space so list formatting survives the rewrite.
+const LIST_BULLET_RE = /^([-*+]|\d+\.)\s+/;
 
 export async function addRelationship(
 	action: AddRelationshipAction,
@@ -45,13 +51,17 @@ export async function addRelationship(
 
 	let matchIdx = -1;
 	let inCallout = false;
+	let bullet = ""; // normalized list bullet incl. trailing space (e.g. "- "), or "" if none
 	for (let i = 0; i < lines.length; i++) {
 		const raw = lines[i] ?? "";
 		const calloutMatch = CALLOUT_PREFIX_RE.exec(raw);
-		const stripped = (calloutMatch !== null ? raw.slice(calloutMatch[0].length) : raw).trimStart();
+		const afterCallout = (calloutMatch !== null ? raw.slice(calloutMatch[0].length) : raw).trimStart();
+		const bulletMatch = LIST_BULLET_RE.exec(afterCallout);
+		const stripped = bulletMatch !== null ? afterCallout.slice(bulletMatch[0].length) : afterCallout;
 		if (stripped.startsWith(marker)) {
 			matchIdx = i;
 			inCallout = calloutMatch !== null;
+			bullet = bulletMatch !== null ? `${bulletMatch[1]} ` : "";
 			break;
 		}
 	}
@@ -60,11 +70,12 @@ export async function addRelationship(
 		return { kind: "failed", reason: `Marker not found: ${marker}` };
 	}
 
-	// Normalize callout prefix to canonical "> " (single space). Whitespace
-	// variation in the source line is treated as cosmetic — the line is
-	// rewritten verbatim with a single-space callout prefix when inside a
-	// callout, no prefix when outside.
-	const newLine = inCallout ? `> ${line}` : line;
+	// Reconstruct the structural prefix, normalizing whitespace to canonical
+	// form: callout prefix → "> " (single space), list bullet → token + single
+	// space. Whitespace variation in the source line is treated as cosmetic;
+	// the bullet token itself (`-`/`*`/`+`/`1.`) is preserved so list items
+	// stay list items.
+	const newLine = `${inCallout ? "> " : ""}${bullet}${line}`;
 	if (lines[matchIdx] === newLine) {
 		return { kind: "skipped-already" };
 	}
