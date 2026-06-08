@@ -908,7 +908,7 @@ describe("InstructionExecutor — run log records handler failures end-to-end", 
 // ---------------------------------------------------------------------------
 
 describe("InstructionExecutor — debug logging", () => {
-	it("logs per-action outcomes (with failure reason) to console when debugLogging is on", async () => {
+	it("failed → console.warn (always); applied + run start/complete → console.debug (gated)", async () => {
 		const vault = new FakeVaultFS();
 		const sourcePath = `${INBOX}/dbg_instructions.json`;
 		// create_moc whose source note is absent → handler returns failed.
@@ -918,32 +918,71 @@ describe("InstructionExecutor — debug logging", () => {
 		// Deliberately do NOT create inbox/note-I01.md → "Source missing".
 
 		const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
-		let lines: string[] = [];
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let debugLines: string[] = [];
+		let warnLines: string[] = [];
 		try {
 			const { executor } = makeSingleFileExecutor(vault, set, {
 				settings: { debugLogging: true },
 			});
 			await executor.execute({ kind: "single-file", sourcePath });
 			// Capture before mockRestore() — restoring also resets mock.calls.
-			lines = debugSpy.mock.calls.map((c) => c.join(" "));
+			debugLines = debugSpy.mock.calls.map((c) => c.join(" "));
+			warnLines = warnSpy.mock.calls.map((c) => c.join(" "));
 		} finally {
 			debugSpy.mockRestore();
+			warnSpy.mockRestore();
 		}
 
-		// Per-action failure line carries the id, kind, and reason.
+		// The failure surfaces as a WARNING (with id, kind, reason)…
 		expect(
-			lines.some(
+			warnLines.some(
 				(l) =>
 					l.includes("[hashi:exec]") &&
 					l.includes("I01") &&
 					l.includes("Source missing"),
 			),
 		).toBe(true);
-		expect(lines.some((l) => l.includes("[hashi:exec] run start"))).toBe(true);
-		expect(lines.some((l) => l.includes("[hashi:exec] run complete"))).toBe(true);
+		// …not buried in the debug stream.
+		expect(debugLines.some((l) => l.includes("Source missing"))).toBe(false);
+		// Lifecycle lines stay at debug level (only when debugLogging is on).
+		expect(debugLines.some((l) => l.includes("[hashi:exec] run start"))).toBe(true);
+		expect(debugLines.some((l) => l.includes("[hashi:exec] run complete"))).toBe(true);
 	});
 
-	it("emits no execution traces when debugLogging is off (default)", async () => {
+	it("a failed action still warns even when debugLogging is off", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/dbg_fail_off_instructions.json`;
+		const set = makeInstructionSet([makeCreateMoc("I01", `${INBOX}/moc-fail-off.md`)]);
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		// Source note absent → "Source missing".
+
+		const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let debugExec: string[] = [];
+		let warnLines: string[] = [];
+		try {
+			const { executor } = makeSingleFileExecutor(vault, set, {
+				settings: { debugLogging: false },
+			});
+			await executor.execute({ kind: "single-file", sourcePath });
+			debugExec = debugSpy.mock.calls
+				.map((c) => c.join(" "))
+				.filter((l) => l.includes("[hashi:exec]"));
+			warnLines = warnSpy.mock.calls.map((c) => c.join(" "));
+		} finally {
+			debugSpy.mockRestore();
+			warnSpy.mockRestore();
+		}
+
+		// Failure is always surfaced…
+		expect(warnLines.some((l) => l.includes("[hashi:exec]") && l.includes("Source missing"))).toBe(true);
+		// …while verbose debug lines stay off.
+		expect(debugExec).toHaveLength(0);
+	});
+
+	it("a fully successful run emits nothing when debugLogging is off", async () => {
 		const vault = new FakeVaultFS();
 		const sourcePath = `${INBOX}/dbg_off_instructions.json`;
 		const set = makeInstructionSet([makeCreateMoc("I01", `${INBOX}/moc-dbg-off.md`)]);
@@ -953,21 +992,23 @@ describe("InstructionExecutor — debug logging", () => {
 		await vault.create("inbox/note-I01.md", "# Note");
 
 		const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
-		let execLines: string[] = [];
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let execDebug: string[] = [];
+		let execWarn: string[] = [];
 		try {
 			const { executor } = makeSingleFileExecutor(vault, set, {
 				settings: { debugLogging: false },
 			});
 			await executor.execute({ kind: "single-file", sourcePath });
-			// Capture before mockRestore() — restoring also resets mock.calls.
-			execLines = debugSpy.mock.calls
-				.map((c) => c.join(" "))
-				.filter((l) => l.includes("[hashi:exec]"));
+			execDebug = debugSpy.mock.calls.map((c) => c.join(" ")).filter((l) => l.includes("[hashi:exec]"));
+			execWarn = warnSpy.mock.calls.map((c) => c.join(" ")).filter((l) => l.includes("[hashi:exec]"));
 		} finally {
 			debugSpy.mockRestore();
+			warnSpy.mockRestore();
 		}
 
-		expect(execLines).toHaveLength(0);
+		expect(execDebug).toHaveLength(0);
+		expect(execWarn).toHaveLength(0);
 	});
 });
 

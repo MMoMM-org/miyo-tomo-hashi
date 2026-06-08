@@ -128,20 +128,26 @@ export class InstructionExecutor {
 		if (this.settings.debugLogging) console.debug(`[hashi:exec] ${msg}`);
 	}
 
-	// Emit one line per action outcome (failure reason included). Called at
-	// every point the loop finalizes a record's outcome.
+	// Emit one line per action outcome. A `failed` outcome is an operational
+	// signal, not debug chatter — it goes to console.warn UNCONDITIONALLY (so
+	// it's visible without debugLogging and stands out, in colour, from the
+	// debug-level lines around it). Successes/skips are verbose and stay
+	// debug-gated. Throws are louder still: console.error ("run aborted").
 	private debugOutcome(record: ActionRecord): void {
-		if (!this.settings.debugLogging) return;
 		const o = record.outcome;
+		const loc = `${record.fileId}::${record.id} [${record.kind}]`;
+		if (o !== null && o.kind === "failed") {
+			console.warn(`[hashi:exec] ${loc} → failed: ${o.reason}`);
+			return;
+		}
+		if (!this.settings.debugLogging) return;
 		const detail =
 			o === null
 				? "pending"
-				: o.kind === "failed"
-					? `failed: ${o.reason}`
-					: o.kind === "skipped-dependency"
-						? `skipped-dependency (needs ${o.dependsOn})`
-						: o.kind;
-		this.debug(`${record.fileId}::${record.id} [${record.kind}] → ${detail}`);
+				: o.kind === "skipped-dependency"
+					? `skipped-dependency (needs ${o.dependsOn})`
+					: o.kind;
+		this.debug(`${loc} → ${detail}`);
 	}
 
 	cancel(): void {
@@ -448,7 +454,10 @@ export class InstructionExecutor {
 				logWriter.appendRecord(record, opts);
 				this.debugOutcome(record);
 				if (afterOutcome.kind === "failed") {
-					this.debug(`${record.fileId}::${record.id} after-hook failed: ${afterOutcome.reason}`);
+					// After-hook failure doesn't flip the action outcome (the vault
+					// commit already happened), but it's still a warning worth
+					// surfacing unconditionally.
+					console.warn(`[hashi:exec] ${record.fileId}::${record.id} after-hook failed: ${afterOutcome.reason}`);
 				}
 			}
 
