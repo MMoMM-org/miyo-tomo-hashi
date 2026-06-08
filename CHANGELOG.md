@@ -1,3 +1,10 @@
+## [0.7.4](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.7.3...0.7.4) (2026-06-08)
+
+
+### Bug Fixes
+
+* **executor:** crash-safe run log + resolve hooks once per run ([61bcd20](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/61bcd2026491c106aa3fd9a4cb6eaa567e17d775)), closes [#52](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/52)
+
 ## [0.7.3](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.7.2...0.7.3) (2026-06-08)
 
 
