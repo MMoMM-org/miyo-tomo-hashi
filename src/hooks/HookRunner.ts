@@ -266,7 +266,14 @@ export class HookRunner {
 			logger: this.logger,
 		};
 
-		return await this.invoke(phase, hookFn, ctx);
+		const outcome = await this.invoke(phase, hookFn, ctx);
+		// Debug-gated trace (logger.info routes through the debugLogging
+		// setting). Only fires for actions that actually have a hook, and only
+		// when debugging is on — no contribution to the issue #52 spam.
+		this.logger.info(
+			`${key} → ${outcome.kind}${outcome.kind === "failed" ? `: ${outcome.reason}` : ""}`,
+		);
+		return outcome;
 	}
 
 	resetSessionDecisions(): void {

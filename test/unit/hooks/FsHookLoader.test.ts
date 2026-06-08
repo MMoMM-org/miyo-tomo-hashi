@@ -24,7 +24,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FsHookLoader } from "../../../src/hooks/FsHookLoader";
 
@@ -81,6 +81,27 @@ describe("FsHookLoader", () => {
 	it("returns null when the hooks directory does not exist on disk", () => {
 		const loader = new FsHookLoader(tmpRoot, () => ".tomo-hashi/hooks");
 		expect(loader.resolve("before-create_moc")).toBeNull();
+	});
+
+	// -- #52: debug trace sink (silent by default, opt-in for debugging) -----
+
+	it("is silent by default — no debug sink passed, resolve does not throw", () => {
+		// Default no-op sink: routine resolution emits nothing to the console.
+		const loader = new FsHookLoader(tmpRoot, () => ".tomo-hashi/hooks");
+		expect(() => loader.resolve("before-create_moc")).not.toThrow();
+	});
+
+	it("routes discovery traces to the debug sink when one is provided (#52)", () => {
+		const debug = vi.fn();
+		// Absent hooks dir → the useful 'dir + not readable' detail that
+		// diagnosed #52 still surfaces, but only through the (gated) sink.
+		const loader = new FsHookLoader(tmpRoot, () => "missing/hooks", debug);
+
+		expect(loader.resolve("before-create_moc")).toBeNull();
+		expect(debug).toHaveBeenCalled();
+		const messages = debug.mock.calls.map((c) => String(c[0])).join("\n");
+		expect(messages).toContain("before-create_moc");
+		expect(messages).toContain("not readable");
 	});
 
 	it("returns null when the hooks directory exists but contains no matching file", () => {

@@ -16,6 +16,11 @@ to the caller. A stranded `totals: {}` log no longer happens — an aborted run 
 `readdirSync` calls, each `console.debug`-logging (and logging the ENOENT when the hooks
 dir is absent). This buried real errors.
 **Fix:** `HookRunner` caches resolution per run (primed once by `preApprove`, reset by
-`beginRun()`); routine `console.debug` lines were removed and an absent hooks dir is a
-silent `null`. Only genuine signals remain (`.js`-ignored warning, vault-escape warning,
-malformed-hook warning).
+`beginRun()`), so each key resolves at most once per run instead of per action. The
+`[hashi:hooks]` traces are **not deleted** — they are gated behind the `debugLogging`
+setting: `FsHookLoader` takes an optional `debug` sink (wired in main.ts to fire only when
+`debugLogging` is on), and `HookRunner` run-outcome traces route through the already-gated
+`hookLogger.info`. Default: clean console. `debugLogging` on: concise per-run traces
+(including the hooks-dir path that diagnosed #52). Always-on signals stay (`.js`-ignored,
+vault-escape, malformed-hook warnings) plus the `[hashi] run aborted before finalize:`
+console.error.

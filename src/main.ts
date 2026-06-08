@@ -384,6 +384,12 @@ export default class TomoHashiPlugin extends Plugin {
 		const hookLoader = new FsHookLoader(
 			vaultBasePath,
 			() => this.settings.hooksDir,
+			// Debug-gated trace sink — silent unless the user enables
+			// debugLogging. Hook resolution is cached per run (issue #52), so
+			// this fires at most once per hook key per run, never per action.
+			(msg) => {
+				if (this.settings.debugLogging) console.debug(`[hashi:hooks] ${msg}`);
+			},
 		);
 
 		// `import.meta.url` is empty in the CJS bundle (esbuild target=es2018,

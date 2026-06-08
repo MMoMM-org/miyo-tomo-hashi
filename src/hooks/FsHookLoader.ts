@@ -33,14 +33,23 @@ import * as path from "node:path";
 import type { HookKey, HookLoader, ResolvedHook } from "./HookRunner.js";
 
 export class FsHookLoader implements HookLoader {
+	/**
+	 * @param debug optional trace sink. The caller is expected to gate it on
+	 *   the `debugLogging` setting (main.ts does). Off by default so routine
+	 *   resolution is silent — but the path/discovery detail is available on
+	 *   demand (it's what diagnosed #52). HookRunner caches resolution per run,
+	 *   so this fires at most once per hook key per run, never per action.
+	 */
 	constructor(
 		private readonly vaultBasePath: string,
 		private readonly getHooksDir: () => string,
+		private readonly debug: (msg: string) => void = () => { /* silent by default */ },
 	) {}
 
 	resolve(key: HookKey): ResolvedHook | null {
 		const hooksDir = this.getHooksDir();
 		const absoluteDir = path.resolve(this.vaultBasePath, hooksDir);
+		this.debug(`resolve("${key}") → dir="${absoluteDir}"`);
 
 		// M2: refuse hooksDir values that escape the vault root. `data.json`
 		// could be tampered (e.g., via Obsidian Sync from another device)
@@ -83,8 +92,10 @@ export class FsHookLoader implements HookLoader {
 			entries = fs.readdirSync(absoluteDir);
 		} catch {
 			// Absent/unreadable hooks dir is the normal "no hooks configured"
-			// case — return null silently (issue #52). Previously logged an
-			// ENOENT per action, which was the dominant console noise.
+			// case — return null. Silent unless debugLogging is on (issue #52:
+			// this used to log an ENOENT error per action, drowning the console
+			// — but the dir path is useful when actively debugging hooks).
+			this.debug(`resolve("${key}") → hooks dir not readable: "${absoluteDir}"`);
 			return null;
 		}
 		const matches = entries
@@ -94,6 +105,7 @@ export class FsHookLoader implements HookLoader {
 		if (jsOnly.length > 0 && matches.length === 0) {
 			console.warn(`[hashi:hooks] "${key}.js" found but ignored — Electron requires .cjs for CommonJS hooks. Rename to "${key}.cjs".`);
 		}
+		this.debug(`resolve("${key}") → matches=[${matches.join(", ")}]`);
 		if (matches.length === 0) return null;
 		const [first, ...rest] = matches;
 		if (first === undefined) return null;
