@@ -1,5 +1,22 @@
 # Context Memory
 
+## CURRENT FOCUS — run-log/logging hardening + chase the real abort (2026-06-08)
+
+**Session handoff (Docker → host).** The empty-run-log investigation (started from issue #51) is at this state:
+
+**Shipped to main (0.8.0):**
+- **#55 (0.7.4) — crash-safe run log.** `InstructionExecutor.run()` used to call `finalize()` as a bare `await`; any uncaught throw in the action loop or the post-loop `markActionsApplied` flush aborted the run and left the placeholder `start()` wrote (`totals: {}`, empty body) — the "empty log" symptom. Now: loop+flush wrapped, `finalize()` always runs, an aborted run writes a `(run error) → run aborted: <reason>` row + a `[hashi] run aborted before finalize:` console.error, and the original error still re-throws.
+- **#52 fix (in #55) — hook resolve once per run.** `HookRunner` caches resolution per run (primed by `preApprove`, reset by `beginRun()`); was ~250 `readdirSync`+logs per 126-action run.
+- **#56 (0.8.0) — debug-gated logging.** Hook traces gated behind `debugLogging` (not deleted); new `[hashi:exec]` per-action execution logging. **Log levels:** throw → `console.error` (run aborted); action **failed → `console.warn` (always on)**; applied/skipped/run start+complete → `console.debug` (debugLogging-gated). End-to-end test added: handler failure → reason rendered in the run-log `.md`.
+
+**Two failure classes (the key mental model):** a handler returning `{kind:failed}` (target note missing, marker/anchor/field/section missing) was ALWAYS logged in the run-log table — never causes an empty log. Only an uncaught THROW aborts before finalize → empty log. See `troubleshooting.md`.
+
+**NEXT STEP — must be done on the HOST (outside Docker):** look at the user's **Privat-Test vault** (separate from the repo's `test/Hashi/` QA vault, which only has success cases so the throw never reproduces). Privat-Test has many real errors. Deploy 0.8.0 there, run, and capture the first `[hashi:exec] … → failed: <reason>` warnings and any `run aborted: <reason>`. Goal: identify the actual throwing site, then **convert that throw into a clean `failed` outcome** in the handler so one bad action fails as a single row instead of aborting the whole run. The exact root-cause throw is still UNCONFIRMED — 0.8.0 only makes it visible.
+
+Deploy command: `HASHI_DEPLOY_VAULT=1 npm run build` (deploys to `test/Hashi/`; for Privat-Test the user copies/points the plugin themselves).
+
+---
+
 ## Next up — documentation refresh pass (queued 2026-05-31, after PR #15 / 0.6.0)
 
 The IDE Bridge feature shipped and the user-facing naming was changed to **Tomo chat** / **Tomo context** (was Connection / IDE Bridge). The docs *text* is aligned, but the visual + structural layer lags. Do a dedicated pass covering:
