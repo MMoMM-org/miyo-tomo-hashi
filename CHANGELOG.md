@@ -1,3 +1,16 @@
+# [0.8.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.7.4...0.8.0) (2026-06-08)
+
+
+### Bug Fixes
+
+* **executor:** surface failed actions at console.warn, not debug ([dfa3464](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/dfa34646c7d9ec349a69b8d2b78b7e1117361eed))
+* **hooks:** gate hook console traces behind debugLogging, not delete them ([825b9de](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/825b9de82c476f41a4081c7376d27e679bb9a1e4)), closes [#52](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/52) [#52](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/52) [#52](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/52)
+
+
+### Features
+
+* **executor:** debug-gated per-action execution logging ([8cce39d](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/8cce39d7b812f36d4f57e0e81afbbafac0417fe1))
+
 ## [0.7.4](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.7.3...0.7.4) (2026-06-08)
 
 
