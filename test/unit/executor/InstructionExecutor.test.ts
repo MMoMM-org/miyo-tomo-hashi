@@ -120,6 +120,23 @@ function makeLinkToMoc(id: string, targetMoc: string, targetMocPath: string, app
 	};
 }
 
+function makeAddRelationship(
+	id: string,
+	targetMocPath: string,
+	marker: string,
+	line: string,
+	applied?: boolean,
+): Action {
+	return {
+		action: "add_relationship",
+		id,
+		target_moc_path: targetMocPath,
+		marker,
+		line,
+		...(applied !== undefined ? { applied } : {}),
+	};
+}
+
 // ---------------------------------------------------------------------------
 // Helpers to make tests concise
 // ---------------------------------------------------------------------------
@@ -814,6 +831,75 @@ describe("InstructionExecutor — run log", () => {
 		const filesInInbox = await vault.list(INBOX);
 		const logFile = filesInInbox.find((f) => f.includes("tomo-hashi-run-log"));
 		expect(logFile).toBeUndefined();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Run log captures handler failures end-to-end (the chain that matters most:
+// handler returns failed → executor records → run-log .md renders the reason)
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — run log records handler failures end-to-end", () => {
+	it("writes each failing action's reason into the rendered run-log .md (target-note missing + marker-in-note missing)", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/fail_log_instructions.json`;
+		const existingMoc = `${INBOX}/Existing (MOC).md`;
+
+		// I01: target MOC does not exist        → "Relationship target missing"
+		// I02: target MOC exists, marker absent  → "Marker not found: zz::"
+		const set = makeInstructionSet([
+			makeAddRelationship("I01", `${INBOX}/Missing (MOC).md`, "up::", "up:: [[X]]"),
+			makeAddRelationship("I02", existingMoc, "zz::", "zz:: [[Y]]"),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.create(existingMoc, "# Existing (MOC)\n\nno markers here\n");
+
+		const { executor } = makeSingleFileExecutor(vault, set, {
+			settings: { runLogRetention: "always" },
+		});
+
+		const counts = await executor.execute({ kind: "single-file", sourcePath });
+		expect(counts.failed).toBe(2);
+
+		const filesInInbox = await vault.list(INBOX);
+		const logFile = filesInInbox.find((f) => f.includes("tomo-hashi-run-log"));
+		expect(logFile).toBeDefined();
+		const logContent = await vault.read(logFile as string);
+
+		// End-to-end: both failure reasons rendered in the run-log table, each
+		// against its action id. This is the chain a "failure happened but isn't
+		// in the log" bug would break.
+		expect(logContent).toContain("I01");
+		expect(logContent).toContain("Relationship target missing");
+		expect(logContent).toContain("I02");
+		expect(logContent).toContain("Marker not found: zz::");
+	});
+
+	it("a target-in-note failure is retained under retention=only-after-failed (it counts as a failure)", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/fail_keep_instructions.json`;
+		const moc = `${INBOX}/Map (MOC).md`;
+		const set = makeInstructionSet([
+			makeAddRelationship("I01", moc, "missing::", "missing:: [[Z]]"),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.create(moc, "# Map (MOC)\n\nbody without the marker\n");
+
+		const { executor } = makeSingleFileExecutor(vault, set, {
+			settings: { runLogRetention: "only-after-failed" },
+		});
+
+		await executor.execute({ kind: "single-file", sourcePath });
+
+		const filesInInbox = await vault.list(INBOX);
+		const logFile = filesInInbox.find((f) => f.includes("tomo-hashi-run-log"));
+		expect(logFile).toBeDefined();
+		const logContent = await vault.read(logFile as string);
+		expect(logContent).toContain("Marker not found: missing::");
 	});
 });
 
