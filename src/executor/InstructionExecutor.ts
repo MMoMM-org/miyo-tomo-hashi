@@ -120,6 +120,36 @@ export class InstructionExecutor {
 		return this.settingsRef();
 	}
 
+	// Debug-gated execution trace. The run log (.md) is the persistent record;
+	// this is the live console view for diagnosing a run in progress — most
+	// importantly which action failed and why. Off unless the user enables the
+	// `debugLogging` setting, so a 100+ action run stays quiet by default.
+	private debug(msg: string): void {
+		if (this.settings.debugLogging) console.debug(`[hashi:exec] ${msg}`);
+	}
+
+	// Emit one line per action outcome. A `failed` outcome is an operational
+	// signal, not debug chatter — it goes to console.warn UNCONDITIONALLY (so
+	// it's visible without debugLogging and stands out, in colour, from the
+	// debug-level lines around it). Successes/skips are verbose and stay
+	// debug-gated. Throws are louder still: console.error ("run aborted").
+	private debugOutcome(record: ActionRecord): void {
+		const o = record.outcome;
+		const loc = `${record.fileId}::${record.id} [${record.kind}]`;
+		if (o !== null && o.kind === "failed") {
+			console.warn(`[hashi:exec] ${loc} → failed: ${o.reason}`);
+			return;
+		}
+		if (!this.settings.debugLogging) return;
+		const detail =
+			o === null
+				? "pending"
+				: o.kind === "skipped-dependency"
+					? `skipped-dependency (needs ${o.dependsOn})`
+					: o.kind;
+		this.debug(`${loc} → ${detail}`);
+	}
+
 	cancel(): void {
 		this.cancelled = true;
 		// If waiting at the proceed gate, also cancel through it
@@ -168,12 +198,16 @@ export class InstructionExecutor {
 
 		// Step 2: resolve sources
 		const sourcePaths = await this.resolveSources(invocation);
+		this.debug(`run start — mode=${mode}, sources=${sourcePaths.length} [${sourcePaths.join(", ")}]`);
 
 		// Step 3: validate each source (M17: extracted from run()'s body
 		// for readability — single-purpose helper, no behavior change).
 		const { validSources, perFileFailures } = await this.validateAllSources(
 			sourcePaths,
 		);
+		for (const [fileId, message] of perFileFailures) {
+			this.debug(`validation failed — ${fileId}: ${message}`);
+		}
 
 		// All files failed validation
 		if (sourcePaths.length > 0 && validSources.length === 0) {
@@ -320,6 +354,7 @@ export class InstructionExecutor {
 
 				// Step 8a: cancellation check
 				if (this.cancelled) {
+					this.debug(`cancelled — ${records.length - i} remaining action(s) marked skipped-cancelled`);
 					for (let j = i; j < records.length; j++) {
 						const remaining = records[j] as ActionRecord;
 						remaining.outcome = { kind: "skipped-cancelled" };
@@ -333,6 +368,7 @@ export class InstructionExecutor {
 				if (depFailure !== null) {
 					record.outcome = { kind: "skipped-dependency", dependsOn: depFailure };
 					logWriter.appendRecord(record);
+					this.debugOutcome(record);
 					continue;
 				}
 
@@ -342,6 +378,7 @@ export class InstructionExecutor {
 					record.outcome = { kind: "failed", reason: `Action ${record.id} not found in source` };
 					failedIds.add(record.id);
 					logWriter.appendRecord(record);
+					this.debugOutcome(record);
 					continue;
 				}
 
@@ -351,6 +388,7 @@ export class InstructionExecutor {
 					record.outcome = { kind: "failed", reason: beforeOutcome.reason };
 					failedIds.add(record.id);
 					logWriter.appendRecord(record);
+					this.debugOutcome(record);
 					continue;
 				}
 				// L11: collect any "messages" outcomes from before-hook so the
@@ -414,6 +452,13 @@ export class InstructionExecutor {
 					opts.hookNote = combinedNote;
 				}
 				logWriter.appendRecord(record, opts);
+				this.debugOutcome(record);
+				if (afterOutcome.kind === "failed") {
+					// After-hook failure doesn't flip the action outcome (the vault
+					// commit already happened), but it's still a warning worth
+					// surfacing unconditionally.
+					console.warn(`[hashi:exec] ${record.fileId}::${record.id} after-hook failed: ${afterOutcome.reason}`);
+				}
 			}
 
 			// Step 8.5 (H5 + M3): flush batched applied-flag writes — one
@@ -452,6 +497,13 @@ export class InstructionExecutor {
 		// Determine final log path (may have been trashed)
 		const finalLogPath = this.settings.runLogRetention === "always" ? logPath : null;
 		const counts = tallyCounts(records, startedAt, endedAt);
+		this.debug(
+			`run complete — applied=${counts.applied}, failed=${counts.failed}, ` +
+				`skipped-already=${counts["skipped-already"]}, ` +
+				`skipped-dependency=${counts["skipped-dependency"]}, ` +
+				`skipped-cancelled=${counts["skipped-cancelled"]} ` +
+				`(log: ${finalLogPath ?? "not retained"})`,
+		);
 
 		// Step 10: set store → summary
 		this.state.set({

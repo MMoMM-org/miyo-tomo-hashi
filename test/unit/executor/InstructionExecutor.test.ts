@@ -120,6 +120,23 @@ function makeLinkToMoc(id: string, targetMoc: string, targetMocPath: string, app
 	};
 }
 
+function makeAddRelationship(
+	id: string,
+	targetMocPath: string,
+	marker: string,
+	line: string,
+	applied?: boolean,
+): Action {
+	return {
+		action: "add_relationship",
+		id,
+		target_moc_path: targetMocPath,
+		marker,
+		line,
+		...(applied !== undefined ? { applied } : {}),
+	};
+}
+
 // ---------------------------------------------------------------------------
 // Helpers to make tests concise
 // ---------------------------------------------------------------------------
@@ -814,6 +831,184 @@ describe("InstructionExecutor — run log", () => {
 		const filesInInbox = await vault.list(INBOX);
 		const logFile = filesInInbox.find((f) => f.includes("tomo-hashi-run-log"));
 		expect(logFile).toBeUndefined();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Run log captures handler failures end-to-end (the chain that matters most:
+// handler returns failed → executor records → run-log .md renders the reason)
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — run log records handler failures end-to-end", () => {
+	it("writes each failing action's reason into the rendered run-log .md (target-note missing + marker-in-note missing)", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/fail_log_instructions.json`;
+		const existingMoc = `${INBOX}/Existing (MOC).md`;
+
+		// I01: target MOC does not exist        → "Relationship target missing"
+		// I02: target MOC exists, marker absent  → "Marker not found: zz::"
+		const set = makeInstructionSet([
+			makeAddRelationship("I01", `${INBOX}/Missing (MOC).md`, "up::", "up:: [[X]]"),
+			makeAddRelationship("I02", existingMoc, "zz::", "zz:: [[Y]]"),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.create(existingMoc, "# Existing (MOC)\n\nno markers here\n");
+
+		const { executor } = makeSingleFileExecutor(vault, set, {
+			settings: { runLogRetention: "always" },
+		});
+
+		const counts = await executor.execute({ kind: "single-file", sourcePath });
+		expect(counts.failed).toBe(2);
+
+		const filesInInbox = await vault.list(INBOX);
+		const logFile = filesInInbox.find((f) => f.includes("tomo-hashi-run-log"));
+		expect(logFile).toBeDefined();
+		const logContent = await vault.read(logFile as string);
+
+		// End-to-end: both failure reasons rendered in the run-log table, each
+		// against its action id. This is the chain a "failure happened but isn't
+		// in the log" bug would break.
+		expect(logContent).toContain("I01");
+		expect(logContent).toContain("Relationship target missing");
+		expect(logContent).toContain("I02");
+		expect(logContent).toContain("Marker not found: zz::");
+	});
+
+	it("a target-in-note failure is retained under retention=only-after-failed (it counts as a failure)", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/fail_keep_instructions.json`;
+		const moc = `${INBOX}/Map (MOC).md`;
+		const set = makeInstructionSet([
+			makeAddRelationship("I01", moc, "missing::", "missing:: [[Z]]"),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.create(moc, "# Map (MOC)\n\nbody without the marker\n");
+
+		const { executor } = makeSingleFileExecutor(vault, set, {
+			settings: { runLogRetention: "only-after-failed" },
+		});
+
+		await executor.execute({ kind: "single-file", sourcePath });
+
+		const filesInInbox = await vault.list(INBOX);
+		const logFile = filesInInbox.find((f) => f.includes("tomo-hashi-run-log"));
+		expect(logFile).toBeDefined();
+		const logContent = await vault.read(logFile as string);
+		expect(logContent).toContain("Marker not found: missing::");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Execution debug logging (gated on debugLogging)
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — debug logging", () => {
+	it("failed → console.warn (always); applied + run start/complete → console.debug (gated)", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/dbg_instructions.json`;
+		// create_moc whose source note is absent → handler returns failed.
+		const set = makeInstructionSet([makeCreateMoc("I01", `${INBOX}/moc-dbg.md`)]);
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		// Deliberately do NOT create inbox/note-I01.md → "Source missing".
+
+		const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let debugLines: string[] = [];
+		let warnLines: string[] = [];
+		try {
+			const { executor } = makeSingleFileExecutor(vault, set, {
+				settings: { debugLogging: true },
+			});
+			await executor.execute({ kind: "single-file", sourcePath });
+			// Capture before mockRestore() — restoring also resets mock.calls.
+			debugLines = debugSpy.mock.calls.map((c) => c.join(" "));
+			warnLines = warnSpy.mock.calls.map((c) => c.join(" "));
+		} finally {
+			debugSpy.mockRestore();
+			warnSpy.mockRestore();
+		}
+
+		// The failure surfaces as a WARNING (with id, kind, reason)…
+		expect(
+			warnLines.some(
+				(l) =>
+					l.includes("[hashi:exec]") &&
+					l.includes("I01") &&
+					l.includes("Source missing"),
+			),
+		).toBe(true);
+		// …not buried in the debug stream.
+		expect(debugLines.some((l) => l.includes("Source missing"))).toBe(false);
+		// Lifecycle lines stay at debug level (only when debugLogging is on).
+		expect(debugLines.some((l) => l.includes("[hashi:exec] run start"))).toBe(true);
+		expect(debugLines.some((l) => l.includes("[hashi:exec] run complete"))).toBe(true);
+	});
+
+	it("a failed action still warns even when debugLogging is off", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/dbg_fail_off_instructions.json`;
+		const set = makeInstructionSet([makeCreateMoc("I01", `${INBOX}/moc-fail-off.md`)]);
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		// Source note absent → "Source missing".
+
+		const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let debugExec: string[] = [];
+		let warnLines: string[] = [];
+		try {
+			const { executor } = makeSingleFileExecutor(vault, set, {
+				settings: { debugLogging: false },
+			});
+			await executor.execute({ kind: "single-file", sourcePath });
+			debugExec = debugSpy.mock.calls
+				.map((c) => c.join(" "))
+				.filter((l) => l.includes("[hashi:exec]"));
+			warnLines = warnSpy.mock.calls.map((c) => c.join(" "));
+		} finally {
+			debugSpy.mockRestore();
+			warnSpy.mockRestore();
+		}
+
+		// Failure is always surfaced…
+		expect(warnLines.some((l) => l.includes("[hashi:exec]") && l.includes("Source missing"))).toBe(true);
+		// …while verbose debug lines stay off.
+		expect(debugExec).toHaveLength(0);
+	});
+
+	it("a fully successful run emits nothing when debugLogging is off", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/dbg_off_instructions.json`;
+		const set = makeInstructionSet([makeCreateMoc("I01", `${INBOX}/moc-dbg-off.md`)]);
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note");
+
+		const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let execDebug: string[] = [];
+		let execWarn: string[] = [];
+		try {
+			const { executor } = makeSingleFileExecutor(vault, set, {
+				settings: { debugLogging: false },
+			});
+			await executor.execute({ kind: "single-file", sourcePath });
+			execDebug = debugSpy.mock.calls.map((c) => c.join(" ")).filter((l) => l.includes("[hashi:exec]"));
+			execWarn = warnSpy.mock.calls.map((c) => c.join(" ")).filter((l) => l.includes("[hashi:exec]"));
+		} finally {
+			debugSpy.mockRestore();
+			warnSpy.mockRestore();
+		}
+
+		expect(execDebug).toHaveLength(0);
+		expect(execWarn).toHaveLength(0);
 	});
 });
 
