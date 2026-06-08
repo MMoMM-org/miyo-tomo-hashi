@@ -103,6 +103,96 @@ describe("addRelationship — marker line in callout", () => {
 
 // ---------------------------------------------------------------------------
 
+describe("addRelationship — marker line is a callout list item", () => {
+	it("fills empty `> - up::` list item, preserving the `> - ` callout+bullet prefix", async () => {
+		const content = [
+			"> [!METADATA]-",
+			"> - Created:: [[2023-05-10]]",
+			"> - up::",
+			"> - Topics::",
+			"",
+		].join("\n");
+		const vault = new FakeVaultFS();
+		await vault.create(MOC_PATH, content);
+
+		const outcome = await addRelationship(makeAction({
+			marker: "up::",
+			line: "up:: [[Some MOC]]",
+		}), makeCtx(vault));
+
+		expect(outcome.kind).toBe("applied");
+		const lines = (await vault.read(MOC_PATH)).split("\n");
+		expect(lines).toContain("> - up:: [[Some MOC]]");
+		// Surrounding list items untouched, formatting preserved
+		expect(lines).toContain("> - Created:: [[2023-05-10]]");
+		expect(lines).toContain("> - Topics::");
+		// The bare-callout form must NOT appear (bullet must be preserved)
+		expect(lines).not.toContain("> up:: [[Some MOC]]");
+	});
+
+	it("supports `*`, `+`, and ordered (`1.`) bullets inside a callout", async () => {
+		const content = [
+			"> [!METADATA]-",
+			"> * up::",
+			"> + related::",
+			"> 1. down::",
+			"",
+		].join("\n");
+		const vault = new FakeVaultFS();
+		await vault.create(MOC_PATH, content);
+
+		expect((await addRelationship(makeAction({ marker: "up::", line: "up:: [[A]]" }), makeCtx(vault))).kind).toBe("applied");
+		expect((await addRelationship(makeAction({ marker: "related::", line: "related:: [[B]]" }), makeCtx(vault))).kind).toBe("applied");
+		expect((await addRelationship(makeAction({ marker: "down::", line: "down:: [[C]]" }), makeCtx(vault))).kind).toBe("applied");
+
+		const lines = (await vault.read(MOC_PATH)).split("\n");
+		expect(lines).toContain("> * up:: [[A]]");
+		expect(lines).toContain("> + related:: [[B]]");
+		expect(lines).toContain("> 1. down:: [[C]]");
+	});
+
+	it("fills a bare (non-callout) `- up::` list item, preserving the `- ` bullet", async () => {
+		const content = [
+			"# Some MOC",
+			"- up::",
+			"",
+		].join("\n");
+		const vault = new FakeVaultFS();
+		await vault.create(MOC_PATH, content);
+
+		const outcome = await addRelationship(makeAction({
+			marker: "up::",
+			line: "up:: [[Hobbies (MOC)]]",
+		}), makeCtx(vault));
+
+		expect(outcome.kind).toBe("applied");
+		const lines = (await vault.read(MOC_PATH)).split("\n");
+		expect(lines).toContain("- up:: [[Hobbies (MOC)]]");
+		// Bullet must be kept — the bare (bullet-less) form must NOT appear
+		expect(lines).not.toContain("up:: [[Hobbies (MOC)]]");
+	});
+
+	it("already-filled `> - up:: [[X]]` list item → skipped-already; no mutation", async () => {
+		const content = [
+			"> [!METADATA]-",
+			"> - up:: [[Hobbies (MOC)]]",
+			"",
+		].join("\n");
+		const vault = new FakeVaultFS();
+		await vault.create(MOC_PATH, content);
+
+		const outcome = await addRelationship(makeAction({
+			marker: "up::",
+			line: "up:: [[Hobbies (MOC)]]",
+		}), makeCtx(vault));
+
+		expect(outcome.kind).toBe("skipped-already");
+		expect(await vault.read(MOC_PATH)).toBe(content);
+	});
+});
+
+// ---------------------------------------------------------------------------
+
 describe("addRelationship — marker line outside callout", () => {
 	it("replaces a plain `up::` line at top-of-file (no `> ` prefix)", async () => {
 		const content = [
