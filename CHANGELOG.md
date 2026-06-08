@@ -1,3 +1,10 @@
+## [0.7.3](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.7.2...0.7.3) (2026-06-08)
+
+
+### Bug Fixes
+
+* **add-relationship:** match and preserve callout list-item fields (`> - up::`) ([9fafac2](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/9fafac2ea3da68e6d819326ee88198b7c137d1b6)), closes [#51](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/51)
+
 ## [0.7.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.7.1...0.7.2) (2026-06-06)
 
 
