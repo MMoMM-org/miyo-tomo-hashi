@@ -818,6 +818,74 @@ describe("InstructionExecutor — run log", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Execution debug logging (gated on debugLogging)
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — debug logging", () => {
+	it("logs per-action outcomes (with failure reason) to console when debugLogging is on", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/dbg_instructions.json`;
+		// create_moc whose source note is absent → handler returns failed.
+		const set = makeInstructionSet([makeCreateMoc("I01", `${INBOX}/moc-dbg.md`)]);
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		// Deliberately do NOT create inbox/note-I01.md → "Source missing".
+
+		const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+		let lines: string[] = [];
+		try {
+			const { executor } = makeSingleFileExecutor(vault, set, {
+				settings: { debugLogging: true },
+			});
+			await executor.execute({ kind: "single-file", sourcePath });
+			// Capture before mockRestore() — restoring also resets mock.calls.
+			lines = debugSpy.mock.calls.map((c) => c.join(" "));
+		} finally {
+			debugSpy.mockRestore();
+		}
+
+		// Per-action failure line carries the id, kind, and reason.
+		expect(
+			lines.some(
+				(l) =>
+					l.includes("[hashi:exec]") &&
+					l.includes("I01") &&
+					l.includes("Source missing"),
+			),
+		).toBe(true);
+		expect(lines.some((l) => l.includes("[hashi:exec] run start"))).toBe(true);
+		expect(lines.some((l) => l.includes("[hashi:exec] run complete"))).toBe(true);
+	});
+
+	it("emits no execution traces when debugLogging is off (default)", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/dbg_off_instructions.json`;
+		const set = makeInstructionSet([makeCreateMoc("I01", `${INBOX}/moc-dbg-off.md`)]);
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note");
+
+		const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+		let execLines: string[] = [];
+		try {
+			const { executor } = makeSingleFileExecutor(vault, set, {
+				settings: { debugLogging: false },
+			});
+			await executor.execute({ kind: "single-file", sourcePath });
+			// Capture before mockRestore() — restoring also resets mock.calls.
+			execLines = debugSpy.mock.calls
+				.map((c) => c.join(" "))
+				.filter((l) => l.includes("[hashi:exec]"));
+		} finally {
+			debugSpy.mockRestore();
+		}
+
+		expect(execLines).toHaveLength(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // Scenario 9: Pre-hook throw
 // ---------------------------------------------------------------------------
 
