@@ -576,8 +576,12 @@ describe("HookRunner — ask-mode", () => {
 		await runner.run("before", makeAction("create_moc"));
 		expect(askCallback).toHaveBeenCalledTimes(1);
 
-		// Simulate the user (or a sibling process) replacing the hook file.
+		// Simulate the user (or a sibling process) replacing the hook file
+		// between runs. beginRun() marks the run boundary — hook resolution is
+		// cached within a run (issue #52) and re-read fresh per run, so the
+		// staleness check sees the new fingerprint on the next run.
 		fingerprint = { size: 200, mtimeMs: 2000 };
+		runner.beginRun();
 		await runner.run("before", makeAction("create_moc"));
 
 		// The remembered "enable-session" decision must NOT carry across a
@@ -714,6 +718,51 @@ describe("HookRunner — preApprove", () => {
 		await runner.preApprove(["create_moc", "create_moc", "create_moc"]);
 
 		expect(askCallback).toHaveBeenCalledTimes(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 11. Resolve caching — resolve each hook key once per run (issue #52)
+// ---------------------------------------------------------------------------
+
+describe("HookRunner — resolve caching (issue #52)", () => {
+	it("resolves each hook key at most once per run, not once per action", async () => {
+		// The FS loader reads the hooks dir on every resolve(); a long run
+		// would otherwise do one readdir (and, when the dir is absent, one
+		// error log) per action per phase. preApprove primes; run() reuses.
+		const resolveSpy = vi.fn(() => null);
+		const loader: HookLoader = { resolve: resolveSpy };
+		const runner = new HookRunner(fakeApp, loader, makeLogger(), {
+			policy: "enabled",
+			requireFn,
+		});
+
+		// One run: prime, then many actions of the same kind.
+		await runner.preApprove(["create_moc"]); // primes before- + after-create_moc
+		await runner.run("before", makeAction("create_moc"));
+		await runner.run("after", makeAction("create_moc"));
+		await runner.run("before", makeAction("create_moc"));
+		await runner.run("after", makeAction("create_moc"));
+
+		// Only the two priming resolves — run() served from the per-run cache.
+		expect(resolveSpy).toHaveBeenCalledTimes(2);
+	});
+
+	it("re-reads hook resolution on the next run (beginRun clears the cache)", async () => {
+		const resolveSpy = vi.fn(() => null);
+		const loader: HookLoader = { resolve: resolveSpy };
+		const runner = new HookRunner(fakeApp, loader, makeLogger(), {
+			policy: "enabled",
+			requireFn,
+		});
+
+		await runner.run("before", makeAction("create_moc")); // miss → 1 resolve
+		await runner.run("before", makeAction("create_moc")); // cache hit → still 1
+		expect(resolveSpy).toHaveBeenCalledTimes(1);
+
+		runner.beginRun(); // run boundary → cache cleared
+		await runner.run("before", makeAction("create_moc")); // miss → 2 resolves
+		expect(resolveSpy).toHaveBeenCalledTimes(2);
 	});
 });
 
