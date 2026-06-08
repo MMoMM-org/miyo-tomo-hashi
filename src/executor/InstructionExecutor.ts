@@ -319,9 +319,13 @@ export class InstructionExecutor {
 
 		// Step 8: execute each record
 		const failedIds = new Set<string>();
-		// H5: accumulate applied ids per source so we can flush all writes
+		// H5: accumulate completed ids per source so we can flush all writes
 		// in one processJSON call after the loop, instead of N per source.
-		const appliedByFile = new Map<string, string[]>();
+		// "Completed" = applied OR skipped-already: both mean the action's
+		// end-state is present, so both must graduate (get applied:true) and
+		// be filtered out of future runs. (Pre-fix only `applied` graduated, so
+		// already-correct notes returned skipped-already every run forever.)
+		const completedByFile = new Map<string, string[]>();
 
 		// The action loop and post-loop flush perform vault mutations and hook
 		// callbacks that can throw (an unguarded vault op on partial state, a
@@ -423,10 +427,21 @@ export class InstructionExecutor {
 					// next run re-enqueued the action while the user saw it
 					// as done. Now: source JSON wins; peer ticks fire only
 					// after their corresponding markActionsApplied succeeds.
-					if (handlerOutcome.kind === "applied") {
-						const list = appliedByFile.get(record.fileId) ?? [];
+					//
+					// Both `applied` and `skipped-already` graduate: the action's
+					// desired end-state is present either way (just written, or
+					// already correct on disk). Writing applied:true for
+					// skipped-already stops already-correct notes from nagging in
+					// every subsequent run. The other non-failed outcomes
+					// (skipped-dependency, skipped-cancelled) are genuinely
+					// unfinished and must NOT graduate.
+					if (
+						handlerOutcome.kind === "applied" ||
+						handlerOutcome.kind === "skipped-already"
+					) {
+						const list = completedByFile.get(record.fileId) ?? [];
 						list.push(record.id);
-						appliedByFile.set(record.fileId, list);
+						completedByFile.set(record.fileId, list);
 					}
 				}
 
@@ -469,7 +484,7 @@ export class InstructionExecutor {
 			// throws, peer ticks for that file are skipped (the throw
 			// propagates to the catch below); peer .md being slightly stale
 			// is recoverable, peer .md being ahead of truth is not.
-			for (const [fileId, ids] of appliedByFile) {
+			for (const [fileId, ids] of completedByFile) {
 				await markActionsApplied(vault, fileId, ids);
 				for (const id of ids) {
 					await tickPeerCheckbox(vault, fileId, id);
