@@ -93,13 +93,11 @@ function loadHookFresh(absolutePath: string, requireFn: RequireFn): Hook {
 		}
 	}
 	const mod = requireFn(absolutePath) as { default?: Hook } | Hook;
-	console.debug(`[hashi:hooks] loadHookFresh typeof mod="${typeof mod}"`, typeof mod === "object" ? Object.keys(mod as object) : "");
 	if (typeof mod === "function") return mod;
 	if (typeof (mod as { default?: Hook }).default === "function") {
-		console.debug("[hashi:hooks] loadHookFresh → using mod.default");
 		return (mod as { default: Hook }).default;
 	}
-	console.debug("[hashi:hooks] loadHookFresh → FALLING BACK TO noopHook");
+	console.warn(`[hashi:hooks] "${absolutePath}" exports no hook function — ignored (expected module.exports = fn or exports.default = fn).`);
 	return noopHook;
 }
 
@@ -147,6 +145,14 @@ function fingerprintsMatch(
 
 export class HookRunner {
 	private readonly sessionDecisions = new Map<HookKey, SessionDecisionRecord>();
+	// Per-run resolution cache (issue #52). The loader reads the hooks dir on
+	// every resolve() — a 126-action run does 252 readdirSync calls and, when
+	// the dir is absent, an error per call. We resolve each key at most once
+	// per run: preApprove() clears + primes this at run start, and run() reads
+	// through it. Cleared per run so a newly dropped hook file is still picked
+	// up on the next run (preserving FsHookLoader's no-cache contract across
+	// runs, just not within one).
+	private readonly resolveCache = new Map<HookKey, ResolvedHook | null>();
 	private readonly requireFn: RequireFn;
 	private readonly timeoutMs: number;
 	private readonly askCallback: AskCallback;
@@ -171,9 +177,23 @@ export class HookRunner {
 		this.policy = options.policy;
 	}
 
+	/**
+	 * Called once per run by the executor, before the action loop. Two jobs:
+	 *   1. Prime the per-run resolve cache so each hook key hits the
+	 *      filesystem at most once for the whole run (issue #52).
+	 *   2. In ask-mode, collect all disclosure decisions up front so the
+	 *      modals don't interrupt mid-execution.
+	 */
 	async preApprove(actionKinds: readonly ActionKind[]): Promise<void> {
-		console.debug(`[hashi:hooks] preApprove policy="${this.policy}" kinds=[${[...actionKinds].join(", ")}]`);
-		if (this.policy !== "ask") return;
+		// Fresh resolution per run — a hook file dropped, removed, or swapped
+		// between runs is re-discovered on the next run (and the M1 fingerprint
+		// staleness re-prompt still fires, since the cached resolution from the
+		// prior run is dropped here).
+		this.beginRun();
+
+		// Disabled is the kill-switch: run() short-circuits before resolving,
+		// so there is nothing to prime or approve.
+		if (this.policy === "disabled") return;
 
 		const seen = new Set<HookKey>();
 		const phases: HookPhase[] = ["before", "after"];
@@ -183,31 +203,44 @@ export class HookRunner {
 				if (seen.has(key)) continue;
 				seen.add(key);
 
-				const resolved = this.loader.resolve(key);
+				const resolved = this.resolveCached(key);
 				if (resolved === null) continue;
 
-				await this.resolveAskDecision(
-					key,
-					resolved.absolutePath,
-					resolved.fingerprint,
-				);
+				if (this.policy === "ask") {
+					await this.resolveAskDecision(
+						key,
+						resolved.absolutePath,
+						resolved.fingerprint,
+					);
+				}
 			}
 		}
 	}
 
+	/**
+	 * Resolve a hook key through the per-run cache. The first lookup for a key
+	 * hits the loader (filesystem); subsequent lookups in the same run reuse
+	 * the result. A live lookup on cache miss keeps run() correct even when
+	 * preApprove() did not prime this key (e.g. direct unit-test calls).
+	 */
+	private resolveCached(key: HookKey): ResolvedHook | null {
+		const cached = this.resolveCache.get(key);
+		if (cached !== undefined) return cached;
+		const resolved = this.loader.resolve(key);
+		this.resolveCache.set(key, resolved);
+		return resolved;
+	}
+
 	async run(phase: HookPhase, action: Action): Promise<HookOutcome> {
 		if (this.policy === "disabled") {
-			console.debug(`[hashi:hooks] run ${phase}-${action.action} → SKIP (disabled)`);
 			return { kind: "ok" };
 		}
 
 		const key: HookKey = `${phase}-${action.action}`;
-		const resolved = this.loader.resolve(key);
+		const resolved = this.resolveCached(key);
 		if (resolved === null) {
-			console.debug(`[hashi:hooks] run "${key}" → no hook file`);
 			return { kind: "ok" };
 		}
-		console.debug(`[hashi:hooks] run "${key}" → found "${resolved.absolutePath}"`);
 
 		const { absolutePath, duplicates } = resolved;
 
@@ -233,13 +266,22 @@ export class HookRunner {
 			logger: this.logger,
 		};
 
-		const outcome = await this.invoke(phase, hookFn, ctx);
-		console.debug(`[hashi:hooks] run "${key}" → outcome=${outcome.kind}`, outcome.kind === "failed" ? outcome.reason : "");
-		return outcome;
+		return await this.invoke(phase, hookFn, ctx);
 	}
 
 	resetSessionDecisions(): void {
 		this.sessionDecisions.clear();
+	}
+
+	/**
+	 * Reset per-run resolution state. Called once at the start of each run
+	 * (via preApprove) before the action loop, so each hook key is resolved
+	 * from the filesystem at most once per run instead of once per action
+	 * (issue #52), while a file dropped or swapped between runs is still
+	 * re-read on the next run.
+	 */
+	beginRun(): void {
+		this.resolveCache.clear();
 	}
 
 	private async resolveAskDecision(

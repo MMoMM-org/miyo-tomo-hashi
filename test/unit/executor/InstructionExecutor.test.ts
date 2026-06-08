@@ -722,6 +722,78 @@ describe("InstructionExecutor — run log", () => {
 		expect(logFile).toBeDefined();
 	});
 
+	it("finalizes the run log when the run throws mid-flight (no stranded placeholder)", async () => {
+		// Regression: a vault op / hook callback throwing in the action loop
+		// used to abort run() before finalize(), leaving the placeholder log
+		// start() wrote — empty body with `totals: {}` and no diagnostic.
+		// finalize() now runs even on abort, with the error recorded.
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/abort_instructions.json`;
+		const set = makeInstructionSet([makeCreateMoc("I01", `${INBOX}/moc-abort.md`)]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note");
+
+		// A hook whose run() rejects (vs. returning a failed outcome) is an
+		// uncaught throw inside the action loop.
+		const throwingHook = {
+			run: vi.fn().mockRejectedValue(new Error("kaboom from hook")),
+			preApprove: vi.fn().mockResolvedValue(undefined),
+		};
+
+		const { executor } = makeSingleFileExecutor(vault, set, {
+			hookRunner: throwingHook,
+			settings: { runLogRetention: "always" },
+		});
+
+		// The error still propagates to the caller (behavior preserved).
+		await expect(
+			executor.execute({ kind: "single-file", sourcePath }),
+		).rejects.toThrow("kaboom from hook");
+
+		// …but the run log is now a real, finalized log — not the placeholder.
+		const filesInInbox = await vault.list(INBOX);
+		const logFile = filesInInbox.find((f) => f.includes("tomo-hashi-run-log"));
+		expect(logFile).toBeDefined();
+		const logContent = await vault.read(logFile as string);
+		expect(logContent).toContain("run aborted: kaboom from hook");
+		// Finalized totals, not the placeholder's `totals:\n  {}`.
+		expect(logContent).not.toContain("  {}");
+	});
+
+	it("keeps the run log on abort even under retention=only-after-failed", async () => {
+		// The recorded run-error counts as a failure, so an aborted run is
+		// retained for diagnosis even with the failure-only retention policy.
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/abort_keep_instructions.json`;
+		const set = makeInstructionSet([makeCreateMoc("I01", `${INBOX}/moc-abort-keep.md`)]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note");
+
+		const throwingHook = {
+			run: vi.fn().mockRejectedValue(new Error("boom")),
+			preApprove: vi.fn().mockResolvedValue(undefined),
+		};
+
+		const { executor } = makeSingleFileExecutor(vault, set, {
+			hookRunner: throwingHook,
+			settings: { runLogRetention: "only-after-failed" },
+		});
+
+		await expect(
+			executor.execute({ kind: "single-file", sourcePath }),
+		).rejects.toThrow("boom");
+
+		const filesInInbox = await vault.list(INBOX);
+		const logFile = filesInInbox.find((f) => f.includes("tomo-hashi-run-log"));
+		expect(logFile).toBeDefined();
+	});
+
 	it("does NOT keep run log when retention=only-after-failed and all succeed", async () => {
 		const vault = new FakeVaultFS();
 		const sourcePath = `${INBOX}/log_nofail_instructions.json`;

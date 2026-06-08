@@ -41,7 +41,6 @@ export class FsHookLoader implements HookLoader {
 	resolve(key: HookKey): ResolvedHook | null {
 		const hooksDir = this.getHooksDir();
 		const absoluteDir = path.resolve(this.vaultBasePath, hooksDir);
-		console.debug(`[hashi:hooks] resolve("${key}") → dir="${absoluteDir}"`);
 
 		// M2: refuse hooksDir values that escape the vault root. `data.json`
 		// could be tampered (e.g., via Obsidian Sync from another device)
@@ -71,15 +70,21 @@ export class FsHookLoader implements HookLoader {
 			canonicalDir !== canonicalBase &&
 			!canonicalDir.startsWith(canonicalBase + path.sep)
 		) {
-			console.debug(`[hashi:hooks] resolve("${key}") → BLOCKED: dir escapes vault (canonical="${canonicalDir}", base="${canonicalBase}")`);
+			// Rare + security-relevant (a tampered hooksDir trying to escape
+			// the vault) → warn, not debug. Routine path resolution is silent
+			// (issue #52: resolve() runs per action; debug-per-call floods the
+			// console and buries real errors).
+			console.warn(`[hashi:hooks] hooksDir escapes vault — ignored: "${canonicalDir}"`);
 			return null;
 		}
 
 		let entries: string[];
 		try {
 			entries = fs.readdirSync(absoluteDir);
-		} catch (err) {
-			console.debug(`[hashi:hooks] resolve("${key}") → readdirSync failed:`, err);
+		} catch {
+			// Absent/unreadable hooks dir is the normal "no hooks configured"
+			// case — return null silently (issue #52). Previously logged an
+			// ENOENT per action, which was the dominant console noise.
 			return null;
 		}
 		const matches = entries
@@ -89,7 +94,6 @@ export class FsHookLoader implements HookLoader {
 		if (jsOnly.length > 0 && matches.length === 0) {
 			console.warn(`[hashi:hooks] "${key}.js" found but ignored — Electron requires .cjs for CommonJS hooks. Rename to "${key}.cjs".`);
 		}
-		console.debug(`[hashi:hooks] resolve("${key}") → entries=[${entries.join(", ")}] matches=[${matches.join(", ")}]`);
 		if (matches.length === 0) return null;
 		const [first, ...rest] = matches;
 		if (first === undefined) return null;

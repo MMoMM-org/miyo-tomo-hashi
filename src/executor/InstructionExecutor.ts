@@ -289,133 +289,165 @@ export class InstructionExecutor {
 		// in one processJSON call after the loop, instead of N per source.
 		const appliedByFile = new Map<string, string[]>();
 
-		for (let i = 0; i < records.length; i++) {
-			const record = records[i] as ActionRecord;
+		// The action loop and post-loop flush perform vault mutations and hook
+		// callbacks that can throw (an unguarded vault op on partial state, a
+		// rejected hook callback, a markActionsApplied write failure).
+		// finalize() MUST still run afterward — otherwise the run log is left
+		// as the bare placeholder start() wrote (`totals: {}`, empty body),
+		// which is exactly the silent, diagnostic-free abort users hit. On a
+		// throw: record it as a row in the log, finalize, then re-throw so
+		// upstream error handling is unchanged. Best-effort finalize — a
+		// finalize failure is logged but must not mask the original error.
+		const finalizeLog = async (endedAt: Date): Promise<void> => {
+			try {
+				await logWriter.finalize(endedAt, this.settings.runLogRetention);
+			} catch (finalizeErr) {
+				console.error("[hashi] run log finalize failed:", finalizeErr);
+			}
+		};
 
-			// Update running index
-			this.state.set({
-				kind: "running",
-				mode,
-				records,
-				currentIndex: i,
+		try {
+			for (let i = 0; i < records.length; i++) {
+				const record = records[i] as ActionRecord;
+
+				// Update running index
+				this.state.set({
+					kind: "running",
+					mode,
+					records,
+					currentIndex: i,
+				});
+
+				// Step 8a: cancellation check
+				if (this.cancelled) {
+					for (let j = i; j < records.length; j++) {
+						const remaining = records[j] as ActionRecord;
+						remaining.outcome = { kind: "skipped-cancelled" };
+						logWriter.appendRecord(remaining);
+					}
+					break;
+				}
+
+				// Step 8b: dependency check
+				const depFailure = findDependencyFailure(record, depMap, failedIds);
+				if (depFailure !== null) {
+					record.outcome = { kind: "skipped-dependency", dependsOn: depFailure };
+					logWriter.appendRecord(record);
+					continue;
+				}
+
+				// Look up the actual Action object for handler dispatch + hooks
+				const action = actionLookup.get(`${record.fileId}::${record.id}`);
+				if (action === undefined) {
+					record.outcome = { kind: "failed", reason: `Action ${record.id} not found in source` };
+					failedIds.add(record.id);
+					logWriter.appendRecord(record);
+					continue;
+				}
+
+				// Step 8c: before-hook
+				const beforeOutcome = await this.hookRunner.run("before", action);
+				if (beforeOutcome.kind === "failed") {
+					record.outcome = { kind: "failed", reason: beforeOutcome.reason };
+					failedIds.add(record.id);
+					logWriter.appendRecord(record);
+					continue;
+				}
+				// L11: collect any "messages" outcomes from before-hook so the
+				// run log surfaces info/warnings (pre-fix only console).
+				const beforeNote =
+					beforeOutcome.kind === "messages"
+						? formatHookMessages("before", beforeOutcome)
+						: undefined;
+
+				// Step 8d: dispatch handler. All handlers share the same broad
+				// outcome union (review L4), so the registry indexing widens
+				// cleanly to a single Action input — no narrowing cast needed.
+				const handler = HANDLERS[record.kind] as Handler<Action>;
+				const handlerOutcome = await handler(action, { vault, clock: this.clock });
+				record.outcome = handlerOutcome;
+
+				if (handlerOutcome.kind === "failed") {
+					failedIds.add(record.id);
+				}
+
+				// Step 8e: after-hook (runs regardless of handler outcome)
+				const afterOutcome = await this.hookRunner.run("after", action);
+
+				if (handlerOutcome.kind !== "failed") {
+					// Step 8f: queue applied:true write (flushed in one batch
+					// after the loop — review H5). Peer-checkbox sync also
+					// deferred to post-loop (review round 2 / M3): pre-fix
+					// peer .md was ticked here, BEFORE the source JSON's
+					// applied flag was written. A crash between the tick and
+					// the post-loop flush left peer .md showing `[x] Applied`
+					// while source JSON still had `applied: false` — the
+					// next run re-enqueued the action while the user saw it
+					// as done. Now: source JSON wins; peer ticks fire only
+					// after their corresponding markActionsApplied succeeds.
+					if (handlerOutcome.kind === "applied") {
+						const list = appliedByFile.get(record.fileId) ?? [];
+						list.push(record.id);
+						appliedByFile.set(record.fileId, list);
+					}
+				}
+
+				// Step 8e (continued): after-hook failure does NOT change action
+				// outcome — the vault commit already happened. The failure is
+				// attached to the same row's error column (review M18) instead
+				// of being synthesized as a `${id}-after-hook` pseudo-record.
+				const afterNote =
+					afterOutcome.kind === "messages"
+						? formatHookMessages("after", afterOutcome)
+						: undefined;
+				const combinedNote = [beforeNote, afterNote]
+					.filter((n): n is string => n !== undefined)
+					.join("; ");
+				const opts: {
+					afterHookFailure?: { reason: string };
+					hookNote?: string;
+				} = {};
+				if (afterOutcome.kind === "failed") {
+					opts.afterHookFailure = { reason: afterOutcome.reason };
+				}
+				if (combinedNote !== "") {
+					opts.hookNote = combinedNote;
+				}
+				logWriter.appendRecord(record, opts);
+			}
+
+			// Step 8.5 (H5 + M3): flush batched applied-flag writes — one
+			// processJSON call per source, regardless of how many actions in
+			// that source were applied. Peer .md checkboxes are ticked AFTER
+			// the JSON write succeeds, preserving the "source JSON is the
+			// truth, peer .md mirrors it" invariant. If markActionsApplied
+			// throws, peer ticks for that file are skipped (the throw
+			// propagates to the catch below); peer .md being slightly stale
+			// is recoverable, peer .md being ahead of truth is not.
+			for (const [fileId, ids] of appliedByFile) {
+				await markActionsApplied(vault, fileId, ids);
+				for (const id of ids) {
+					await tickPeerCheckbox(vault, fileId, id);
+				}
+			}
+		} catch (err) {
+			// Surface the aborting error with a greppable prefix so it stands
+			// out from hook/Obsidian console noise (issue #52).
+			console.error("[hashi] run aborted before finalize:", err);
+			const reason = err instanceof Error ? err.message : String(err);
+			logWriter.appendValidationFailure({
+				fileId: "(run error)",
+				message: `run aborted: ${reason}`,
 			});
-
-			// Step 8a: cancellation check
-			if (this.cancelled) {
-				for (let j = i; j < records.length; j++) {
-					const remaining = records[j] as ActionRecord;
-					remaining.outcome = { kind: "skipped-cancelled" };
-					logWriter.appendRecord(remaining);
-				}
-				break;
-			}
-
-			// Step 8b: dependency check
-			const depFailure = findDependencyFailure(record, depMap, failedIds);
-			if (depFailure !== null) {
-				record.outcome = { kind: "skipped-dependency", dependsOn: depFailure };
-				logWriter.appendRecord(record);
-				continue;
-			}
-
-			// Look up the actual Action object for handler dispatch + hooks
-			const action = actionLookup.get(`${record.fileId}::${record.id}`);
-			if (action === undefined) {
-				record.outcome = { kind: "failed", reason: `Action ${record.id} not found in source` };
-				failedIds.add(record.id);
-				logWriter.appendRecord(record);
-				continue;
-			}
-
-			// Step 8c: before-hook
-			const beforeOutcome = await this.hookRunner.run("before", action);
-			if (beforeOutcome.kind === "failed") {
-				record.outcome = { kind: "failed", reason: beforeOutcome.reason };
-				failedIds.add(record.id);
-				logWriter.appendRecord(record);
-				continue;
-			}
-			// L11: collect any "messages" outcomes from before-hook so the
-			// run log surfaces info/warnings (pre-fix only console).
-			const beforeNote =
-				beforeOutcome.kind === "messages"
-					? formatHookMessages("before", beforeOutcome)
-					: undefined;
-
-			// Step 8d: dispatch handler. All handlers share the same broad
-			// outcome union (review L4), so the registry indexing widens
-			// cleanly to a single Action input — no narrowing cast needed.
-			const handler = HANDLERS[record.kind] as Handler<Action>;
-			const handlerOutcome = await handler(action, { vault, clock: this.clock });
-			record.outcome = handlerOutcome;
-
-			if (handlerOutcome.kind === "failed") {
-				failedIds.add(record.id);
-			}
-
-			// Step 8e: after-hook (runs regardless of handler outcome)
-			const afterOutcome = await this.hookRunner.run("after", action);
-
-			if (handlerOutcome.kind !== "failed") {
-				// Step 8f: queue applied:true write (flushed in one batch
-				// after the loop — review H5). Peer-checkbox sync also
-				// deferred to post-loop (review round 2 / M3): pre-fix
-				// peer .md was ticked here, BEFORE the source JSON's
-				// applied flag was written. A crash between the tick and
-				// the post-loop flush left peer .md showing `[x] Applied`
-				// while source JSON still had `applied: false` — the
-				// next run re-enqueued the action while the user saw it
-				// as done. Now: source JSON wins; peer ticks fire only
-				// after their corresponding markActionsApplied succeeds.
-				if (handlerOutcome.kind === "applied") {
-					const list = appliedByFile.get(record.fileId) ?? [];
-					list.push(record.id);
-					appliedByFile.set(record.fileId, list);
-				}
-			}
-
-			// Step 8e (continued): after-hook failure does NOT change action
-			// outcome — the vault commit already happened. The failure is
-			// attached to the same row's error column (review M18) instead
-			// of being synthesized as a `${id}-after-hook` pseudo-record.
-			const afterNote =
-				afterOutcome.kind === "messages"
-					? formatHookMessages("after", afterOutcome)
-					: undefined;
-			const combinedNote = [beforeNote, afterNote]
-				.filter((n): n is string => n !== undefined)
-				.join("; ");
-			const opts: {
-				afterHookFailure?: { reason: string };
-				hookNote?: string;
-			} = {};
-			if (afterOutcome.kind === "failed") {
-				opts.afterHookFailure = { reason: afterOutcome.reason };
-			}
-			if (combinedNote !== "") {
-				opts.hookNote = combinedNote;
-			}
-			logWriter.appendRecord(record, opts);
+			// Write the log (with the failure recorded), then re-throw so the
+			// caller's error handling behaves exactly as before this guard.
+			await finalizeLog(this.clock.now());
+			throw err;
 		}
 
-		// Step 8.5 (H5 + M3): flush batched applied-flag writes — one
-		// processJSON call per source, regardless of how many actions in
-		// that source were applied. Peer .md checkboxes are ticked AFTER
-		// the JSON write succeeds, preserving the "source JSON is the
-		// truth, peer .md mirrors it" invariant. If markActionsApplied
-		// throws, peer ticks for that file are skipped (the throw
-		// propagates and aborts the run); peer .md being slightly stale
-		// is recoverable, peer .md being ahead of truth is not.
-		for (const [fileId, ids] of appliedByFile) {
-			await markActionsApplied(vault, fileId, ids);
-			for (const id of ids) {
-				await tickPeerCheckbox(vault, fileId, id);
-			}
-		}
-
-		// Step 9: finalize run log per retention policy
+		// Step 9: finalize run log per retention policy (success path).
 		const endedAt = this.clock.now();
-		await logWriter.finalize(endedAt, this.settings.runLogRetention);
+		await finalizeLog(endedAt);
 
 		// Determine final log path (may have been trashed)
 		const finalLogPath = this.settings.runLogRetention === "always" ? logPath : null;
