@@ -1,5 +1,9 @@
 # Context Memory
 
+## Logging / run-log foundation — DONE (2026-06-09, 0.8.1)
+
+The empty-run-log investigation (from issue #51) is **closed**. The root cause was **not** an uncaught throw aborting before `finalize()` (the #51/#55 hypothesis) — a real `confirm`-run logged `run complete` yet the file was the 190-byte placeholder. Actual cause: the two-write placeholder lifecycle (`start()` writes a placeholder, `finalize()` overwrites it) combined with an external frontmatter-automator clobber race in the Privat-Test vault (Obsidian Linter `Updated:` stamp + MetaEdit rewriting Hashi's output files). Resolved by making the run log **write-once** (#58 → 0.8.1): `start()` reserves the path only, `finalize()` creates the file exactly once via `vault.create()`. Same PR also fixed the `skipped-already` footgun — already-correct `add_relationship` notes now graduate (`applied:true` written) instead of reappearing every run. Details in `decisions.md` + `troubleshooting.md`. The MetaEdit null-frontmatter throw is a third-party bug, intentionally out of scope.
+
 ## Next up — documentation refresh pass (queued 2026-05-31, after PR #15 / 0.6.0)
 
 The IDE Bridge feature shipped and the user-facing naming was changed to **Tomo chat** / **Tomo context** (was Connection / IDE Bridge). The docs *text* is aligned, but the visual + structural layer lags. Do a dedicated pass covering:
