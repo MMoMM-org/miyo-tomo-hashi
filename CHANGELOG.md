@@ -1,3 +1,11 @@
+## [0.8.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.8.0...0.8.1) (2026-06-09)
+
+
+### Bug Fixes
+
+* **executor:** graduate skipped-already actions, not just applied ([4be50e6](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/4be50e66d84662689126f012f2d19678548e6eca))
+* **runlog:** write the run log once at finalize, drop start() placeholder ([e454c85](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/e454c855036a3934048b8a86acb1cfbd8663154d))
+
 # [0.8.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.7.4...0.8.0) (2026-06-08)
 
 
