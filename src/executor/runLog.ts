@@ -2,10 +2,20 @@
  * RunLogWriter — writes per-run Markdown log files into the tomo-inbox folder.
  *
  * API:
- *   start(meta)                 → choose non-colliding path, write placeholder, return path
+ *   start(meta)                 → reserve a non-colliding path; return it (NO file write)
  *   appendRecord(record)        → buffer one ActionRecord
  *   appendValidationFailure(f)  → buffer a validation-only failure for a file
- *   finalize(endedAt, retention) → overwrite file with full content; trash if retention rule applies
+ *   finalize(endedAt, retention) → create the file once with full content (or nothing, per retention)
+ *
+ * Write-once lifecycle: the run log is created in a single vault.create() call
+ * at finalize(), never before. The pre-write-once design wrote a placeholder in
+ * start() and overwrote it in finalize() — so an aborted run (cancel, exception,
+ * hard kill) left the placeholder behind as a 190-byte "ghost" log (started set,
+ * ended empty, totals: {}, empty body). Deferring all file I/O to finalize()
+ * means an aborted run leaves no file at all, and a single create() (instead of
+ * create-placeholder + process-overwrite) halves the modify events that external
+ * frontmatter automators (Linter, MetaEdit) race against — the race that could
+ * clobber a finalized log back to its placeholder.
  *
  * No crypto, no obsidian imports.
  *
@@ -79,7 +89,10 @@ export class RunLogWriter {
 		const path = await resolveCollisionFreePath(this.vault, meta.inboxFolder, baseFilename);
 		this.logPath = path;
 
-		await this.vault.create(path, renderPlaceholder(meta));
+		// Write-once: no file is created here. The path is reserved (resolved
+		// against the inbox's current contents) and returned so the UI/summary
+		// can reference it; the file itself is created in finalize(). See the
+		// module header for why the placeholder was removed.
 		return path;
 	}
 
@@ -109,21 +122,20 @@ export class RunLogWriter {
 			throw new Error("RunLogWriter.finalize called before start");
 		}
 
-		const peerHeadings = await loadPeerHeadings(this.vault, this.meta.sources);
-		const content = renderLog(this.meta, endedAt, this.entries, peerHeadings);
-		await this.vault.process(this.logPath, () => content);
-
-		// Inlined countFailures (review round 2 / L16) — the helper just
-		// re-ran computeTotals to read one field; renderLog already
-		// computed the same tally above (line 187), but lifting that into
-		// the caller would ripple through renderLog's signature for one
-		// number. One extra pass per finalize is cheap; the helper isn't.
+		// Retention gate first — under write-once, a suppressed log is simply
+		// never created (the pre-write-once design created a placeholder in
+		// start() and trashed it here). No failures + only-after-failed → no
+		// file, no I/O.
 		if (
 			retention === "only-after-failed" &&
 			computeTotals(this.entries).failed === 0
 		) {
-			await this.vault.trash(this.logPath);
+			return;
 		}
+
+		const peerHeadings = await loadPeerHeadings(this.vault, this.meta.sources);
+		const content = renderLog(this.meta, endedAt, this.entries, peerHeadings);
+		await this.vault.create(this.logPath, content);
 	}
 }
 
@@ -181,10 +193,6 @@ function basename(path: string): string {
 // ---------------------------------------------------------------------------
 // Rendering helpers
 // ---------------------------------------------------------------------------
-
-function renderPlaceholder(meta: RunLogStartMeta): string {
-	return renderFrontmatter(meta, null, null) + "\n# Hashi run log\n";
-}
 
 function renderLog(
 	meta: RunLogStartMeta,

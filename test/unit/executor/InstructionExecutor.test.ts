@@ -196,6 +196,37 @@ describe("InstructionExecutor — single-file invocation", () => {
 		const updated = await vault.readJSON<InstructionSet>(sourcePath);
 		expect(updated.actions.every((a) => a.applied === true)).toBe(true);
 	});
+
+	it("writes applied:true for a skipped-already outcome so it graduates next run", async () => {
+		// Footgun fix: `skipped-already` means the desired end-state is already
+		// present — functionally identical to `applied` for "mark as done". The
+		// pre-fix code only wrote applied:true for `applied`, so a note whose
+		// marker was already correct returned skipped-already every run, kept
+		// applied:false, and was never filtered out by the planner — nagging
+		// forever. Already-correct must graduate like just-applied.
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/2026-04-29_skip_instructions.json`;
+		const mocPath = "Atlas/Quote.md";
+		const set = makeInstructionSet([
+			makeAddRelationship("I01", mocPath, "up::", "up:: [[Quotes (MOC)]]"),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("Atlas");
+		// Note already carries the exact target line → handler → skipped-already.
+		await vault.create(mocPath, "# Quote\n\nup:: [[Quotes (MOC)]]\n");
+
+		const { executor } = makeSingleFileExecutor(vault, set);
+		const counts = await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(counts["skipped-already"]).toBe(1);
+		expect(counts.applied).toBe(0);
+
+		// The fix: applied:true is written so the planner filters it out next run.
+		const updated = await vault.readJSON<InstructionSet>(sourcePath);
+		expect(updated.actions.find((a) => a.id === "I01")?.applied).toBe(true);
+	});
 });
 
 // ---------------------------------------------------------------------------

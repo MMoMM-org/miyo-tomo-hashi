@@ -16,7 +16,7 @@
  * [ref: PRD/F7; SDD/ADR-8]
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import { RunLogWriter } from "../../../src/executor/runLog.js";
@@ -102,13 +102,17 @@ describe("resolveCollisionFreePath", () => {
 // ---------------------------------------------------------------------------
 
 describe("RunLogWriter.start", () => {
-	it("creates the log file and returns its path", async () => {
+	it("resolves the path WITHOUT creating a file (write-once)", async () => {
+		// Write-once lifecycle: start() only reserves the path; the file is
+		// created exactly once in finalize(). The pre-write-once design wrote a
+		// placeholder here, which an aborted run left behind as a 190-byte
+		// "ghost" log (ended: empty, totals: {}, no table).
 		const vault = new FakeVaultFS();
 		const writer = new RunLogWriter(vault);
 		const path = await writer.start(makeStartMeta());
 
 		expect(path).toBe("tomo-inbox/tomo-hashi-run-log_2026-04-29T1432.md");
-		expect(await vault.exists(path)).toBe(true);
+		expect(await vault.exists(path)).toBe(false);
 	});
 
 	it("resolves collision with _2 suffix", async () => {
@@ -119,15 +123,54 @@ describe("RunLogWriter.start", () => {
 
 		expect(path).toBe("tomo-inbox/tomo-hashi-run-log_2026-04-29T1432_2.md");
 	});
+});
 
-	it("placeholder file has YAML frontmatter with started and mode", async () => {
+// ---------------------------------------------------------------------------
+// RunLogWriter — write-once lifecycle (ghost-log prevention)
+// ---------------------------------------------------------------------------
+
+describe("RunLogWriter — write-once lifecycle", () => {
+	it("an aborted run (start without finalize) leaves no file behind", async () => {
+		// The core ghost-log guarantee: if the run dies between start() and
+		// finalize() (cancel, exception, hard kill), no empty placeholder is
+		// left in the inbox — either a full log or nothing.
 		const vault = new FakeVaultFS();
 		const writer = new RunLogWriter(vault);
 		const path = await writer.start(makeStartMeta());
-		const content = await vault.read(path);
 
-		expect(content).toContain("started:");
-		expect(content).toContain("mode: confirm");
+		// …run aborts here, finalize() never called.
+		expect(await vault.exists(path)).toBe(false);
+	});
+
+	it("finalize writes the file exactly once via create(), never process()", async () => {
+		// One create() instead of create-placeholder + process-overwrite halves
+		// the modify events external frontmatter automators race against — the
+		// race that clobbered a finalized log back to its placeholder.
+		const vault = new FakeVaultFS();
+		const createSpy = vi.spyOn(vault, "create");
+		const processSpy = vi.spyOn(vault, "process");
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "a → b", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "always");
+
+		expect(processSpy).not.toHaveBeenCalled();
+		expect(createSpy).toHaveBeenCalledTimes(1);
+		expect(createSpy).toHaveBeenCalledWith(path, expect.stringContaining("# Hashi run log"));
+	});
+
+	it("retention=only-after-failed with 0 failures creates no file at all", async () => {
+		// No placeholder to trash — the clean write-once outcome for a
+		// suppressed log is simply never calling create().
+		const vault = new FakeVaultFS();
+		const createSpy = vi.spyOn(vault, "create");
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "a → b", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "only-after-failed");
+
+		expect(createSpy).not.toHaveBeenCalled();
+		expect(await vault.exists(path)).toBe(false);
 	});
 });
 
