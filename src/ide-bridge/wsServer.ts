@@ -123,7 +123,8 @@ export class WsServer {
 	private readonly readdressRetryMs: number;
 	private readonly clients = new Set<Client>();
 	private server: Server | null = null;
-	private pingTimer: ReturnType<typeof setInterval> | null = null;
+	// window.setInterval returns a numeric handle in the Electron renderer.
+	private pingTimer: number | null = null;
 	/** Combined registry: injected tool handlers + MCP handshake methods. */
 	private readonly registry: HandlerRegistry;
 
@@ -163,7 +164,7 @@ export class WsServer {
 			const onError = (err: NodeJS.ErrnoException) => {
 				if (err.code === "EADDRINUSE" && !retried) {
 					retried = true;
-					setTimeout(() => {
+					window.setTimeout(() => {
 						try {
 							server.listen(this.opts.port, this.host);
 						} catch {
@@ -199,7 +200,7 @@ export class WsServer {
 	/** Close every client then the HTTP server. Idempotent. */
 	async stop(): Promise<void> {
 		if (this.pingTimer !== null) {
-			clearInterval(this.pingTimer);
+			window.clearInterval(this.pingTimer);
 			this.pingTimer = null;
 		}
 		for (const client of this.clients) {
@@ -393,9 +394,9 @@ export class WsServer {
 	}
 
 	private startKeepalive(): void {
-		this.pingTimer = setInterval(() => this.sweep(), this.pingIntervalMs);
-		// Do not keep the event loop alive solely for the ping timer.
-		if (typeof this.pingTimer.unref === "function") this.pingTimer.unref();
+		// window.setInterval returns a numeric handle (browser/Electron-renderer
+		// timer), not a Node Timeout — so there is no unref() to call here.
+		this.pingTimer = window.setInterval(() => this.sweep(), this.pingIntervalMs);
 	}
 
 	/**
