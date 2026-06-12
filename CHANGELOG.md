@@ -1,3 +1,11 @@
+## [0.8.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.8.1...0.8.2) (2026-06-12)
+
+
+### Bug Fixes
+
+* **lint:** use window.* timers and declare @codemirror/view ([98cef59](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/98cef599ccd9583cd529653347440ac24531d410))
+* **vault:** trash via fileManager.trashFile to honor user delete preference ([44c710f](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/44c710fb9839e6d2efb32fdf1029bb40d4e34b64))
+
 ## [0.8.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.8.0...0.8.1) (2026-06-09)
 
 
