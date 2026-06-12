@@ -4,7 +4,7 @@
  * Runs the shared contract tests (T2.1) against ObsidianVaultFS backed by a
  * richly-mocked Obsidian app, then verifies delegation specifics:
  *   - rename → fileManager.renameFile (NOT vault.rename)
- *   - trash  → vault.trash(file, true)
+ *   - trash  → fileManager.trashFile (honors user delete preference)
  *   - createFolder swallows "Folder already exists"
  *   - metadata reads from metadataCache.getFileCache
  */
@@ -124,6 +124,10 @@ function makeRichApp(): App {
     },
   );
 
+  app.fileManager.trashFile = vi.fn(async (file: TFile) => {
+    store.delete(file.path);
+  });
+
   app.metadataCache.getFileCache = vi.fn((_file: TFile) => ({
     headings: [],
     sections: [],
@@ -165,16 +169,15 @@ describe("ObsidianVaultFS", () => {
       expect(calledNewPath).toBe("notes/renamed.md");
     });
 
-    it("trash calls vault.trash(file, true) — system trash flag", async () => {
+    it("trash uses fileManager.trashFile — honors user delete preference", async () => {
       await app.vault.create("notes/totrash.md", "bye");
       await vault.trash("notes/totrash.md");
 
-      expect(app.vault.trash).toHaveBeenCalledOnce();
-      const [calledFile, useSystemTrash] = (
-        app.vault.trash as ReturnType<typeof vi.fn>
-      ).mock.calls[0] as [TFile, boolean];
+      expect(app.fileManager.trashFile).toHaveBeenCalledOnce();
+      const [calledFile] = (
+        app.fileManager.trashFile as ReturnType<typeof vi.fn>
+      ).mock.calls[0] as [TFile];
       expect(calledFile.path).toBe("notes/totrash.md");
-      expect(useSystemTrash).toBe(true);
     });
 
     it("process uses app.vault.process", async () => {

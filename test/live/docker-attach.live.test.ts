@@ -139,12 +139,18 @@ describe("attach() — live Docker", () => {
 	it("TTY=false: demuxed stdout AND stderr both surface on the merged stdout stream", async () => {
 		if (!daemonReachable) return;
 
-		// `sh -c 'echo out; echo err 1>&2; cat'` emits one stdout line, one
-		// stderr line, then waits on stdin. The trailing `cat` keeps the
-		// container alive (and the attach open) until afterEach tears it down.
+		// attach() dials with logs=0 (no history replay — see dialAttach), and
+		// it connects AFTER c.start(). A single start-time `echo` would race the
+		// attach and is reliably lost on a CI runner. Emit out/err repeatedly so
+		// the post-attach stream is guaranteed to carry both channels; the
+		// trailing `cat` keeps the container (and attach) alive until teardown.
 		const c = await docker.createContainer({
 			Image: "alpine:latest",
-			Cmd: ["sh", "-c", "echo out; echo err 1>&2; cat"],
+			Cmd: [
+				"sh",
+				"-c",
+				"for i in 1 2 3 4 5; do echo out; echo err 1>&2; sleep 0.3; done; cat",
+			],
 			Tty: false,
 			OpenStdin: true,
 			AttachStdin: true,
@@ -165,7 +171,7 @@ describe("attach() — live Docker", () => {
 		await waitFor(() => {
 			const s = Buffer.concat(chunks).toString("utf8");
 			return s.includes("out") && s.includes("err");
-		}, 2_000);
+		}, 5_000);
 
 		const seen = Buffer.concat(chunks).toString("utf8");
 		// T2.1 merges stderr into stdout at the AttachSession surface (single

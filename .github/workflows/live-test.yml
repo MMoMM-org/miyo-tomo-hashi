@@ -1,0 +1,32 @@
+name: Live Docker tests
+
+# Runs the test/live/ suite against a real Docker daemon. GitHub-hosted
+# ubuntu-latest runners ship Docker pre-installed (socket at
+# /var/run/docker.sock), so the suite self-provisions alpine:latest and
+# throwaway containers on the ephemeral runner — nothing touches a dev host.
+#
+# Scoped to PRs into main (so dependency/connection changes self-verify) plus
+# manual dispatch. The lint.yml "CI" workflow still covers unit build/test/lint
+# on every push.
+
+on:
+    pull_request:
+        branches: ["main"]
+    workflow_dispatch:
+
+jobs:
+    live:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+            - name: Use Node.js 22.x
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22.x
+                  cache: "npm"
+            - run: npm ci
+            - name: Confirm Docker daemon is reachable
+              run: docker version
+            - name: Run live Docker tests
+              run: npm run test:live

@@ -1,6 +1,6 @@
 {
 	"name": "miyo-tomo-hashi",
-	"version": "0.8.1",
+	"version": "0.8.2",
 	"description": "Direct integration with Tomo (Claude Code) sessions for session interaction and automated vault updates",
 	"main": "main.js",
 	"type": "module",
@@ -27,6 +27,7 @@
 		"dockerode": "^5.0.0"
 	},
 	"devDependencies": {
+		"@codemirror/view": "^6.38.6",
 		"@eslint/js": "9.30.1",
 		"@semantic-release/changelog": "^6.0.3",
 		"@semantic-release/exec": "^7.0.3",
