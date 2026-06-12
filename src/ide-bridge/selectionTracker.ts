@@ -17,9 +17,9 @@
  *   - broadcast: (msg) => void — receives JSON-RPC 2.0 notification envelopes.
  *     Wired by the WS server in T3.1; a vi.fn() spy in tests.
  *
- * activeWindow (Obsidian global, popout-safe) resolves to globalThis in jsdom
- * via the obsidian mock shim, ensuring vi.useFakeTimers() patches the right
- * timer functions.
+ * Timer calls use window.* (not activeWindow) per the obsidianmd
+ * prefer-window-timer rule. In jsdom window === globalThis, so
+ * vi.useFakeTimers() still patches the right timer functions.
  *
  * Spec: docs/XDD/specs/003-ide-bridge — SDD F5, T2.6.
  */
@@ -97,8 +97,8 @@ export function createSelectionTracker(
 
 	function onEditorActivity(): void {
 		// Rule 2: trailing-edge debounce — reset timer on every call
-		if (timer !== null) activeWindow.clearTimeout(timer);
-		timer = activeWindow.setTimeout(flush, DEBOUNCE_MS);
+		if (timer !== null) window.clearTimeout(timer);
+		timer = window.setTimeout(flush, DEBOUNCE_MS);
 	}
 
 	function getLatest(): SelectionChangedParams | null {
@@ -107,7 +107,7 @@ export function createSelectionTracker(
 
 	function dispose(): void {
 		if (timer !== null) {
-			activeWindow.clearTimeout(timer);
+			window.clearTimeout(timer);
 			timer = null;
 		}
 	}

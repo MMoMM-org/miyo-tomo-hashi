@@ -196,6 +196,7 @@ export class App {
 		renameFile: vi.fn<(file: TFile, newPath: string) => Promise<void>>(
 			async () => {},
 		),
+		trashFile: vi.fn<(file: TFile) => Promise<void>>(async () => {}),
 	};
 }
 

@@ -121,8 +121,11 @@ export class ObsidianVaultFS implements VaultFS {
 
   async trash(path: string): Promise<void> {
     const file = this.requireFile(path);
-    // SDD mandates vault.trash(file, true) — system trash flag for v0.1.
-    await this.app.vault.trash(file, true);
+    // fileManager.trashFile honors the user's "Deleted files" preference
+    // (system trash / .trash folder / permanent). obsidianmd lint requires it
+    // over vault.trash. Supersedes the v0.1 SDD note that forced system trash —
+    // SDD update flagged to Kokoro.
+    await this.app.fileManager.trashFile(file);
   }
 
   async create(path: string, content: string): Promise<void> {

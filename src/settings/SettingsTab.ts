@@ -428,7 +428,7 @@ export class SettingsTab extends PluginSettingTab {
 				void navigator.clipboard.writeText(token).then(
 					() => {
 						btn.setButtonText("Copied!");
-						activeWindow.setTimeout(() => { btn.setButtonText("Copy"); }, 1500);
+						window.setTimeout(() => { btn.setButtonText("Copy"); }, 1500);
 					},
 					() => { new Notice("Failed to copy to clipboard"); },
 				);
