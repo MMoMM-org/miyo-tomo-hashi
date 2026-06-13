@@ -79,10 +79,14 @@ export interface VaultFS {
   createFolder(path: string): Promise<void>;
 
   /**
-   * Move the file to the system trash when available; fall back to permanent
-   * deletion. On the Obsidian adapter this calls `vault.trash(file, true)`.
+   * Delete the file, honoring the user's Obsidian "Files & Links → Deleted
+   * files" preference (system trash / vault-local `.trash/` / permanent). On
+   * the Obsidian adapter this calls `fileManager.trashFile(file)` — NOT
+   * `vault.trash`, per the obsidianmd lint rule. When the user's preference is
+   * "Permanently delete", the file is hard-deleted; the executor surfaces a
+   * one-time warning for that case (Spec 002 F4 amendment).
    *
-   * [ref: PRD/F4; SDD/Implementation Gotchas; vault.trash]
+   * [ref: PRD/F4; Kokoro decision 2026-06-12; SDD/Implementation Gotchas]
    */
   trash(path: string): Promise<void>;
 

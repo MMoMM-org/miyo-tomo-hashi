@@ -416,6 +416,27 @@ export default class TomoHashiPlugin extends Plugin {
 			hookRunner,
 			settings: () => this.settings,
 			clock: { now: () => new Date() },
+			// One-shot permanent-delete warning (Spec 002 F4 amendment, Kokoro
+			// decision 2026-06-12). `getConfig("trashOption")` is an internal,
+			// untyped Vault method — values: "system" (OS trash), "local"
+			// (.trash folder), "none" (permanent delete). Guarded read so a
+			// future API change degrades to "not permanent" rather than throwing.
+			permanentDeleteWarning: {
+				isPermanent: () => {
+					const getConfig = (
+						this.app.vault as { getConfig?: (key: string) => unknown }
+					).getConfig;
+					return getConfig?.call(this.app.vault, "trashOption") === "none";
+				},
+				hasWarned: () => this.settings.permanentDeleteWarningShown,
+				markWarned: async () => {
+					this.settings.permanentDeleteWarningShown = true;
+					await this.saveSettings();
+				},
+				notify: (msg: string) => {
+					new Notice(msg);
+				},
+			},
 		});
 
 		// 11. Status bar 橋 indicator (color states only per ADR-6 v2).

@@ -198,6 +198,7 @@ function makeDefaultSettings(): PluginSettings {
 		hooksDir: ".tomo-hashi/hooks",
 		hooksPolicy: "ask",
 		debugLogging: false,
+		permanentDeleteWarningShown: false,
 		ideBridgeEnabled: true,
 		ideBridgePort: 0, // ephemeral — WsServer uses 0 for OS-assigned port
 		ideBridgeAuthToken: "",
