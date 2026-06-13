@@ -53,7 +53,7 @@ This phase implements the vault edge — the `VaultFS` port + two adapters (Obsi
   2. Test: Write `test/unit/vault/ObsidianVaultFS.test.ts` that:
      - Runs the contract test from T2.1 against `ObsidianVaultFS` constructed with the mocked Obsidian app
      - Verifies `rename` calls `app.fileManager.renameFile` (NOT `app.vault.rename`)
-     - Verifies `trash` calls `app.vault.trash(file, true)` (system trash)
+     - Verifies `trash` calls `app.fileManager.trashFile(file)` (honors user "Deleted files" pref; F4 amendment 2026-06-12)
      - Verifies `process` and `processJSON` use `app.vault.process` (atomic primitive)
      - Verifies `createFolder` swallows the "Folder already exists" error
      - Verifies `metadata` reads from `app.metadataCache.getFileCache`
@@ -62,7 +62,7 @@ This phase implements the vault edge — the `VaultFS` port + two adapters (Obsi
   5. Success:
      - [ ] Adapter passes the full contract test `[ref: SDD/VaultFS Port]`
      - [ ] `fileManager.renameFile` (not `vault.rename`) used for moves `[ref: PRD/F4; SDD/Implementation Gotchas]`
-     - [ ] `vault.trash` with system flag used for delete `[ref: PRD/F4]`
+     - [ ] `fileManager.trashFile` used for delete — honors user "Deleted files" pref `[ref: PRD/F4 amendment 2026-06-12]`
 
 - [x] **T2.3 FakeVaultFS** `[activity: testing]` (FsPromisesVaultFS dropped 2026-04-25 per ADR-9 revision)
 

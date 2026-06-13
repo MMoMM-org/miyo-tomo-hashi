@@ -4,10 +4,12 @@
  * Delegates every vault operation to the live Obsidian app instance.
  * Implementation notes:
  *   - rename: uses fileManager.renameFile (NOT vault.rename) to preserve backlinks
- *   - trash:  calls vault.trash(file, true) — system trash flag (per SDD decision;
- *             the obsidianmd/prefer-file-manager-trash-file lint rule is suppressed
- *             here because the SDD explicitly mandates vault.trash with the system
- *             trash flag for v0.1)
+ *   - trash:  calls fileManager.trashFile(file) — honors the user's "Deleted
+ *             files" preference (system trash / .trash / permanent) per the
+ *             obsidianmd/prefer-file-manager-trash-file lint rule. Supersedes
+ *             the v0.1 SDD note that forced system trash (Kokoro decision
+ *             2026-06-12; Spec 002 F4 amendment). The executor warns once when
+ *             that preference is "Permanently delete".
  *   - createFolder: swallows "already exists" per port contract
  *   - process/processJSON: delegates to vault.process for Obsidian's built-in
  *     atomic read-transform-write with per-path serialisation

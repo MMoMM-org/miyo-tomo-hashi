@@ -82,6 +82,14 @@ export interface PluginSettings {
 	 * Spec: PRD F11.
 	 */
 	debugLogging: boolean;
+	/**
+	 * One-shot flag: set once the permanent-delete warning has been shown, so
+	 * it never repeats. Surfaced when a run contains `delete_source` actions and
+	 * the user's Obsidian "Deleted files" preference is "Permanently delete".
+	 * Spec: docs/XDD/specs/002-instruction-executor — F4 trash-semantics
+	 * amendment (Kokoro decision 2026-06-12).
+	 */
+	permanentDeleteWarningShown: boolean;
 
 	// --- 003 fields (NEW — ide-bridge) ---
 
@@ -115,6 +123,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	hooksDir: ".tomo-hashi/hooks",
 	hooksPolicy: "ask",
 	debugLogging: false,
+	permanentDeleteWarningShown: false,
 	// 003 defaults
 	ideBridgeEnabled: false,
 	ideBridgePort: 23027,
