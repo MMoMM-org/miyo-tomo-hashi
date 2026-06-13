@@ -85,8 +85,8 @@
         "target_moc": {"type": "string", "description": "MOC stem (no path, no .md)."},
         "target_moc_path": {"type": ["string", "null"], "description": "Resolved vault-relative path of the MOC, if known."},
         "anchor": {"$ref": "#/$defs/anchor", "description": "Where in the target MOC to find the insertion point. type=callout matches the callout opening line; type=heading matches a heading by text; type=line matches a body line by content."},
-        "placement": {"type": "string", "enum": ["inside", "after"], "description": "Where to write relative to the matched anchor. inside (callout only) appends as last line of callout body with > prefix. after inserts immediately after the matched anchor's terminal line, verbatim."},
-        "line_to_add": {"type": "string", "description": "Pre-formatted line content to insert (bullet style, link form, etc. all decided Tomo-side). Hashi writes this verbatim, prepending '> ' only when placement=inside on a callout anchor."},
+        "placement": {"type": "string", "enum": ["inside", "before", "after"], "description": "Where to write relative to the matched anchor. inside (callout only) appends as last line(s) of callout body with > prefix on each line. before inserts immediately before the anchor's first line, verbatim. after inserts immediately after the matched anchor's terminal line, verbatim."},
+        "line_to_add": {"type": "string", "description": "Pre-formatted content to insert (bullet style, link form, etc. all decided Tomo-side). MAY contain embedded \\n — every line is written as a block (blank lines preserved). Hashi writes lines verbatim for before/after, prepending '> ' to each line only when placement=inside on a callout anchor."},
         "source_note_title": {"type": ["string", "null"]},
         "applied": {"$ref": "#/$defs/applied_field"}
       }

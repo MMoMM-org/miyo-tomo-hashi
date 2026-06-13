@@ -150,6 +150,9 @@ target_vault: ../temp/Privat-Test
 | F4.link_to_moc.callout-after | `link_to_moc` with anchor.type=callout + placement=after: `<line_to_add>` (no `> ` prefix) inserted immediately after the callout's closing `>` line | | | |
 | F4.link_to_moc.heading-after | `link_to_moc` with anchor.type=heading + placement=after: `<line_to_add>` inserted immediately after the heading line itself (NOT at end of heading section content) | | | |
 | F4.link_to_moc.line-after | `link_to_moc` with anchor.type=line + placement=after: `<line_to_add>` inserted immediately after the body line whose stripped content matches `anchor.value` | | | |
+| F4.link_to_moc.callout-before | `link_to_moc` with placement=before on a callout anchor: `<line_to_add>` (no `> ` prefix) inserted immediately before the callout opener `> [!type] Title` line (2026-06-13 insert primitive) | | | |
+| F4.link_to_moc.heading-before | `link_to_moc` with placement=before on a heading anchor: `<line_to_add>` inserted immediately before the heading line | | | |
+| F4.link_to_moc.multiline | Multi-line `line_to_add` (embedded `\n`, e.g. `## Key Concepts\n\n- [[Note]]`): every line written as a block, blank lines preserved — verbatim for before/after; `> `-prefixed on each line for inside-callout | | | |
 | F4.link_to_moc.duplicate | Re-run with identical bullet already at anchor target: no-op (skipped-already) | | | |
 | F4.link_to_moc.anchor-missing | anchor cannot be resolved in the MOC (no matching callout/heading/line) → action fails with "anchor not found: <value>"; no fallback to first editable callout | | | |
 | F4.link_to_moc.inside-non-callout | placement=inside on anchor.type ≠ callout → action fails with "placement: inside requires callout anchor" | | | |
