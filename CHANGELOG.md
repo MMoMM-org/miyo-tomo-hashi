@@ -1,3 +1,15 @@
+# [0.9.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.8.2...0.9.0) (2026-06-13)
+
+
+### Bug Fixes
+
+* **executor:** make the permanent-delete warning Notice sticky ([0769976](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/076997616c465e35b2d801f21003943a6974fbf6))
+
+
+### Features
+
+* **executor:** one-time permanent-delete warning + F4 trash-semantics amendment ([d6c3957](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/d6c3957ddb2b727f8b4311aa565196e6d9c98429))
+
 ## [0.8.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.8.1...0.8.2) (2026-06-12)
 
 
