@@ -1,3 +1,10 @@
+# [0.10.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.9.0...0.10.0) (2026-06-13)
+
+
+### Features
+
+* **link_to_moc:** generalize apply into one insert primitive (before + multi-line) ([a3e9b99](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/a3e9b993fdb471ccf75115bdf2448139d3fb5ea1)), closes [hashi#42](https://github.com/hashi/issues/42) [hashi#43](https://github.com/hashi/issues/43) [28/#29](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/29)
+
 # [0.9.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.8.2...0.9.0) (2026-06-13)
 
 
