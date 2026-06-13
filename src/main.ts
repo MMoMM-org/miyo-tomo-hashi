@@ -434,7 +434,11 @@ export default class TomoHashiPlugin extends Plugin {
 					await this.saveSettings();
 				},
 				notify: (msg: string) => {
-					new Notice(msg);
+					// Sticky Notice (timeout 0 → stays until the user dismisses it).
+					// This warning fires at most ONCE per install; a 5s auto-dismiss
+					// is too easy to miss for a one-shot permanent-deletion heads-up,
+					// so it persists until clicked away.
+					new Notice(msg, 0);
 				},
 			},
 		});
