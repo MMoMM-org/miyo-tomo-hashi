@@ -369,3 +369,191 @@ describe("linkToMoc — inside placement on non-callout anchor (schema-illegal)"
 		}
 	});
 });
+
+// ---------------------------------------------------------------------------
+// before placement (2026-06-13 insert-primitive generalization) — symmetric
+// to after; inserts immediately before the anchor's first line, verbatim.
+// ---------------------------------------------------------------------------
+
+describe("linkToMoc — before placement", () => {
+	it("callout anchor: block lands directly above the callout opener (no `> ` prefix)", async () => {
+		const metaMap = new Map<string, FileMetadata | null>([
+			[MOC_PATH, makeCalloutMetadata()],
+		]);
+		const vault = new FakeVaultFS(metaMap);
+		await vault.create(MOC_PATH, calloutMocContent);
+
+		const outcome = await linkToMoc(makeAction({
+			anchor: { type: "callout", value: "[!note] Projects" },
+			placement: "before",
+			line_to_add: "## Key Concepts",
+		}), makeCtx(vault));
+
+		expect(outcome.kind).toBe("applied");
+		const lines = (await vault.read(MOC_PATH)).split("\n");
+		const calloutIdx = lines.indexOf("> [!note] Projects");
+		const newLineIdx = lines.indexOf("## Key Concepts");
+		expect(newLineIdx).toBe(calloutIdx - 1);
+		// verbatim — no `> ` prefix
+		expect(lines).not.toContain("> ## Key Concepts");
+	});
+
+	it("heading anchor: line lands immediately above the heading line", async () => {
+		const metaMap = new Map<string, FileMetadata | null>([
+			[MOC_PATH, makeHeadingMetadata()],
+		]);
+		const vault = new FakeVaultFS(metaMap);
+		await vault.create(MOC_PATH, headingMocContent);
+
+		const outcome = await linkToMoc(makeAction({
+			anchor: { type: "heading", value: "Projects" },
+			placement: "before",
+			line_to_add: "- [[before-heading]]",
+		}), makeCtx(vault));
+
+		expect(outcome.kind).toBe("applied");
+		const lines = (await vault.read(MOC_PATH)).split("\n");
+		const headingIdx = lines.indexOf("## Projects");
+		expect(lines.indexOf("- [[before-heading]]")).toBe(headingIdx - 1);
+	});
+
+	it("line anchor: block lands immediately above the matched body line", async () => {
+		const metaMap = new Map<string, FileMetadata | null>([
+			[MOC_PATH, makeHeadingMetadata()],
+		]);
+		const vault = new FakeVaultFS(metaMap);
+		await vault.create(MOC_PATH, headingMocContent);
+
+		const outcome = await linkToMoc(makeAction({
+			anchor: { type: "line", value: "more text" },
+			placement: "before",
+			line_to_add: "- [[before-line]]",
+		}), makeCtx(vault));
+
+		expect(outcome.kind).toBe("applied");
+		const lines = (await vault.read(MOC_PATH)).split("\n");
+		const anchorIdx = lines.indexOf("more text");
+		expect(lines.indexOf("- [[before-line]]")).toBe(anchorIdx - 1);
+	});
+
+	it("idempotent: identical line already directly before the anchor → skipped-already", async () => {
+		const content = [
+			"# Main",
+			"- [[already-here]]",
+			"## Projects",
+			"",
+		].join("\n");
+		const metaMap = new Map<string, FileMetadata | null>([
+			[MOC_PATH, {
+				headings: [
+					{ heading: "Main", level: 1, line: 0 },
+					{ heading: "Projects", level: 2, line: 2 },
+				],
+				sections: [
+					{ type: "heading", line: 0, endLine: 1 },
+					{ type: "heading", line: 2, endLine: -1 },
+				],
+			}],
+		]);
+		const vault = new FakeVaultFS(metaMap);
+		await vault.create(MOC_PATH, content);
+
+		const outcome = await linkToMoc(makeAction({
+			anchor: { type: "heading", value: "Projects" },
+			placement: "before",
+			line_to_add: "- [[already-here]]",
+		}), makeCtx(vault));
+
+		expect(outcome.kind).toBe("skipped-already");
+		expect(await vault.read(MOC_PATH)).toBe(content);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// multi-line line_to_add (2026-06-13) — embedded \n inserts a block; blank
+// lines preserved. The #28 "new section before footer" emission shape.
+// ---------------------------------------------------------------------------
+
+describe("linkToMoc — multi-line line_to_add", () => {
+	it("before a callout: inserts a verbatim multi-line block (blank line preserved)", async () => {
+		const metaMap = new Map<string, FileMetadata | null>([
+			[MOC_PATH, makeCalloutMetadata()],
+		]);
+		const vault = new FakeVaultFS(metaMap);
+		await vault.create(MOC_PATH, calloutMocContent);
+
+		const outcome = await linkToMoc(makeAction({
+			anchor: { type: "callout", value: "[!note] Projects" },
+			placement: "before",
+			line_to_add: "## Key Concepts\n\n- [[Some Note]]",
+		}), makeCtx(vault));
+
+		expect(outcome.kind).toBe("applied");
+		const lines = (await vault.read(MOC_PATH)).split("\n");
+		const calloutIdx = lines.indexOf("> [!note] Projects");
+		// The three block lines sit directly above the callout opener, in order.
+		expect(lines.slice(calloutIdx - 3, calloutIdx)).toEqual([
+			"## Key Concepts",
+			"",
+			"- [[Some Note]]",
+		]);
+		// verbatim — no `> ` prefixes
+		expect(lines).not.toContain("> ## Key Concepts");
+	});
+
+	it("inside a callout: each line of the block gets a `> ` prefix", async () => {
+		const metaMap = new Map<string, FileMetadata | null>([
+			[MOC_PATH, makeCalloutMetadata()],
+		]);
+		const vault = new FakeVaultFS(metaMap);
+		await vault.create(MOC_PATH, calloutMocContent);
+
+		const outcome = await linkToMoc(makeAction({
+			anchor: { type: "callout", value: "[!note] Projects" },
+			placement: "inside",
+			line_to_add: "- [[one]]\n- [[two]]",
+		}), makeCtx(vault));
+
+		expect(outcome.kind).toBe("applied");
+		const lines = (await vault.read(MOC_PATH)).split("\n");
+		// Both lines land inside the callout body, each prefixed.
+		const oneIdx = lines.indexOf("> - [[one]]");
+		const twoIdx = lines.indexOf("> - [[two]]");
+		expect(oneIdx).toBeGreaterThan(-1);
+		expect(twoIdx).toBe(oneIdx + 1);
+		// land inside the callout (before the trailing blank/After-callout)
+		expect(twoIdx).toBeLessThan(lines.indexOf("After callout"));
+	});
+
+	it("idempotent: the full multi-line block already present → skipped-already", async () => {
+		const content = [
+			"# Main MOC",
+			"## Key Concepts",
+			"",
+			"- [[Some Note]]",
+			"> [!note] Projects",
+			"> - [[existing]]",
+			"",
+		].join("\n");
+		const metaMap = new Map<string, FileMetadata | null>([
+			[MOC_PATH, {
+				headings: [
+					{ heading: "Main MOC", level: 1, line: 0 },
+					{ heading: "Key Concepts", level: 2, line: 1 },
+				],
+				sections: [{ type: "callout", line: 4, endLine: 5 }],
+			}],
+		]);
+		const vault = new FakeVaultFS(metaMap);
+		await vault.create(MOC_PATH, content);
+
+		const outcome = await linkToMoc(makeAction({
+			anchor: { type: "callout", value: "[!note] Projects" },
+			placement: "before",
+			line_to_add: "## Key Concepts\n\n- [[Some Note]]",
+		}), makeCtx(vault));
+
+		expect(outcome.kind).toBe("skipped-already");
+		expect(await vault.read(MOC_PATH)).toBe(content);
+	});
+});

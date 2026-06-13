@@ -10,6 +10,9 @@
  *     value verbatim (substring inclusion).
  *
  * Returned indices:
+ *   - anchorLine:   the anchor's first line (callout opener / heading line /
+ *     matched line). Insert at this index → block lands immediately BEFORE the
+ *     anchor (`placement: "before"`).
  *   - insertInside: insertion point for `placement: "inside"` (callout only;
  *     null otherwise). Insert with `> ` prefix at this index → new line lands
  *     as the last content line inside the callout body.

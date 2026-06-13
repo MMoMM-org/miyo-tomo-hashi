@@ -60,9 +60,20 @@ export interface Anchor {
 export interface LinkToMocAction extends ActionBase {
 	readonly action: "link_to_moc";
 	readonly target_moc: string;
+	/**
+	 * Text to insert. MAY contain embedded `\n` — every line is written as a
+	 * block (blank lines preserved). Verbatim for `before`/`after`; each line
+	 * gets a `> ` prefix for `inside` (callout body).
+	 */
 	readonly line_to_add: string;
 	readonly anchor: Anchor;
-	readonly placement: "inside" | "after";
+	/**
+	 * Where to write relative to the anchor:
+	 *   - `inside` (callout-only): as the last line(s) of the callout body.
+	 *   - `before`: immediately before the anchor's first line.
+	 *   - `after`:  immediately after the anchor's terminal line.
+	 */
+	readonly placement: "inside" | "before" | "after";
 	readonly target_moc_path?: string | null;
 	readonly source_note_title?: string | null;
 }

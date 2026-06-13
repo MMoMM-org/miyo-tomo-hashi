@@ -90,6 +90,40 @@ describe("validate", () => {
 		expect(result.ok).toBe(false);
 	});
 
+	it("accepts link_to_moc with placement 'before' and multi-line line_to_add (2026-06-13)", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{
+					id: "I01",
+					action: "link_to_moc",
+					target_moc: "Projects",
+					anchor: { type: "callout", value: "[!video] Action Items" },
+					placement: "before",
+					line_to_add: "## Key Concepts\n\n- [[Some Note]]",
+				},
+			],
+		};
+		expect(validate(fixture).ok).toBe(true);
+	});
+
+	it("rejects link_to_moc with an unknown placement value", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{
+					id: "I01",
+					action: "link_to_moc",
+					target_moc: "Projects",
+					anchor: { type: "heading", value: "Key Concepts" },
+					placement: "above",
+					line_to_add: "- [[Some Note]]",
+				},
+			],
+		};
+		expect(validate(fixture).ok).toBe(false);
+	});
+
 	it("rejects unknown action.action value", () => {
 		const fixture = {
 			...VALID_FIXTURE,
