@@ -142,7 +142,7 @@ graph TB
 
     Tomo -->|Writes _instructions.json + .md peer| Vault
     Vault -->|Hashi reads .json + peer| Hashi
-    Hashi -->|Vault.process / fileManager.renameFile / vault.trash| Vault
+    Hashi -->|Vault.process / fileManager.renameFile / fileManager.trashFile| Vault
     Hashi -->|Writes applied:true to .json| Vault
     Hashi -->|Writes tomo-hashi-run-log_<ts>.md| Vault
     Hashi -->|Best-effort tick of .md peer| Vault
@@ -197,7 +197,7 @@ outbound:
     format: In-process function calls
     authentication: Sandboxed to plugin
     criticality: HIGH
-    data_flow: "Move/rename files (fileManager.renameFile); atomic content edits (vault.process); trash (vault.trash); folder creation (vault.createFolder)"
+    data_flow: "Move/rename files (fileManager.renameFile); atomic content edits (vault.process); trash (fileManager.trashFile — honors user 'Deleted files' pref; F4 amendment 2026-06-12); folder creation (vault.createFolder)"
 
   - name: "Obsidian Vault — JSON Applied-Flag Write"
     type: Obsidian Plugin API (Vault.process)
@@ -555,7 +555,7 @@ export interface VaultFS {
   processJSON<T>(path: string, transform: (json: T) => T): Promise<void>;        // wraps process; uses 2-space stringify
   rename(fromPath: string, toPath: string): Promise<void>;       // link-preserving (FileManager.renameFile)
   createFolder(path: string): Promise<void>;                     // tolerates already-exists
-  trash(path: string): Promise<void>;                            // system trash when available
+  trash(path: string): Promise<void>;                            // FileManager.trashFile — honors user "Deleted files" pref (system/.trash/permanent); see F4 amendment 2026-06-12
   create(path: string, content: string): Promise<void>;          // for run log file creation
 }
 

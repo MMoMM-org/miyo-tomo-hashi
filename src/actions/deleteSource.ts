@@ -2,10 +2,13 @@
  * deleteSource handler — trash the source file via Obsidian's trash facility.
  *
  * Idempotency:
- *   source present → trashed via vault.trash (link-preserving); returns applied
+ *   source present → trashed via vault.trash (the port method; backed by
+ *                    fileManager.trashFile on the Obsidian adapter); returns applied
  *   source absent  → no-op; returns skipped-already
  *
- * MUST use vault.trash, never hard-delete. [ref: PRD/F4]
+ * Deletion honors the user's Obsidian "Deleted files" preference (system trash
+ * / .trash / permanent). When that preference is permanent, the executor
+ * surfaces a one-time warning. [ref: PRD/F4; Kokoro decision 2026-06-12]
  */
 
 import type { DeleteSourceAction } from "../schema/types.js";

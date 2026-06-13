@@ -596,6 +596,8 @@ describe("SettingsTab — instruction executor controls", () => {
 			"hooksDir",
 			"hooksPolicy",
 			"debugLogging",
+			// 002 F4 amendment (2026-06-12) — one-shot permanent-delete warning
+			"permanentDeleteWarningShown",
 			// 003 fields (ide-bridge)
 			"ideBridgeEnabled",
 			"ideBridgePort",

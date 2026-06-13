@@ -30,6 +30,10 @@ import type { RunState, Clock, ValidationOutcome } from "../../../src/executor/s
 import type { InstructionSet, Action } from "../../../src/schema/types.js";
 import type { PluginSettings } from "../../../src/types/index.js";
 import type { HookOutcome } from "../../../src/hooks/HookRunner.js";
+import {
+	PERMANENT_DELETE_WARNING,
+	type PermanentDeleteWarningDeps,
+} from "../../../src/executor/permanentDeleteWarning.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -49,6 +53,7 @@ const defaultSettings: PluginSettings = {
 	hooksDir: ".tomo-hashi/hooks",
 	hooksPolicy: "enabled",
 	debugLogging: false,
+	permanentDeleteWarningShown: false,
 	ideBridgeEnabled: false,
 	ideBridgePort: 23027,
 	ideBridgeAuthToken: "",
@@ -133,6 +138,16 @@ function makeAddRelationship(
 		target_moc_path: targetMocPath,
 		marker,
 		line,
+		...(applied !== undefined ? { applied } : {}),
+	};
+}
+
+function makeDeleteSource(id: string, sourcePath: string, applied?: boolean): Action {
+	return {
+		action: "delete_source",
+		id,
+		source_path: sourcePath,
+		reason: "user approved deletion in Tomo review",
 		...(applied !== undefined ? { applied } : {}),
 	};
 }
@@ -1353,5 +1368,84 @@ describe("executionStore singleton", () => {
 		});
 		const progress = selectProgress(executionStore.get());
 		expect(progress).toEqual({ current: 3, total: 0 });
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Permanent-delete one-shot warning wiring (Spec 002 F4 amendment)
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — permanent-delete warning wiring", () => {
+	async function runWith(args: {
+		actions: Action[];
+		isPermanent: boolean;
+		hasWarned: boolean;
+	}): Promise<{ notify: Mock; markWarned: Mock }> {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/2026-06-13_del_instructions.json`;
+		const set = makeInstructionSet(args.actions);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		// Source files the handlers operate on must exist.
+		for (const a of args.actions) {
+			if (a.action === "delete_source") await vault.create(a.source_path, "x");
+			if (a.action === "create_moc") {
+				await vault.create(a.source, "# src");
+				await vault.createFolder("notes");
+			}
+		}
+
+		const notify = vi.fn();
+		const markWarned = vi.fn<() => Promise<void>>(async () => {});
+		const permanentDeleteWarning: PermanentDeleteWarningDeps = {
+			isPermanent: () => args.isPermanent,
+			hasWarned: () => args.hasWarned,
+			markWarned,
+			notify: (msg) => notify(msg),
+		};
+
+		const executor = new InstructionExecutor({
+			vault,
+			validator: makeOkValidator(set),
+			hookRunner: makeHookRunner(),
+			settings: makeSettings({ executionMode: "silent" }),
+			clock: fixedClock,
+			store: new Store<RunState>({ kind: "idle" }),
+			permanentDeleteWarning,
+		});
+		await executor.execute({ kind: "single-file", sourcePath });
+		return { notify, markWarned };
+	}
+
+	it("warns once when a run contains delete_source and trash is permanent", async () => {
+		const { notify, markWarned } = await runWith({
+			actions: [makeDeleteSource("D01", "inbox/old-source.m4a")],
+			isPermanent: true,
+			hasWarned: false,
+		});
+		expect(notify).toHaveBeenCalledWith(PERMANENT_DELETE_WARNING);
+		expect(markWarned).toHaveBeenCalledOnce();
+	});
+
+	it("does NOT warn when the run has no delete_source action", async () => {
+		const { notify, markWarned } = await runWith({
+			actions: [makeCreateMoc("I01", `${INBOX}/moc-I01.md`)],
+			isPermanent: true,
+			hasWarned: false,
+		});
+		expect(notify).not.toHaveBeenCalledWith(PERMANENT_DELETE_WARNING);
+		expect(markWarned).not.toHaveBeenCalled();
+	});
+
+	it("does NOT warn when trash preference is not permanent", async () => {
+		const { notify, markWarned } = await runWith({
+			actions: [makeDeleteSource("D01", "inbox/old-source.m4a")],
+			isPermanent: false,
+			hasWarned: false,
+		});
+		expect(notify).not.toHaveBeenCalledWith(PERMANENT_DELETE_WARNING);
+		expect(markWarned).not.toHaveBeenCalled();
 	});
 });

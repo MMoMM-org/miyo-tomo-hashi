@@ -50,6 +50,10 @@ import {
 import { markActionsApplied } from "./jsonAppliedWriter.js";
 import { tickPeerCheckbox } from "./peerCheckboxSync.js";
 import { RunLogWriter } from "./runLog.js";
+import {
+	maybeWarnPermanentDelete,
+	type PermanentDeleteWarningDeps,
+} from "./permanentDeleteWarning.js";
 import { HANDLERS, type Handler } from "../actions/index.js";
 
 // ---------------------------------------------------------------------------
@@ -79,6 +83,13 @@ export interface InstructionExecutorDeps {
 	readonly clock: Clock;
 	readonly store?: Store<RunState>;
 	readonly notify?: (msg: string) => void;
+	/**
+	 * One-shot permanent-delete warning collaborator (Spec 002 F4 amendment,
+	 * Kokoro decision 2026-06-12). Optional: when omitted, the warning is never
+	 * surfaced (the FakeVaultFS/test wiring leaves it unset; main.ts supplies it
+	 * with the live Obsidian trash preference + persisted flag).
+	 */
+	readonly permanentDeleteWarning?: PermanentDeleteWarningDeps;
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +107,7 @@ export class InstructionExecutor {
 	private readonly clock: Clock;
 	readonly state: Store<RunState>;
 	private readonly notify: (msg: string) => void;
+	private readonly permanentDeleteWarning: PermanentDeleteWarningDeps | null;
 
 	private running = false;
 	private cancelled = false;
@@ -112,6 +124,7 @@ export class InstructionExecutor {
 		this.clock = deps.clock;
 		this.state = deps.store ?? executionStore;
 		this.notify = deps.notify ?? (() => { /* no-op in prod when not injected */ });
+		this.permanentDeleteWarning = deps.permanentDeleteWarning ?? null;
 	}
 
 	// Reads through the registered accessor so consumers passing a getter
@@ -289,6 +302,15 @@ export class InstructionExecutor {
 				// drives idle. No auto-idle here.
 				return counts;
 			}
+		}
+
+		// Step 6.4: one-shot permanent-delete warning (Spec 002 F4 amendment,
+		// Kokoro decision 2026-06-12). Reached only when the run is committed to
+		// executing (a confirm-mode cancel returned above), so the warning maps
+		// to deletions about to actually happen. Fires at most once per install.
+		if (this.permanentDeleteWarning !== null) {
+			const hasDeleteSource = records.some((r) => r.kind === "delete_source");
+			await maybeWarnPermanentDelete(hasDeleteSource, this.permanentDeleteWarning);
 		}
 
 		// Step 6.5: pre-approve hooks — collect all ask-mode decisions before
