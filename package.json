@@ -53,6 +53,10 @@
 	},
 	"overrides": {
 		"fast-uri": "3.1.2",
-		"protobufjs": "7.6.2"
+		"protobufjs": "7.6.3",
+		"js-yaml": "^4.2.0",
+		"vitest": {
+			"esbuild": "0.28.1"
+		}
 	}
 }
