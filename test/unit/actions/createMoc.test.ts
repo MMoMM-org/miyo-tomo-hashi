@@ -111,6 +111,27 @@ describe("createMoc handler", () => {
 		expect(result).toContain("title: PKM MOC");
 	});
 
+	// Reject-and-report: an illegal filename char in the destination must fail
+	// THIS action with the path + culprit named (so the run log is diagnostic)
+	// rather than letting Obsidian's renameFile throw and abort the whole run.
+	it("destination with illegal char → failed naming the path; source untouched", async () => {
+		const vault = new FakeVaultFS();
+		await seedFile(vault, "Inbox/my-note.md");
+		const action = makeAction({ destination: "Atlas/MOC/10:30 Standup.md" });
+		const ctx = makeCtx(vault);
+
+		const outcome = await createMoc(action, ctx);
+
+		expect(outcome.kind).toBe("failed");
+		if (outcome.kind === "failed") {
+			expect(outcome.reason).toBe(
+				"destination filename has illegal character(s) ':': Atlas/MOC/10:30 Standup.md",
+			);
+		}
+		// No move happened — the source is still in place for the user to fix.
+		expect(await vault.exists("Inbox/my-note.md")).toBe(true);
+	});
+
 	it("source absent + target absent → failed with source-missing message", async () => {
 		const vault = new FakeVaultFS();
 		const action = makeAction();

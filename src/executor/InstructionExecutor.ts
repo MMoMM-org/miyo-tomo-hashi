@@ -30,6 +30,7 @@ import type { VaultFS } from "../vault/VaultFS.js";
 import type { Action } from "../schema/types.js";
 import type {
 	ActionKind,
+	ActionOutcome,
 	ActionRecord,
 	Clock,
 	ExecutionMode,
@@ -427,8 +428,27 @@ export class InstructionExecutor {
 				// Step 8d: dispatch handler. All handlers share the same broad
 				// outcome union (review L4), so the registry indexing widens
 				// cleanly to a single Action input — no narrowing cast needed.
+				//
+				// Per-action throw backstop: a handler that throws (e.g. an
+				// Obsidian vault op rejecting on an illegal filename char) must
+				// fail ONLY that action — not abort the whole run with an
+				// uncaught rejection (callers fire-and-forget execute()). Record
+				// it as a `failed` row, mark the id so dependents cascade-skip,
+				// log it, and continue — mirroring the action-not-found and
+				// before-hook-failed branches above. The outer try/catch stays
+				// the backstop for truly-unexpected (non-handler) failures.
 				const handler = HANDLERS[record.kind] as Handler<Action>;
-				const handlerOutcome = await handler(action, { vault, clock: this.clock });
+				let handlerOutcome: ActionOutcome;
+				try {
+					handlerOutcome = await handler(action, { vault, clock: this.clock });
+				} catch (err) {
+					const reason = err instanceof Error ? err.message : String(err);
+					record.outcome = { kind: "failed", reason: `handler threw: ${reason}` };
+					failedIds.add(record.id);
+					logWriter.appendRecord(record);
+					this.debugOutcome(record);
+					continue;
+				}
 				record.outcome = handlerOutcome;
 
 				if (handlerOutcome.kind === "failed") {

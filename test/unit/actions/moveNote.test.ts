@@ -113,6 +113,26 @@ describe("moveNote handler", () => {
 		expect(result).toContain("tags:");
 	});
 
+	// Reject-and-report: an illegal filename char in the destination must fail
+	// THIS action with the path + culprit named rather than letting Obsidian's
+	// renameFile throw and abort the whole run.
+	it("destination with illegal char → failed naming the path; source untouched", async () => {
+		const vault = new FakeVaultFS();
+		await seedFile(vault, "Inbox/raw-note.md");
+		const action = makeAction({ destination: "Notes/bad?name.md" });
+		const ctx = makeCtx(vault);
+
+		const outcome = await moveNote(action, ctx);
+
+		expect(outcome.kind).toBe("failed");
+		if (outcome.kind === "failed") {
+			expect(outcome.reason).toBe(
+				"destination filename has illegal character(s) '?': Notes/bad?name.md",
+			);
+		}
+		expect(await vault.exists("Inbox/raw-note.md")).toBe(true);
+	});
+
 	it("source absent + target absent → failed with source-missing message", async () => {
 		const vault = new FakeVaultFS();
 		const action = makeAction();

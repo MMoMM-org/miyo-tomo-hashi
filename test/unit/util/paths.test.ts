@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	VALIDATION_ORDER,
 	denyListMatch,
+	findIllegalFilenameChars,
 	normalizeAndContain,
 	verifyRealpathContainment,
 } from "../../../src/util/paths";
@@ -260,6 +261,50 @@ describe("verifyRealpathContainment", () => {
 		);
 
 		expect(realpathStub).toHaveBeenCalledTimes(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// findIllegalFilenameChars
+// ---------------------------------------------------------------------------
+
+describe("findIllegalFilenameChars", () => {
+	describe("clean filenames return no offending chars", () => {
+		it("accepts a simple filename", () => {
+			expect(findIllegalFilenameChars("my-note.md")).toEqual([]);
+		});
+
+		it("accepts a nested vault-relative path (slashes are separators)", () => {
+			expect(findIllegalFilenameChars("Atlas/MOC/My Note.md")).toEqual([]);
+		});
+
+		it("ignores illegal-looking chars in the directory portion", () => {
+			// A `:` in a parent segment is the directory's problem, not this
+			// basename's — the helper only inspects the final segment.
+			expect(findIllegalFilenameChars("a:b/clean.md")).toEqual([]);
+		});
+	});
+
+	describe("flags Obsidian-reserved chars in the basename", () => {
+		it("flags a colon (the timestamp case)", () => {
+			expect(findIllegalFilenameChars("Atlas/10:30 Standup.md")).toEqual([":"]);
+		});
+
+		it("flags a backslash", () => {
+			expect(findIllegalFilenameChars("Atlas/we\\ird.md")).toEqual(["\\"]);
+		});
+
+		it("flags an asterisk", () => {
+			expect(findIllegalFilenameChars("Atlas/wild*.md")).toEqual(["*"]);
+		});
+
+		it("returns multiple distinct offenders in first-seen order, de-duplicated", () => {
+			expect(findIllegalFilenameChars('Atlas/a:b:c?"x.md')).toEqual([
+				":",
+				"?",
+				'"',
+			]);
+		});
 	});
 });
 

@@ -950,6 +950,79 @@ describe("InstructionExecutor — run log records handler failures end-to-end", 
 });
 
 // ---------------------------------------------------------------------------
+// Per-action handler-throw backstop
+//
+// A handler that THROWS (e.g. Obsidian's renameFile rejecting on an illegal
+// filename char) must fail only that action — not abort the whole run with an
+// uncaught rejection. Distinct from the hook-throw case above (which still
+// propagates): a handler throw is caught, recorded as `failed`, and the loop
+// continues.
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — handler-throw backstop", () => {
+	it("a throwing handler fails only that action; the run continues and execute() resolves", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/handler_throw_instructions.json`;
+		const throwingDest = `${INBOX}/moc-throw.md`;
+
+		// I01 create_moc: its rename throws (simulates Obsidian renameFile
+		// rejecting). I02 move_note: independent, must still run.
+		const set = makeInstructionSet([
+			makeCreateMoc("I01", throwingDest),
+			makeMoveNote("I02", "inbox/note-I02.md", "notes/note-I02.md"),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note-I01.md", "# Note I01");
+		await vault.create("inbox/note-I02.md", "# Note I02");
+		await vault.createFolder("notes");
+
+		// Make the rename for I01's destination throw, but let every other
+		// rename delegate to the real FakeVaultFS implementation.
+		const realRename = FakeVaultFS.prototype.rename.bind(vault);
+		vi.spyOn(vault, "rename").mockImplementation(async (from, to) => {
+			if (to === throwingDest) {
+				throw new Error(
+					"File name cannot contain any of the following characters: \\ / :",
+				);
+			}
+			return realRename(from, to);
+		});
+
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let counts;
+		try {
+			const { executor } = makeSingleFileExecutor(vault, set, {
+				settings: { runLogRetention: "always" },
+			});
+			// Must NOT reject — the throw is contained per-action.
+			counts = await executor.execute({ kind: "single-file", sourcePath });
+		} finally {
+			warnSpy.mockRestore();
+		}
+
+		expect(counts.failed).toBe(1); // I01
+		expect(counts.applied).toBe(1); // I02 still ran
+
+		// I02 graduated; I01 did not.
+		const updated = await vault.readJSON<InstructionSet>(sourcePath);
+		expect(updated.actions.find((a) => a.id === "I02")?.applied).toBe(true);
+		expect(updated.actions.find((a) => a.id === "I01")?.applied).not.toBe(true);
+
+		// The run log names the failing action and the contained throw reason.
+		const filesInInbox = await vault.list(INBOX);
+		const logFile = filesInInbox.find((f) => f.includes("tomo-hashi-run-log"));
+		expect(logFile).toBeDefined();
+		const logContent = await vault.read(logFile as string);
+		expect(logContent).toContain("I01");
+		expect(logContent).toContain("handler threw:");
+		expect(logContent).toContain("File name cannot contain");
+	});
+});
+
+// ---------------------------------------------------------------------------
 // Execution debug logging (gated on debugLogging)
 // ---------------------------------------------------------------------------
 
