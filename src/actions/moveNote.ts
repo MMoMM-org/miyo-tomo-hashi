@@ -15,7 +15,7 @@
 
 import type { MoveNoteAction } from "../schema/types.js";
 import type { ActionOutcome } from "../executor/state.js";
-import { findIllegalFilenameChars } from "../util/paths.js";
+import { findIllegalFilenameChars, formatIllegalChars } from "../util/paths.js";
 import { dirOf, stripTomoFrontmatter, type HandlerContext } from "./types.js";
 
 type MoveOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
@@ -29,14 +29,16 @@ export async function moveNote(
 
 	// Guard before any vault op: Obsidian's renameFile throws on illegal
 	// filename chars (\ / : …), which would otherwise abort the whole run.
-	// Fail this one action with the path + culprit named so the run log is
-	// diagnostic and dependents cascade-skip (review: reject, don't sanitize).
+	// Per the filename-sanitization contract (Tomo 2026-06-17): the producer
+	// guarantees Obsidian-safe names; the executor validates and REJECTS, never
+	// repairs (silently sanitizing here would orphan the verbatim links Tomo
+	// emits for this note). Fail this one action with the path + culprit named
+	// so the run log is diagnostic and dependents cascade-skip.
 	const illegal = findIllegalFilenameChars(destination);
 	if (illegal.length > 0) {
-		const chars = illegal.map((c) => `'${c}'`).join(", ");
 		return {
 			kind: "failed",
-			reason: `destination filename has illegal character(s) ${chars}: ${destination}`,
+			reason: `destination filename has illegal character(s) ${formatIllegalChars(illegal)}: ${destination} — producer must emit Obsidian-safe names`,
 		};
 	}
 

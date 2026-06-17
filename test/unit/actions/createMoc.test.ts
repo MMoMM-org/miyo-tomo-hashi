@@ -125,7 +125,7 @@ describe("createMoc handler", () => {
 		expect(outcome.kind).toBe("failed");
 		if (outcome.kind === "failed") {
 			expect(outcome.reason).toBe(
-				"destination filename has illegal character(s) ':': Atlas/MOC/10:30 Standup.md",
+				"destination filename has illegal character(s) ':': Atlas/MOC/10:30 Standup.md — producer must emit Obsidian-safe names",
 			);
 		}
 		// No move happened — the source is still in place for the user to fix.

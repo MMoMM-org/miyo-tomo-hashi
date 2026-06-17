@@ -127,7 +127,7 @@ describe("moveNote handler", () => {
 		expect(outcome.kind).toBe("failed");
 		if (outcome.kind === "failed") {
 			expect(outcome.reason).toBe(
-				"destination filename has illegal character(s) '?': Notes/bad?name.md",
+				"destination filename has illegal character(s) '?': Notes/bad?name.md — producer must emit Obsidian-safe names",
 			);
 		}
 		expect(await vault.exists("Inbox/raw-note.md")).toBe(true);
