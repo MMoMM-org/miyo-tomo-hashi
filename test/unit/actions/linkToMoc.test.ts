@@ -336,13 +336,60 @@ describe("linkToMoc — anchor not found", () => {
 		expect(outcome.kind).toBe("failed");
 	});
 
-	it("metadata null (cache miss) → failed", async () => {
+	it("anchor genuinely absent from content → failed (no metadata consulted)", async () => {
 		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, "# MOC\n");
 
 		const outcome = await linkToMoc(makeAction(), makeCtx(vault));
 
 		expect(outcome.kind).toBe("failed");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// metadataCache race (miyo-tomo-hashi#68): resolution must work from content
+// alone, even when the metadata cache is null/stale. The vault here has NO
+// metadata map → vault.metadata() returns null throughout, reproducing the
+// post-write cache-rebuild gap. Pre-fix this failed with "anchor not found".
+// ---------------------------------------------------------------------------
+
+describe("linkToMoc — metadataCache race (#68)", () => {
+	it("resolves a present callout even when the metadata cache is null", async () => {
+		// No metadata map injected → FakeVaultFS.metadata() === null.
+		const vault = new FakeVaultFS();
+		await vault.create(MOC_PATH, calloutMocContent);
+
+		const outcome = await linkToMoc(makeAction({
+			anchor: { type: "callout", value: "[!note] Projects" },
+			placement: "inside",
+		}), makeCtx(vault));
+
+		expect(outcome.kind).toBe("applied");
+		expect(await vault.read(MOC_PATH)).toContain("> - [[Notes/Projects/raw-note|Raw Note]]");
+	});
+
+	it("two sequential inserts into the SAME MOC both succeed with a null cache (the I36→I38 case)", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(MOC_PATH, calloutMocContent);
+
+		const first = await linkToMoc(makeAction({
+			anchor: { type: "callout", value: "[!note] Projects" },
+			placement: "inside",
+			line_to_add: "- [[First]]",
+		}), makeCtx(vault));
+
+		// Second insert re-reads the now-mutated content; cache is still null.
+		const second = await linkToMoc(makeAction({
+			anchor: { type: "callout", value: "[!note] Projects" },
+			placement: "inside",
+			line_to_add: "- [[Second]]",
+		}), makeCtx(vault));
+
+		expect(first.kind).toBe("applied");
+		expect(second.kind).toBe("applied");
+		const result = await vault.read(MOC_PATH);
+		expect(result).toContain("> - [[First]]");
+		expect(result).toContain("> - [[Second]]");
 	});
 });
 

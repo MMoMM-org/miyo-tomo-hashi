@@ -32,10 +32,16 @@
  *   - anchor.value is null                       → "anchor not found (null value)"
  *   - anchor cannot be resolved in the MOC       → "anchor not found: <value>"
  *   - placement=inside on non-callout anchor     → "placement: inside requires callout anchor"
- *   - metadata cache returns null for the file   → "anchor not found: …"
+ *
+ * Anchor resolution reads the freshly-read file content (`cachedRead`), NOT the
+ * async metadataCache — see anchorResolver. This keeps batches with ≥2 inserts
+ * into the same MOC correct: Obsidian rebuilds the metadataCache asynchronously
+ * after each write, so a cache-based read would race the rebuild and spuriously
+ * miss a present anchor. [miyo-tomo-hashi#68]
  *
  * [ref: PRD/F4 link_to_moc; Tomo docs/instructions-json.md § Anchor Model;
- *  Tomo integration request 2026-06-13 (insert-primitive generalization)]
+ *  Tomo integration request 2026-06-13 (insert-primitive generalization);
+ *  metadataCache-race fix miyo-tomo-hashi#68]
  */
 
 import type { LinkToMocAction } from "../schema/types.js";
@@ -67,16 +73,9 @@ export async function linkToMoc(
 		};
 	}
 
-	const [content, metadata] = await Promise.all([
-		vault.cachedRead(mocPath),
-		vault.metadata(mocPath),
-	]);
+	const content = await vault.cachedRead(mocPath);
 
-	if (metadata === null) {
-		return { kind: "failed", reason: `anchor not found: ${action.anchor.value}` };
-	}
-
-	const match = resolveAnchor(metadata, content, action.anchor);
+	const match = resolveAnchor(content, action.anchor);
 	if (match === null) {
 		return { kind: "failed", reason: `anchor not found: ${action.anchor.value}` };
 	}
