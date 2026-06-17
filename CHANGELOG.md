@@ -1,3 +1,10 @@
+## [0.10.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.10.1...0.10.2) (2026-06-17)
+
+
+### Bug Fixes
+
+* **deps:** patch protobufjs/js-yaml/esbuild alerts + record filename decision ([#67](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/67)) ([58e0417](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/58e04174b0f22d02bf8fd32dc147fee5c8df064d)), closes [#66](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/66)
+
 ## [0.10.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.10.0...0.10.1) (2026-06-17)
 
 
