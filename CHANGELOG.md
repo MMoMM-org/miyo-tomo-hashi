@@ -1,3 +1,10 @@
+## [0.10.3](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.10.2...0.10.3) (2026-06-17)
+
+
+### Bug Fixes
+
+* **actions:** align filename validation with Tomo sanitization contract ([#69](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/69)) ([c580c06](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/c580c06bf36d9ed6a80e93b1c089cb4420ed8f4e)), closes [#66](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/66)
+
 ## [0.10.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.10.1...0.10.2) (2026-06-17)
 
 
