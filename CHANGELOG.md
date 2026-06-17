@@ -1,3 +1,10 @@
+## [0.10.4](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.10.3...0.10.4) (2026-06-17)
+
+
+### Bug Fixes
+
+* resolve link_to_moc & daily-note sections from content, not the metadataCache ([#68](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/68)) ([#70](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/70)) ([30f76c4](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/30f76c4dcb81340853a8c0a0564ac62e31fa119f))
+
 ## [0.10.3](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.10.2...0.10.3) (2026-06-17)
 
 
