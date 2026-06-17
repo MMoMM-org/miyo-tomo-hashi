@@ -388,6 +388,35 @@ describe("ExecutionModal — onClose lifecycle (H2: native-dismiss safety)", () 
 		expect(exec.cancel).not.toHaveBeenCalled();
 	});
 
+	it("does NOT recurse when the consumer's onClose calls modal.close() mid-run (stack-overflow guard)", () => {
+		// Reproduces the real main.ts wiring: the onClose hook sets the store
+		// to idle and then calls modal.close(). Obsidian's close() re-invokes
+		// onClose; because we've already unsubscribed, currentState is frozen
+		// at "running", so without the re-entrancy guard needCancel stays true
+		// and the safety-net call recurses until "Maximum call stack size
+		// exceeded". The guard must make the second onClose a no-op.
+		const exec = makeExecutor();
+		let modal!: ExecutionModal;
+		const onCloseCb = vi.fn(() => {
+			exec.state.set({ kind: "idle" });
+			modal.close();
+		});
+		modal = new ExecutionModal(app, exec, { onClose: onCloseCb });
+		modal.onOpen();
+		exec.state.set({
+			kind: "running",
+			mode: "confirm",
+			records: [record()],
+			currentIndex: 0,
+		});
+
+		// Without the guard this throws RangeError synchronously.
+		expect(() => modal.onClose()).not.toThrow();
+		// The teardown body ran exactly once: one cancel, one consumer onClose.
+		expect(exec.cancel).toHaveBeenCalledTimes(1);
+		expect(onCloseCb).toHaveBeenCalledTimes(1);
+	});
+
 	it("forwards callbacks.onClose when canceling so consumer can drive idle", () => {
 		// After cancel, the executor transitions to summary with no modal to
 		// close it — main.ts's onClose hook drives the idle transition.

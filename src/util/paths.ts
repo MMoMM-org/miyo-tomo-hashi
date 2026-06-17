@@ -18,6 +18,49 @@ export type SafetyResult =
 	| { ok: false; reason: string };
 
 /**
+ * Characters Obsidian rejects inside a single filename segment. `\` and `:`
+ * are illegal on the platforms Hashi targets (macOS primary, Linux); `/` is
+ * the path separator (legal in a full path, illegal inside one segment);
+ * `* ? " < > |` round out the cross-platform reserved set Obsidian guards in
+ * its own `checkPath`. Kept here so `paths.ts` stays the single source of
+ * truth for path safety.
+ */
+const ILLEGAL_FILENAME_CHARS: readonly string[] = [
+	"\\",
+	"/",
+	":",
+	"*",
+	"?",
+	'"',
+	"<",
+	">",
+	"|",
+];
+
+/**
+ * Inspect the basename of a vault-relative path for characters Obsidian
+ * rejects in a filename. The directory portion is ignored — `/` is only an
+ * offence inside the final segment, never as a separator.
+ *
+ * Returns the offending characters in first-seen order, de-duplicated; an
+ * empty array means the filename is clean. Pure and synchronous so action
+ * handlers can pre-flight a rename without I/O and turn a would-be Obsidian
+ * throw into a reportable `failed` outcome.
+ */
+export function findIllegalFilenameChars(path: string): string[] {
+	const slash = path.lastIndexOf("/");
+	const basename = slash === -1 ? path : path.slice(slash + 1);
+
+	const found: string[] = [];
+	for (const ch of ILLEGAL_FILENAME_CHARS) {
+		if (basename.includes(ch) && !found.includes(ch)) {
+			found.push(ch);
+		}
+	}
+	return found;
+}
+
+/**
  * Documented validation order for any vault-targeting action. Callers
  * (Phase 4 InstructionExecutor) MUST evaluate in this order and short-circuit
  * on the first failure. Mirrors PRD F9 verbatim: schema → normalize → contain
