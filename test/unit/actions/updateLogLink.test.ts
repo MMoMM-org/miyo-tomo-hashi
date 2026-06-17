@@ -13,7 +13,6 @@ import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import { updateLogLink } from "../../../src/actions/updateLogLink.js";
 import type { UpdateLogLinkAction } from "../../../src/schema/types.js";
-import type { FileMetadata } from "../../../src/vault/VaultFS.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,23 +32,6 @@ const makeAction = (overrides?: Partial<UpdateLogLinkAction>): UpdateLogLinkActi
 const makeCtx = (vault: FakeVaultFS) => ({
 	vault,
 	clock: { now: () => new Date("2026-04-28T10:00:00Z") },
-});
-
-/**
- * Metadata with a heading "Links" starting at line 1, running to EOF.
- * Line 0: # Daily Note
- * Line 1: ## Links
- * Line 2+: section content
- */
-const makeHeadingMetadata = (): FileMetadata => ({
-	headings: [
-		{ heading: "Daily Note", level: 1, line: 0 },
-		{ heading: "Links", level: 2, line: 1 },
-	],
-	sections: [
-		{ type: "heading", line: 0, endLine: 0 },
-		{ type: "heading", line: 1, endLine: -1 },
-	],
 });
 
 const DAILY_PATH = "daily/2026-04-28.md";
@@ -107,10 +89,7 @@ describe("updateLogLink — link line format", () => {
 			"## Links",
 			"- [[existing-note]]",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			position: "after_last_line",
@@ -131,10 +110,7 @@ describe("updateLogLink — link line format", () => {
 			"## Links",
 			"- [[existing-note]]",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			position: "before_first_line",
@@ -159,10 +135,7 @@ describe("updateLogLink — link line format", () => {
 			"- 09:00: [[morning-note]]",
 			"- 11:00: [[noon-note]]",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			position: "at_time",
@@ -198,10 +171,7 @@ describe("updateLogLink — idempotency", () => {
 			"- [[existing-note]]",
 			"- [[Notes/my-project]]",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			position: "after_last_line",
@@ -223,10 +193,7 @@ describe("updateLogLink — idempotency", () => {
 			"- 10:00: [[Notes/my-project]]",
 			"- 11:00: [[noon-note]]",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			position: "at_time",

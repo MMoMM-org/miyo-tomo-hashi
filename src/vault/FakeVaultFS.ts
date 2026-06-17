@@ -3,22 +3,16 @@
  *
  * Implements every VaultFS method using a plain Map<path, string> for
  * content and a per-path Promise queue for serialised process() calls.
- * Constructor accepts an optional metadata map for injection in tests.
  *
  * [ref: SDD/Architecture Decisions; ADR-9 v2; VaultFS Port]
  */
 
-import type { FileMetadata, VaultFS } from "./VaultFS.js";
+import type { VaultFS } from "./VaultFS.js";
 
 export class FakeVaultFS implements VaultFS {
   private readonly content = new Map<string, string>();
   private readonly folders = new Set<string>();
   private readonly queues = new Map<string, Promise<void>>();
-  private readonly metadataMap: Map<string, FileMetadata | null>;
-
-  constructor(metadata?: Map<string, FileMetadata | null>) {
-    this.metadataMap = metadata ?? new Map<string, FileMetadata | null>();
-  }
 
   async read(path: string): Promise<string> {
     const v = this.content.get(path);
@@ -50,10 +44,6 @@ export class FakeVaultFS implements VaultFS {
       if (!rest.includes("/")) out.push(path);
     }
     return out;
-  }
-
-  async metadata(path: string): Promise<FileMetadata | null> {
-    return this.metadataMap.get(path) ?? null;
   }
 
   async process(

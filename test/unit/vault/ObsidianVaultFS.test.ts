@@ -6,7 +6,6 @@
  *   - rename → fileManager.renameFile (NOT vault.rename)
  *   - trash  → fileManager.trashFile (honors user delete preference)
  *   - createFolder swallows "Folder already exists"
- *   - metadata reads from metadataCache.getFileCache
  */
 
 import { App, TFile } from "obsidian";
@@ -128,11 +127,6 @@ function makeRichApp(): App {
     store.delete(file.path);
   });
 
-  app.metadataCache.getFileCache = vi.fn((_file: TFile) => ({
-    headings: [],
-    sections: [],
-  }));
-
   return app;
 }
 
@@ -209,43 +203,6 @@ describe("ObsidianVaultFS", () => {
       await expect(vault.createFolder("forbidden/dir")).rejects.toThrow(
         "Permission denied",
       );
-    });
-
-    it("metadata reads from app.metadataCache.getFileCache", async () => {
-      const headings = [
-        { heading: "H1", level: 1, position: { start: { line: 0 } } },
-      ];
-      const sections = [
-        { type: "heading", position: { start: { line: 0 }, end: { line: 0 } } },
-      ];
-      (app.metadataCache.getFileCache as ReturnType<typeof vi.fn>).mockReturnValue({
-        headings,
-        sections,
-      });
-
-      await app.vault.create("notes/meta.md", "# H1");
-      const meta = await vault.metadata("notes/meta.md");
-
-      expect(app.metadataCache.getFileCache).toHaveBeenCalledOnce();
-      expect(meta).not.toBeNull();
-      expect(meta?.headings).toEqual([{ heading: "H1", level: 1, line: 0 }]);
-      expect(meta?.sections).toEqual([
-        { type: "heading", line: 0, endLine: 0 },
-      ]);
-    });
-
-    it("metadata returns null when getFileCache returns null", async () => {
-      (app.metadataCache.getFileCache as ReturnType<typeof vi.fn>).mockReturnValue(
-        null,
-      );
-      await app.vault.create("notes/nocache.md", "content");
-      const meta = await vault.metadata("notes/nocache.md");
-      expect(meta).toBeNull();
-    });
-
-    it("metadata returns null when file does not exist", async () => {
-      const meta = await vault.metadata("no/such/file.md");
-      expect(meta).toBeNull();
     });
   });
 });

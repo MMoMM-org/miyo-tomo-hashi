@@ -19,7 +19,7 @@
 
 import type { App } from "obsidian";
 import { TFile } from "obsidian";
-import type { FileMetadata, VaultFS } from "./VaultFS.js";
+import type { VaultFS } from "./VaultFS.js";
 
 export class ObsidianVaultFS implements VaultFS {
   constructor(private readonly app: App) {}
@@ -52,36 +52,6 @@ export class ObsidianVaultFS implements VaultFS {
     const children = (entry as { children: ReadonlyArray<{ path: string }> })
       .children;
     return children.map((c) => c.path);
-  }
-
-  async metadata(path: string): Promise<FileMetadata | null> {
-    const abstractFile = this.app.vault.getAbstractFileByPath(path);
-    if (!(abstractFile instanceof TFile)) return null;
-    const cache = this.app.metadataCache.getFileCache(abstractFile);
-    if (cache === null) return null;
-    return {
-      headings: (cache.headings ?? []).map(
-        (h: {
-          heading: string;
-          level: number;
-          position: { start: { line: number } };
-        }) => ({
-          heading: h.heading,
-          level: h.level,
-          line: h.position.start.line,
-        }),
-      ),
-      sections: (cache.sections ?? []).map(
-        (s: {
-          type: string;
-          position: { start: { line: number }; end: { line: number } };
-        }) => ({
-          type: s.type,
-          line: s.position.start.line,
-          endLine: s.position.end.line,
-        }),
-      ),
-    };
   }
 
   async process(

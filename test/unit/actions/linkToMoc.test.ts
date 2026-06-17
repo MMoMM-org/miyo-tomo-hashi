@@ -20,7 +20,6 @@ import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import { linkToMoc } from "../../../src/actions/linkToMoc.js";
 import type { LinkToMocAction } from "../../../src/schema/types.js";
-import type { FileMetadata } from "../../../src/vault/VaultFS.js";
 
 const makeAction = (overrides?: Partial<LinkToMocAction>): LinkToMocAction => ({
 	action: "link_to_moc",
@@ -51,19 +50,6 @@ const headingMocContent = [
 	"## Other",                    // 7
 ].join("\n");
 
-const makeHeadingMetadata = (): FileMetadata => ({
-	headings: [
-		{ heading: "Main MOC", level: 1, line: 0 },
-		{ heading: "Projects", level: 2, line: 1 },
-		{ heading: "Other", level: 2, line: 7 },
-	],
-	sections: [
-		{ type: "heading", line: 0, endLine: 0 },
-		{ type: "heading", line: 1, endLine: 6 },
-		{ type: "heading", line: 7, endLine: -1 },
-	],
-});
-
 // Callout `[!note] Projects` at line 1, body lines 2..5, blank 6, line 7 outside
 const calloutMocContent = [
 	"# Main MOC",                  // 0
@@ -75,14 +61,6 @@ const calloutMocContent = [
 	"",                            // 6
 	"After callout",               // 7
 ].join("\n");
-
-const makeCalloutMetadata = (): FileMetadata => ({
-	headings: [{ heading: "Main MOC", level: 1, line: 0 }],
-	sections: [
-		{ type: "heading", line: 0, endLine: 0 },
-		{ type: "callout", line: 1, endLine: 5 },
-	],
-});
 
 // ---------------------------------------------------------------------------
 
@@ -104,10 +82,7 @@ describe("linkToMoc — MOC missing", () => {
 describe("linkToMoc — target_moc_path priority", () => {
 	it("target_moc_path is used when present, regardless of target_moc", async () => {
 		const canonicalPath = "MOCs/canonical.md";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[canonicalPath, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(canonicalPath, calloutMocContent);
 		const action = makeAction({
 			target_moc: "some/legacy.md",
@@ -126,10 +101,7 @@ describe("linkToMoc — target_moc_path priority", () => {
 
 describe("linkToMoc — callout anchor + inside placement", () => {
 	it("appends `> <line_to_add>` as last line of callout body", async () => {
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, calloutMocContent);
 		const action = makeAction({
 			anchor: { type: "callout", value: "[!note] Projects" },
@@ -158,10 +130,7 @@ describe("linkToMoc — callout anchor + inside placement", () => {
 			"> Last body line",
 			"",
 		].join("\n");
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, { headings: [], sections: [{ type: "callout", line: 1, endLine: 4 }] }],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, contentWithBullet);
 
 		const outcome = await linkToMoc(makeAction({
@@ -180,10 +149,7 @@ describe("linkToMoc — callout anchor + inside placement", () => {
 
 describe("linkToMoc — callout anchor + after placement", () => {
 	it("inserts <line_to_add> verbatim (no `> ` prefix) after the callout's last `>` line", async () => {
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, calloutMocContent);
 
 		const outcome = await linkToMoc(makeAction({
@@ -209,10 +175,7 @@ describe("linkToMoc — callout anchor + after placement", () => {
 
 describe("linkToMoc — heading anchor + after placement", () => {
 	it("inserts <line_to_add> verbatim immediately after the heading line (NOT at end of section)", async () => {
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, headingMocContent);
 
 		const outcome = await linkToMoc(makeAction({
@@ -239,19 +202,7 @@ describe("linkToMoc — heading anchor + after placement", () => {
 			"existing body",
 			"",
 		].join("\n");
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, {
-				headings: [
-					{ heading: "Main", level: 1, line: 0 },
-					{ heading: "Projects", level: 2, line: 1 },
-				],
-				sections: [
-					{ type: "heading", line: 0, endLine: 0 },
-					{ type: "heading", line: 1, endLine: -1 },
-				],
-			}],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, content);
 
 		const outcome = await linkToMoc(makeAction({
@@ -276,10 +227,7 @@ describe("linkToMoc — line anchor + after placement", () => {
 			"<!-- bookmark: sources -->",          // 2
 			"already-here line",                   // 3
 		].join("\n");
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, { headings: [{ heading: "Main", level: 1, line: 0 }], sections: [] }],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, content);
 
 		const outcome = await linkToMoc(makeAction({
@@ -302,10 +250,7 @@ describe("linkToMoc — line anchor + after placement", () => {
 
 describe("linkToMoc — anchor not found", () => {
 	it("anchor not found → failed (no fallback to first callout)", async () => {
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, calloutMocContent);
 		const originalContent = await vault.read(MOC_PATH);
 
@@ -322,10 +267,7 @@ describe("linkToMoc — anchor not found", () => {
 	});
 
 	it("anchor.value is null → failed (Tomo emission gap)", async () => {
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, calloutMocContent);
 
 		const outcome = await linkToMoc(makeAction({
@@ -347,15 +289,14 @@ describe("linkToMoc — anchor not found", () => {
 });
 
 // ---------------------------------------------------------------------------
-// metadataCache race (miyo-tomo-hashi#68): resolution must work from content
-// alone, even when the metadata cache is null/stale. The vault here has NO
-// metadata map → vault.metadata() returns null throughout, reproducing the
-// post-write cache-rebuild gap. Pre-fix this failed with "anchor not found".
+// metadataCache race (miyo-tomo-hashi#68): resolution works from the freshly
+// read content alone — the handler no longer consults the metadataCache at all,
+// so a batch of inserts into the same MOC can't lose the cache-rebuild race.
+// Pre-fix the second same-MOC insert failed with a spurious "anchor not found".
 // ---------------------------------------------------------------------------
 
 describe("linkToMoc — metadataCache race (#68)", () => {
-	it("resolves a present callout even when the metadata cache is null", async () => {
-		// No metadata map injected → FakeVaultFS.metadata() === null.
+	it("resolves a present callout purely from content (no metadata involved)", async () => {
 		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, calloutMocContent);
 
@@ -378,7 +319,7 @@ describe("linkToMoc — metadataCache race (#68)", () => {
 			line_to_add: "- [[First]]",
 		}), makeCtx(vault));
 
-		// Second insert re-reads the now-mutated content; cache is still null.
+		// Second insert re-reads the now-mutated content — no cache to go stale.
 		const second = await linkToMoc(makeAction({
 			anchor: { type: "callout", value: "[!note] Projects" },
 			placement: "inside",
@@ -399,10 +340,7 @@ describe("linkToMoc — metadataCache race (#68)", () => {
 
 describe("linkToMoc — inside placement on non-callout anchor (schema-illegal)", () => {
 	it("placement=inside + anchor.type=heading → failed (Tomo schema disallows; Hashi defensive)", async () => {
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, headingMocContent);
 
 		const outcome = await linkToMoc(makeAction({
@@ -424,10 +362,7 @@ describe("linkToMoc — inside placement on non-callout anchor (schema-illegal)"
 
 describe("linkToMoc — before placement", () => {
 	it("callout anchor: block lands directly above the callout opener (no `> ` prefix)", async () => {
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, calloutMocContent);
 
 		const outcome = await linkToMoc(makeAction({
@@ -446,10 +381,7 @@ describe("linkToMoc — before placement", () => {
 	});
 
 	it("heading anchor: line lands immediately above the heading line", async () => {
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, headingMocContent);
 
 		const outcome = await linkToMoc(makeAction({
@@ -465,10 +397,7 @@ describe("linkToMoc — before placement", () => {
 	});
 
 	it("line anchor: block lands immediately above the matched body line", async () => {
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, headingMocContent);
 
 		const outcome = await linkToMoc(makeAction({
@@ -490,19 +419,7 @@ describe("linkToMoc — before placement", () => {
 			"## Projects",
 			"",
 		].join("\n");
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, {
-				headings: [
-					{ heading: "Main", level: 1, line: 0 },
-					{ heading: "Projects", level: 2, line: 2 },
-				],
-				sections: [
-					{ type: "heading", line: 0, endLine: 1 },
-					{ type: "heading", line: 2, endLine: -1 },
-				],
-			}],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, content);
 
 		const outcome = await linkToMoc(makeAction({
@@ -523,10 +440,7 @@ describe("linkToMoc — before placement", () => {
 
 describe("linkToMoc — multi-line line_to_add", () => {
 	it("before a callout: inserts a verbatim multi-line block (blank line preserved)", async () => {
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, calloutMocContent);
 
 		const outcome = await linkToMoc(makeAction({
@@ -549,10 +463,7 @@ describe("linkToMoc — multi-line line_to_add", () => {
 	});
 
 	it("inside a callout: each line of the block gets a `> ` prefix", async () => {
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, calloutMocContent);
 
 		const outcome = await linkToMoc(makeAction({
@@ -582,16 +493,7 @@ describe("linkToMoc — multi-line line_to_add", () => {
 			"> - [[existing]]",
 			"",
 		].join("\n");
-		const metaMap = new Map<string, FileMetadata | null>([
-			[MOC_PATH, {
-				headings: [
-					{ heading: "Main MOC", level: 1, line: 0 },
-					{ heading: "Key Concepts", level: 2, line: 1 },
-				],
-				sections: [{ type: "callout", line: 4, endLine: 5 }],
-			}],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(MOC_PATH, content);
 
 		const outcome = await linkToMoc(makeAction({

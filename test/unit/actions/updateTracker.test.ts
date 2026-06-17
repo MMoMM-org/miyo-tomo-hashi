@@ -16,7 +16,6 @@ import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import { updateTracker } from "../../../src/actions/updateTracker.js";
 import type { UpdateTrackerAction } from "../../../src/schema/types.js";
-import type { FileMetadata } from "../../../src/vault/VaultFS.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -36,11 +35,6 @@ const makeAction = (overrides?: Partial<UpdateTrackerAction>): UpdateTrackerActi
 const makeCtx = (vault: FakeVaultFS) => ({
 	vault,
 	clock: { now: () => new Date("2026-04-28T10:00:00Z") },
-});
-
-const makeCalloutMetadata = (): FileMetadata => ({
-	headings: [],
-	sections: [{ type: "callout", line: 0, endLine: 4 }],
 });
 
 const DAILY_PATH = "daily/2026-04-28.md";
@@ -223,10 +217,7 @@ describe("updateTracker — callout_body", () => {
 			"> energy:: high",
 			">",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			syntax: "callout_body",
@@ -249,10 +240,7 @@ describe("updateTracker — callout_body", () => {
 			"> energy:: high",
 			">",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			syntax: "callout_body",
@@ -280,10 +268,7 @@ describe("updateTracker — callout_body", () => {
 			"> For Me:: alt",
 			">",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			syntax: "callout_body",
@@ -310,10 +295,7 @@ describe("updateTracker — callout_body", () => {
 			"> energy:: high",
 			">",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeCalloutMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			syntax: "callout_body",
