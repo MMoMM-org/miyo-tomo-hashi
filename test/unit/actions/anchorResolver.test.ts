@@ -9,25 +9,25 @@
  *     after the callout closes; for heading: after the heading line
  *     itself; for line: after the matched line).
  *
+ * Resolution reads ONLY the file content — no metadataCache. This is the
+ * fix for the metadataCache race (miyo-tomo-hashi#68): a batch with ≥2
+ * inserts into the same file would race Obsidian's async cache rebuild, so
+ * resolving from content is the only race-free source of truth.
+ *
  * Anchor types:
  *   - callout: `[!type] Title` shape — matches the opening line of the
- *     callout whose type+title equal the value (case-insensitive).
+ *     callout whose type+title equal the value (case-insensitive). Body
+ *     extends through consecutive `>`-prefixed lines.
  *   - heading: matches a heading by text (without leading `#`s),
  *     case-sensitive, any heading level.
  *   - line: matches a body line by literal stripped content (substring).
  *
- * [ref: PRD/F4 link_to_moc; SDD/Anchor Model 2026-05-01]
+ * [ref: PRD/F4 link_to_moc; SDD/Anchor Model 2026-05-01; #68]
  */
 
 import { describe, expect, it } from "vitest";
 import { resolveAnchor } from "../../../src/actions/anchorResolver.js";
 import type { Anchor } from "../../../src/schema/types.js";
-import type { FileMetadata } from "../../../src/vault/VaultFS.js";
-
-const makeMetadata = (
-	headings: FileMetadata["headings"],
-	sections: FileMetadata["sections"],
-): FileMetadata => ({ headings, sections });
 
 // ---------------------------------------------------------------------------
 // callout anchor
@@ -42,15 +42,8 @@ describe("resolveAnchor — callout", () => {
 			"> [!blocks] Key Concepts",            // 3
 			"> body line",                         // 4
 		].join("\n");
-		const metadata = makeMetadata(
-			[],
-			[
-				{ type: "callout", line: 0, endLine: 1 },
-				{ type: "callout", line: 3, endLine: 4 },
-			],
-		);
 		const anchor: Anchor = { type: "callout", value: "[!blocks] Key Concepts" };
-		const result = resolveAnchor(metadata, content, anchor);
+		const result = resolveAnchor(content, anchor);
 		expect(result).toEqual({ kind: "callout", anchorLine: 3, insertInside: 5, insertAfter: 5 });
 	});
 
@@ -59,12 +52,8 @@ describe("resolveAnchor — callout", () => {
 			"> [!blocks] Key Concepts",
 			"> body",
 		].join("\n");
-		const metadata = makeMetadata(
-			[],
-			[{ type: "callout", line: 0, endLine: 1 }],
-		);
 		const anchor: Anchor = { type: "callout", value: "[!compass] Key Concepts" };
-		expect(resolveAnchor(metadata, content, anchor)).toBeNull();
+		expect(resolveAnchor(content, anchor)).toBeNull();
 	});
 
 	it("callout match is case-insensitive on type and title", () => {
@@ -72,17 +61,54 @@ describe("resolveAnchor — callout", () => {
 			"> [!Compass] Something you should look at perhaps..",
 			"> body",
 		].join("\n");
-		const metadata = makeMetadata(
-			[],
-			[{ type: "callout", line: 0, endLine: 1 }],
-		);
 		const anchor: Anchor = {
 			type: "callout",
 			value: "[!compass] something YOU should look at perhaps..",
 		};
-		const result = resolveAnchor(metadata, content, anchor);
+		const result = resolveAnchor(content, anchor);
 		expect(result?.kind).toBe("callout");
 		expect(result?.anchorLine).toBe(0);
+	});
+
+	it("computes the callout body extent from consecutive `>` lines, stopping at the first non-`>` line", () => {
+		const content = [
+			"# Heading",                  // 0
+			"> [!note] Projects",         // 1  opener
+			"> - one",                    // 2  body
+			">",                          // 3  body (empty quote line)
+			"> - two",                    // 4  body (terminal)
+			"",                           // 5  blank → ends callout
+			"After",                      // 6
+		].join("\n");
+		const anchor: Anchor = { type: "callout", value: "[!note] Projects" };
+		const result = resolveAnchor(content, anchor);
+		// endLine = 4 → insertion at 5
+		expect(result).toEqual({ kind: "callout", anchorLine: 1, insertInside: 5, insertAfter: 5 });
+	});
+
+	it("matches the FIRST callout when two share the same type+title (deterministic, no cache)", () => {
+		const content = [
+			"> [!note] Dup",              // 0  first
+			"> a",                        // 1
+			"",                           // 2
+			"> [!note] Dup",              // 3  second
+			"> b",                        // 4
+		].join("\n");
+		const anchor: Anchor = { type: "callout", value: "[!note] Dup" };
+		const result = resolveAnchor(content, anchor);
+		expect(result?.anchorLine).toBe(0);
+	});
+
+	it("does NOT match a callout opener that lives inside a fenced code block", () => {
+		const content = [
+			"# Doc",                      // 0
+			"```md",                      // 1  fence open
+			"> [!note] Example",          // 2  fenced — not a real anchor
+			"```",                        // 3  fence close
+			"body",                       // 4
+		].join("\n");
+		const anchor: Anchor = { type: "callout", value: "[!note] Example" };
+		expect(resolveAnchor(content, anchor)).toBeNull();
 	});
 });
 
@@ -100,16 +126,8 @@ describe("resolveAnchor — heading", () => {
 			"- b",                    // 4
 			"## Next section",        // 5
 		].join("\n");
-		const metadata = makeMetadata(
-			[
-				{ heading: "Top", level: 1, line: 0 },
-				{ heading: "Sources", level: 2, line: 2 },
-				{ heading: "Next section", level: 2, line: 5 },
-			],
-			[],
-		);
 		const anchor: Anchor = { type: "heading", value: "Sources" };
-		const result = resolveAnchor(metadata, content, anchor);
+		const result = resolveAnchor(content, anchor);
 		expect(result).toEqual({
 			kind: "heading",
 			anchorLine: 2,
@@ -120,24 +138,27 @@ describe("resolveAnchor — heading", () => {
 
 	it("matches at any heading level (h1 through h6)", () => {
 		const content = "###### Deep Heading\nbody\n";
-		const metadata = makeMetadata(
-			[{ heading: "Deep Heading", level: 6, line: 0 }],
-			[],
-		);
 		const anchor: Anchor = { type: "heading", value: "Deep Heading" };
-		const result = resolveAnchor(metadata, content, anchor);
+		const result = resolveAnchor(content, anchor);
 		expect(result?.kind).toBe("heading");
 		expect(result?.anchorLine).toBe(0);
 	});
 
 	it("returns null when no heading matches the value", () => {
 		const content = "## Other\nbody\n";
-		const metadata = makeMetadata(
-			[{ heading: "Other", level: 2, line: 0 }],
-			[],
-		);
 		const anchor: Anchor = { type: "heading", value: "Missing" };
-		expect(resolveAnchor(metadata, content, anchor)).toBeNull();
+		expect(resolveAnchor(content, anchor)).toBeNull();
+	});
+
+	it("does NOT match a heading-like line inside a fenced code block", () => {
+		const content = [
+			"intro",                  // 0
+			"~~~",                    // 1  fence open (tilde)
+			"## Fake Heading",        // 2  fenced — not a real heading
+			"~~~",                    // 3  fence close
+		].join("\n");
+		const anchor: Anchor = { type: "heading", value: "Fake Heading" };
+		expect(resolveAnchor(content, anchor)).toBeNull();
 	});
 });
 
@@ -153,12 +174,11 @@ describe("resolveAnchor — line", () => {
 			"<!-- bookmark: source-list -->", // 2
 			"- existing item",             // 3
 		].join("\n");
-		const metadata = makeMetadata([{ heading: "Top", level: 1, line: 0 }], []);
 		const anchor: Anchor = {
 			type: "line",
 			value: "<!-- bookmark: source-list -->",
 		};
-		const result = resolveAnchor(metadata, content, anchor);
+		const result = resolveAnchor(content, anchor);
 		expect(result).toEqual({
 			kind: "line",
 			anchorLine: 2,
@@ -169,16 +189,14 @@ describe("resolveAnchor — line", () => {
 
 	it("returns null when no body line matches", () => {
 		const content = "# Top\nbody\n";
-		const metadata = makeMetadata([{ heading: "Top", level: 1, line: 0 }], []);
 		const anchor: Anchor = { type: "line", value: "nonexistent marker" };
-		expect(resolveAnchor(metadata, content, anchor)).toBeNull();
+		expect(resolveAnchor(content, anchor)).toBeNull();
 	});
 
 	it("matches by substring inclusion (anchor value contained in line)", () => {
 		const content = "## Sources\n- See also: <related-marker> for full list\n";
-		const metadata = makeMetadata([{ heading: "Sources", level: 2, line: 0 }], []);
 		const anchor: Anchor = { type: "line", value: "<related-marker>" };
-		const result = resolveAnchor(metadata, content, anchor);
+		const result = resolveAnchor(content, anchor);
 		expect(result?.kind).toBe("line");
 		expect(result?.anchorLine).toBe(1);
 	});
@@ -191,11 +209,7 @@ describe("resolveAnchor — line", () => {
 describe("resolveAnchor — null value", () => {
 	it("returns null when anchor.value is null (Tomo emission gap; Hashi runtime fail)", () => {
 		const content = "> [!blocks] Key Concepts\n> body\n";
-		const metadata = makeMetadata(
-			[],
-			[{ type: "callout", line: 0, endLine: 1 }],
-		);
 		const anchor: Anchor = { type: "callout", value: null };
-		expect(resolveAnchor(metadata, content, anchor)).toBeNull();
+		expect(resolveAnchor(content, anchor)).toBeNull();
 	});
 });

@@ -11,7 +11,6 @@ import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import { updateLogEntry } from "../../../src/actions/updateLogEntry.js";
 import type { UpdateLogEntryAction } from "../../../src/schema/types.js";
-import type { FileMetadata } from "../../../src/vault/VaultFS.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -31,23 +30,6 @@ const makeAction = (overrides?: Partial<UpdateLogEntryAction>): UpdateLogEntryAc
 const makeCtx = (vault: FakeVaultFS) => ({
 	vault,
 	clock: { now: () => new Date("2026-04-28T10:00:00Z") },
-});
-
-/**
- * Metadata with a heading "Log" starting at line 1, running to EOF (endLine -1).
- * Line 0: # Daily Note
- * Line 1: ## Log
- * Line 2+: section content
- */
-const makeHeadingMetadata = (): FileMetadata => ({
-	headings: [
-		{ heading: "Daily Note", level: 1, line: 0 },
-		{ heading: "Log", level: 2, line: 1 },
-	],
-	sections: [
-		{ type: "heading", line: 0, endLine: 0 },
-		{ type: "heading", line: 1, endLine: -1 },
-	],
 });
 
 const DAILY_PATH = "daily/2026-04-28.md";
@@ -106,10 +88,7 @@ describe("updateLogEntry — after_last_line", () => {
 			"- 09:00: Morning standup",
 			"- 10:30: Team meeting",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			position: "after_last_line",
@@ -131,10 +110,7 @@ describe("updateLogEntry — after_last_line", () => {
 			"- 09:00: Morning standup",
 			"- Completed the refactor task",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			position: "after_last_line",
@@ -160,10 +136,7 @@ describe("updateLogEntry — before_first_line", () => {
 			"## Log",
 			"- 09:00: Morning standup",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			position: "before_first_line",
@@ -189,10 +162,7 @@ describe("updateLogEntry — before_first_line", () => {
 			"- Early entry",
 			"- 09:00: Morning standup",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			position: "before_first_line",
@@ -219,10 +189,7 @@ describe("updateLogEntry — at_time", () => {
 			"- 09:00: Morning standup",
 			"- 11:00: Design review",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			position: "at_time",
@@ -253,10 +220,7 @@ describe("updateLogEntry — at_time", () => {
 			"- 10:00: Coffee break",
 			"- 11:00: Design review",
 		].join("\n") + "\n";
-		const metaMap = new Map<string, FileMetadata | null>([
-			[DAILY_PATH, makeHeadingMetadata()],
-		]);
-		const vault = new FakeVaultFS(metaMap);
+		const vault = new FakeVaultFS();
 		await vault.create(DAILY_PATH, content);
 		const action = makeAction({
 			position: "at_time",

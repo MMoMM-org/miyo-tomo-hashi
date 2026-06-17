@@ -2,12 +2,24 @@
  * anchorResolver — locate an Anchor in a vault file and report the line
  * indices the linkToMoc handler needs for both placement modes.
  *
+ * Resolution reads ONLY the freshly-read file content (`rawContent`), never the
+ * async metadataCache. Obsidian rebuilds the metadataCache asynchronously after
+ * each vault mutation, so a batch with ≥2 inserts into the same file would race
+ * the rebuild: the second insert could read a null/stale cache and spuriously
+ * fail to find an anchor that is present in the file. Parsing positions straight
+ * from the current content removes that race entirely. [miyo-tomo-hashi#68]
+ *
  * Three anchor types (per Tomo's link_to_moc contract 2026-05-01):
  *   - callout: match callout opening line by `[!type] Title` (case-insensitive).
+ *     The callout body extends through consecutive `>`-prefixed lines.
  *   - heading: match a heading by text (without leading `#`s), case-sensitive,
  *     any heading level.
  *   - line:    match the first body line whose stripped content contains the
  *     value verbatim (substring inclusion).
+ *
+ * Callout and heading scans skip lines inside fenced code blocks (``` / ~~~),
+ * mirroring how the metadataCache excluded fenced content. (`line` matching is
+ * deliberately literal and scans all lines, unchanged from prior behaviour.)
  *
  * Returned indices:
  *   - anchorLine:   the anchor's first line (callout opener / heading line /
@@ -24,11 +36,12 @@
  *
  * Returns null when the anchor cannot be resolved (no match, or value is null).
  *
- * [ref: PRD/F4 link_to_moc; Tomo docs/instructions-json.md § Anchor Model]
+ * [ref: PRD/F4 link_to_moc; Tomo docs/instructions-json.md § Anchor Model;
+ *  metadataCache-race fix miyo-tomo-hashi#68]
  */
 
-import type { FileMetadata } from "../vault/VaultFS.js";
 import type { Anchor } from "../schema/types.js";
+import { findCallout, parseHeadings } from "./markdownStructure.js";
 
 export interface AnchorMatch {
 	readonly kind: "callout" | "heading" | "line";
@@ -37,21 +50,16 @@ export interface AnchorMatch {
 	readonly insertAfter: number;
 }
 
-const CALLOUT_FIRST_LINE_RE = /^>\s*\[!(\w+)\]\s*(.*)$/;
 const ANCHOR_VALUE_PREFIX_RE = /^\[!(\w+)\]\s*(.*)$/;
 
-export function resolveAnchor(
-	metadata: FileMetadata,
-	rawContent: string,
-	anchor: Anchor,
-): AnchorMatch | null {
+export function resolveAnchor(rawContent: string, anchor: Anchor): AnchorMatch | null {
 	if (anchor.value === null) return null;
 
 	switch (anchor.type) {
 		case "callout":
-			return resolveCallout(metadata, rawContent, anchor.value);
+			return resolveCallout(rawContent, anchor.value);
 		case "heading":
-			return resolveHeading(metadata, anchor.value);
+			return resolveHeading(rawContent, anchor.value);
 		case "line":
 			return resolveLine(rawContent, anchor.value);
 	}
@@ -61,46 +69,28 @@ export function resolveAnchor(
 // callout — match by `[!type] Title` (case-insensitive)
 // ---------------------------------------------------------------------------
 
-function resolveCallout(
-	metadata: FileMetadata,
-	rawContent: string,
-	value: string,
-): AnchorMatch | null {
+function resolveCallout(rawContent: string, value: string): AnchorMatch | null {
 	const desired = ANCHOR_VALUE_PREFIX_RE.exec(value);
 	if (desired === null) return null;
-	const desiredType = desired[1]!.toLowerCase();
-	const desiredTitle = desired[2]!.trim().toLowerCase();
 
-	const lines = rawContent.split("\n");
+	const span = findCallout(rawContent.split("\n"), desired[1]!, desired[2]!);
+	if (span === null) return null;
 
-	for (const sec of metadata.sections) {
-		if (sec.type !== "callout") continue;
-		const firstLine = lines[sec.line] ?? "";
-		const m = CALLOUT_FIRST_LINE_RE.exec(firstLine);
-		if (m === null) continue;
-		const calloutType = m[1]!.toLowerCase();
-		const calloutTitle = m[2]!.trim().toLowerCase();
-		if (calloutType !== desiredType) continue;
-		if (calloutTitle !== desiredTitle) continue;
-
-		const insertionIndex = sec.endLine === -1 ? lines.length : sec.endLine + 1;
-		return {
-			kind: "callout",
-			anchorLine: sec.line,
-			insertInside: insertionIndex,
-			insertAfter: insertionIndex,
-		};
-	}
-
-	return null;
+	const insertionIndex = span.endLine + 1;
+	return {
+		kind: "callout",
+		anchorLine: span.openerLine,
+		insertInside: insertionIndex,
+		insertAfter: insertionIndex,
+	};
 }
 
 // ---------------------------------------------------------------------------
 // heading — match by text (case-sensitive), any level
 // ---------------------------------------------------------------------------
 
-function resolveHeading(metadata: FileMetadata, value: string): AnchorMatch | null {
-	const heading = metadata.headings.find((h) => h.heading === value);
+function resolveHeading(rawContent: string, value: string): AnchorMatch | null {
+	const heading = parseHeadings(rawContent.split("\n")).find((h) => h.heading === value);
 	if (heading === undefined) return null;
 	return {
 		kind: "heading",

@@ -35,12 +35,9 @@ export async function updateLogLink(
 		return { kind: "failed", reason: `Daily note missing: ${daily_note_path}` };
 	}
 
-	const [fileContent, metadata] = await Promise.all([
-		vault.cachedRead(daily_note_path),
-		vault.metadata(daily_note_path),
-	]);
+	const fileContent = await vault.cachedRead(daily_note_path);
 
-	const range = metadata ? locateSection(metadata, fileContent, section) : null;
+	const range = locateSection(fileContent, section);
 	if (!range) {
 		return { kind: "failed", reason: `Section not found: ${section}` };
 	}

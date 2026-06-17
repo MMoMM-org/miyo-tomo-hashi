@@ -36,13 +36,6 @@ export interface VaultFS {
   /** List the non-recursive direct children of `folder`. Returns paths relative to vault root. */
   list(folder: string): Promise<readonly string[]>;
 
-  /**
-   * Return cached metadata for the file, or null if the MetadataCache has no
-   * entry (e.g. the file is not a markdown file, or the cache has not yet been
-   * populated).
-   */
-  metadata(path: string): Promise<FileMetadata | null>;
-
   // Writes (atomic at the file level)
 
   /**
@@ -95,17 +88,4 @@ export interface VaultFS {
    * Used for run log file creation.
    */
   create(path: string, content: string): Promise<void>;
-}
-
-export interface FileMetadata {
-  readonly headings: ReadonlyArray<{
-    heading: string;
-    level: number;
-    line: number;
-  }>;
-  readonly sections: ReadonlyArray<{
-    type: string;
-    line: number;
-    endLine: number;
-  }>;
 }

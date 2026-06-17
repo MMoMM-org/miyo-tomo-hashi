@@ -210,13 +210,10 @@ async function handleCalloutBody(
 	const { vault } = ctx;
 	const { daily_note_path, field, value, section } = action;
 
-	const [content, metadata] = await Promise.all([
-		vault.cachedRead(daily_note_path),
-		vault.metadata(daily_note_path),
-	]);
+	const content = await vault.cachedRead(daily_note_path);
 
 	const sectionName = section ?? field;
-	const range = metadata ? locateSection(metadata, content, sectionName) : null;
+	const range = locateSection(content, sectionName);
 	if (!range) {
 		return { kind: "failed", reason: `Section not found: ${sectionName}` };
 	}

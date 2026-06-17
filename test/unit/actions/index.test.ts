@@ -30,7 +30,6 @@ import type {
 	CreateMocAction,
 	MoveNoteAction,
 } from "../../../src/schema/types.js";
-import type { FileMetadata } from "../../../src/vault/VaultFS.js";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -144,11 +143,7 @@ describe("HANDLERS — dispatch smoke", () => {
 
 	it("link_to_moc: dispatches and returns applied", async () => {
 		const mocPath = "MOCs/projects.md";
-		const metadata: FileMetadata = {
-			headings: [{ heading: "Projects", level: 2, line: 1 }],
-			sections: [{ type: "heading", line: 1, endLine: -1 }],
-		};
-		const vault = new FakeVaultFS(new Map([[mocPath, metadata]]));
+		const vault = new FakeVaultFS();
 		await vault.create(mocPath, "# MOC\n## Projects\n");
 		const action = {
 			action: "link_to_moc" as const,
@@ -183,17 +178,7 @@ describe("HANDLERS — dispatch smoke", () => {
 
 	it("update_log_entry: dispatches and returns applied", async () => {
 		const notePath = "daily/2026-04-28.md";
-		const metadata: FileMetadata = {
-			headings: [
-				{ heading: "Daily Note", level: 1, line: 0 },
-				{ heading: "Log", level: 2, line: 1 },
-			],
-			sections: [
-				{ type: "heading", line: 0, endLine: 0 },
-				{ type: "heading", line: 1, endLine: -1 },
-			],
-		};
-		const vault = new FakeVaultFS(new Map([[notePath, metadata]]));
+		const vault = new FakeVaultFS();
 		await vault.create(notePath, "# Daily Note\n## Log\n");
 		const action = {
 			action: "update_log_entry" as const,
@@ -211,17 +196,7 @@ describe("HANDLERS — dispatch smoke", () => {
 
 	it("update_log_link: dispatches and returns applied", async () => {
 		const notePath = "daily/2026-04-28.md";
-		const metadata: FileMetadata = {
-			headings: [
-				{ heading: "Daily Note", level: 1, line: 0 },
-				{ heading: "Log", level: 2, line: 1 },
-			],
-			sections: [
-				{ type: "heading", line: 0, endLine: 0 },
-				{ type: "heading", line: 1, endLine: -1 },
-			],
-		};
-		const vault = new FakeVaultFS(new Map([[notePath, metadata]]));
+		const vault = new FakeVaultFS();
 		await vault.create(notePath, "# Daily Note\n## Log\n");
 		const action = {
 			action: "update_log_link" as const,

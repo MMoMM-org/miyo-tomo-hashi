@@ -1,15 +1,11 @@
+/**
+ * sectionLocator — resolves a named section within a vault file, reading ONLY
+ * the file content (no metadataCache) so batches of update_* actions against
+ * the same daily note don't race Obsidian's async cache rebuild (#68).
+ */
+
 import { describe, expect, it } from "vitest";
 import { locateSection } from "../../../src/actions/sectionLocator.js";
-import type { FileMetadata } from "../../../src/vault/VaultFS.js";
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
-const makeMetadata = (
-	headings: FileMetadata["headings"],
-	sections: FileMetadata["sections"],
-): FileMetadata => ({ headings, sections });
 
 // ---------------------------------------------------------------------------
 // Heading match
@@ -24,14 +20,7 @@ describe("locateSection — heading match", () => {
 			"## Archive",
 			"- old item",
 		].join("\n");
-		const metadata = makeMetadata(
-			[
-				{ heading: "Projects", level: 2, line: 0 },
-				{ heading: "Archive", level: 2, line: 3 },
-			],
-			[],
-		);
-		const result = locateSection(metadata, content, "Projects");
+		const result = locateSection(content, "Projects");
 		expect(result).toEqual({ startLine: 1, endLine: 2, kind: "heading" });
 	});
 
@@ -42,26 +31,14 @@ describe("locateSection — heading match", () => {
 			"body",
 			"# NextTop",
 		].join("\n");
-		const metadata = makeMetadata(
-			[
-				{ heading: "Top", level: 1, line: 0 },
-				{ heading: "Sub", level: 2, line: 1 },
-				{ heading: "NextTop", level: 1, line: 3 },
-			],
-			[],
-		);
 		// "Sub" terminates at NextTop (level 1 <= level 2)
-		const result = locateSection(metadata, content, "Sub");
+		const result = locateSection(content, "Sub");
 		expect(result).toEqual({ startLine: 2, endLine: 2, kind: "heading" });
 	});
 
 	it("heading match at EOF — endLine is -1", () => {
 		const content = ["## Projects", "- item one"].join("\n");
-		const metadata = makeMetadata(
-			[{ heading: "Projects", level: 2, line: 0 }],
-			[],
-		);
-		const result = locateSection(metadata, content, "Projects");
+		const result = locateSection(content, "Projects");
 		expect(result).toEqual({ startLine: 1, endLine: -1, kind: "heading" });
 	});
 });
@@ -76,11 +53,7 @@ describe("locateSection — callout match", () => {
 			"> [!note] Projects",
 			"> body line",
 		].join("\n");
-		const metadata = makeMetadata(
-			[],
-			[{ type: "callout", line: 0, endLine: 1 }],
-		);
-		const result = locateSection(metadata, content, "PROJECTS");
+		const result = locateSection(content, "PROJECTS");
 		expect(result).toEqual({ startLine: 1, endLine: 1, kind: "callout" });
 	});
 
@@ -91,11 +64,7 @@ describe("locateSection — callout match", () => {
 			"> - 09:00 standup",
 			"> - 10:00 review",
 		].join("\n");
-		const metadata = makeMetadata(
-			[],
-			[{ type: "callout", line: 1, endLine: 3 }],
-		);
-		const result = locateSection(metadata, content, "Daily Log");
+		const result = locateSection(content, "Daily Log");
 		expect(result).toEqual({ startLine: 2, endLine: 3, kind: "callout" });
 	});
 });
@@ -119,14 +88,7 @@ describe("locateSection — callout match with [!type] prefix", () => {
 			"> [!blocks] Key Concepts",
 			"> body",
 		].join("\n");
-		const metadata = makeMetadata(
-			[],
-			[
-				{ type: "callout", line: 0, endLine: 1 },
-				{ type: "callout", line: 2, endLine: 3 },
-			],
-		);
-		const result = locateSection(metadata, content, "[!blocks] Key Concepts");
+		const result = locateSection(content, "[!blocks] Key Concepts");
 		expect(result).toEqual({ startLine: 3, endLine: 3, kind: "callout" });
 	});
 
@@ -135,12 +97,8 @@ describe("locateSection — callout match with [!type] prefix", () => {
 			"> [!note] Projects",
 			"> body",
 		].join("\n");
-		const metadata = makeMetadata(
-			[],
-			[{ type: "callout", line: 0, endLine: 1 }],
-		);
 		// User asked for [!blocks] Projects, but only [!note] Projects exists — must NOT match
-		const result = locateSection(metadata, content, "[!blocks] Projects");
+		const result = locateSection(content, "[!blocks] Projects");
 		expect(result).toBeNull();
 	});
 
@@ -149,11 +107,7 @@ describe("locateSection — callout match with [!type] prefix", () => {
 			"> [!Compass] Something you should look at perhaps..",
 			"> body",
 		].join("\n");
-		const metadata = makeMetadata(
-			[],
-			[{ type: "callout", line: 0, endLine: 1 }],
-		);
-		const result = locateSection(metadata, content, "[!compass] something YOU should look at perhaps..");
+		const result = locateSection(content, "[!compass] something YOU should look at perhaps..");
 		expect(result?.kind).toBe("callout");
 		expect(result?.startLine).toBe(1);
 	});
@@ -163,11 +117,7 @@ describe("locateSection — callout match with [!type] prefix", () => {
 			"> [!note] Projects",
 			"> body",
 		].join("\n");
-		const metadata = makeMetadata(
-			[],
-			[{ type: "callout", line: 0, endLine: 1 }],
-		);
-		const result = locateSection(metadata, content, "Projects");
+		const result = locateSection(content, "Projects");
 		expect(result).toEqual({ startLine: 1, endLine: 1, kind: "callout" });
 	});
 
@@ -178,12 +128,8 @@ describe("locateSection — callout match with [!type] prefix", () => {
 			"> [!blocks] Key Concepts",
 			"> callout body",
 		].join("\n");
-		const metadata = makeMetadata(
-			[{ heading: "Key Concepts", level: 2, line: 0 }],
-			[{ type: "callout", line: 2, endLine: 3 }],
-		);
 		// Prefix is callout-specific intent — must hit the callout, not the heading
-		const result = locateSection(metadata, content, "[!blocks] Key Concepts");
+		const result = locateSection(content, "[!blocks] Key Concepts");
 		expect(result?.kind).toBe("callout");
 	});
 });
@@ -195,17 +141,12 @@ describe("locateSection — callout match with [!type] prefix", () => {
 describe("locateSection — no match", () => {
 	it("returns null when no heading or callout matches", () => {
 		const content = ["## Other", "body"].join("\n");
-		const metadata = makeMetadata(
-			[{ heading: "Other", level: 2, line: 0 }],
-			[],
-		);
-		const result = locateSection(metadata, content, "Nonexistent");
+		const result = locateSection(content, "Nonexistent");
 		expect(result).toBeNull();
 	});
 
 	it("returns null when content has no sections at all", () => {
-		const metadata = makeMetadata([], []);
-		const result = locateSection(metadata, "plain text", "Projects");
+		const result = locateSection("plain text", "Projects");
 		expect(result).toBeNull();
 	});
 });
@@ -222,11 +163,34 @@ describe("locateSection — priority", () => {
 			"> [!note] Projects",
 			"> callout body",
 		].join("\n");
-		const metadata = makeMetadata(
-			[{ heading: "Projects", level: 2, line: 0 }],
-			[{ type: "callout", line: 2, endLine: 3 }],
-		);
-		const result = locateSection(metadata, content, "Projects");
+		const result = locateSection(content, "Projects");
 		expect(result?.kind).toBe("heading");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// metadataCache race (#68): resolution must not depend on cache freshness.
+// A heading/callout inside a fenced code block must NOT be matched — mirroring
+// what the metadataCache excluded — so content scanning stays equivalent.
+// ---------------------------------------------------------------------------
+
+describe("locateSection — fenced code blocks (#68 content-parity)", () => {
+	it("does not match a heading inside a fenced code block", () => {
+		const content = [
+			"intro",
+			"```",
+			"## Fenced",
+			"```",
+		].join("\n");
+		expect(locateSection(content, "Fenced")).toBeNull();
+	});
+
+	it("does not match a callout opener inside a fenced code block", () => {
+		const content = [
+			"```md",
+			"> [!note] Fenced",
+			"```",
+		].join("\n");
+		expect(locateSection(content, "[!note] Fenced")).toBeNull();
 	});
 });

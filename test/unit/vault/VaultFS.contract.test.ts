@@ -11,7 +11,7 @@
  *   });
  */
 
-import type { FileMetadata, VaultFS } from "../../../src/vault/VaultFS.js";
+import type { VaultFS } from "../../../src/vault/VaultFS.js";
 import { describe, expect, it, vi } from "vitest";
 
 /**
@@ -188,31 +188,6 @@ export function runContractTests(makeVaultFS: () => VaultFS): void {
     });
   });
 
-  describe("metadata null or { headings, sections }", () => {
-    it("returns null or an object with headings and sections arrays", async () => {
-      const vault = makeVaultFS();
-      await vault.create("notes/meta.md", "# H1\n\nParagraph.");
-
-      const meta = await vault.metadata("notes/meta.md");
-      if (meta === null) {
-        // null is a valid response (e.g. when cache has no entry yet)
-        expect(meta).toBeNull();
-      } else {
-        expect(meta).toHaveProperty("headings");
-        expect(meta).toHaveProperty("sections");
-        expect(Array.isArray(meta.headings)).toBe(true);
-        expect(Array.isArray(meta.sections)).toBe(true);
-      }
-    });
-
-    it("returns null for a path with no metadata entry", async () => {
-      const vault = makeVaultFS();
-      // No create — file not known to cache
-      const meta = await vault.metadata("no/entry.md");
-      // Adapters that don't know the file must return null
-      expect(meta).toBeNull();
-    });
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +243,6 @@ function makeBrokenStub(overrides: Partial<VaultFS>): VaultFS {
         return rest.length > 0 && !rest.includes("/");
       });
     }),
-    metadata: vi.fn(async (_path: string): Promise<FileMetadata | null> => null),
     process: vi.fn(
       async (path: string, transform: (content: string) => string) => {
         const current = store.get(path) ?? "";
