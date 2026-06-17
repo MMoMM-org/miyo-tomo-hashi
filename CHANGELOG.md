@@ -1,3 +1,10 @@
+## [0.10.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.10.0...0.10.1) (2026-06-17)
+
+
+### Bug Fixes
+
+* **executor:** reject illegal filenames + guard modal onClose recursion ([#66](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/66)) ([65086b0](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/65086b02198714c7015320a1c8adf04f848a00d2))
+
 # [0.10.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.9.0...0.10.0) (2026-06-13)
 
 
