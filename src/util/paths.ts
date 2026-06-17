@@ -18,12 +18,17 @@ export type SafetyResult =
 	| { ok: false; reason: string };
 
 /**
- * Characters Obsidian rejects inside a single filename segment. `\` and `:`
- * are illegal on the platforms Hashi targets (macOS primary, Linux); `/` is
- * the path separator (legal in a full path, illegal inside one segment);
+ * Characters that must not appear inside a single filename segment. `\` and
+ * `:` are illegal on the platforms Hashi targets (macOS primary, Linux); `/`
+ * is the path separator (legal in a full path, illegal inside one segment);
  * `* ? " < > |` round out the cross-platform reserved set Obsidian guards in
- * its own `checkPath`. Kept here so `paths.ts` stays the single source of
- * truth for path safety.
+ * its own `checkPath`; NUL (`\x00`) can never appear in a filesystem name.
+ *
+ * This mirrors Tomo's authoritative producer-side set
+ * (`tomo/scripts/lib/obsidian_filename.py`) so producer and executor agree on
+ * exactly what "Obsidian-safe" means (filename-sanitization contract,
+ * Tomo 2026-06-17). Kept here so `paths.ts` stays the single source of truth
+ * for path safety.
  */
 const ILLEGAL_FILENAME_CHARS: readonly string[] = [
 	"\\",
@@ -35,6 +40,7 @@ const ILLEGAL_FILENAME_CHARS: readonly string[] = [
 	"<",
 	">",
 	"|",
+	"\x00",
 ];
 
 /**
@@ -58,6 +64,23 @@ export function findIllegalFilenameChars(path: string): string[] {
 		}
 	}
 	return found;
+}
+
+/**
+ * Render a list of illegal characters for an error message: each quoted, joined
+ * by `, `. Non-printable chars (e.g. NUL) are shown as their `\xNN` escape so
+ * the message stays legible in logs instead of embedding a raw control byte.
+ */
+export function formatIllegalChars(chars: readonly string[]): string {
+	return chars
+		.map((c) => {
+			const code = c.charCodeAt(0);
+			if (code < 0x20 || code === 0x7f) {
+				return `'\\x${code.toString(16).padStart(2, "0")}'`;
+			}
+			return `'${c}'`;
+		})
+		.join(", ");
 }
 
 /**

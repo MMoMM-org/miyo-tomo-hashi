@@ -4,6 +4,7 @@ import {
 	VALIDATION_ORDER,
 	denyListMatch,
 	findIllegalFilenameChars,
+	formatIllegalChars,
 	normalizeAndContain,
 	verifyRealpathContainment,
 } from "../../../src/util/paths";
@@ -305,6 +306,24 @@ describe("findIllegalFilenameChars", () => {
 				'"',
 			]);
 		});
+
+		it("flags NUL — parity with Tomo's authoritative producer set", () => {
+			expect(findIllegalFilenameChars("Atlas/bad\x00name.md")).toEqual(["\x00"]);
+		});
+	});
+});
+
+// ---------------------------------------------------------------------------
+// formatIllegalChars
+// ---------------------------------------------------------------------------
+
+describe("formatIllegalChars", () => {
+	it("quotes printable offenders and joins with comma", () => {
+		expect(formatIllegalChars([":", "?", '"'])).toBe("':', '?', '\"'");
+	});
+
+	it("renders NUL as a legible \\x00 escape, not a raw control byte", () => {
+		expect(formatIllegalChars(["\x00"])).toBe("'\\x00'");
 	});
 });
 
