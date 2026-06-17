@@ -13,12 +13,19 @@
  * `docs/instructions-json.md` § Section name resolution). The plain-title path
  * is preserved for backward compatibility with handler-internal callers.
  *
+ * Resolution reads ONLY the file content — never the async metadataCache. The
+ * daily-note update_* handlers run batches of actions against the same note, so
+ * a cache-based lookup would race Obsidian's post-write rebuild and spuriously
+ * miss a present section (the same failure mode as link_to_moc #68). See
+ * markdownStructure for the shared content-parsing helpers.
+ *
  * Returns null when no match exists; the caller decides the fallback.
  *
- * [ref: SDD/Implementation Examples; Section Locator for link_to_moc]
+ * [ref: SDD/Implementation Examples; Section Locator for link_to_moc;
+ *  metadataCache-race fix miyo-tomo-hashi#68]
  */
 
-import type { FileMetadata } from "../vault/VaultFS.js";
+import { findCallout, parseHeadings } from "./markdownStructure.js";
 
 export interface SectionRange {
 	readonly startLine: number; // first content line inside the section
@@ -27,23 +34,24 @@ export interface SectionRange {
 }
 
 const PREFIX_RE = /^\[!(\w+)\]\s*(.*)$/;
-const CALLOUT_FIRST_LINE_RE = /^>\s*\[!(\w+)\]\s*(.*)$/;
 
 export function locateSection(
-	metadata: FileMetadata,
 	rawContent: string,
 	desiredSectionName: string,
 ): SectionRange | null {
 	const prefixMatch = PREFIX_RE.exec(desiredSectionName);
-	const desiredType = prefixMatch ? prefixMatch[1]!.toLowerCase() : null;
+	const desiredType = prefixMatch ? prefixMatch[1]! : null;
 	const desiredTitle = prefixMatch ? prefixMatch[2]!.trim() : desiredSectionName;
+
+	const lines = rawContent.split("\n");
 
 	// Heading lookup — only when no [!type] prefix was given. A prefix expresses
 	// callout-specific intent and must not silently fall back to a heading match.
 	if (desiredType === null) {
-		const heading = metadata.headings.find((h) => h.heading === desiredTitle);
+		const headings = parseHeadings(lines);
+		const heading = headings.find((h) => h.heading === desiredTitle);
 		if (heading) {
-			const next = metadata.headings.find(
+			const next = headings.find(
 				(h) => h.line > heading.line && h.level <= heading.level,
 			);
 			return {
@@ -54,19 +62,9 @@ export function locateSection(
 		}
 	}
 
-	const lines = rawContent.split("\n");
-	for (const sec of metadata.sections) {
-		if (sec.type !== "callout") continue;
-		const firstLine = lines[sec.line] ?? "";
-		const calloutMatch = CALLOUT_FIRST_LINE_RE.exec(firstLine);
-		if (!calloutMatch) continue;
-		const calloutType = calloutMatch[1]!.toLowerCase();
-		const calloutTitle = calloutMatch[2]!.trim();
-
-		if (desiredType !== null && calloutType !== desiredType) continue;
-		if (calloutTitle.toLowerCase() !== desiredTitle.toLowerCase()) continue;
-
-		return { startLine: sec.line + 1, endLine: sec.endLine, kind: "callout" };
+	const callout = findCallout(lines, desiredType, desiredTitle);
+	if (callout) {
+		return { startLine: callout.openerLine + 1, endLine: callout.endLine, kind: "callout" };
 	}
 
 	return null;

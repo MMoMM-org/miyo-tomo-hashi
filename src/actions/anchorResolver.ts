@@ -41,6 +41,7 @@
  */
 
 import type { Anchor } from "../schema/types.js";
+import { findCallout, parseHeadings } from "./markdownStructure.js";
 
 export interface AnchorMatch {
 	readonly kind: "callout" | "heading" | "line";
@@ -49,11 +50,7 @@ export interface AnchorMatch {
 	readonly insertAfter: number;
 }
 
-const CALLOUT_FIRST_LINE_RE = /^>\s*\[!(\w+)\]\s*(.*)$/;
-const CALLOUT_CONTINUATION_RE = /^>/;
 const ANCHOR_VALUE_PREFIX_RE = /^\[!(\w+)\]\s*(.*)$/;
-const HEADING_RE = /^#{1,6}\s+(.*)$/;
-const CODE_FENCE_RE = /^\s*(?:```|~~~)/;
 
 export function resolveAnchor(rawContent: string, anchor: Anchor): AnchorMatch | null {
 	if (anchor.value === null) return null;
@@ -68,24 +65,6 @@ export function resolveAnchor(rawContent: string, anchor: Anchor): AnchorMatch |
 	}
 }
 
-/**
- * Mark each line that sits inside a fenced code block. Fence delimiter lines
- * themselves are marked too — they are never valid callout/heading anchors.
- */
-function fencedLineMask(lines: readonly string[]): boolean[] {
-	const mask = new Array<boolean>(lines.length).fill(false);
-	let inFence = false;
-	for (let i = 0; i < lines.length; i++) {
-		if (CODE_FENCE_RE.test(lines[i] ?? "")) {
-			mask[i] = true;
-			inFence = !inFence;
-			continue;
-		}
-		mask[i] = inFence;
-	}
-	return mask;
-}
-
 // ---------------------------------------------------------------------------
 // callout — match by `[!type] Title` (case-insensitive)
 // ---------------------------------------------------------------------------
@@ -93,35 +72,17 @@ function fencedLineMask(lines: readonly string[]): boolean[] {
 function resolveCallout(rawContent: string, value: string): AnchorMatch | null {
 	const desired = ANCHOR_VALUE_PREFIX_RE.exec(value);
 	if (desired === null) return null;
-	const desiredType = desired[1]!.toLowerCase();
-	const desiredTitle = desired[2]!.trim().toLowerCase();
 
-	const lines = rawContent.split("\n");
-	const fenced = fencedLineMask(lines);
+	const span = findCallout(rawContent.split("\n"), desired[1]!, desired[2]!);
+	if (span === null) return null;
 
-	for (let i = 0; i < lines.length; i++) {
-		if (fenced[i]) continue;
-		const m = CALLOUT_FIRST_LINE_RE.exec(lines[i] ?? "");
-		if (m === null) continue;
-		if (m[1]!.toLowerCase() !== desiredType) continue;
-		if (m[2]!.trim().toLowerCase() !== desiredTitle) continue;
-
-		// Callout body extends through consecutive `>`-prefixed lines.
-		let endLine = i;
-		for (let j = i + 1; j < lines.length; j++) {
-			if (!CALLOUT_CONTINUATION_RE.test(lines[j] ?? "")) break;
-			endLine = j;
-		}
-		const insertionIndex = endLine + 1;
-		return {
-			kind: "callout",
-			anchorLine: i,
-			insertInside: insertionIndex,
-			insertAfter: insertionIndex,
-		};
-	}
-
-	return null;
+	const insertionIndex = span.endLine + 1;
+	return {
+		kind: "callout",
+		anchorLine: span.openerLine,
+		insertInside: insertionIndex,
+		insertAfter: insertionIndex,
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -129,23 +90,14 @@ function resolveCallout(rawContent: string, value: string): AnchorMatch | null {
 // ---------------------------------------------------------------------------
 
 function resolveHeading(rawContent: string, value: string): AnchorMatch | null {
-	const lines = rawContent.split("\n");
-	const fenced = fencedLineMask(lines);
-
-	for (let i = 0; i < lines.length; i++) {
-		if (fenced[i]) continue;
-		const m = HEADING_RE.exec(lines[i] ?? "");
-		if (m === null) continue;
-		if (m[1]!.trim() !== value) continue;
-		return {
-			kind: "heading",
-			anchorLine: i,
-			insertInside: null,
-			insertAfter: i + 1,
-		};
-	}
-
-	return null;
+	const heading = parseHeadings(rawContent.split("\n")).find((h) => h.heading === value);
+	if (heading === undefined) return null;
+	return {
+		kind: "heading",
+		anchorLine: heading.line,
+		insertInside: null,
+		insertAfter: heading.line + 1,
+	};
 }
 
 // ---------------------------------------------------------------------------
