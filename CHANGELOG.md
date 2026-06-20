@@ -1,3 +1,10 @@
+# [0.11.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.10.4...0.11.0) (2026-06-20)
+
+
+### Features
+
+* **schema:** accept optional top-level tomo provenance block ([#71](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/71)) ([7fe621e](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/7fe621e96a7a07298417593f0b72eca48d0264c1)), closes [miyo-tomo#74](https://github.com/miyo-tomo/issues/74)
+
 ## [0.10.4](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.10.3...0.10.4) (2026-06-17)
 
 
