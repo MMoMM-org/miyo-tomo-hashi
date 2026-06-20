@@ -159,6 +159,28 @@ export type Action =
 export type ActionKind = Action["action"];
 
 // ---------------------------------------------------------------------------
+// Tomo provenance block — lifecycle/coverage metadata mirroring the .md
+// frontmatter. Tomo-owned; Hashi ignores it for execution (it only runs
+// `actions`). Permissive by contract so Tomo can evolve it without a
+// coordinated round-trip (tomo-to-hashi handoff 2026-06-20, miyo-tomo#74).
+// ---------------------------------------------------------------------------
+
+export interface TomoSource {
+	readonly path?: string;
+	readonly checksum?: string;
+	readonly [key: string]: unknown;
+}
+
+export interface TomoBlock {
+	readonly doc_type?: string;
+	readonly state?: string;
+	readonly run_id?: string | null;
+	readonly updated_at?: string;
+	readonly sources?: readonly TomoSource[];
+	readonly [key: string]: unknown;
+}
+
+// ---------------------------------------------------------------------------
 // InstructionSet — top-level schema shape
 // ---------------------------------------------------------------------------
 
@@ -171,5 +193,6 @@ export interface InstructionSet {
 	readonly tomo_version?: string | null;
 	readonly action_count?: number;
 	readonly md_peer?: string;
+	readonly tomo?: TomoBlock;
 	readonly actions: readonly Action[];
 }

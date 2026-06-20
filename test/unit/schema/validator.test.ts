@@ -189,6 +189,41 @@ describe("validate", () => {
 		expect(validate(fixture).ok).toBe(true);
 	});
 
+	it("accepts a top-level tomo provenance block (additive — tomo-to-hashi 2026-06-20)", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			tomo: {
+				doc_type: "instructions",
+				state: "rendered",
+				run_id: "2026-06-20_1530",
+				updated_at: "2026-06-20T15:30:00Z",
+				sources: [
+					{ path: "100 Inbox/2026-06-20_suggestions.md", checksum: "abc123" },
+				],
+			},
+		};
+		expect(validate(fixture).ok).toBe(true);
+	});
+
+	it("accepts a JSON without a tomo block (backward-compatible)", () => {
+		const fixture = { ...VALID_FIXTURE } as Record<string, unknown>;
+		expect("tomo" in fixture).toBe(false);
+		expect(validate(fixture).ok).toBe(true);
+	});
+
+	it("tolerates unknown keys inside the tomo block (permissive by contract)", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			tomo: { doc_type: "instructions", future_field: { nested: true } },
+		};
+		expect(validate(fixture).ok).toBe(true);
+	});
+
+	it("rejects a non-object tomo block (string)", () => {
+		const fixture = { ...VALID_FIXTURE, tomo: "rendered" };
+		expect(validate(fixture).ok).toBe(false);
+	});
+
 	it("validates a 100-action fixture in under 200ms (CON-7)", () => {
 		const big = {
 			...VALID_FIXTURE,
