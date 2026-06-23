@@ -27,11 +27,14 @@ import type { VaultFS } from "../vault/VaultFS.js";
 
 // Canonical action order. add_relationship runs after link_to_moc since both
 // modify the same MOC and relationships are typically navigation links on the
-// just-linked MOC. Update kinds and source cleanup follow.
+// just-linked MOC. insert_under_marker sits beside link_to_moc as the second
+// insert primitive (arbitrary-note inserts; no dependency on create_moc).
+// Update kinds and source cleanup follow.
 const KIND_ORDER: readonly ActionKind[] = [
 	"create_moc",
 	"move_note",
 	"link_to_moc",
+	"insert_under_marker",
 	"add_relationship",
 	"update_tracker",
 	"update_log_entry",
@@ -249,6 +252,8 @@ function buildSummary(action: Action): string {
 			return `${action.source} → ${action.destination}`;
 		case "link_to_moc":
 			return `${action.target_moc}`;
+		case "insert_under_marker":
+			return `${action.target_path}#${action.anchor.value ?? "—"} (${action.placement})`;
 		case "add_relationship":
 			return `${action.target_moc_path} :: ${action.marker}`;
 		case "update_tracker":

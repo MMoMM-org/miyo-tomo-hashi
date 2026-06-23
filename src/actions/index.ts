@@ -20,6 +20,7 @@ import type { HandlerContext } from "./types.js";
 import { createMoc } from "./createMoc.js";
 import { moveNote } from "./moveNote.js";
 import { linkToMoc } from "./linkToMoc.js";
+import { insertUnderMarker } from "./insertUnderMarker.js";
 import { addRelationship } from "./addRelationship.js";
 import { updateTracker } from "./updateTracker.js";
 import { updateLogEntry } from "./updateLogEntry.js";
@@ -52,6 +53,7 @@ export const HANDLERS: {
 	create_moc: createMoc,
 	move_note: moveNote,
 	link_to_moc: linkToMoc,
+	insert_under_marker: insertUnderMarker,
 	add_relationship: addRelationship,
 	update_tracker: updateTracker,
 	update_log_entry: updateLogEntry,
@@ -67,6 +69,7 @@ export const HANDLERS: {
 export { createMoc } from "./createMoc.js";
 export { moveNote } from "./moveNote.js";
 export { linkToMoc } from "./linkToMoc.js";
+export { insertUnderMarker } from "./insertUnderMarker.js";
 export { addRelationship } from "./addRelationship.js";
 export { updateTracker } from "./updateTracker.js";
 export { updateLogEntry } from "./updateLogEntry.js";

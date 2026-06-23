@@ -157,6 +157,11 @@ target_vault: ../temp/Privat-Test
 | F4.link_to_moc.anchor-missing | anchor cannot be resolved in the MOC (no matching callout/heading/line) → action fails with "anchor not found: <value>"; no fallback to first editable callout | | | |
 | F4.link_to_moc.inside-non-callout | placement=inside on anchor.type ≠ callout → action fails with "placement: inside requires callout anchor" | | | |
 | F4.link_to_moc.missing-moc | MOC target missing → action fails with "MOC target missing" | | | |
+| F4.insert_under_marker.heading-inside | `insert_under_marker` with anchor.type=heading + placement=inside on an arbitrary note (e.g. `## Captures` in a dev-log note): multi-line `content` appended verbatim at the end of the heading's section — immediately above the next heading of same-or-higher level (or EOF); existing section content untouched | | | |
+| F4.insert_under_marker.callout-inside | `insert_under_marker` with anchor.type=callout + placement=inside: each line of `content` `> `-prefixed and appended as last line(s) of the callout body | | | |
+| F4.insert_under_marker.before-after | `insert_under_marker` placement=before/after on heading/callout/line markers: `content` inserted verbatim immediately before the marker's first line / after its terminal line (same as link_to_moc) | | | |
+| F4.insert_under_marker.inside-line-fails | placement=inside on anchor.type=line → action fails gracefully "placement: inside not supported for line anchor"; file untouched | | | |
+| F4.insert_under_marker.missing-note | `target_path` does not exist → action fails "target note missing"; nothing created (modify-only). Missing/null anchor → "anchor not found …"; file untouched | | | |
 | F4.add_relationship.up-marker | `add_relationship` with marker=`"up::"` + line=`"up:: [[X]]"`: located line in target MOC replaced by `line`; if matched line was inside a callout, the new line keeps a normalised `> ` prefix | | | |
 | F4.add_relationship.related-marker | `add_relationship` with marker=`"related::"`: same behaviour; multi-link aggregation (`related:: [[A]], [[B]]`) is supplied by Tomo verbatim — Hashi does no aggregation | | | |
 | F4.add_relationship.first-match-wins | If multiple lines start with the marker, only the first is replaced; subsequent occurrences untouched | | | |

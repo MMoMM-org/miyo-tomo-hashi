@@ -56,6 +56,7 @@
         "oneOf": [
           {"$ref": "#/$defs/move_note"},
           {"$ref": "#/$defs/link_to_moc"},
+          {"$ref": "#/$defs/insert_under_marker"},
           {"$ref": "#/$defs/add_relationship"},
           {"$ref": "#/$defs/update_tracker"},
           {"$ref": "#/$defs/update_log_entry"},
@@ -108,6 +109,20 @@
         "placement": {"type": "string", "enum": ["inside", "before", "after"], "description": "Where to write relative to the matched anchor. inside (callout only) appends as last line(s) of callout body with > prefix on each line. before inserts immediately before the anchor's first line, verbatim. after inserts immediately after the matched anchor's terminal line, verbatim."},
         "line_to_add": {"type": "string", "description": "Pre-formatted content to insert (bullet style, link form, etc. all decided Tomo-side). MAY contain embedded \\n — every line is written as a block (blank lines preserved). Hashi writes lines verbatim for before/after, prepending '> ' to each line only when placement=inside on a callout anchor."},
         "source_note_title": {"type": ["string", "null"]},
+        "applied": {"$ref": "#/$defs/applied_field"}
+      }
+    },
+    "insert_under_marker": {
+      "type": "object",
+      "required": ["id", "action", "target_path", "anchor", "placement", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/action_id"},
+        "action": {"const": "insert_under_marker"},
+        "target_path": {"type": "string", "description": "Vault-relative full path of ANY existing note to modify (not a MOC stem). Hashi modifies only; Tomo guarantees the note exists before emitting."},
+        "anchor": {"$ref": "#/$defs/anchor", "description": "Marker locating the insertion point. type=heading matches a heading by text; type=callout matches a callout opening line; type=line matches a body line by content. Same $def and matching rules as link_to_moc."},
+        "placement": {"type": "string", "enum": ["inside", "before", "after"], "description": "Where to write relative to the matched marker. inside: for a callout marker, append as last line(s) of the callout body with '> ' prefix on each line; for a heading marker, append at the end of the heading's section (immediately above the next heading of same-or-higher level, or EOF), verbatim; for a line marker, inside is unsupported (action fails gracefully). before: insert verbatim immediately before the marker's first line. after: insert verbatim immediately after the marker's terminal line."},
+        "content": {"type": "string", "description": "Multi-line markdown block to insert. MAY contain embedded \\n — every line is written as a block (blank lines preserved). Written verbatim for before/after and heading-inside; each line gets a '> ' prefix only for callout-inside. Tomo composes the full block (dated header, bullets, etc.) — Hashi inserts as-is and never replaces existing content."},
         "applied": {"$ref": "#/$defs/applied_field"}
       }
     },

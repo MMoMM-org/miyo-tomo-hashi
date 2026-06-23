@@ -24,6 +24,7 @@ import type {
 	Action,
 	AddRelationshipAction,
 	CreateMocAction,
+	InsertUnderMarkerAction,
 	InstructionSet,
 	LinkToMocAction,
 	MoveNoteAction,
@@ -87,6 +88,17 @@ function makeLinkToMoc(id: string, targetMoc: string, lineToAdd: string, targetM
 		placement: "inside",
 		...(targetMocPath !== undefined ? { target_moc_path: targetMocPath } : {}),
 		...(applied !== undefined ? { applied } : {}),
+	};
+}
+
+function makeInsertUnderMarker(id: string, targetPath: string): InsertUnderMarkerAction {
+	return {
+		action: "insert_under_marker",
+		id,
+		target_path: targetPath,
+		anchor: { type: "heading", value: "Captures" },
+		placement: "inside",
+		content: "- entry",
 	};
 }
 
@@ -232,6 +244,26 @@ describe("computeRemaining — canonical order", () => {
 
 		const kinds = records.map((r) => r.kind);
 		expect(kinds).toEqual(["create_moc", "move_note", "link_to_moc"]);
+	});
+
+	it("plans insert_under_marker in canonical order, after link_to_moc and before add_relationship", () => {
+		const actions: Action[] = [
+			makeAddRelationship("I03", "moc/MyMOC.md", "up::", "up:: [[X]]"),
+			makeInsertUnderMarker("I02", "Efforts/Dev Log.md"),
+			makeLinkToMoc("I01", "moc/MyMOC.md", "- [[note]]"),
+		];
+		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
+
+		const { records } = computeRemaining(sources);
+
+		// Regression guard: a kind missing from planner KIND_ORDER is silently
+		// dropped from the execution list. Prove insert_under_marker is planned
+		// and lands in its canonical slot.
+		expect(records.map((r) => r.kind)).toEqual([
+			"link_to_moc",
+			"insert_under_marker",
+			"add_relationship",
+		]);
 	});
 
 	it("preserves monotonic I## order within each kind", () => {

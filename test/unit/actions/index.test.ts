@@ -2,7 +2,7 @@
  * HANDLERS dispatch registry tests.
  *
  * T3.6 — verifies:
- *   1. Key coverage: HANDLERS has exactly 8 keys matching all ActionKind values.
+ *   1. Key coverage: HANDLERS has exactly 10 keys matching all ActionKind values.
  *   2. Identity: each registry entry points to the canonical handler function.
  *   3. Dispatch smoke: HANDLERS[action.action](action, ctx) routes to the correct handler.
  *
@@ -19,6 +19,7 @@ import {
 	createMoc,
 	moveNote,
 	linkToMoc,
+	insertUnderMarker,
 	updateTracker,
 	updateLogEntry,
 	updateLogLink,
@@ -45,11 +46,12 @@ const makeCtx = (vault: FakeVaultFS) => ({
 // ---------------------------------------------------------------------------
 
 describe("HANDLERS — key coverage", () => {
-	it("has exactly the 9 ActionKind keys", () => {
+	it("has exactly the 10 ActionKind keys", () => {
 		const expectedKeys: ActionKind[] = [
 			"create_moc",
 			"move_note",
 			"link_to_moc",
+			"insert_under_marker",
 			"add_relationship",
 			"update_tracker",
 			"update_log_entry",
@@ -76,6 +78,10 @@ describe("HANDLERS — identity", () => {
 
 	it("HANDLERS.link_to_moc === linkToMoc", () => {
 		expect(HANDLERS.link_to_moc).toBe(linkToMoc);
+	});
+
+	it("HANDLERS.insert_under_marker === insertUnderMarker", () => {
+		expect(HANDLERS.insert_under_marker).toBe(insertUnderMarker);
 	});
 
 	it("HANDLERS.update_tracker === updateTracker", () => {
@@ -152,6 +158,23 @@ describe("HANDLERS — dispatch smoke", () => {
 			line_to_add: "- [[Notes/x|X]]",
 			anchor: { type: "heading" as const, value: "Projects" },
 			placement: "after" as const,
+		};
+		const handler = HANDLERS[action.action];
+		const outcome = await handler(action, makeCtx(vault));
+		expect(outcome.kind).toBe("applied");
+	});
+
+	it("insert_under_marker: dispatches and returns applied", async () => {
+		const notePath = "Efforts/Dev Log.md";
+		const vault = new FakeVaultFS();
+		await vault.create(notePath, "# Dev Log\n## Captures\n- old\n");
+		const action = {
+			action: "insert_under_marker" as const,
+			id: "smoke-ium",
+			target_path: notePath,
+			anchor: { type: "heading" as const, value: "Captures" },
+			placement: "inside" as const,
+			content: "- new",
 		};
 		const handler = HANDLERS[action.action];
 		const outcome = await handler(action, makeCtx(vault));

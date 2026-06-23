@@ -290,7 +290,7 @@ graph TB
         Store["executionStore :<br/>Store&lt;RunState&gt;"]
         Executor[InstructionExecutor<br/>orchestrator]
         Planner[Planner<br/>resolve + order + filter applied]
-        Handlers[ActionHandler dispatch<br/>create_moc / move_note / link_to_moc /<br/>update_tracker / update_log_entry /<br/>update_log_link / delete_source / skip]
+        Handlers[ActionHandler dispatch<br/>create_moc / move_note / link_to_moc / insert_under_marker /<br/>add_relationship / update_tracker / update_log_entry /<br/>update_log_link / delete_source / skip]
         Validator[SchemaValidator<br/>ajv 8.x compiled at plugin load]
         AppliedWriter[JsonAppliedWriter<br/>atomic .json edit]
         PeerSync[PeerCheckboxSync<br/>best-effort .md tick]
@@ -364,7 +364,9 @@ graph TB
 │   │   ├── index.ts                                 # NEW: dispatcher (kind → handler) + handler registry
 │   │   ├── createMoc.ts                             # NEW
 │   │   ├── moveNote.ts                              # NEW
-│   │   ├── linkToMoc.ts                             # NEW (uses sectionLocator.ts)
+│   │   ├── linkToMoc.ts                             # NEW (uses anchorResolver.ts + blockInsert.ts)
+│   │   ├── insertUnderMarker.ts                     # NEW (#46→#47: arbitrary-note multi-line insert; uses anchorResolver + sectionLocator + blockInsert)
+│   │   ├── blockInsert.ts                           # NEW: shared blockAlreadyPresent + spliceLines (link_to_moc + insert_under_marker)
 │   │   ├── updateTracker.ts                         # NEW (3 sub-modes: inline_field / callout_body / checkbox)
 │   │   ├── updateLogEntry.ts                        # NEW (uses logPosition.ts)
 │   │   ├── updateLogLink.ts                         # NEW (uses logPosition.ts)
@@ -513,6 +515,8 @@ export type ActionKind =
   | "create_moc"
   | "move_note"
   | "link_to_moc"
+  | "insert_under_marker"
+  | "add_relationship"
   | "update_tracker"
   | "update_log_entry"
   | "update_log_link"
@@ -526,8 +530,8 @@ export interface InstructionSet {
 }
 
 export type Action =
-  | CreateMocAction | MoveNoteAction | LinkToMocAction
-  | UpdateTrackerAction | UpdateLogEntryAction | UpdateLogLinkAction
+  | CreateMocAction | MoveNoteAction | LinkToMocAction | InsertUnderMarkerAction
+  | AddRelationshipAction | UpdateTrackerAction | UpdateLogEntryAction | UpdateLogLinkAction
   | DeleteSourceAction | SkipAction;
 
 interface ActionBase {
@@ -587,6 +591,8 @@ export const HANDLERS: { readonly [K in ActionKind]: Handler<Extract<Action, { k
   create_moc: createMocHandler,
   move_note: moveNoteHandler,
   link_to_moc: linkToMocHandler,
+  insert_under_marker: insertUnderMarkerHandler,
+  add_relationship: addRelationshipHandler,
   update_tracker: updateTrackerHandler,
   update_log_entry: updateLogEntryHandler,
   update_log_link: updateLogLinkHandler,

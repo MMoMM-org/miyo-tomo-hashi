@@ -124,6 +124,74 @@ describe("validate", () => {
 		expect(validate(fixture).ok).toBe(false);
 	});
 
+	it("accepts insert_under_marker with a heading anchor and multi-line content", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{
+					id: "I01",
+					action: "insert_under_marker",
+					target_path: "Efforts/Tomo Dev Log.md",
+					anchor: { type: "heading", value: "Captures" },
+					placement: "inside",
+					content: "### 2026-06-23\n\n- Shipped X",
+				},
+			],
+		};
+		expect(validate(fixture).ok).toBe(true);
+	});
+
+	it("rejects insert_under_marker missing the required content field", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{
+					id: "I01",
+					action: "insert_under_marker",
+					target_path: "Efforts/Tomo Dev Log.md",
+					anchor: { type: "heading", value: "Captures" },
+					placement: "inside",
+				},
+			],
+		};
+		expect(validate(fixture).ok).toBe(false);
+	});
+
+	it("rejects insert_under_marker with an unknown placement value", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{
+					id: "I01",
+					action: "insert_under_marker",
+					target_path: "Efforts/Tomo Dev Log.md",
+					anchor: { type: "heading", value: "Captures" },
+					placement: "above",
+					content: "x",
+				},
+			],
+		};
+		expect(validate(fixture).ok).toBe(false);
+	});
+
+	it("rejects insert_under_marker with an extra (additional) property", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{
+					id: "I01",
+					action: "insert_under_marker",
+					target_path: "Efforts/Tomo Dev Log.md",
+					anchor: { type: "heading", value: "Captures" },
+					placement: "inside",
+					content: "x",
+					target_moc: "should-not-be-here",
+				},
+			],
+		};
+		expect(validate(fixture).ok).toBe(false);
+	});
+
 	it("rejects unknown action.action value", () => {
 		const fixture = {
 			...VALID_FIXTURE,
