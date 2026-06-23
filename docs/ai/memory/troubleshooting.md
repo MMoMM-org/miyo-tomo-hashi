@@ -1,5 +1,24 @@
 # Troubleshooting Memory
 
+<!-- 2026-06-23 -->
+## Adding a new instruction action kind — `KIND_ORDER` is a silent-drop trap
+**Symptom:** a newly-added action kind is registered (schema `$def` + `oneOf`, `ActionKind`
+union, `HANDLERS`, handler file) and the full unit suite is green — but the action never
+executes end-to-end.
+**Cause:** `src/executor/planner.ts` has a `KIND_ORDER: readonly ActionKind[]` array, and
+`computeRemaining` iterates **only** over `KIND_ORDER` (`for (const kind of KIND_ORDER)`). A kind
+absent from that array is silently dropped from the execution list — no error, no warning. The
+unit suite passes because handler/validator/registry tests exercise the kind in isolation; none
+plans a fixture set end-to-end, so the gap is invisible. (`buildSummary`'s exhaustive switch IS
+compiler-enforced, so it catches you — but `KIND_ORDER` is a plain array and is not.)
+**How to apply:** when adding an action kind, the wiring checklist is **5** places, not 4 —
+(1) schema `$def` + `oneOf`, (2) `ActionKind`/`Action` types, (3) `HANDLERS` registry,
+(4) `KIND_ORDER` (pick the canonical slot), (5) `buildSummary` case. Add a planner
+`computeRemaining` test asserting the new kind appears in its canonical-order slot — that's the
+only test that proves it's actually planned. Several `*.test.ts` files also hard-code the kind
+**count** (types.test.ts, actions/index.test.ts) — bump those too. (Landed with
+`insert_under_marker`, PR #73.)
+
 ## Run log written as bare placeholder (`totals: {}`, empty body)
 **Symptom:** a run produces a run-log file whose frontmatter has `totals: {}` and no action table.
 **Cause:** the run threw between `RunLogWriter.start()` (writes the placeholder) and
