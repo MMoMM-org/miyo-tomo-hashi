@@ -1,3 +1,10 @@
+## [0.11.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.11.0...0.11.1) (2026-06-23)
+
+
+### Performance Improvements
+
+* **build:** stub dockerode's eager gRPC ./session — bundle 1172→759 KB ([#46](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/46)) ([#72](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/72)) ([e2e3621](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/e2e3621cb734ac64f36ab786087533c191d3a20f))
+
 # [0.11.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.10.4...0.11.0) (2026-06-20)
 
 
