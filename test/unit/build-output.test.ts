@@ -41,22 +41,24 @@ describe("production build pipeline", () => {
 		expect(configSource).toMatch(/loader\s*:\s*\{[^}]*['"]\.css['"]\s*:/);
 	});
 
-	it("build/main.js is at most 1200 KB minified (SDD CON-7, raised at T6.2)", () => {
+	it("build/main.js is at most 850 KB minified (SDD CON-7, lowered at #46 audit)", () => {
 		const stats = statSync(buildOutput);
 		const sizeKb = stats.size / 1024;
-		// 1200 KB ceiling per SDD CON-7 (raised 2026-04-29 at T6.2). Revision
-		// history:
+		// 850 KB ceiling per SDD CON-7. Revision history:
 		//   - Original 500 KB target (T1.2) assumed dockerode would be
 		//     `external`; impossible because Obsidian plugins ship one main.js.
 		//   - 1000 KB target (T5.6, 2026-04-28) was set for 001 + dockerode
 		//     + xterm + ajv (≈ 940 KB).
-		//   - 002 wiring at T6.2 adds InstructionExecutor + planner + 8 action
-		//     handlers + RunLogWriter + HookRunner + ExecutionModal +
-		//     statusBar + the schema validator's compiled-ajv ~165 KB → bundle
-		//     is now ~1105 KB. 1200 KB is the realistic post-002 ceiling.
-		// If this trips, audit ajv usage (consider validator.gen.js code-gen
-		// per ADR-1 v1) or lazy-load xterm before raising.
-		expect(sizeKb).toBeLessThanOrEqual(1200);
+		//   - 002 wiring at T6.2 added the executor surfaces + compiled-ajv,
+		//     pushing the bundle to ~1105 KB → ceiling raised to 1200 KB.
+		//   - #46 audit (2026-06-23) stubbed dockerode 5.x's eager `./session`
+		//     gRPC helper in esbuild.config.mjs, removing @grpc/grpc-js +
+		//     proto-loader + protobufjs (~414 KB minified). Bundle dropped to
+		//     ~759 KB → ceiling lowered to 850 KB (~12% headroom).
+		// If this trips, the next levers (from the #46 audit) are ajv standalone
+		// code-gen (ADR-1 v1) and lazy-loading xterm.js (only the 001 chat path
+		// needs it, not the executor) before raising.
+		expect(sizeKb).toBeLessThanOrEqual(850);
 	});
 
 	it("build/manifest.json declares isDesktopOnly: true (PRD Constraints / SDD CON-3)", () => {

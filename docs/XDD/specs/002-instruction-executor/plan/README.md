@@ -269,4 +269,4 @@ Every PRD edge-case bullet (PRD §F1–F11 *Edge Cases*) must trace to a test ar
 
 ## Follow-up tasks
 
-- **Bundle audit (post-v0.1)**: revisit CON-7 after v0.1 ships. Investigate ajv code-gen (ADR-1 v1 standalone codegen), lazy-load xterm.js (only used by 001's TomoChat), tree-shake unused imports.
+- **Bundle audit (post-v0.1)** — ✅ done 2026-06-23 (issue #46). The audit's metafile analysis found the dominant contributor was *not* ajv or xterm but dockerode 5.x's eagerly-required `./session` gRPC BuildKit helper (`@grpc/grpc-js` + `@grpc/proto-loader` + `protobufjs`, ~1 MB pre-minify / ~414 KB minified) — dead code in Hashi. Stubbing `./session` in `esbuild.config.mjs` (same pattern as the existing `ssh2`/`cpu-features`/`./buildkit` stubs) dropped `main.js` from ~1172 KB to ~759 KB. CON-7 ceiling lowered 1200 → 850 KB in `test/unit/build-output.test.ts` + SDD. Remaining un-pulled levers (deferred — no longer pressing): ajv standalone code-gen (ADR-1 v1), lazy-load xterm.js.
