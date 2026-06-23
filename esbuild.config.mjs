@@ -64,7 +64,17 @@ function stampManifestForVault() {
 // in production. Bundling it would pull in protobuf and a large transitive
 // graph for code that's literally dead in our use case.
 //
-// All three ship code (or `.node` native binaries) that esbuild cannot bundle
+// `./session` (issue #46) is required EAGERLY at the top of dockerode's
+// docker.js (`withSession = require('./session')`) and in turn top-level
+// `require('@grpc/grpc-js')` + `@grpc/proto-loader`, dragging the entire gRPC
+// + protobufjs stack (~1 MB pre-minify) into the bundle. `withSession` is only
+// ever invoked from `buildImage`'s BuildKit auth flow — which Hashi never
+// calls (we only listContainers/getContainer/inspect/attach/resize). Stubbing
+// `./session` is the single biggest bundle lever (CON-7 audit): it removes
+// @grpc/grpc-js, @grpc/proto-loader, protobufjs, long, lodash.camelcase, and
+// @js-sdsl/ordered-map outright.
+//
+// All of these ship code (or `.node` native binaries) that esbuild cannot bundle
 // usefully — and Obsidian plugins ship as a single `main.js` with no adjacent
 // `node_modules/`, so externalizing them at runtime fails to resolve. Stubbing
 // them at build time bundles dockerode itself into main.js (the only path
@@ -85,9 +95,28 @@ const stubMissingNativeDeps = {
 			}
 			return { path: args.path, namespace: "stub-empty" };
 		});
+		// dockerode 5.x: docker.js EAGERLY requires `./session` (the gRPC
+		// BuildKit session helper), which pulls @grpc/grpc-js + proto-loader +
+		// protobufjs (~1 MB pre-minify). withSession is only reached via
+		// buildImage, which Hashi never calls. Stub it (issue #46). Same
+		// importer guard as buildkit so we only touch dockerode's own module.
+		build.onResolve({ filter: /^\.\/session$/ }, (args) => {
+			if (!/dockerode[\\/]lib[\\/]docker\.js$/.test(args.importer)) {
+				return null;
+			}
+			return { path: args.path, namespace: "stub-session" };
+		});
 		build.onLoad({ filter: /.*/, namespace: "stub-empty" }, () => ({
 			contents:
 				"module.exports = { followProgress: () => { throw new Error('buildkit stubbed — image-build APIs are not used by Hashi'); } };",
+			loader: "js",
+		}));
+		// session.js exports a single function `withSession(docker, auth, handler)`.
+		// Keep the shape (a function) so docker.js's top-level binding is valid;
+		// throw if it is ever actually invoked (it never is — image build only).
+		build.onLoad({ filter: /.*/, namespace: "stub-session" }, () => ({
+			contents:
+				"module.exports = function withSession() { throw new Error('session/grpc stubbed — image-build (BuildKit) APIs are not used by Hashi'); };",
 			loader: "js",
 		}));
 	},
