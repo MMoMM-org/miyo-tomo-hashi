@@ -78,6 +78,27 @@ export interface LinkToMocAction extends ActionBase {
 	readonly source_note_title?: string | null;
 }
 
+/**
+ * InsertUnderMarkerAction — insert a multi-line block beneath a marker in an
+ * ARBITRARY vault note. Generalises `link_to_moc`'s insert primitive: the only
+ * deltas are `target_path` (any note, not a MOC stem) and `content` (multi-line,
+ * not a single bullet). Reuses the same `Anchor` + `placement` semantics.
+ *
+ * Placement × marker type (see anchorResolver / sectionLocator):
+ *   - `inside` + callout → appended to callout body (`> ` per line).
+ *   - `inside` + heading → appended at the end of the heading's section
+ *     (above the next heading of same-or-higher level, or EOF), verbatim.
+ *   - `inside` + line   → unsupported (handler fails gracefully).
+ *   - `before`/`after`  → verbatim, relative to the marker, any marker type.
+ */
+export interface InsertUnderMarkerAction extends ActionBase {
+	readonly action: "insert_under_marker";
+	readonly target_path: string;
+	readonly anchor: Anchor;
+	readonly placement: "inside" | "before" | "after";
+	readonly content: string;
+}
+
 export interface AddRelationshipAction extends ActionBase {
 	readonly action: "add_relationship";
 	readonly target_moc_path: string;
@@ -144,6 +165,7 @@ export type Action =
 	| CreateMocAction
 	| MoveNoteAction
 	| LinkToMocAction
+	| InsertUnderMarkerAction
 	| AddRelationshipAction
 	| UpdateTrackerAction
 	| UpdateLogEntryAction

@@ -48,6 +48,7 @@ import type { LinkToMocAction } from "../schema/types.js";
 import type { ActionOutcome } from "../executor/state.js";
 import { type HandlerContext } from "./types.js";
 import { resolveAnchor } from "./anchorResolver.js";
+import { blockAlreadyPresent, spliceLines } from "./blockInsert.js";
 
 type LinkOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
 
@@ -99,35 +100,4 @@ export async function linkToMoc(
 
 	await vault.process(mocPath, (current) => spliceLines(current, insertIndex, blockLines));
 	return { kind: "applied" };
-}
-
-/**
- * True iff `block` already appears in `content` as a consecutive run of lines.
- * Generalises the single-line "is this bullet already here" check to multi-line
- * blocks; reduces to exact-line-anywhere when block.length === 1.
- */
-function blockAlreadyPresent(content: string, block: readonly string[]): boolean {
-	if (block.length === 0) return true;
-	const lines = content.split("\n");
-	for (let i = 0; i + block.length <= lines.length; i++) {
-		let matched = true;
-		for (let j = 0; j < block.length; j++) {
-			if (lines[i + j] !== block[j]) {
-				matched = false;
-				break;
-			}
-		}
-		if (matched) return true;
-	}
-	return false;
-}
-
-/** Insert `newLines` as a block at index `at` in `content`. Preserves trailing newline. */
-function spliceLines(content: string, at: number, newLines: readonly string[]): string {
-	const lines = content.split("\n");
-	const hasTrailingNewline = content.endsWith("\n");
-	const body = hasTrailingNewline ? lines.slice(0, -1) : lines;
-	const index = Math.max(0, Math.min(at, body.length));
-	body.splice(index, 0, ...newLines);
-	return body.join("\n") + (hasTrailingNewline ? "\n" : "");
 }
