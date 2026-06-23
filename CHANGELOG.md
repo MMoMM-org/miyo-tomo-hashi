@@ -1,3 +1,10 @@
+# [0.12.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.11.1...0.12.0) (2026-06-23)
+
+
+### Features
+
+* **actions:** add insert_under_marker — multi-line block insert under any marker ([#47](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/47)) ([#73](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/73)) ([a565ed1](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/a565ed1b675a1defea4c87d33727e3f30d902390))
+
 ## [0.11.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.11.0...0.11.1) (2026-06-23)
 
 
