@@ -1,3 +1,15 @@
+# [0.13.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.12.0...0.13.0) (2026-06-25)
+
+
+### Bug Fixes
+
+* **connection:** classify raw docker.sock errors instead of leaking them ([#76](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/76)) ([35c94d8](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/35c94d8905d45535940c103e1daeab3b26cf1eed))
+
+
+### Features
+
+* **actions:** add block anchor + replace_section for structure-aware compose ([#75](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/75)) ([86c0fc4](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/86c0fc45ee2a554938abcd2413817c27d0e19747)), closes [miyo-tomo#47](https://github.com/miyo-tomo/issues/47) [#68](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/68)
+
 # [0.12.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.11.1...0.12.0) (2026-06-23)
 
 
