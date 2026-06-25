@@ -16,6 +16,11 @@
  *     any heading level.
  *   - line:    match the first body line whose stripped content contains the
  *     value verbatim (substring inclusion).
+ *   - block:   match N consecutive file lines against the value's `\n`-joined
+ *     lines, each EXACT after trimming trailing whitespace (not substring). For
+ *     unique multi-row markers a single `line` anchor cannot express — e.g. a
+ *     table's header + separator rows together, where the separator alone is
+ *     non-unique. `inside` is unsupported (handler rejects it, like `line`).
  *
  * Callout and heading scans skip lines inside fenced code blocks (``` / ~~~),
  * mirroring how the metadataCache excluded fenced content. (`line` matching is
@@ -44,7 +49,7 @@ import type { Anchor } from "../schema/types.js";
 import { findCallout, parseHeadings } from "./markdownStructure.js";
 
 export interface AnchorMatch {
-	readonly kind: "callout" | "heading" | "line";
+	readonly kind: "callout" | "heading" | "line" | "block";
 	readonly anchorLine: number;
 	readonly insertInside: number | null;
 	readonly insertAfter: number;
@@ -62,6 +67,8 @@ export function resolveAnchor(rawContent: string, anchor: Anchor): AnchorMatch |
 			return resolveHeading(rawContent, anchor.value);
 		case "line":
 			return resolveLine(rawContent, anchor.value);
+		case "block":
+			return resolveBlock(rawContent, anchor.value);
 	}
 }
 
@@ -114,6 +121,40 @@ function resolveLine(rawContent: string, value: string): AnchorMatch | null {
 				anchorLine: i,
 				insertInside: null,
 				insertAfter: i + 1,
+			};
+		}
+	}
+	return null;
+}
+
+// ---------------------------------------------------------------------------
+// block — match N consecutive lines, each exact after trailing-whitespace trim
+// ---------------------------------------------------------------------------
+
+function trimEnd(s: string): string {
+	return s.replace(/\s+$/, "");
+}
+
+function resolveBlock(rawContent: string, value: string): AnchorMatch | null {
+	const anchorLines = value.split("\n").map(trimEnd);
+	const k = anchorLines.length;
+	if (k === 0) return null;
+
+	const lines = rawContent.split("\n");
+	for (let i = 0; i + k <= lines.length; i++) {
+		let matched = true;
+		for (let j = 0; j < k; j++) {
+			if (trimEnd(lines[i + j] ?? "") !== anchorLines[j]) {
+				matched = false;
+				break;
+			}
+		}
+		if (matched) {
+			return {
+				kind: "block",
+				anchorLine: i,
+				insertInside: null,
+				insertAfter: i + k,
 			};
 		}
 	}

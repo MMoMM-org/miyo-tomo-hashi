@@ -203,6 +203,95 @@ describe("resolveAnchor — line", () => {
 });
 
 // ---------------------------------------------------------------------------
+// block anchor — N consecutive lines, exact per line (trailing-trim)
+// ---------------------------------------------------------------------------
+
+describe("resolveAnchor — block", () => {
+	it("matches a two-line header+separator block (anchorLine = i, insertAfter = i + k)", () => {
+		const content = [
+			"## Captures",                    // 0
+			"",                               // 1
+			"| Date | Type | Description |",  // 2
+			"| --- | --- | --- |",            // 3
+			"| 2026-06-24 | feature | x |",   // 4
+		].join("\n");
+		const anchor: Anchor = {
+			type: "block",
+			value: "| Date | Type | Description |\n| --- | --- | --- |",
+		};
+		const result = resolveAnchor(content, anchor);
+		// k = 2, matched at i = 2 → insertAfter = 4 (above the existing data row)
+		expect(result).toEqual({
+			kind: "block",
+			anchorLine: 2,
+			insertInside: null,
+			insertAfter: 4,
+		});
+	});
+
+	it("picks the UNIQUE table when an earlier table shares the non-unique separator row", () => {
+		const content = [
+			"## Log A",                       // 0
+			"| Stamp | Note |",               // 1
+			"| --- | --- |",                  // 2  separator — collides with the second table's
+			"| a | b |",                      // 3
+			"",                               // 4
+			"## Log B",                       // 5
+			"| Date | Type | Description |",  // 6  the header we anchor on
+			"| --- | --- | --- |",            // 7
+			"| 2026-06-24 | feature | x |",   // 8
+		].join("\n");
+		const anchor: Anchor = {
+			type: "block",
+			value: "| Date | Type | Description |\n| --- | --- | --- |",
+		};
+		const result = resolveAnchor(content, anchor);
+		// A single-line `line` anchor on `| --- | --- |` would have hit line 2;
+		// the two-row block is unique → matches at line 6, insertAfter = 8.
+		expect(result).toEqual({
+			kind: "block",
+			anchorLine: 6,
+			insertInside: null,
+			insertAfter: 8,
+		});
+	});
+
+	it("tolerates trailing whitespace on file lines (exact match after trailing-trim)", () => {
+		const content = ["| H1 | H2 |   ", "| --- | --- |\t"].join("\n");
+		const anchor: Anchor = { type: "block", value: "| H1 | H2 |\n| --- | --- |" };
+		const result = resolveAnchor(content, anchor);
+		expect(result?.kind).toBe("block");
+		expect(result?.anchorLine).toBe(0);
+		expect(result?.insertAfter).toBe(2);
+	});
+
+	it("returns null when the consecutive block does not appear (partial match is not enough)", () => {
+		const content = [
+			"| Date | Type | Description |", // 0  header present…
+			"intervening line",             // 1  …but separator does not follow
+			"| --- | --- | --- |",          // 2
+		].join("\n");
+		const anchor: Anchor = {
+			type: "block",
+			value: "| Date | Type | Description |\n| --- | --- | --- |",
+		};
+		expect(resolveAnchor(content, anchor)).toBeNull();
+	});
+
+	it("matches the FIRST occurrence when an identical block appears twice (deterministic)", () => {
+		const content = [
+			"| H |",      // 0
+			"| --- |",    // 1
+			"",           // 2
+			"| H |",      // 3
+			"| --- |",    // 4
+		].join("\n");
+		const anchor: Anchor = { type: "block", value: "| H |\n| --- |" };
+		expect(resolveAnchor(content, anchor)?.anchorLine).toBe(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // Null anchor value
 // ---------------------------------------------------------------------------
 

@@ -29,12 +29,14 @@ import type { VaultFS } from "../vault/VaultFS.js";
 // modify the same MOC and relationships are typically navigation links on the
 // just-linked MOC. insert_under_marker sits beside link_to_moc as the second
 // insert primitive (arbitrary-note inserts; no dependency on create_moc).
+// replace_section follows insert_under_marker as the section-overwrite sibling.
 // Update kinds and source cleanup follow.
 const KIND_ORDER: readonly ActionKind[] = [
 	"create_moc",
 	"move_note",
 	"link_to_moc",
 	"insert_under_marker",
+	"replace_section",
 	"add_relationship",
 	"update_tracker",
 	"update_log_entry",
@@ -254,6 +256,8 @@ function buildSummary(action: Action): string {
 			return `${action.target_moc}`;
 		case "insert_under_marker":
 			return `${action.target_path}#${action.anchor.value ?? "—"} (${action.placement})`;
+		case "replace_section":
+			return `${action.target_path}#${action.anchor.value ?? "—"}`;
 		case "add_relationship":
 			return `${action.target_moc_path} :: ${action.marker}`;
 		case "update_tracker":

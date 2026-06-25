@@ -4,11 +4,12 @@
  *
  * Extracted from linkToMoc so the `link_to_moc` and `insert_under_marker`
  * handlers share one implementation (DRY): both are "put this block of lines
- * at this position" primitives. Pure string/array work — no vault access, no
+ * at this position" primitives. `replaceLines` adds the overwrite primitive
+ * `replace_section` needs. Pure string/array work — no vault access, no
  * Obsidian API — so they are trivially unit-testable and reused verbatim.
  *
  * [ref: PRD/F4 link_to_moc + insert_under_marker; Tomo insert-under-marker
- *  request 2026-06-23]
+ *  request 2026-06-23; replace_section request 2026-06-25]
  */
 
 /**
@@ -39,5 +40,27 @@ export function spliceLines(content: string, at: number, newLines: readonly stri
 	const body = hasTrailingNewline ? lines.slice(0, -1) : lines;
 	const index = Math.max(0, Math.min(at, body.length));
 	body.splice(index, 0, ...newLines);
+	return body.join("\n") + (hasTrailingNewline ? "\n" : "");
+}
+
+/**
+ * Replace lines `[start..endInclusive]` of `content` with `newLines`.
+ * `endInclusive === -1` means "to the end of the file". Preserves trailing
+ * newline. The `replace_section` overwrite primitive — symmetric with
+ * `spliceLines` (which only inserts).
+ */
+export function replaceLines(
+	content: string,
+	start: number,
+	endInclusive: number,
+	newLines: readonly string[],
+): string {
+	const lines = content.split("\n");
+	const hasTrailingNewline = content.endsWith("\n");
+	const body = hasTrailingNewline ? lines.slice(0, -1) : lines;
+	const from = Math.max(0, Math.min(start, body.length));
+	const to = endInclusive === -1 ? body.length - 1 : Math.min(endInclusive, body.length - 1);
+	const deleteCount = Math.max(0, to - from + 1);
+	body.splice(from, deleteCount, ...newLines);
 	return body.join("\n") + (hasTrailingNewline ? "\n" : "");
 }

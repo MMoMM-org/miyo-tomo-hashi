@@ -12,12 +12,15 @@ unit suite passes because handler/validator/registry tests exercise the kind in 
 plans a fixture set end-to-end, so the gap is invisible. (`buildSummary`'s exhaustive switch IS
 compiler-enforced, so it catches you — but `KIND_ORDER` is a plain array and is not.)
 **How to apply:** when adding an action kind, the wiring checklist is **5** places, not 4 —
-(1) schema `$def` + `oneOf`, (2) `ActionKind`/`Action` types, (3) `HANDLERS` registry,
+(1) schema `$def` + `oneOf` — the `$def` **must** include `"applied": {"$ref": "#/$defs/applied_field"}`
+or `vendored-schema.test.ts` fails (it asserts every `oneOf` variant references it),
+(2) `ActionKind`/`Action` types, (3) `HANDLERS` registry,
 (4) `KIND_ORDER` (pick the canonical slot), (5) `buildSummary` case. Add a planner
 `computeRemaining` test asserting the new kind appears in its canonical-order slot — that's the
 only test that proves it's actually planned. Several `*.test.ts` files also hard-code the kind
-**count** (types.test.ts, actions/index.test.ts) — bump those too. (Landed with
-`insert_under_marker`, PR #73.)
+**count** (types.test.ts `toHaveLength` + literal union, actions/index.test.ts key list) — bump
+those too. (Landed with `insert_under_marker` PR #73; re-confirmed end-to-end adding
+`replace_section`, the 11th kind, 2026-06-25.)
 
 ## Run log written as bare placeholder (`totals: {}`, empty body)
 **Symptom:** a run produces a run-log file whose frontmatter has `totals: {}` and no action table.

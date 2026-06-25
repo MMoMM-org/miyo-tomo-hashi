@@ -44,16 +44,21 @@ export interface MoveNoteAction extends ActionBase {
 
 /**
  * Anchor — where in a target MOC to find the insertion point for a
- * `link_to_moc`. Three types:
+ * `link_to_moc`. Four types:
  *   - `callout`: match the callout opening line (e.g., `[!blocks] Key Concepts`).
  *   - `heading`: match heading text without `#` prefix (any heading level).
  *   - `line`: match a body line by literal content (substring/exact).
+ *   - `block`: match N consecutive lines (the `value`'s `\n`-joined lines),
+ *     each exact after trimming trailing whitespace. Unique multi-row markers
+ *     (e.g. a table's header + separator rows together) that a single-line
+ *     `line` anchor cannot express; resolves above (`before`) / below (`after`)
+ *     the matched block. `inside` is unsupported for `block`.
  *
  * `value` is `null` only at emission time when the renderer cannot resolve
  * a concrete value yet — Hashi receiving null is a runtime fail.
  */
 export interface Anchor {
-	readonly type: "callout" | "heading" | "line";
+	readonly type: "callout" | "heading" | "line" | "block";
 	readonly value: string | null;
 }
 
@@ -96,6 +101,29 @@ export interface InsertUnderMarkerAction extends ActionBase {
 	readonly target_path: string;
 	readonly anchor: Anchor;
 	readonly placement: "inside" | "before" | "after";
+	readonly content: string;
+}
+
+/**
+ * ReplaceSectionAction — OVERWRITE the body of a heading section in an arbitrary
+ * vault note. Symmetric with `insert_under_marker`, but it writes over the
+ * section instead of appending to it: it intentionally breaks the "append, never
+ * replace" invariant, which is why it is its own opt-in action kind rather than a
+ * mode on an insert.
+ *
+ * Heading-scoped for v1: the `anchor` must be a `heading`. The replaced range is
+ * the section body — the line after the heading down to the next heading of
+ * same-or-higher level, or EOF (the same range `insert_under_marker`'s
+ * `inside`-on-heading computes). The heading line itself is preserved.
+ *
+ * Modify-only, never create. Missing target / null value / non-heading anchor /
+ * anchor-not-found → graceful failure, never a blind write. [ref: Tomo handoff
+ * 2026-06-25 block-anchor-and-replace-section; #68 race discipline]
+ */
+export interface ReplaceSectionAction extends ActionBase {
+	readonly action: "replace_section";
+	readonly target_path: string;
+	readonly anchor: Anchor;
 	readonly content: string;
 }
 
@@ -166,6 +194,7 @@ export type Action =
 	| MoveNoteAction
 	| LinkToMocAction
 	| InsertUnderMarkerAction
+	| ReplaceSectionAction
 	| AddRelationshipAction
 	| UpdateTrackerAction
 	| UpdateLogEntryAction

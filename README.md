@@ -82,7 +82,7 @@ Cut down on the busywork — with the peace of mind that Hashi does only what yo
 - **Path safety** — `.obsidian/`, `.git/`, `.trash/`, hooks dir, and traversal-escape paths are denied
 - **Optional hooks** — `.cjs` files in your vault, full plugin privilege, with an ask-mode disclosure modal
 - **Schema validation** — vendored Tomo schema, ajv-compiled at module load
-- **9 action kinds** — create_moc, move_note, link_to_moc, add_relationship, update_tracker, update_log_entry, update_log_link, delete_source, skip
+- **11 action kinds** — create_moc, move_note, link_to_moc, insert_under_marker, replace_section, add_relationship, update_tracker, update_log_entry, update_log_link, delete_source, skip
 
 ## Documentation
 
@@ -95,7 +95,7 @@ Cut down on the busywork — with the peace of mind that Hashi does only what yo
 | [Chat](docs/chat.md) | Tomo users | Picker, reconnect schedule, status bar 友 — branch A |
 | [Context](docs/context.md) | Tomo users | Enable + Tomo wiring, auth token, connection troubleshooting — branch B |
 | [Instruction Executor](docs/instruction-executor.md) | Tomo users | Modal stages, modes, partial-resume, status bar 橋 — branch C |
-| [Action Reference](docs/action-reference.md) | Tomo users | All 9 action kinds with idempotency rules — branch C |
+| [Action Reference](docs/action-reference.md) | Tomo users | All 11 action kinds with idempotency rules — branch C |
 | [Hooks](docs/hooks.md) | Power users | `.cjs` hook authoring, policy, disclosure modal — branch C |
 | [Run Log](docs/run-log.md) | Vault owners | Log format, retention, hook output — branch C |
 | [Development](docs/development.md) | Contributors | Build, test, lint, architecture, test vault |
