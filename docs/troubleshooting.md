@@ -49,7 +49,7 @@ retrying, since neither resolves by waiting.
    `module.exports` yields an empty object and the hook silently does nothing.
 3. **The filename or location is wrong** — it must be `before-<action>.cjs` /
    `after-<action>.cjs`, sit in the configured hooks directory (default
-   `.tomo-hashi/hooks/`), and use one of the nine [action kinds](action-reference.md).
+   `.tomo-hashi/hooks/`), and use one of the eleven [action kinds](action-reference.md).
 
 **Fix.** Settings → **Hooks** → switch to *Ask on first use* or *Enabled*; rename
 the file to `.cjs`; match the exact `before-`/`after-<action>` naming. See

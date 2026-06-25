@@ -30,7 +30,7 @@ Place `.cjs` files in the configured **Hooks directory** (default: `.tomo-hashi/
 - `before-<action>.cjs` — runs *before* the action's handler. A non-empty `errors` return short-circuits the handler and the action is recorded as `failed`.
 - `after-<action>.cjs` — runs *after* the action's handler succeeds. Errors here do not retroactively fail the action; they are recorded as a separate log entry.
 
-`<action>` is one of the [action kinds](action-reference.md): `create_moc`, `move_note`, `link_to_moc`, `add_relationship`, `update_tracker`, `update_log_entry`, `update_log_link`, `delete_source`, `skip`.
+`<action>` is one of the [action kinds](action-reference.md): `create_moc`, `move_note`, `link_to_moc`, `insert_under_marker`, `replace_section`, `add_relationship`, `update_tracker`, `update_log_entry`, `update_log_link`, `delete_source`, `skip`.
 
 Examples:
 
