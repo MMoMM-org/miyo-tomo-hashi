@@ -180,6 +180,108 @@ describe("insertUnderMarker — before/after", () => {
 });
 
 // ---------------------------------------------------------------------------
+// block anchor — newest-first table insert (header+separator + after)
+// ---------------------------------------------------------------------------
+
+describe("insertUnderMarker — block anchor", () => {
+	// "## Captures" with a table; header (1) + separator (2) are the anchor block.
+	const tableDoc = [
+		"## Captures",                    // 0
+		"| Date | Type | Description |",  // 1
+		"| --- | --- | --- |",            // 2
+		"| 2026-06-24 | feature | x |",   // 3
+	].join("\n");
+
+	const blockAnchor = {
+		type: "block" as const,
+		value: "| Date | Type | Description |\n| --- | --- | --- |",
+	};
+
+	it("after + block lands the new row as the FIRST data row (above existing rows)", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(PATH, tableDoc);
+
+		const outcome = await insertUnderMarker(
+			makeAction({
+				anchor: blockAnchor,
+				placement: "after",
+				content: "| 2026-06-25 | fix | y |",
+			}),
+			makeCtx(vault),
+		);
+
+		expect(outcome.kind).toBe("applied");
+		expect(await vault.read(PATH)).toBe(
+			[
+				"## Captures",
+				"| Date | Type | Description |",
+				"| --- | --- | --- |",
+				"| 2026-06-25 | fix | y |",
+				"| 2026-06-24 | feature | x |",
+			].join("\n"),
+		);
+	});
+
+	it("a second block insert stacks above the previous (anchor never moves → newest-first)", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(PATH, tableDoc);
+
+		await insertUnderMarker(
+			makeAction({ anchor: blockAnchor, placement: "after", content: "| 2026-06-25 | fix | y |" }),
+			makeCtx(vault),
+		);
+		await insertUnderMarker(
+			makeAction({ anchor: blockAnchor, placement: "after", content: "| 2026-06-26 | docs | z |" }),
+			makeCtx(vault),
+		);
+
+		expect(await vault.read(PATH)).toBe(
+			[
+				"## Captures",
+				"| Date | Type | Description |",
+				"| --- | --- | --- |",
+				"| 2026-06-26 | docs | z |", // newest on top
+				"| 2026-06-25 | fix | y |",
+				"| 2026-06-24 | feature | x |",
+			].join("\n"),
+		);
+	});
+
+	it("inside + block → failed gracefully, file untouched", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(PATH, tableDoc);
+
+		const outcome = await insertUnderMarker(
+			makeAction({ anchor: blockAnchor, placement: "inside", content: "| x | y | z |" }),
+			makeCtx(vault),
+		);
+
+		expect(outcome.kind).toBe("failed");
+		if (outcome.kind === "failed") {
+			expect(outcome.reason).toBe("placement: inside not supported for block anchor");
+		}
+		expect(await vault.read(PATH)).toBe(tableDoc);
+	});
+
+	it("non-matching block → failed 'anchor not found', file untouched", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(PATH, tableDoc);
+
+		const outcome = await insertUnderMarker(
+			makeAction({
+				anchor: { type: "block", value: "| No | Such |\n| --- | --- |" },
+				placement: "after",
+				content: "| x | y |",
+			}),
+			makeCtx(vault),
+		);
+
+		expect(outcome.kind).toBe("failed");
+		expect(await vault.read(PATH)).toBe(tableDoc);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // failure / denial paths
 // ---------------------------------------------------------------------------
 

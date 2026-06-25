@@ -28,6 +28,7 @@ import type {
 	InstructionSet,
 	LinkToMocAction,
 	MoveNoteAction,
+	ReplaceSectionAction,
 } from "../../../src/schema/types.js";
 
 // ---------------------------------------------------------------------------
@@ -99,6 +100,16 @@ function makeInsertUnderMarker(id: string, targetPath: string): InsertUnderMarke
 		anchor: { type: "heading", value: "Captures" },
 		placement: "inside",
 		content: "- entry",
+	};
+}
+
+function makeReplaceSection(id: string, targetPath: string): ReplaceSectionAction {
+	return {
+		action: "replace_section",
+		id,
+		target_path: targetPath,
+		anchor: { type: "heading", value: "Status" },
+		content: "new body",
 	};
 }
 
@@ -246,9 +257,10 @@ describe("computeRemaining — canonical order", () => {
 		expect(kinds).toEqual(["create_moc", "move_note", "link_to_moc"]);
 	});
 
-	it("plans insert_under_marker in canonical order, after link_to_moc and before add_relationship", () => {
+	it("plans insert_under_marker + replace_section in canonical order, after link_to_moc and before add_relationship", () => {
 		const actions: Action[] = [
-			makeAddRelationship("I03", "moc/MyMOC.md", "up::", "up:: [[X]]"),
+			makeAddRelationship("I04", "moc/MyMOC.md", "up::", "up:: [[X]]"),
+			makeReplaceSection("I03", "Efforts/Status.md"),
 			makeInsertUnderMarker("I02", "Efforts/Dev Log.md"),
 			makeLinkToMoc("I01", "moc/MyMOC.md", "- [[note]]"),
 		];
@@ -257,11 +269,12 @@ describe("computeRemaining — canonical order", () => {
 		const { records } = computeRemaining(sources);
 
 		// Regression guard: a kind missing from planner KIND_ORDER is silently
-		// dropped from the execution list. Prove insert_under_marker is planned
-		// and lands in its canonical slot.
+		// dropped from the execution list. Prove insert_under_marker and the new
+		// replace_section are planned and land in their canonical slots.
 		expect(records.map((r) => r.kind)).toEqual([
 			"link_to_moc",
 			"insert_under_marker",
+			"replace_section",
 			"add_relationship",
 		]);
 	});

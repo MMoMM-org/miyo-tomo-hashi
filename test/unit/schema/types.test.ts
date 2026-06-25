@@ -19,12 +19,13 @@ import type {
 // ---------------------------------------------------------------------------
 
 describe("ActionKind", () => {
-	it("is the exact 10-element string-literal union", () => {
+	it("is the exact 11-element string-literal union", () => {
 		expectTypeOf<ActionKind>().toEqualTypeOf<
 			| "create_moc"
 			| "move_note"
 			| "link_to_moc"
 			| "insert_under_marker"
+			| "replace_section"
 			| "add_relationship"
 			| "update_tracker"
 			| "update_log_entry"
@@ -34,12 +35,13 @@ describe("ActionKind", () => {
 		>();
 	});
 
-	it("all 10 literals are assignable to ActionKind", () => {
+	it("all 11 literals are assignable to ActionKind", () => {
 		const allKinds: ActionKind[] = [
 			"create_moc",
 			"move_note",
 			"link_to_moc",
 			"insert_under_marker",
+			"replace_section",
 			"add_relationship",
 			"update_tracker",
 			"update_log_entry",
@@ -47,8 +49,8 @@ describe("ActionKind", () => {
 			"delete_source",
 			"skip",
 		];
-		// Runtime check: exactly 10
-		expect(allKinds).toHaveLength(10);
+		// Runtime check: exactly 11
+		expect(allKinds).toHaveLength(11);
 	});
 });
 
@@ -215,7 +217,7 @@ describe("Action discriminated union", () => {
 	});
 
 	it("exhaustive switch compiles over all Action variants", () => {
-		// This function compiles only if all 10 variants are handled.
+		// This function compiles only if all 11 variants are handled.
 		function describeAction(a: Action): string {
 			switch (a.action) {
 				case "create_moc":
@@ -226,6 +228,8 @@ describe("Action discriminated union", () => {
 					return `link_to_moc:${a.target_moc}`;
 				case "insert_under_marker":
 					return `insert_under_marker:${a.target_path}`;
+				case "replace_section":
+					return `replace_section:${a.target_path}`;
 				case "add_relationship":
 					return `add_relationship:${a.marker}`;
 				case "update_tracker":

@@ -15,9 +15,11 @@
  *     immediately above the next heading of same-or-higher level, or EOF —
  *     verbatim (reuses sectionLocator's heading section range). This matches
  *     Tomo's "append, never replace" guarantee.
- *   - `inside` + line   → unsupported; fails gracefully (no mutation, reported).
+ *   - `inside` + line / block → unsupported; fails gracefully (reported).
  *   - `before`/`after`  → verbatim, relative to the marker, for any marker type
- *     (reuses anchorResolver's `anchorLine` / `insertAfter`).
+ *     (reuses anchorResolver's `anchorLine` / `insertAfter`). A `block` anchor
+ *     (header+separator rows) + `after` lands the new row as the first table
+ *     data row — the newest-first table-insert case (Tomo handoff 2026-06-25).
  *
  * Behaviour guarantees (per Tomo contract):
  *   - Modify-only, never create — a missing `target_path` fails (Tomo guarantees
@@ -56,10 +58,13 @@ export async function insertUnderMarker(
 		return { kind: "failed", reason: "anchor not found (null value)" };
 	}
 
-	if (action.placement === "inside" && action.anchor.type === "line") {
+	if (
+		action.placement === "inside" &&
+		(action.anchor.type === "line" || action.anchor.type === "block")
+	) {
 		return {
 			kind: "failed",
-			reason: "placement: inside not supported for line anchor",
+			reason: `placement: inside not supported for ${action.anchor.type} anchor`,
 		};
 	}
 

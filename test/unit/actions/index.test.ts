@@ -2,7 +2,7 @@
  * HANDLERS dispatch registry tests.
  *
  * T3.6 — verifies:
- *   1. Key coverage: HANDLERS has exactly 10 keys matching all ActionKind values.
+ *   1. Key coverage: HANDLERS has exactly 11 keys matching all ActionKind values.
  *   2. Identity: each registry entry points to the canonical handler function.
  *   3. Dispatch smoke: HANDLERS[action.action](action, ctx) routes to the correct handler.
  *
@@ -20,6 +20,7 @@ import {
 	moveNote,
 	linkToMoc,
 	insertUnderMarker,
+	replaceSection,
 	updateTracker,
 	updateLogEntry,
 	updateLogLink,
@@ -46,12 +47,13 @@ const makeCtx = (vault: FakeVaultFS) => ({
 // ---------------------------------------------------------------------------
 
 describe("HANDLERS — key coverage", () => {
-	it("has exactly the 10 ActionKind keys", () => {
+	it("has exactly the 11 ActionKind keys", () => {
 		const expectedKeys: ActionKind[] = [
 			"create_moc",
 			"move_note",
 			"link_to_moc",
 			"insert_under_marker",
+			"replace_section",
 			"add_relationship",
 			"update_tracker",
 			"update_log_entry",
@@ -82,6 +84,10 @@ describe("HANDLERS — identity", () => {
 
 	it("HANDLERS.insert_under_marker === insertUnderMarker", () => {
 		expect(HANDLERS.insert_under_marker).toBe(insertUnderMarker);
+	});
+
+	it("HANDLERS.replace_section === replaceSection", () => {
+		expect(HANDLERS.replace_section).toBe(replaceSection);
 	});
 
 	it("HANDLERS.update_tracker === updateTracker", () => {
@@ -175,6 +181,22 @@ describe("HANDLERS — dispatch smoke", () => {
 			anchor: { type: "heading" as const, value: "Captures" },
 			placement: "inside" as const,
 			content: "- new",
+		};
+		const handler = HANDLERS[action.action];
+		const outcome = await handler(action, makeCtx(vault));
+		expect(outcome.kind).toBe("applied");
+	});
+
+	it("replace_section: dispatches and returns applied", async () => {
+		const notePath = "Efforts/Status Note.md";
+		const vault = new FakeVaultFS();
+		await vault.create(notePath, "# Note\n## Status\nold\n");
+		const action = {
+			action: "replace_section" as const,
+			id: "smoke-rs",
+			target_path: notePath,
+			anchor: { type: "heading" as const, value: "Status" },
+			content: "new",
 		};
 		const handler = HANDLERS[action.action];
 		const outcome = await handler(action, makeCtx(vault));

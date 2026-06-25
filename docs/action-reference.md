@@ -1,12 +1,14 @@
 # Action Reference
 
-The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are nine kinds; each has its own outcome semantics, idempotency rule, and failure surface.
+The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are eleven kinds; each has its own outcome semantics, idempotency rule, and failure surface.
 
 | Action | What it does | Idempotency probe | Halt-on-fail effect |
 |---|---|---|---|
 | [create_moc](#create_moc) | Create a new MOC at `destination` from a template | Destination exists | Marks dependent `link_to_moc` as `skipped-dependency` |
 | [move_note](#move_note) | Rename source → destination | Destination exists, source missing → `skipped-already` | None — independent action |
 | [link_to_moc](#link_to_moc) | Append `- [[note]]` bullet to a MOC's named section | Bullet already present | None |
+| [insert_under_marker](#insert_under_marker) | Insert a multi-line block at a marker in any note | Identical block already present | None |
+| [replace_section](#replace_section) | Overwrite a heading section's body in any note | Body already equals content | None |
 | [add_relationship](#add_relationship) | Add a wikilink under a frontmatter relationship key | Wikilink already present | None |
 | [update_tracker](#update_tracker) | Set a frontmatter scalar on a tracker note | Field already at target value | None |
 | [update_log_entry](#update_log_entry) | Append/insert a line in a daily log at a positional anchor | Exact line already present | None |
@@ -64,6 +66,39 @@ Append `- [[note]]` to a named section of a MOC. The section is identified by ca
 - `skipped-already` — the exact bullet already exists in the section.
 - `skipped-dependency` — the MOC does not exist AND no `create_moc` earlier in this run targeted it (or that `create_moc` failed). The error references the failed `create_moc` ID.
 - `failed` — MOC exists but the named section can't be located. Hashi will not invent a section.
+
+## `insert_under_marker`
+
+Insert a multi-line markdown block beneath a marker in **any** vault note (the `link_to_moc` insert primitive generalised to arbitrary notes). Tomo composes the full block and decides the position; Hashi inserts as-is and **never replaces** existing content.
+
+| Field | Type | Notes |
+|---|---|---|
+| `target_path` | string | Vault-relative path of an existing note. Modify-only — Hashi never creates it. |
+| `anchor` | object | `{ type, value }`. `type` ∈ `callout` \| `heading` \| `line` \| `block`. See [Anchor resolution](#anchor-resolution). |
+| `placement` | string | `inside` \| `before` \| `after` (relative to the matched marker). |
+| `content` | string | Multi-line block (`\n`-joined). Written verbatim for `before`/`after`/heading-`inside`; each line gets a `> ` prefix only for callout-`inside`. |
+
+**Placement × marker:** `inside` + callout → appended to the callout body (`> ` per line); `inside` + heading → appended at the end of the heading's section (above the next same-or-higher heading, or EOF); `inside` + `line`/`block` → unsupported (fails gracefully); `before`/`after` → verbatim, relative to the marker, any type. A `block` anchor (table header + separator rows) + `after` lands a new row as the **first** table data row — the newest-first table-insert case.
+
+**Outcome:**
+- `applied` — block inserted.
+- `skipped-already` — a byte-identical block is already present.
+- `failed` — target missing, anchor value null, marker not resolvable, or `inside` + `line`/`block`. File untouched.
+
+## `replace_section`
+
+**Overwrite** the body of a heading section in any note — the deliberate counterpart to `insert_under_marker`. It intentionally breaks the "append, never replace" invariant, which is why it is its own opt-in action kind rather than a mode on an insert. Heading-scoped for v1.
+
+| Field | Type | Notes |
+|---|---|---|
+| `target_path` | string | Vault-relative path of an existing note. Modify-only. |
+| `anchor` | object | `{ type: "heading", value }`. **Must** be a `heading` anchor in v1; other types fail gracefully. |
+| `content` | string | Multi-line block that replaces the section body (line after the heading down to the next same-or-higher heading, or EOF). The heading line itself is preserved. |
+
+**Outcome:**
+- `applied` — section body overwritten.
+- `skipped-already` — the section body already equals `content` byte-for-byte.
+- `failed` — target missing, anchor value null, non-heading anchor, or heading not found. File untouched (never a blind write).
 
 ## `add_relationship`
 
@@ -154,10 +189,13 @@ An explicit no-op. Used by Tomo when generating an instruction set where some ac
 
 ## Anchor resolution
 
-Several actions (`link_to_moc`, `update_log_entry`, `update_log_link`) need to find a section or line *inside* a markdown file. The shared `anchorResolver` does this with conservative parsing:
+Several actions (`link_to_moc`, `insert_under_marker`, `replace_section`, `update_log_entry`, `update_log_link`) need to find a section or line *inside* a markdown file. The shared `anchorResolver` does this with conservative parsing. An `anchor` is `{ type, value }`, with four `type`s:
 
-- Section headings match by exact label after stripping callout markers (`[!blocks] X` matches section `X`).
-- Lines match exactly, including leading whitespace. No fuzzy matching.
+- `callout` — matches the callout opening line by `[!type] Title` (case-insensitive); body extends through consecutive `>`-prefixed lines.
+- `heading` — matches heading text (without leading `#`s), case-sensitive, any level.
+- `line` — matches the first body line that **contains** the value (substring).
+- `block` — matches **N consecutive lines** (the value's `\n`-joined lines), each exact after trimming trailing whitespace. For unique multi-row markers a single `line` anchor cannot express — e.g. a table's header row + separator row together, where the separator (`| --- | --- |`) alone is non-unique. `inside` is unsupported for `block`.
+
 - A failed match is always a `failed` outcome (or `skipped-dependency` for the MOC-creation case) — Hashi never *creates* sections or guesses positions.
 
 This is intentional. The instruction set is a precise contract from Tomo; if the vault has drifted from what Tomo expected, you should see the failure rather than have Hashi paper over it.
