@@ -334,6 +334,81 @@ describe("TomoConnection.connect()", () => {
 		expect(state.reason?.code).toBe("socket-permission-denied");
 		expect(s.chosenInstanceName).toBeNull();
 	});
+
+	// --- raw OS/socket error classification ---------------------------------
+	// When the daemon is down or the socket is unreadable, the dial rejects with
+	// a RAW Node error (`code: "ENOENT"` etc.), not a pre-built ConnectionFailure.
+	// These must be classified into the friendly daemon-unreachable /
+	// socket-permission-denied codes — otherwise the user sees a raw
+	// "Stream error: connect ENOENT /var/run/docker.sock" AND the reconnect loop
+	// wastes its full backoff on an error that will never resolve by retrying.
+
+	const rawErr = (code: string, message: string): Error => {
+		const e = new Error(message) as Error & { code: string };
+		e.code = code;
+		return e;
+	};
+
+	it("classifies a raw ENOENT (daemon not running) as daemon-unreachable, not a raw stream error", async () => {
+		const target = inst();
+		mockedAttach.mockRejectedValue(rawErr("ENOENT", "connect ENOENT /var/run/docker.sock"));
+
+		const s = settings();
+		const conn = new TomoConnection(s);
+
+		await conn.connect(target);
+
+		const state = conn.state;
+		expect(state.kind).toBe("disconnected");
+		if (state.kind !== "disconnected") throw new Error("expected disconnected");
+		expect(state.reason?.code).toBe("daemon-unreachable");
+		// The raw socket path must NOT leak into the user-facing detail.
+		expect(state.reason?.detail).not.toContain("ENOENT");
+		expect(state.reason?.detail).not.toMatch(/Stream error/);
+	});
+
+	it("classifies a raw ECONNREFUSED as daemon-unreachable", async () => {
+		const target = inst();
+		mockedAttach.mockRejectedValue(rawErr("ECONNREFUSED", "connect ECONNREFUSED /var/run/docker.sock"));
+
+		const s = settings();
+		const conn = new TomoConnection(s);
+
+		await conn.connect(target);
+
+		const state = conn.state;
+		if (state.kind !== "disconnected") throw new Error("expected disconnected");
+		expect(state.reason?.code).toBe("daemon-unreachable");
+	});
+
+	it("classifies a raw EACCES as socket-permission-denied", async () => {
+		const target = inst();
+		mockedAttach.mockRejectedValue(rawErr("EACCES", "connect EACCES /var/run/docker.sock"));
+
+		const s = settings();
+		const conn = new TomoConnection(s);
+
+		await conn.connect(target);
+
+		const state = conn.state;
+		if (state.kind !== "disconnected") throw new Error("expected disconnected");
+		expect(state.reason?.code).toBe("socket-permission-denied");
+	});
+
+	it("leaves an unclassified raw error as attach-failed with the stream-error detail", async () => {
+		const target = inst();
+		mockedAttach.mockRejectedValue(rawErr("EPIPE", "write EPIPE"));
+
+		const s = settings();
+		const conn = new TomoConnection(s);
+
+		await conn.connect(target);
+
+		const state = conn.state;
+		if (state.kind !== "disconnected") throw new Error("expected disconnected");
+		expect(state.reason?.code).toBe("attach-failed");
+		expect(state.reason?.detail).toMatch(/Stream error/);
+	});
 });
 
 describe("TomoConnection.disconnect()", () => {

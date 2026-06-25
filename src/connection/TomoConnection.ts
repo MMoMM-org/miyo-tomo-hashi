@@ -74,6 +74,36 @@ function streamErrorDetail(message: string): string {
 	return `Stream error: ${message}`;
 }
 
+/**
+ * Classify a RAW OS/socket error (the kind the Docker dial rejects with when the
+ * daemon is down or the socket is unreadable) into one of the actionable
+ * ConnectionError codes. Without this, a `connect ENOENT /var/run/docker.sock`
+ * leaks verbatim into the status bar AND is treated as a transient
+ * `attach-failed`, so the reconnect loop burns its full backoff on an error that
+ * will never resolve by waiting. The `daemon-unreachable` /
+ * `socket-permission-denied` codes already exist (and short-circuit the loop in
+ * connect()'s catch) — this is what finally produces them.
+ *
+ * Returns null when the code isn't one we recognise, so the caller falls back to
+ * the generic stream-error detail.
+ */
+function classifyDialError(err: unknown): ConnectionError | null {
+	const code = (err as { code?: unknown } | null)?.code;
+	if (code === "ENOENT" || code === "ECONNREFUSED") {
+		return {
+			code: "daemon-unreachable",
+			detail: "Docker isn't reachable — is Docker running?",
+		};
+	}
+	if (code === "EACCES" || code === "EPERM") {
+		return {
+			code: "socket-permission-denied",
+			detail: "Permission denied on the Docker socket — check your Docker permissions.",
+		};
+	}
+	return null;
+}
+
 function isConnectionFailure(err: unknown): err is ConnectionFailure {
 	return err instanceof ConnectionFailure;
 }
@@ -96,6 +126,8 @@ function toConnectionError(err: unknown): ConnectionError {
 				return { code: "attach-failed", detail: err.detail };
 		}
 	}
+	const classified = classifyDialError(err);
+	if (classified !== null) return classified;
 	const message =
 		err instanceof Error ? err.message : "unknown attach failure";
 	return { code: "attach-failed", detail: streamErrorDetail(message) };

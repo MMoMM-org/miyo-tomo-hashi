@@ -25,7 +25,11 @@ build it shows but refuses to enable.
 **Cause.** The [Session View](session-view.md) attaches to a [Tomo](https://github.com/MMoMM-org/miyo-tomo)
 Docker container over the Docker socket. If your Docker runtime isn't running,
 no container has been chosen, or the container is down, the header indicator reads
-`Disconnected — <reason>` or cycles `Reconnecting (attempt N)…`.
+`Disconnected — <reason>` or cycles `Reconnecting (attempt N)…`. When the daemon
+itself can't be reached the reason is `Docker isn't reachable — is Docker running?`;
+a socket the plugin can't open reads `Permission denied on the Docker socket …`.
+Both are terminal — Hashi stops the reconnect backoff immediately rather than
+retrying, since neither resolves by waiting.
 
 **Fix.**
 
