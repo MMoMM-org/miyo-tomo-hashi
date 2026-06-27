@@ -229,6 +229,11 @@ function renderFrontmatter(
 	return [
 		"---",
 		`log_format_version: ${LOG_FORMAT_VERSION}`,
+		// Run-logs land in the ingested inbox folder Tomo's /inbox scans.
+		// This producer-declared flag is the Tomo↔Hashi contract: Tomo's
+		// Step 2b skip-flag pre-filter marks the item done without
+		// classifying, so the audit artifact never becomes a note proposal.
+		"tomo_skip_inbox_analysis: true",
 		`started: ${startIso}`,
 		`ended:   ${endIso}`,
 		`mode: ${meta.mode}`,
