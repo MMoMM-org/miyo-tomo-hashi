@@ -1,3 +1,10 @@
+# [0.14.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.13.0...0.14.0) (2026-06-27)
+
+
+### Features
+
+* **run-log:** stamp tomo_skip_inbox_analysis on run-log frontmatter ([#78](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/78)) ([7a436e4](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/7a436e4ce2407e5ff0d2c9642ce9abfaa634fb00))
+
 # [0.13.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.12.0...0.13.0) (2026-06-25)
 
 

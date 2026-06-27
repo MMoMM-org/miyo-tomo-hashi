@@ -1,6 +1,6 @@
 {
 	"name": "miyo-tomo-hashi",
-	"version": "0.13.0",
+	"version": "0.14.0",
 	"description": "Direct integration with Tomo (Claude Code) sessions for session interaction and automated vault updates",
 	"main": "main.js",
 	"type": "module",
