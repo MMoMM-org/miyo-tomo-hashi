@@ -192,6 +192,21 @@ describe("RunLogWriter.finalize — header", () => {
 		expect(content).toMatch(/^---[\s\S]*?\nlog_format_version:\s*1\b/m);
 	});
 
+	it("stamps tomo_skip_inbox_analysis: true so Tomo skips the run-log", async () => {
+		// The run-log lands in the ingested inbox folder, which is exactly what
+		// Tomo's /inbox scans. Without this producer-declared flag, Tomo
+		// re-classifies the audit artifact as user knowledge (atomic-note
+		// proposal + daily link). Tomo's Step 2b skip-flag pre-filter recognizes
+		// the key and marks the item done without classifying.
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const filePath = await writer.start(makeStartMeta());
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(filePath);
+
+		expect(content).toMatch(/^---[\s\S]*?\ntomo_skip_inbox_analysis:\s*true\b/m);
+	});
+
 	it("includes start and end timestamps in frontmatter", async () => {
 		const vault = new FakeVaultFS();
 		const writer = new RunLogWriter(vault);

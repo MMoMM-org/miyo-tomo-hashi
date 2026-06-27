@@ -15,6 +15,10 @@ Every executor run produces a markdown file in your configured **Tomo inbox fold
 - Always lands in the **Tomo inbox folder** — the same folder the executor reads `_instructions.json` from. Easy to keep input + output paired.
 - Multi-file batch runs produce one log covering the whole batch, not one per source file.
 
+## Tomo skips the run log
+
+Because the log lands in the same inbox folder Tomo's `/inbox` scans, its frontmatter carries `tomo_skip_inbox_analysis: true`. Tomo's skip-flag pre-filter recognizes the key, marks the item done, and returns without classifying it — so a machine-generated audit artifact is never turned into a note proposal or daily link. The flag is a producer-declared contract: Hashi states intent, Tomo honours it.
+
 ## Structure
 
 ```markdown
