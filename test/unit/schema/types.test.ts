@@ -55,24 +55,24 @@ describe("ActionKind", () => {
 });
 
 // ---------------------------------------------------------------------------
-// InstructionSet — schema_version must be string "1"
+// InstructionSet — schema_version must be string "2"
 // ---------------------------------------------------------------------------
 
 describe("InstructionSet", () => {
-	it("accepts a valid instruction set with schema_version '1'", () => {
+	it("accepts a valid instruction set with schema_version '2'", () => {
 		const is: InstructionSet = {
-			schema_version: "1",
+			schema_version: "2",
 			type: "tomo-instructions",
 			generated: "2026-04-28T00:00:00Z",
 			profile: null,
 			actions: [],
 		};
-		expect(is.schema_version).toBe("1");
+		expect(is.schema_version).toBe("2");
 	});
 
-	it("schema_version is typed as string literal '1', not number 1", () => {
-		// Type-level: schema_version must be "1" (string), not 1 (number).
-		expectTypeOf<InstructionSet["schema_version"]>().toEqualTypeOf<"1">();
+	it("schema_version is typed as string literal '2', not number 2", () => {
+		// Type-level: schema_version must be "2" (string), not 2 (number).
+		expectTypeOf<InstructionSet["schema_version"]>().toEqualTypeOf<"2">();
 	});
 
 	it("actions field is a readonly array of Action", () => {

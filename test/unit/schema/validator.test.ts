@@ -7,7 +7,7 @@ import type { InstructionSet } from "../../../src/schema/types.js";
 // ---------------------------------------------------------------------------
 
 const VALID_FIXTURE: InstructionSet = {
-	schema_version: "1",
+	schema_version: "2",
 	type: "tomo-instructions",
 	generated: "2026-04-28T10:00:00Z",
 	profile: null,
@@ -35,16 +35,16 @@ const makeSkip = (i: number) => ({
 // ---------------------------------------------------------------------------
 
 describe("validate", () => {
-	it("accepts a valid v1 InstructionSet", () => {
+	it("accepts a valid v2 InstructionSet", () => {
 		const result = validate(VALID_FIXTURE);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
-			expect(result.data.schema_version).toBe("1");
+			expect(result.data.schema_version).toBe("2");
 			expect(result.data.actions.length).toBeGreaterThan(0);
 		}
 	});
 
-	it("rejects schema_version '0' with PRD F2 'expected 1, got 0' message (M14)", () => {
+	it("rejects schema_version '0' with PRD F2 'expected 2, got 0' message (M14)", () => {
 		const result = validate({ ...VALID_FIXTURE, schema_version: "0" });
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
@@ -52,17 +52,20 @@ describe("validate", () => {
 			// with both expected and actual values, so it can drive the
 			// "upgrade Hashi" prompt without re-parsing AJV's generic msg.
 			expect(result.message).toBe(
-				"Schema version mismatch — expected 1, got 0",
+				"Schema version mismatch — expected 2, got 0",
 			);
 		}
 	});
 
-	it("rejects schema_version '2' with PRD F2 'expected 1, got 2' message (M14)", () => {
-		const result = validate({ ...VALID_FIXTURE, schema_version: "2" });
+	it("rejects schema_version '1' with PRD F2 'expected 2, got 1' message (spec 027 ADR-3 lockstep)", () => {
+		// A v1 instruction set hitting v2-only Hashi must fail loud with the
+		// version mismatch — the lockstep fail-loud guarantee — not a confusing
+		// missing-field error from the origin_inbox_item → source_inbox_item rename.
+		const result = validate({ ...VALID_FIXTURE, schema_version: "1" });
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.message).toBe(
-				"Schema version mismatch — expected 1, got 2",
+				"Schema version mismatch — expected 2, got 1",
 			);
 		}
 	});
@@ -192,6 +195,55 @@ describe("validate", () => {
 		expect(validate(fixture).ok).toBe(false);
 	});
 
+	it("accepts move_note carrying source_inbox_item (spec 027 rename)", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{
+					id: "I01",
+					action: "move_note",
+					source: "100 Inbox/2026-06-30_memo.md",
+					destination: "Atlas/202 Notes/Memo.md",
+					title: "Memo",
+					source_inbox_item: "100 Inbox/2026-06-30_memo.md",
+				},
+			],
+		};
+		expect(validate(fixture).ok).toBe(true);
+	});
+
+	it("rejects move_note carrying the old origin_inbox_item key (hard cutover, no alias)", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{
+					id: "I01",
+					action: "move_note",
+					source: "100 Inbox/2026-06-30_memo.md",
+					destination: "Atlas/202 Notes/Memo.md",
+					title: "Memo",
+					origin_inbox_item: "100 Inbox/2026-06-30_memo.md",
+				},
+			],
+		};
+		expect(validate(fixture).ok).toBe(false);
+	});
+
+	it("accepts delete_source on a non-.md audio peer (voice source set)", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{
+					id: "I01",
+					action: "delete_source",
+					source_path: "100 Inbox/2026-06-30_memo.m4a",
+					reason: "voice source files not kept",
+				},
+			],
+		};
+		expect(validate(fixture).ok).toBe(true);
+	});
+
 	it("rejects unknown action.action value", () => {
 		const fixture = {
 			...VALID_FIXTURE,
@@ -305,7 +357,7 @@ describe("validate", () => {
 	});
 
 	it("returns a non-empty message string on schema failure", () => {
-		const result = validate({ ...VALID_FIXTURE, schema_version: "0" });
+		const result = validate({ ...VALID_FIXTURE, schema_version: "9" });
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(typeof result.message).toBe("string");

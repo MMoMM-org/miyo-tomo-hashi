@@ -37,7 +37,7 @@ import type {
 
 function makeInstructionSet(actions: Action[] = []): InstructionSet {
 	return {
-		schema_version: "1",
+		schema_version: "2",
 		type: "tomo-instructions",
 		generated: "2026-04-28T10:00:00Z",
 		profile: null,

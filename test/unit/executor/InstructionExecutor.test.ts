@@ -82,7 +82,7 @@ function makeHookRunner(
 
 function makeInstructionSet(actions: Action[]): InstructionSet {
 	return {
-		schema_version: "1",
+		schema_version: "2",
 		type: "tomo-instructions",
 		generated: "2026-04-29T10:00:00Z",
 		profile: null,
@@ -539,7 +539,7 @@ describe("InstructionExecutor — settings as getter (M4)", () => {
 			validator: {
 				validate: (raw: unknown): ValidationOutcome => {
 					const s = raw as { schema_version?: string };
-					if (s?.schema_version === "1") {
+					if (s?.schema_version === "2") {
 						return { ok: true, data: raw as InstructionSet };
 					}
 					return { ok: false, message: "invalid" };
@@ -724,7 +724,7 @@ describe("InstructionExecutor — validation failure in batch", () => {
 		const selectiveValidator = {
 			validate: (raw: unknown): ValidationOutcome => {
 				const s = raw as { schema_version?: string };
-				if (s?.schema_version === "1") {
+				if (s?.schema_version === "2") {
 					return { ok: true, data: raw as InstructionSet };
 				}
 				return { ok: false, message: "invalid schema" };

@@ -2,8 +2,10 @@
  * Hand-aligned TypeScript types for the vendored Tomo instruction-set schema.
  *
  * Source of truth: src/schema/instructions.schema.json (ADR-2)
- * Deviation note: schema_version is typed as "1" (string literal), not 1 (number).
- *   The schema declares {"const": "1"} — a string. SDD code excerpt was incorrect.
+ * Deviation note: schema_version is typed as "2" (string literal), not 2 (number).
+ *   The schema declares {"const": "2"} — a string. SDD code excerpt was incorrect.
+ *   Bumped "1" → "2" for spec 027 ADR-3 hard cutover (move_note.origin_inbox_item
+ *   → source_inbox_item rename); a v1 instruction set now fails closed.
  * Deviation note: Action discriminant field is `action` (matching schema $defs),
  *   not `kind`. Plan task wording "narrows on `kind`" was loose phrasing.
  *
@@ -37,7 +39,7 @@ export interface MoveNoteAction extends ActionBase {
 	readonly destination: string;
 	readonly title: string;
 	readonly rendered_file?: string;
-	readonly origin_inbox_item?: string | null;
+	readonly source_inbox_item?: string | null;
 	readonly parent_mocs?: string[];
 	readonly tags?: string[];
 }
@@ -236,7 +238,7 @@ export interface TomoBlock {
 // ---------------------------------------------------------------------------
 
 export interface InstructionSet {
-	readonly schema_version: "1";
+	readonly schema_version: "2";
 	readonly type: "tomo-instructions";
 	readonly generated: string;
 	readonly profile: string | null;
