@@ -52,7 +52,7 @@ export function runContractTests(makeVaultFS: () => VaultFS): void {
   describe("readJSON round-trip", () => {
     it("readJSON parses JSON written with create", async () => {
       const vault = makeVaultFS();
-      const obj = { schema_version: "1", actions: [] };
+      const obj = { schema_version: "2", actions: [] };
       await vault.create("data/set.json", JSON.stringify(obj));
       const result = await vault.readJSON<typeof obj>("data/set.json");
       expect(result).toEqual(obj);
