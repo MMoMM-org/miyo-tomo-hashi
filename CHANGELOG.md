@@ -1,3 +1,17 @@
+## [0.15.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.14.0...0.15.0) (2026-07-01)
+
+### ⚠ BREAKING CHANGES
+
+* **schema:** bump schema_version v1→v2, rename move_note source_inbox_item (#41) (#79)
+
+### Features
+
+* **schema:** bump schema_version v1→v2, rename move_note source_inbox_item ([#41](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/41)) ([#79](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/79)) ([228e966](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/228e96629f7dd38f67d356fdb0399803a8b63b3b))
+
+### Bug Fixes
+
+* **release:** adopt conventionalcommits preset so feat!/fix! commits release ([#80](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/80)) ([c8ec793](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/c8ec79319b19e16f538bc283b72e9321f26e5f73)), closes [#79](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/79)
+
 # [0.14.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.13.0...0.14.0) (2026-06-27)
 
 
