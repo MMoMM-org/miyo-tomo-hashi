@@ -1,3 +1,9 @@
+## [0.16.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.15.0...0.16.0) (2026-07-03)
+
+### Features
+
+* **connection:** make chat container component configurable ([#81](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/81)) ([7e8c356](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/7e8c356ad97076aa0b0c32dbaaadea4e62c068f9))
+
 ## [0.15.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.14.0...0.15.0) (2026-07-01)
 
 ### ⚠ BREAKING CHANGES
