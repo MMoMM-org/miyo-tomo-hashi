@@ -167,6 +167,27 @@ describe("listTomoInstances()", () => {
 		await expect(listTomoInstances()).resolves.toEqual([]);
 	});
 
+	it("filters on the default component when none is passed", async () => {
+		handles.listContainers.mockResolvedValue([]);
+		await listTomoInstances();
+		const arg = handles.listContainers.mock.calls[0]?.[0] as {
+			filters?: { label?: string[] };
+		};
+		expect(arg.filters?.label).toEqual(["miyo.component=tomo"]);
+	});
+
+	it("filters on a custom component value when one is passed", async () => {
+		// Non-Tomo fleets (e.g. "stories") are opt-in via the containerComponent
+		// setting; discovery must scope the label filter to that value so only
+		// the chosen fleet appears in the picker.
+		handles.listContainers.mockResolvedValue([]);
+		await listTomoInstances("stories");
+		const arg = handles.listContainers.mock.calls[0]?.[0] as {
+			filters?: { label?: string[] };
+		};
+		expect(arg.filters?.label).toEqual(["miyo.component=stories"]);
+	});
+
 	it("constructs Dockerode with explicit socketPath (refuses DOCKER_HOST per ADR-1)", async () => {
 		// Force a fresh module evaluation so the lazy-singleton client is
 		// rebuilt and the constructor spy is exercised in this test.
@@ -305,6 +326,15 @@ describe("findInstanceByName()", () => {
 
 		const result = await findInstanceByName("tomo-instance");
 		expect(result?.containerId).toBe(`b${"0".repeat(63)}`);
+	});
+
+	it("forwards a custom component to the underlying label filter", async () => {
+		handles.listContainers.mockResolvedValue([]);
+		await findInstanceByName("whatever", "stories");
+		const arg = handles.listContainers.mock.calls[0]?.[0] as {
+			filters?: { label?: string[] };
+		};
+		expect(arg.filters?.label).toEqual(["miyo.component=stories"]);
 	});
 });
 

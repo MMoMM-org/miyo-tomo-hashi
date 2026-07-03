@@ -466,6 +466,32 @@ describe("SettingsTab — instruction executor controls", () => {
 		expect(plugin.settings.tomoInboxFolder).toBe("inbox/tomo");
 	});
 
+	it("changing containerComponent persists the trimmed value", async () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+		tab.display();
+		await tab._getHandlersForTest().containerComponent?.("  stories  ");
+
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
+		expect(plugin.settings.containerComponent).toBe("stories");
+	});
+
+	it("clearing containerComponent persists an empty string (falls back to default at discovery)", async () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin({ containerComponent: "stories" });
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+		tab.display();
+		await tab._getHandlersForTest().containerComponent?.("   ");
+
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
+		expect(plugin.settings.containerComponent).toBe("");
+	});
+
 	it("changing debugLogging toggle calls saveSettings once", async () => {
 		const conn = makeConnection();
 		const app = new App();
@@ -588,6 +614,7 @@ describe("SettingsTab — instruction executor controls", () => {
 			"settings_version",
 			// 001 fields
 			"chosenInstanceName",
+			"containerComponent",
 			"zoomLevel",
 			// 002 fields
 			"tomoInboxFolder",
@@ -617,6 +644,7 @@ describe("SettingsTab — instruction executor controls", () => {
 	// ---- defaults render correctly on a fresh PluginSettings ----
 
 	it("default values are set on a fresh PluginSettings", () => {
+		expect(DEFAULT_SETTINGS.containerComponent).toBe("tomo");
 		expect(DEFAULT_SETTINGS.tomoInboxFolder).toBe("");
 		expect(DEFAULT_SETTINGS.executionMode).toBe("confirm");
 		expect(DEFAULT_SETTINGS.runLogRetention).toBe("always");

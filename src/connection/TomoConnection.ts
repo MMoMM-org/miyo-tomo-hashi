@@ -46,7 +46,7 @@
 
 import { Buffer } from "node:buffer";
 
-import type { PluginSettings } from "../types";
+import { DEFAULT_COMPONENT, type PluginSettings } from "../types";
 
 import { connectionStore } from "./connectionStore";
 import {
@@ -251,8 +251,19 @@ export class TomoConnection {
 		return null;
 	}
 
+	/**
+	 * Resolve the configured `miyo.component` label value to filter container
+	 * discovery on. Blank/whitespace settings fall back to the default so a
+	 * cleared field can never yield an empty `miyo.component=` filter (which
+	 * would match nothing).
+	 */
+	private component(): string {
+		const c = this.settings.containerComponent?.trim();
+		return c !== undefined && c.length > 0 ? c : DEFAULT_COMPONENT;
+	}
+
 	async openPicker(): Promise<TomoInstance[]> {
-		return await listTomoInstances();
+		return await listTomoInstances(this.component());
 	}
 
 	async connect(target: TomoInstance): Promise<void> {
@@ -331,7 +342,7 @@ export class TomoConnection {
 		// every restart, forcing the user back into the picker.
 		let target: TomoInstance | null;
 		try {
-			target = await findInstanceByName(name);
+			target = await findInstanceByName(name, this.component());
 		} catch (err: unknown) {
 			if (epoch !== this.epoch) return;
 			this.setState({ kind: "disconnected", reason: toConnectionError(err) });
@@ -422,7 +433,7 @@ export class TomoConnection {
 		// restarted between the original connect and now (force-reconnect /
 		// auto-reconnect-after-remote-close).
 		if (target.name !== null) {
-			const byName = await findInstanceByName(target.name);
+			const byName = await findInstanceByName(target.name, this.component());
 			if (byName !== null) return byName;
 			// Name no longer matches anything running — caller treats as gone.
 			return null;

@@ -212,6 +212,20 @@ describe("TomoConnection.openPicker()", () => {
 		expect(result[1]?.name).toBe("b");
 		expect(mockedList).toHaveBeenCalledTimes(1);
 	});
+
+	it("threads the configured containerComponent into discovery", async () => {
+		mockedList.mockResolvedValue([]);
+		const conn = new TomoConnection(settings({ containerComponent: "stories" }));
+		await conn.openPicker();
+		expect(mockedList).toHaveBeenCalledWith("stories");
+	});
+
+	it("falls back to the default component when the setting is blank", async () => {
+		mockedList.mockResolvedValue([]);
+		const conn = new TomoConnection(settings({ containerComponent: "  " }));
+		await conn.openPicker();
+		expect(mockedList).toHaveBeenCalledWith("tomo");
+	});
 });
 
 describe("TomoConnection.connect()", () => {
@@ -708,7 +722,7 @@ describe("TomoConnection.autoReconnectIfRemembered()", () => {
 
 		await conn.autoReconnectIfRemembered();
 
-		expect(mockedFindByName).toHaveBeenCalledWith("tomo-instance");
+		expect(mockedFindByName).toHaveBeenCalledWith("tomo-instance", "tomo");
 		expect(mockedAttach).toHaveBeenCalledWith(restarted.containerId);
 		expect(conn.state.kind).toBe("connected");
 		await conn.dispose();

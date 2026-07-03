@@ -19,6 +19,7 @@ All settings live under **Settings → MiYo Tomo Hashi**. The tab is split by co
 | Setting | What it does | Default |
 |---|---|---|
 | **Status row** | Live state from `connectionStore` — Disconnected / Attaching / Reconnecting (attempt N) / Connected to *label* | n/a |
+| **Container component** (`containerComponent`) | Docker label value matched as `miyo.component=<value>`. Only containers carrying this label appear in the [instance picker](chat.md#picking-a-tomo-instance). Change it to point Hashi chat at a different container fleet (e.g. `stories`) instead of Tomo. Leave blank to fall back to the default. | `tomo` |
 | **Connect / Disconnect button** | Opens the [instance picker](chat.md#picking-a-tomo-instance) when disconnected; gracefully tears down when connected | n/a |
 | (persisted) **`chosenInstanceName`** | Last instance label the user selected. Used for [auto-reconnect](chat.md#auto-reconnect-on-load) on plugin load. Survives Obsidian Sync — see warning in [Chat](chat.md#sync-warning). | `null` |
 | (persisted) **`zoomLevel`** | Terminal zoom (0.5× / 1× / 1.5×). Set in the chat-view header, not in this tab. | `1` |

@@ -15,6 +15,15 @@ import type { ExecutionMode } from "../executor/state";
 export const ZOOM_LEVELS = [0.5, 1, 1.5] as const;
 export type ZoomLevel = (typeof ZOOM_LEVELS)[number];
 
+/**
+ * Default `miyo.component` Docker label value. Historically the only value
+ * Hashi connected to (Tomo containers); now the fallback for a blank
+ * `containerComponent` setting. Lives here so it is a leaf-module constant
+ * shared by `DEFAULT_SETTINGS`, container discovery, and the settings UI
+ * without any of them importing the docker runtime.
+ */
+export const DEFAULT_COMPONENT = "tomo";
+
 export interface PluginSettings {
 	// --- meta ---
 
@@ -36,6 +45,15 @@ export interface PluginSettings {
 	 * instance had no name label (rare; production Tomo always sets it).
 	 */
 	chosenInstanceName: string | null;
+	/**
+	 * Value matched against the `miyo.component` Docker label when discovering
+	 * connectable containers. The instance picker only lists containers labelled
+	 * `miyo.component=<containerComponent>`. Defaults to `"tomo"` (the original
+	 * Tomo-only behaviour); set to e.g. `"stories"` to connect Hashi chat to a
+	 * different, non-Tomo container fleet instead. Empty/blank falls back to
+	 * `"tomo"` at discovery time.
+	 */
+	containerComponent: string;
 	/**
 	 * Font-size multiplier for the chat view's xterm. Persisted so the user
 	 * doesn't re-pick on every reload.
@@ -115,6 +133,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	settings_version: 2,
 	// 001 defaults
 	chosenInstanceName: null,
+	containerComponent: DEFAULT_COMPONENT,
 	zoomLevel: 1,
 	// 002 defaults
 	tomoInboxFolder: "",
