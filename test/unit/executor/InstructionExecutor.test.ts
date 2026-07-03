@@ -46,6 +46,7 @@ const fixedClock: Clock = { now: () => FIXED_DATE };
 
 const defaultSettings: PluginSettings = {
 	chosenInstanceName: null,
+	containerComponent: "tomo",
 	zoomLevel: 1,
 	tomoInboxFolder: INBOX,
 	executionMode: "silent",

@@ -32,7 +32,7 @@ import type { TomoConnection } from "../connection/TomoConnection";
 import type { ExecutionMode } from "../executor/state";
 import { ideBridgeStore } from "../ide-bridge/ideBridgeStore";
 import type { IdeBridgeState } from "../ide-bridge/state";
-import type { PluginSettings } from "../types/index";
+import { DEFAULT_COMPONENT, type PluginSettings } from "../types/index";
 import { ConfirmModal } from "../ui/ConfirmModal";
 import { FolderSuggest } from "./FolderSuggest";
 import { HeaderSection } from "./HeaderSection";
@@ -77,6 +77,7 @@ function isUnsafeVaultRelative(s: string): SafetyResult {
 
 /** Map of onChange handlers, keyed by PluginSettings field. */
 export type HandlerMap = {
+	containerComponent: (v: string) => Promise<void>;
 	tomoInboxFolder: (v: string) => Promise<void>;
 	hooksDir: (v: string) => Promise<void>;
 	executionMode: (v: string) => Promise<void>;
@@ -151,7 +152,16 @@ export function buildSettingsHandlers(
 			await persistence.saveSettings();
 		};
 
+	// Free-text component label value. Trimmed on save; a blank value is
+	// persisted as-is (discovery falls back to the "tomo" default), so the
+	// user can clear the field to restore Tomo-only behaviour.
+	const containerComponentHandler = async (v: string): Promise<void> => {
+		persistence.settings.containerComponent = v.trim();
+		await persistence.saveSettings();
+	};
+
 	return {
+		containerComponent: containerComponentHandler,
 		tomoInboxFolder: pathHandler("tomoInboxFolder"),
 		hooksDir: pathHandler("hooksDir"),
 		executionMode: dropdownHandler("executionMode"),
@@ -302,6 +312,22 @@ export class SettingsTab extends PluginSettingTab {
 		this.headerSection.render(headerContainer);
 
 		new Setting(containerEl).setName("Tomo chat").setHeading();
+
+		// Component filter — which Docker containers the picker discovers.
+		// Only containers labelled `miyo.component=<value>` are listed; blank
+		// falls back to "tomo" (the original Tomo-only behaviour).
+		const componentHandlers = buildSettingsHandlers(this.persistence());
+		new Setting(containerEl)
+			.setName("Container component")
+			.setDesc(
+				"Docker label value matched as miyo.component=<value>. Only containers with this label are shown in the picker. Leave blank for the default (tomo).",
+			)
+			.addText(text => {
+				text.setPlaceholder(DEFAULT_COMPONENT);
+				text.setValue(this.plugin.settings.containerComponent);
+				text.onChange(componentHandlers.containerComponent);
+			});
+
 		const wrapper = containerEl.createDiv({
 			cls: "hashi-settings-connection",
 		});

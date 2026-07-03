@@ -37,6 +37,8 @@ import { PassThrough, type Readable, type Writable } from "node:stream";
 
 import Dockerode from "dockerode";
 
+import { DEFAULT_COMPONENT } from "../types/index";
+
 import { SOCKET_PATH, dialAttach } from "./dialAttach";
 import type { ConnectionError, TomoInstance } from "./types";
 
@@ -65,7 +67,7 @@ export interface AttachSession {
 
 // --- internals ---------------------------------------------------------------
 
-const DOCKER_LABEL_COMPONENT = "miyo.component=tomo";
+const DOCKER_LABEL_COMPONENT_KEY = "miyo.component";
 const DOCKER_LABEL_INSTANCE_NAME = "miyo.tomo.instance-name";
 
 let _client: Dockerode | undefined;
@@ -110,13 +112,15 @@ function isNotFound(err: unknown): boolean {
 // --- listTomoInstances -------------------------------------------------------
 
 /**
- * Discover every running Tomo container reachable on the local Docker daemon.
- * Filters on label `miyo.component=tomo`. Returns instances sorted by
- * `startedAt` DESC (newest first) for picker UX.
+ * Discover every running connectable container reachable on the local Docker
+ * daemon. Filters on label `miyo.component=<component>` (default "tomo").
+ * Returns instances sorted by `startedAt` DESC (newest first) for picker UX.
  */
-export async function listTomoInstances(): Promise<TomoInstance[]> {
+export async function listTomoInstances(
+	component: string = DEFAULT_COMPONENT,
+): Promise<TomoInstance[]> {
 	const containers = await client().listContainers({
-		filters: { label: [DOCKER_LABEL_COMPONENT] },
+		filters: { label: [`${DOCKER_LABEL_COMPONENT_KEY}=${component}`] },
 	});
 
 	const mapped: TomoInstance[] = containers.map((c: Dockerode.ContainerInfo) => {
@@ -157,8 +161,9 @@ export async function listTomoInstances(): Promise<TomoInstance[]> {
  */
 export async function findInstanceByName(
 	name: string,
+	component: string = DEFAULT_COMPONENT,
 ): Promise<TomoInstance | null> {
-	const all = await listTomoInstances();
+	const all = await listTomoInstances(component);
 	const hit = all.find((x) => x.name === name);
 	return hit ?? null;
 }

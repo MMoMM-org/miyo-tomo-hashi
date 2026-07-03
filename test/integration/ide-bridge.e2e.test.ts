@@ -191,6 +191,7 @@ function makeDefaultSettings(): PluginSettings {
 	return {
 		settings_version: 2,
 		chosenInstanceName: null,
+		containerComponent: "tomo",
 		zoomLevel: 1,
 		tomoInboxFolder: "",
 		executionMode: "confirm",
