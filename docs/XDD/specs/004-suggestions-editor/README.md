@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-07-03 |
-| **Current Phase** | Design sketch — **reconciled** with Tomo wire contract (2026-07-04). Schema + change-signal resolved. **Awaiting Tomo confirm round** on 3 flag-backs (SDD §8) before PRD. |
+| **Current Phase** | Design sketch — reconciled + **owner-reviewed** (2026-07-04). Layout = **Tabbed**. Editable surface broadened; field-needs handoff **sent to Tomo**. Awaiting Tomo's consume-side before PRD. |
 | **Last Updated** | 2026-07-04 |
 
 ## Documents
@@ -56,11 +56,18 @@ The wire contract arrived (`_inbox/from-tomo/2026-07-04_tomo-to-hashi_suggestion
 
 **Still deferred** (drift discipline, spec-002 lesson): the real `SuggestionsDoc` adapter + vendored schema are built/tested against **real Tomo emission**, not a hand-authored fixture. The executable schema `Tomo/tomo/schemas/suggestions-wire.schema.json` was **not readable in this checkout** (Tomo repo is `_outbox`-stub-only here) — vendor + verify when the Tomo branch is reachable.
 
-### Three flag-backs to Tomo (SDD §8 — awaiting confirm round)
+### Field-needs handoff to Tomo — SENT (SDD §8)
 
-- **A — op 1 scope:** wire only toggles Tomo-proposed candidates; ADR-026 op 1 read as a picker over *all* MOCs. Recommend accepting the toggle model for v1.
-- **B — op 4 lifecycle state:** **not in the v1 wire** — the fourth ADR-026 op has no binding. Decision needed: drop from v1 (recommended) or ask Tomo for an additive field. Kokoro ADR-026 + this spec must agree.
-- **C — `inside` on non-callout:** confirm Tomo never emits / will accept `inside` **only** for callout anchors (Hashi enforces regardless, since the executor hard-fails `inside` on non-callouts).
+After the owner reviewed the mockups he **broadened the editable surface**. Reframed from "asking permission" to "here are the fields the editor writes; align Pass-2" (his stance: Hashi designs from the goal, Tomo consumes the JSON). Sent: `_outbox/for-tomo/2026-07-04_hashi-to-tomo_suggestions-editor-field-needs.md`. Additive (`schema_version` stays `"1"`):
+
+1. **User-added MOC candidates** — fuzzy-pick any vault note as a MOC target, not just Tomo's proposed set (`candidate_mocs[].source:"user"`).
+2. **Per-note `decision` (approve/skip) = op 4** — the note-level accept/reject moves from the markdown checkbox into the JSON.
+3. **Editable atomic-note `title`** (`stem` follows).
+4. **Editable proposed-MOC `tags`** (fuzzy over vault tags).
+
+Confirmations (no new field): merge-by-same-name; `inside` only for callout anchors. Design question: do daily-note refs belong in the wire (click-to-open)? Owner is syncing Tomo directly.
+
+**Hashi-only affordances** (no wire change): click-to-open missing targets · explicit "Merge into…" (drives same-name collapse) · member-chip hover → atomic-note title.
 
 ## Decisions Log
 
@@ -76,6 +83,9 @@ The wire contract arrived (`_inbox/from-tomo/2026-07-04_tomo-to-hashi_suggestion
 | 2026-07-04 | **op 2 structure source = `markdownStructure` (real file), not Tomo's `alt_headings`.** | `alt_headings` is a Tomo snapshot that can be stale; the real note structure (race-safe, #68) is authoritative for an existing MOC. `alt_headings` kept as a fallback hint only. |
 | 2026-07-04 | **Three flag-backs raised (op 1 scope / op 4 absent / `inside` gating); PRD gated on Tomo's confirm round.** | The handoff invites confirm-or-reshape. Op 4 (lifecycle state) has no v1 wire binding — a real ADR-026 reconciliation, not a Hashi omission. Recommendations recorded in SDD §8. |
 | 2026-07-04 | **HTML interface mockups authored** (`mockups/`) to drive the "how do we build it" layout decision in the design phase. | Per owner request — visual variants to compare before committing the view structure. |
+| 2026-07-04 | **Layout = Tabbed (variant B).** | Owner: "nicht zuviel auf einmal, aber alles sichtbar." Each list uncluttered as runs grow; both one click away. A/stacked + C/master-detail rejected. |
+| 2026-07-04 | **Editable surface broadened past the v1 wire** after owner mockup review; reframed the Tomo coordination from "flag-backs / asks" to "field-needs the editor writes; Tomo consumes." | Owner stance: Hashi designs from the review goal and writes what it needs into the JSON; Tomo's scripts process it (his original Kokoro ask). op 1 broadened to a fuzzy MOC picker; op 4 kept as a per-note `decision` field (not dropped); atomic-note `title` + proposed-MOC `tags` made editable. Sent as a field-needs handoff; owner syncs Tomo directly. |
+| 2026-07-04 | **Three Hashi-only affordances confirmed** (no wire change): click-to-open missing targets (creation outside Hashi), explicit "Merge into…" driving same-name collapse, member-chip hover → atomic-note title. | These hit owner asks 1c/2a/2b using data already present (titles live in the same doc; merge is same-name; Obsidian creates notes on open) — no Tomo dependency. |
 
 ## References
 

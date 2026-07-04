@@ -309,6 +309,43 @@
   .foot-explain li { margin: 5px 0; }
   .foot-explain code { font-family: var(--mono); font-size: 12px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; color: var(--text); }
 
+  /* ---- added affordances (owner review 2026-07-04) ---- */
+  .title-edit {
+    font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text);
+    background: transparent; border: 1px solid transparent; border-radius: var(--r-sm);
+    padding: 2px 6px; margin: -2px -6px; min-width: 0; flex: 1;
+  }
+  .title-edit:hover { border-color: var(--border); background: var(--bg-input); }
+  .title-edit:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--bg-input); }
+  .note-decision { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; flex: none; }
+  .note-decision button { font-family: inherit; font-size: 11px; font-weight: 600; padding: 3px 9px; border: 0; background: var(--bg-input); color: var(--text-muted); cursor: pointer; }
+  .note-decision button.approve[aria-pressed="true"] { background: var(--green); color: #fff; }
+  .note-decision button.skip[aria-pressed="true"] { background: var(--bg-hover); color: var(--text); }
+  .path-link { color: inherit; cursor: pointer; text-decoration: none; border-bottom: 1px solid transparent; }
+  .cand-path:hover .path-link { border-bottom-color: var(--accent); color: var(--accent); }
+  .path-link .ext { width: 11px; height: 11px; opacity: 0; margin-left: 3px; vertical-align: -1px; }
+  .cand-path:hover .path-link .ext { opacity: .7; }
+  .src-badge { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 3px; padding: 1px 5px; margin-left: 7px; }
+  .add-moc { display: flex; align-items: center; gap: 8px; padding: 8px 13px; border-top: 1px dashed var(--border); }
+  .add-moc button { font-family: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: transparent; border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: var(--r-sm); padding: 5px 11px; cursor: pointer; }
+  .add-moc button:hover { background: var(--accent-soft); }
+  .link-btn { font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--text-muted); background: transparent; border: 1px solid var(--border); border-radius: var(--r-sm); padding: 4px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .link-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .chip.member { cursor: help; position: relative; }
+  .tag.add { cursor: pointer; color: var(--accent); border-style: dashed; border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+  .tag.add:hover { background: var(--accent-soft); }
+  .tag.editable { cursor: pointer; }
+  .tag.editable:hover { border-color: var(--accent); }
+
+  /* generic fuzzy picker (MOC / tags) */
+  .fp-search { width: 100%; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg-input); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; margin-bottom: 6px; }
+  .fp-search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .fp-list { display: flex; flex-direction: column; gap: 2px; }
+  .fp-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text); }
+  .fp-item:hover, .fp-item.hi { background: var(--accent-soft); }
+  .fp-item .fp-path { color: var(--text-faint); font-family: var(--mono); font-size: 11px; }
+  .fp-item .fp-new { color: var(--green); font-weight: 600; }
+
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -319,12 +356,12 @@
     <div>
       <div class="eyebrow">Hashi · spec 004 · design phase</div>
       <h1>Suggestions Editor — interface mockups</h1>
-      <p class="sub">Three structural layouts for the leaf view, plus the op-2 spot picker. Same data, same wire contract — pick the skeleton before we build. Toggle the variant and the theme; open the picker to feel the heaviest interaction.</p>
+      <p class="sub"><b>Tabbed</b> is the chosen layout (A / C kept for comparison). The editable surface is the reviewed-and-broadened one: rename notes, approve/skip, add any MOC, edit tags, merge proposals. Toggle variant + theme; open the anchor chip (spot), <b>＋ Add MOC</b>, <b>Merge into…</b> and <b>＋ tag</b> to feel the pickers.</p>
     </div>
     <div class="controls">
       <div class="seg" role="group" aria-label="Layout variant">
-        <button data-variant="A" aria-pressed="true">A · Stacked</button>
-        <button data-variant="B" aria-pressed="false">B · Tabbed</button>
+        <button data-variant="A" aria-pressed="false">A · Stacked</button>
+        <button data-variant="B" aria-pressed="true">B · Tabbed</button>
         <button data-variant="C" aria-pressed="false">C · Master–detail</button>
       </div>
       <button class="ghost-btn" id="themeToggle" title="Toggle light/dark">◐ Theme</button>
@@ -391,13 +428,14 @@
   </div>
 
   <div class="foot-explain">
-    <h4>What the mockup encodes from the wire contract</h4>
+    <h4>What the mockup encodes — after the owner review</h4>
     <ul>
-      <li><b>MOC re-pick</b> = the checkbox toggling <code>candidate_mocs[].selected</code>. The candidate set is Tomo-provided (v1) — a MOC Tomo didn't propose is out of scope, escalate via the Session View chat. <em>(flag-back A)</em></li>
-      <li><b>Choose the spot</b> = the anchor chip → opens the SpotPicker, editing <code>candidate_mocs[].anchor</code>. Structure comes from the real note (<code>markdownStructure</code>), not Tomo's stale <code>alt_headings</code>. <code>inside</code> is offered for callout anchors only — the executor hard-fails <code>inside</code> on a heading. <em>(flag-back C)</em></li>
-      <li><b>Proposed MOCs</b> = inline <code>name</code> / <code>parent</code> edit, <code>decision</code> approve·skip, and membership chips (<code>member_ids</code>). Merge is emergent: two proposals sharing a <code>name</code> → Tomo collapses + unions members.</li>
-      <li><b>Not shown — per-note lifecycle state (ADR-026 op 4)</b> has no field in the v1 wire. Deferred pending Tomo's confirm round. <em>(flag-back B)</em></li>
-      <li><b>Save</b> writes the <code>.json</code> and leaves <code>emit_digest</code> untouched — that mismatch is how Tomo learns the user edited the structured surface.</li>
+      <li><b>Rename a note</b> (title field) · <b>Approve / Skip</b> per note — both are new fields the editor writes; Tomo makes <code>title</code> editable and adds <code>suggestions[].decision</code> (= ADR-026 op 4). <em>(Tomo-ask 3 &amp; 2)</em></li>
+      <li><b>＋ Add MOC</b> = fuzzy pick <em>any</em> vault note, not just Tomo's candidates (added ones carry an <span class="src-badge">added</span> badge). Tomo honours editor-added candidates. <em>(Tomo-ask 1)</em></li>
+      <li><b>Choose the spot</b> (anchor chip → SpotPicker) edits <code>candidate_mocs[].anchor</code>. Structure is the real note (<code>markdownStructure</code>), not Tomo's <code>alt_headings</code>. <code>inside</code> only for callout anchors — the executor hard-fails it on a heading. <em>(Hashi-enforced)</em></li>
+      <li><b>Edit tags</b> = fuzzy over vault tags; Tomo makes <code>tags</code> editable. <em>(Tomo-ask 4)</em></li>
+      <li><b>Merge into…</b> · <b>member hover</b> (shows the note title) · <b>click-to-open</b> a path (creates outside Hashi) — all <em>Hashi-only</em>, no wire change: merge drives same-name collapse, titles live in the same doc, Obsidian creates notes on open.</li>
+      <li><b>Save</b> writes the <code>.json</code> and leaves <code>emit_digest</code> untouched — that mismatch is how Tomo learns the structured surface was edited.</li>
     </ul>
   </div>
 
@@ -441,24 +479,51 @@
   </div>
 </div>
 
+<!-- ===================== FUZZY PICKER (Add MOC / tags / merge) ===================== -->
+<div class="scrim" id="fpScrim" role="dialog" aria-modal="true" aria-labelledby="fpTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="kick" id="fpKick">Add MOC · op 1</div>
+      <h3 id="fpTitle">Pick a note as MOC</h3>
+      <div class="tgt" id="fpSub">any vault note — v1 does no "is it a MOC?" check</div>
+    </div>
+    <div class="modal-body">
+      <input class="fp-search" id="fpSearch" placeholder="Type to filter…" aria-label="Filter" autocomplete="off" />
+      <div class="fp-list" id="fpList"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="left" id="fpNote">metadataCache — all notes</span>
+      <button class="btn subtle" id="fpCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ---- data (from the wire contract example, fleshed out) ----
   const suggestions = [
-    { id:"S01", title:"Bauhaus typography principles", stem:"bauhaus-typography",
+    { id:"S01", title:"Bauhaus typography principles", stem:"bauhaus-typography", decision:"approve",
       cands:[
-        { path:"Atlas/200 Maps/Design Systems MOC.md", on:true,  anchor:{type:"heading",value:"Typography",placement:"inside"}, conf:0.82 },
-        { path:"Atlas/200 Maps/Visual Language MOC.md", on:false, anchor:null, conf:0.44 },
+        { path:"Atlas/200 Maps/Design Systems MOC.md", src:"tomo", on:true,  anchor:{type:"heading",value:"Typography",placement:"inside"}, conf:0.82 },
+        { path:"Atlas/200 Maps/Visual Language MOC.md", src:"tomo", on:false, anchor:null, conf:0.44 },
       ]},
-    { id:"S02", title:"Grid systems in editorial layout", stem:"grid-systems",
+    { id:"S02", title:"Grid systems in editorial layout", stem:"grid-systems", decision:"approve",
       cands:[
-        { path:"Atlas/200 Maps/Design Systems MOC.md", on:true,  anchor:{type:"callout",value:"[!concepts] Layout",placement:"inside"}, conf:0.71 },
-        { path:"Atlas/200 Maps/Print Heritage MOC.md",  on:false, anchor:null, conf:0.50 },
+        { path:"Atlas/200 Maps/Design Systems MOC.md", src:"tomo", on:true,  anchor:{type:"callout",value:"[!concepts] Layout",placement:"inside"}, conf:0.71 },
+        { path:"Atlas/200 Maps/Print Heritage MOC.md",  src:"tomo", on:false, anchor:null, conf:0.50 },
       ]},
-    { id:"S03", title:"Josef Müller-Brockmann", stem:"josef-muller-brockmann",
+    { id:"S03", title:"Josef Müller-Brockmann", stem:"josef-muller-brockmann", decision:"skip",
       cands:[
-        { path:"Atlas/200 Maps/Visual Language MOC.md", on:true,  anchor:null, conf:0.60 },
+        { path:"Atlas/200 Maps/Visual Language MOC.md", src:"tomo", on:true, anchor:null, conf:0.60 },
+        { path:"Atlas/200 Maps/Swiss Style MOC.md",     src:"user", on:true, anchor:{type:"heading",value:"Figures",placement:"after"}, conf:null },
       ]},
   ];
+  // vault notes offered by the ＋Add MOC fuzzy picker (v1: any note, no MOC detection)
+  const vaultNotes = [
+    "Atlas/200 Maps/Design Systems MOC.md","Atlas/200 Maps/Visual Language MOC.md",
+    "Atlas/200 Maps/Print Heritage MOC.md","Atlas/200 Maps/Swiss Style MOC.md",
+    "Atlas/200 Maps/Colour Theory MOC.md","Atlas/202 Notes/Typography scale.md",
+  ];
+  const vaultTags = ["topic/typography","topic/swiss-design","topic/layout","topic/print","design/grid","design/colour"];
   const proposed = [
     { id:"M01", name:"Swiss Design MOC", parent:"Design MOC", members:["S02","S03"], tags:["topic/swiss-design"], reason:"cluster of 2 notes on Swiss/International style", decision:"approve" },
     { id:"M02", name:"Typography MOC",   parent:"Design MOC", members:["S01"],        tags:["topic/typography"],   reason:"single note; consider merging into Swiss Design", decision:"skip" },
@@ -466,6 +531,8 @@
 
   const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 6"/></svg>';
   const PENCIL = '<svg class="pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13 5l4 4"/></svg>';
+  const EXT = '<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6"/><path d="M20 4l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>';
+  const titleOf = id => (suggestions.find(s=>s.id===id)||{}).title || id;
 
   const dir = p => { const i = p.lastIndexOf("/"); return i<0 ? ["",p] : [p.slice(0,i+1), p.slice(i+1)]; };
   const confBar = c => { const mid = c < 0.6; return `<div class="conf"><div class="bar ${mid?'mid':''}"><span style="width:${Math.round(c*100)}%"></span></div><span class="val">${c.toFixed(2)}</span></div>`; };
@@ -479,19 +546,28 @@
     return `<div class="cand ${c.on?'on':'off'}">
       <div class="check" data-toggle role="checkbox" aria-checked="${c.on}" tabindex="0">${CHECK}</div>
       <div class="cand-main">
-        <div class="cand-path"><span class="dir">${d}</span>${f}</div>
+        <div class="cand-path"><span class="path-link" data-open title="Open in new tab (creates if missing)">${d?`<span class="dir">${d}</span>`:''}${f}${EXT}</span>${c.src==='user'?'<span class="src-badge">added</span>':''}</div>
         ${c.on ? `<div class="anchor-row">${anchorChip(c.anchor)}</div>` : ''}
       </div>
-      ${confBar(c.conf)}
+      ${c.conf!==null ? confBar(c.conf) : ''}
     </div>`;
   }
   function suggestionCard(s){
     return `<div class="card">
       <div class="card-top">
-        <h5 class="card-title">${s.title} <span class="id-chip">${s.id}</span></h5>
-        <div class="card-sub">${s.stem}</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input class="title-edit" value="${s.title}" aria-label="Atomic note title" />
+          <span class="id-chip">${s.id}</span>
+          <div style="flex:1"></div>
+          <div class="note-decision" title="Create this note, or skip it">
+            <button class="approve" aria-pressed="${s.decision==='approve'}">Approve</button>
+            <button class="skip" aria-pressed="${s.decision==='skip'}">Skip</button>
+          </div>
+        </div>
+        <div class="card-sub">${s.stem}.md · filename follows the title</div>
       </div>
       ${s.cands.map(candRow).join("")}
+      <div class="add-moc"><button data-addmoc>＋ Add MOC…</button><span style="font-size:11px;color:var(--text-faint)">pick any note — not just Tomo's suggestions</span></div>
     </div>`;
   }
   function proposedCard(m){
@@ -499,7 +575,7 @@
     return `<div class="pmoc">
       <div class="pmoc-row1">
         <div class="field" style="flex:1"><label>Name (${m.id})</label><input class="inp name" value="${m.name}" /></div>
-        <div class="field" style="width:150px"><label>Parent</label><input class="inp" value="${m.parent}" /></div>
+        <div class="field" style="width:140px"><label>Parent</label><input class="inp" value="${m.parent}" /></div>
         <div class="field"><label>Create?</label>
           <div class="decision">
             <button class="approve" aria-pressed="${m.decision==='approve'}">Approve</button>
@@ -508,9 +584,14 @@
         </div>
       </div>
       <div class="pmoc-row2">
-        <div class="members"><span class="lbl">Members</span>${m.members.map(x=>`<span class="chip">${x}</span>`).join("")}</div>
+        <div class="members"><span class="lbl">Members</span>${m.members.map(x=>`<span class="chip member" title="${titleOf(x)}">${x}</span>`).join("")}</div>
         <div style="flex:1"></div>
-        ${m.tags.map(t=>`<span class="tag">${t}</span>`).join("")}
+        <button class="link-btn" data-merge>⇄ Merge into…</button>
+      </div>
+      <div class="pmoc-row2">
+        <span class="lbl" style="font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em">Tags</span>
+        ${m.tags.map(t=>`<span class="tag editable" data-edittag title="Edit tag">${t}</span>`).join("")}
+        <span class="tag add" data-addtag>＋ tag</span>
       </div>
       <div class="reason">${m.reason}</div>
       ${dup?`<div class="merge-hint">◆ shares a name with another proposal → Tomo will merge them and union members</div>`:''}
@@ -576,7 +657,7 @@
 
   const stage = document.getElementById("stage");
   const vcap = document.getElementById("vcap");
-  let variant = "A";
+  let variant = "B";
 
   function paint(){
     vcap.innerHTML = `<b>${captions[variant][0]}</b> — ${captions[variant][1]}`;
@@ -596,8 +677,8 @@
       el.addEventListener("click", act);
       el.addEventListener("keydown", e=>{ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); act(); } });
     });
-    // decision segmented
-    stage.querySelectorAll(".decision").forEach(d=>{
+    // decision segmented (proposed-MOC .decision + per-note .note-decision)
+    stage.querySelectorAll(".decision, .note-decision").forEach(d=>{
       d.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
         d.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));
         b.setAttribute("aria-pressed","true"); showDirty();
@@ -619,8 +700,14 @@
       document.getElementById("mdDetail").innerHTML = detailFor(it.dataset.mdid);
       wire();
     }));
+    // added affordances (owner review)
+    stage.querySelectorAll("[data-addmoc]").forEach(b=>b.addEventListener("click",()=>openFuzzy("moc")));
+    stage.querySelectorAll("[data-addtag],[data-edittag]").forEach(b=>b.addEventListener("click",()=>openFuzzy("tag")));
+    stage.querySelectorAll("[data-merge]").forEach(b=>b.addEventListener("click",()=>openFuzzy("merge")));
+    stage.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); flashOpen(b); }));
     rebindSpots();
   }
+  function flashOpen(el){ el.style.color = "var(--accent)"; setTimeout(()=>{ el.style.color=""; }, 500); }
   function rebindSpots(){ document.querySelectorAll("[data-spot]").forEach(b=>{ b.onclick = openSpot; }); }
   function showDirty(){ document.getElementById("dirtyBadge").style.visibility="visible"; }
 
@@ -645,7 +732,7 @@
   document.getElementById("spCancel").addEventListener("click",closeSpot);
   document.getElementById("spApply").addEventListener("click",()=>{ closeSpot(); showDirty(); });
   scrim.addEventListener("click",e=>{ if(e.target===scrim) closeSpot(); });
-  document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSpot(); });
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeSpot(); document.getElementById("fpScrim").classList.remove("open"); } });
 
   // structure node selection + placement gating (inside = callout only)
   const placeSeg = document.getElementById("placeSeg");
@@ -679,6 +766,42 @@
     else { placeNote.className="place-note"; placeNote.innerHTML = `Insert immediately after <b>${label}</b>${isCallout?" (after the callout closes)":""}.`; }
     if(node && node.dataset.callout==="false" && p!=="inside"){ /* fine */ }
   }
+
+  // ---- Fuzzy picker (Add MOC / edit tags / merge) ----
+  const fpScrim = document.getElementById("fpScrim");
+  const fpSearch = document.getElementById("fpSearch");
+  const fpList = document.getElementById("fpList");
+  let fpMode = "moc";
+  const fpConf = {
+    moc:   { kick:"Add MOC · op 1",    title:"Pick a note as MOC", sub:'any vault note — v1 does no "is it a MOC?" check',  note:"metadataCache — all notes",    src:()=>vaultNotes,               paths:true,  verb:"create" },
+    tag:   { kick:"Edit tags · op 2c", title:"Add a tag",          sub:"fuzzy over existing vault tags",                    note:"metadataCache.getTags()",      src:()=>vaultTags,                paths:false, verb:"add" },
+    merge: { kick:"Merge · op 3",      title:"Merge into…",         sub:"pick another proposed MOC — members get unioned",   note:"proposed MOCs in this run",    src:()=>proposed.map(p=>p.name),  paths:false, verb:"" },
+  };
+  function openFuzzy(mode){
+    fpMode = mode; const c = fpConf[mode];
+    document.getElementById("fpKick").textContent = c.kick;
+    document.getElementById("fpTitle").textContent = c.title;
+    document.getElementById("fpSub").textContent = c.sub;
+    document.getElementById("fpNote").textContent = c.note;
+    fpSearch.value = ""; renderFp(""); fpScrim.classList.add("open");
+    setTimeout(()=>fpSearch.focus(), 0);
+  }
+  function renderFp(q){
+    const c = fpConf[fpMode]; const ql = q.toLowerCase();
+    const items = c.src().filter(x=>x.toLowerCase().includes(ql));
+    let html = items.map((x,i)=>{
+      if(c.paths){ const [d,f]=dir(x); return `<div class="fp-item ${i===0?'hi':''}" data-fp>${f}<span class="fp-path">${d}</span></div>`; }
+      return `<div class="fp-item ${i===0?'hi':''}" data-fp>${x}</div>`;
+    }).join("");
+    if(q && c.verb && !items.some(x=>x.toLowerCase()===ql)){
+      html += `<div class="fp-item" data-fp><span class="fp-new">＋ ${c.verb} “${q}”</span></div>`;
+    }
+    fpList.innerHTML = html || `<div class="fp-item" style="color:var(--text-faint)">No matches</div>`;
+    fpList.querySelectorAll("[data-fp]").forEach(el=>el.addEventListener("click",()=>{ fpScrim.classList.remove("open"); showDirty(); }));
+  }
+  fpSearch.addEventListener("input", e=>renderFp(e.target.value));
+  document.getElementById("fpCancel").addEventListener("click",()=>fpScrim.classList.remove("open"));
+  fpScrim.addEventListener("click", e=>{ if(e.target===fpScrim) fpScrim.classList.remove("open"); });
 
   paint();
 </script>

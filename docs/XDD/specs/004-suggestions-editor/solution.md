@@ -81,6 +81,14 @@ Lifecycle:
 Default: one active `_suggestions.json` at a time (matches the executor's single
 run). Multi-doc deferred.
 
+**Layout — Tabbed (owner decision 2026-07-04).** Inside the leaf, two tabs —
+*Suggestions (n)* / *Proposed MOCs (n)* — show one list at a time. Rationale:
+"nicht zuviel auf einmal, aber alles sichtbar" — keeps each list uncluttered as
+runs grow while both stay one click away. (Rejected: A/stacked — both lists in one
+scroll, cluttered on large runs; C/master-detail — extra clicks for a quick
+toggle.) Editable fields carry the accent affordance so they read as writable vs
+the render-only fields.
+
 ## 4. ADR-S4 — Save path & the `emit_digest` rule (RESOLVED by the wire)
 
 The change-signal open point is **closed**: Tomo chose the **payload-digest**
@@ -127,16 +135,18 @@ interface EditModel {
 
 interface Suggestion {
   readonly id: string;                  // render-only (e.g. "S01", "S01#1")
-  readonly stem: string;                // render-only
-  readonly title: string;               // render-only (display)
+  stem: string;                         // derived from title on rename (Tomo owns)
+  title: string;                        // EDITABLE (op 1d rename) — needs §8-3
+  decision: "approve" | "skip";         // EDITABLE (op 1b/op4) — needs §8-2
   readonly candidateMocs: readonly CandidateMoc[];
 }
 
 interface CandidateMoc {
-  readonly path: string;                // stable key, render-only
+  readonly path: string;                // stable key
+  readonly source: "tomo" | "user";     // user = editor-added via fuzzy pick (§8-1)
   selected: boolean;                    // EDITABLE (op 1)
   anchor: Anchor | null;                // EDITABLE (op 2)
-  readonly fitConfidence: number | null;// advisory, render-only
+  readonly fitConfidence: number | null;// advisory, render-only (tomo candidates)
 }
 
 interface Anchor {                       // note: wire enum has NO `block`
@@ -152,8 +162,8 @@ interface ProposedMoc {
   readonly topic: string;               // render-only
   name: string;                         // EDITABLE (rename)
   parent: string;                       // EDITABLE (reparent)
-  memberIds: readonly string[];         // EDITABLE (membership moves, by id)
-  readonly tags: readonly string[];     // render-only
+  memberIds: readonly string[];         // EDITABLE (membership moves + merge union, by id)
+  tags: readonly string[];              // EDITABLE (op 2c, fuzzy over vault tags) — needs §8-4
   readonly reason: string;              // render-only
   decision: "approve" | "skip";         // EDITABLE (default "skip")
 }
@@ -169,82 +179,113 @@ Every edit is a pure `EditModel → EditModel` transform setting `dirty: true` �
 fully unit-testable with zero Obsidian and zero JSON I/O. The `meta.emitDigest`
 is never derived from the model; it rides along untouched.
 
-## 6. Operation → wire-field mapping (post-reconciliation)
+## 6. Operation → field mapping (final, post owner-review 2026-07-04)
 
-| ADR-026 op | Wire binding | Editor affordance | Notes |
-|---|---|---|---|
-| **1 — re-point to MOC** | toggle `candidate_mocs[].selected` | checkbox/switch per candidate row | **Narrower than ADR-026's "picker over existing MOCs":** the candidate set is Tomo-provided; adding an arbitrary vault MOC is **not** in the wire. Flag-back §8-A. |
-| **2 — choose spot** | edit `candidate_mocs[].anchor` | SpotPicker (ADR-S3) | Retains type→placement gating per executor (below). `alt_headings` = hint; real structure via `markdownStructure` is authoritative for existing MOCs. |
-| **3 — merge/rename proposed** | `proposed_mocs[].name` / `parent` / `member_ids` | inline text + member chips | **Merge model changed:** same-`name` ⇒ Tomo collapses + unions members; OR move `member_ids` by id. Hashi does **not** drop nodes. |
-| **(3b) — approve/create MOC** | `proposed_mocs[].decision` | approve/skip toggle | **New editable surface** beyond ADR-026's four ops; default `skip`. |
-| **4 — change lifecycle state** | *(absent in v1 wire)* | — | **Not expressible.** Deferred / flag-back §8-B. |
+The owner reviewed the mockups and **broadened the editable surface** well past the
+v1 wire: the editor is a full review surface with write access to almost everything,
+not just a MOC-assigner. Design principle he set: *the editor is built from the
+review goal; Hashi writes the fields it needs into the JSON and Tomo's scripts
+consume them* (traces to his original Kokoro ask). The added fields were sent to
+Tomo as a field-needs handoff (§8); all are additive, `schema_version` stays `"1"`.
 
-## 7. Picker contracts
+**A — Suggestions (atomic notes)**
+
+| # | Editor affordance | Field | Owner | Status |
+|---|---|---|---|---|
+| 1 · assign MOC | toggle Tomo candidates **+ fuzzy-pick any vault note** as a new candidate | `candidate_mocs[].selected` + editor-added candidate (`source:"user"`) | Hashi UI + **Tomo** (honour user-added) | §8 (1) |
+| 2 · choose spot | SpotPicker (ADR-S3b) | `candidate_mocs[].anchor` | Hashi (reuses executor) | in wire |
+| 1b · approve/skip note (**= op 4**) | per-note approve/skip toggle | new `suggestions[].decision` | **Tomo** (add field) | §8 (2) |
+| 1d · rename note | inline-editable title | `suggestions[].title` → editable (`stem` follows) | **Tomo** (make editable) | §8 (3) |
+| 1c · missing targets | referenced note names are **click-to-open** links (Obsidian creates on open) | — (render affordance) | Hashi only | — |
+
+**B — Proposed MOCs**
+
+| # | Editor affordance | Field | Owner | Status |
+|---|---|---|---|---|
+| 3 · rename / reparent | inline text | `name` / `parent` | Hashi | in wire |
+| 3 · approve/create | approve·skip toggle | `decision` (default skip) | Hashi | in wire |
+| 2a · **merge** | explicit "Merge into…" action → sets `name` equal + unions members | `name` + `member_ids` | Hashi (drives same-name collapse) | §8 confirm |
+| 2b · member names | member chips show the atomic-note **title on hover** | resolve `member_ids` → `suggestions[].title` | Hashi only (titles are in the same doc) | — |
+| 2c · edit tags | fuzzy picker over vault tags | `tags` → editable | Hashi UI + **Tomo** (make editable) | §8 (4) |
+
+The **`inside`-only-on-callout** rule (op 2) and **real-structure-over-`alt_headings`**
+still hold — see §7.
+
+## 7. Picker & affordance contracts
+
+### ADR-S3a — MocPicker (op 1, broadened) — `FuzzySuggestModal<TFile>`
+
+Beyond toggling Tomo's candidates, an **"＋ Add MOC"** affordance opens a
+`FuzzySuggestModal` over vault notes (idiom: `InstancePickerModal`,
+`FolderSuggest`). v1 does **no "what is a MOC?" detection** (owner call) — any note
+the user picks becomes a new `candidate_mocs[]` entry marked `source:"user"`,
+`selected:true`, `anchor:null` (→ user then sets a spot via op 2). Pass-2 must
+honour user-added candidates identically to Tomo-proposed ones. Optionally scope
+the picker to the Maps folder later; not v1.
 
 ### ADR-S3b — SpotPicker (op 2) — the executor-bound one
 
 Branches on existing-vs-proposed MOC (ADR-026 open point b):
 
-- **Proposed MOC** (no file yet) → no structure to parse → the picker degrades to
-  **membership + ordering**, not a section picker (a proposed MOC's "candidate"
-  is a not-yet-created file; only `new_section` / ordering apply).
+- **Proposed MOC** (no file yet) → no structure to parse → degrades to
+  **membership + ordering**, not a section picker.
 - **Existing MOC** → parse the note's real structure with
-  `markdownStructure.parseHeadings` + `findCallout` (race-safe, content-parsed —
-  the #68 guarantee). This is the **source of truth**; Tomo's `alt_headings` is a
-  fallback hint only (it can be stale). User picks:
-  1. an **anchor** — a parsed heading or callout (wire `type ∈ {heading, callout,
-     line}`; **no `block`** — the wire doesn't emit it), or `new_section` to
-     target a not-yet-existing `## Section`, and
+  `markdownStructure.parseHeadings` + `findCallout` (race-safe, #68). This is the
+  **source of truth**; Tomo's `alt_headings` is a fallback hint only. User picks:
+  1. an **anchor** — a parsed heading or callout (`type ∈ {heading, callout, line}`;
+     **no `block`**), or `new_section` for a not-yet-existing `## Section`, and
   2. a **placement** — **derived from the anchor type by what `anchorResolver`
-     can honour**, NOT the wire's flat enum:
-     - callout anchor → `{ inside, before, after }`
-     - heading / line anchor → `{ before, after }` (**no `inside`**)
+     can honour**, NOT the wire's flat enum: callout → `{ inside, before, after }`;
+     heading / line → `{ before, after }` (**no `inside`**).
 
-**Why gate `inside` even though the wire enum permits it structurally:** Pass-2
-execution routes an `inside` anchor through `link_to_moc` / `insert_under_marker`,
-whose `anchorResolver` returns `insertInside: null` for non-callouts → the handler
-**hard-fails**. Offering `inside` on a heading would let the user author a
-suggestion the executor cannot apply. Gating it in the editor is exactly the
-ADR-026 §0 "bind to what the executor already does" push-back — the editor is
-**more** constrained than the raw wire, on purpose. `fit_confidence` renders as an
-advisory hint (not editable).
+**Why gate `inside`:** Pass-2 routes it through `link_to_moc`/`insert_under_marker`,
+whose `anchorResolver` returns `insertInside: null` for non-callouts → hard-fail.
+Offering it would author an unexecutable suggestion. The editor is deliberately
+**more** constrained than the raw wire (ADR-026 §0). `fit_confidence` = advisory
+hint, not editable.
 
-### op 1 & op 3 — inline, no dedicated modal
+### ADR-S3c — TagPicker (op 2c) — `FuzzySuggestModal<string>`
 
-- **op 1** (`selected`) is a per-candidate toggle rendered inline on the
-  suggestion row — no picker needed for v1 (the candidate set is fixed by Tomo).
-- **op 3** rename/reparent are inline text inputs; membership moves are
-  drag/though-more-likely a "move to MOC" `SuggestModal<ProposedMoc>` over the
-  *proposed* nodes; `decision` is an approve/skip toggle. Merge is emergent
-  (same-name) — surface a hint when two proposed MOCs share a `name`.
+Fuzzy over existing vault tags (`app.metadataCache.getTags()`) with free-text add.
+Edits `proposed_mocs[].tags` (once Tomo makes it editable, §8-4). Pure vault data —
+no Tomo round-trip for the candidate list.
 
-### ADR-S3c — StatePicker (op 4) — **removed from v1 sketch**
+### Inline affordances (no modal)
 
-Op 4 has no wire binding (§6). The StatePicker is **not built for v1**. If we
-decide the lifecycle transition belongs in the editor, it is a flag-back to Tomo
-to extend the schema (§8-B), not something Hashi can synthesize alone (the
-transition table + the on-disk representation are Tomo-owned).
+- **op 1b decision / op 3 decision** — approve·skip segmented toggle inline on the
+  row (same control both sections; op 1b needs the new `suggestions[].decision`).
+- **op 1d title / op 3 name·parent** — inline text inputs; editable fields carry the
+  accent affordance so they read as writable vs render-only.
+- **op 2a merge** — "Merge into…" opens a `SuggestModal<ProposedMoc>` over the
+  *proposed* nodes; picking a target sets `name` equal + unions `member_ids` →
+  same-name collapse on save (no node-drop; Tomo unions).
+- **op 2b member hover** — tooltip resolves each `member_id` to its
+  `suggestions[].title` (both live in the same doc — no lookup cost).
+- **op 1c click-to-open** — every referenced note name (candidate path, parent,
+  and any future daily-note ref) is a link; click opens in a new tab, Obsidian
+  creates the note on open. Creation stays **outside Hashi** in v1.
 
-## 8. Flag-backs to Tomo (raised at reconciliation; awaiting the confirm round)
+## 8. Field-needs handoff to Tomo (SENT 2026-07-04)
 
-The handoff explicitly invites: *"confirm the contract works … or flag fields you
-need reshaped."* Three items:
+Reframed from "flag-backs / permission asks" to **"here are the fields the editor
+writes; align Pass-2"** — per the owner's stance that Hashi designs from the goal
+and Tomo consumes the JSON. Sent:
+`_outbox/for-tomo/2026-07-04_hashi-to-tomo_suggestions-editor-field-needs.md`.
+Additive requests (`schema_version` stays `"1"`):
 
-- **A — op 1 scope.** ADR-026 op 1 reads as "re-point to a *different* MOC (id/path
-  picker over existing MOCs)"; the wire only lets the user toggle among
-  Tomo-proposed `candidate_mocs`. **Recommendation: accept the toggle model for
-  v1** (simpler; the Session View escape hatch covers "I want a MOC Tomo didn't
-  propose"). Confirm with Tomo that this is the intended reading, or ask for an
-  additive "user-added candidate path" field.
-- **B — op 4 lifecycle state.** ADR-026 lists it as one of the four ops, but it is
-  **not in the v1 wire** ("the atomic-note decision stays a markdown checkbox").
-  **Decision needed:** drop op 4 from the v1 editor (recommended — keep v1 to the
-  three surfaces the wire supports) OR ask Tomo for an additive lifecycle-state
-  field. Either way, Kokoro ADR-026 and this spec must agree.
-- **C — `inside` on non-callout.** The wire's `placement` enum is flat
-  ({before, after, inside}) but `inside` is only executable on callout anchors.
-  Confirm Tomo never emits, and will accept from the editor, `inside` **only** for
-  callout anchors (Hashi enforces this regardless).
+1. **User-added MOC candidates** — Pass-2 honours `candidate_mocs[]` entries the
+   editor added (`source:"user"`), incl. `selected` + `anchor`.
+2. **Per-note `decision` (approve/skip) = op 4** — the note-level accept/reject
+   moves from the markdown checkbox into a `suggestions[].decision` field.
+   Sub-question to Tomo: does `skip` also drop `source_inbox_item`?
+3. **Editable `title`** — rename the atomic note during review; `stem` follows
+   (Tomo derives) unless Tomo wants it edited separately.
+4. **Editable `tags`** — `proposed_mocs[].tags` becomes authoritative when edited.
+
+Confirmations requested (no new field): **merge-by-same-name** is the editor's
+merge path; **`inside` only for callout anchors**. One design question: whether
+**daily-note references** belong in the suggestions wire (for click-to-open) or
+stay executor-side. Owner is handling the Tomo-side sync directly.
 
 ## 9. ADR-S5 — `SuggestionsDoc` adapter port (schema now known; still one seam)
 
@@ -285,9 +326,14 @@ interface SuggestionsDoc {
 
 ## 11. Still open until PRD (do not close on a guess)
 
-1. Flag-backs §8-A / §8-B / §8-C → need Tomo's confirm round + possibly a Kokoro
-   ADR-026 reconciliation for op 4.
-2. Vendor + verify `suggestions-wire.schema.json` (unreadable in this checkout).
-3. Re-read Kokoro ADR-026 (not synced here) before promoting this sketch to a PRD.
-4. Membership-move UX (drag vs `SuggestModal`) — pick at design phase (the HTML
-   mockups feed this decision).
+1. **Tomo consumes the 4 field-needs (§8)** — user-added candidates, per-note
+   `decision`, editable `title`, editable `tags` — and confirms merge-by-name +
+   inside-callout-only. Owner is syncing Tomo directly. The real `EditModel`
+   fields marked "needs §8-n" are provisional until Tomo's schema lands.
+2. **Kokoro ADR-026 reconciliation** — op 4 is **kept** (as `suggestions[].decision`
+   via the wire), not dropped; and op 1 is **broadened** (fuzzy-pick any MOC).
+   ADR-026's wording should reflect both so charter ↔ wire ↔ this spec agree.
+3. Vendor + verify `suggestions-wire.schema.json` (unreadable in this checkout).
+4. Re-read Kokoro ADR-026 (not synced here) before promoting this sketch to a PRD.
+5. Daily-note references — Tomo design question (§8): in the wire for click-to-open,
+   or executor-side only?
