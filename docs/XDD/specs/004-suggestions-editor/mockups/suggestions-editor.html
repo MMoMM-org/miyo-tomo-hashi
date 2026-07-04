@@ -310,17 +310,6 @@
   .foot-explain code { font-family: var(--mono); font-size: 12px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; color: var(--text); }
 
   /* ---- added affordances (owner review 2026-07-04) ---- */
-  .title-edit {
-    font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text);
-    background: transparent; border: 1px solid transparent; border-radius: var(--r-sm);
-    padding: 2px 6px; margin: -2px -6px; min-width: 0; flex: 1;
-  }
-  .title-edit:hover { border-color: var(--border); background: var(--bg-input); }
-  .title-edit:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--bg-input); }
-  .note-decision { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; flex: none; }
-  .note-decision button { font-family: inherit; font-size: 11px; font-weight: 600; padding: 3px 9px; border: 0; background: var(--bg-input); color: var(--text-muted); cursor: pointer; }
-  .note-decision button.approve[aria-pressed="true"] { background: var(--green); color: #fff; }
-  .note-decision button.skip[aria-pressed="true"] { background: var(--bg-hover); color: var(--text); }
   .path-link { color: inherit; cursor: pointer; text-decoration: none; border-bottom: 1px solid transparent; }
   .cand-path:hover .path-link { border-bottom-color: var(--accent); color: var(--accent); }
   .path-link .ext { width: 11px; height: 11px; opacity: 0; margin-left: 3px; vertical-align: -1px; }
@@ -555,13 +544,13 @@
   function suggestionCard(s){
     return `<div class="card">
       <div class="card-top">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <input class="title-edit" value="${s.title}" aria-label="Atomic note title" />
-          <span class="id-chip">${s.id}</span>
-          <div style="flex:1"></div>
-          <div class="note-decision" title="Create this note, or skip it">
-            <button class="approve" aria-pressed="${s.decision==='approve'}">Approve</button>
-            <button class="skip" aria-pressed="${s.decision==='skip'}">Skip</button>
+        <div class="pmoc-row1">
+          <div class="field" style="flex:1"><label>Note (${s.id})</label><input class="inp name" value="${s.title}" aria-label="Atomic note title" /></div>
+          <div class="field"><label>Create?</label>
+            <div class="decision">
+              <button class="approve" aria-pressed="${s.decision==='approve'}">Approve</button>
+              <button class="skip" aria-pressed="${s.decision==='skip'}">Skip</button>
+            </div>
           </div>
         </div>
         <div class="card-sub">${s.stem}.md · filename follows the title</div>
@@ -677,8 +666,8 @@
       el.addEventListener("click", act);
       el.addEventListener("keydown", e=>{ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); act(); } });
     });
-    // decision segmented (proposed-MOC .decision + per-note .note-decision)
-    stage.querySelectorAll(".decision, .note-decision").forEach(d=>{
+    // decision segmented (per-note + proposed-MOC use the same control)
+    stage.querySelectorAll(".decision").forEach(d=>{
       d.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
         d.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));
         b.setAttribute("aria-pressed","true"); showDirty();
