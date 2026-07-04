@@ -1,30 +1,41 @@
-# SDD — 004 Suggestions Editor (sketch)
+# SDD — 004 Suggestions Editor (sketch, reconciled with Tomo wire)
 
-> **Status: DRAFT SKETCH, blocked on Tomo.** This is the design skeleton the
-> user asked for while we wait on Tomo's `suggestions.json` schema + change
-> signal. It pins the *surface, edit-model, store shape, view lifecycle, and
-> the three picker contracts* — everything that does NOT depend on the wire
-> shape. All wire knowledge is quarantined behind a single `SuggestionsDoc`
-> adapter port (ADR-S5) so exactly one small file changes when Tomo pins the
-> schema. ADR numbers below are `ADR-Sn` (sketch) — not confirmed until the
-> PRD/SDD proper is written against the synced Kokoro ADR-026.
+> **Status: DRAFT SKETCH.** Surface + edit-model + store shape + view lifecycle
+> + picker contracts are pinned. **Reconciled 2026-07-04** against Tomo's
+> `_suggestions.json` wire contract (`_inbox/from-tomo/2026-07-04_tomo-to-hashi_suggestions-json-wire-contract.md`;
+> executable schema `Tomo/tomo/schemas/suggestions-wire.schema.json`
+> `schema_version: "1"` — **not readable in this checkout**; only the orientation
+> shape + field semantics from the handoff were available). ADR numbers are
+> `ADR-Sn` (sketch) — not confirmed until the PRD/SDD proper is written against
+> the synced Kokoro ADR-026 + the vendored schema.
 
 ## 0. Guiding constraint (ADR-026 §0)
 
 Kokoro pins **intent only**. Every operation binds to what Hashi's executor
 **already does**; we **push back** on anything that duplicates Tomo or
-reimplements the executor. Concretely for this spec: op 2 reuses the existing
-insert primitive (`anchorResolver`/`blockInsert`/`markdownStructure`) rather
-than inventing a placement model, and the editor is **not** an approval gate.
+reimplements the executor. The editor is **not** an approval gate — approval
+stays the user's `#MiYo-Tomo/proposed → confirmed` tag flip.
 
-## 1. Component overview
+## 1. The wire contract in one paragraph (what changed after reconciliation)
+
+Tomo emits a `_suggestions.json` sibling next to each `_suggestions.md` (same
+stem/folder). The **editable review surface is narrow**: per-suggestion MOC
+**selection** (`candidate_mocs[].selected`) and **anchor** (`candidate_mocs[].anchor`),
+plus per-proposed-MOC **name / parent / decision** and **membership** (`member_ids`).
+Everything else (`title`, `id`, `stem`, `topic`, `run_id`, `generated`, …) is
+**render-only**. The change signal is **`emit_digest`** — a sha256 of the
+canonicalised editable payload that Hashi **must carry through verbatim and never
+recompute** (§4). This reconciliation surfaced three deltas vs the original ADR-026
+op list, tracked in §8 as flag-backs to Tomo.
+
+## 2. Component overview
 
 ```
                           ┌─────────────────────────────┐
-   suggestions.json  ───► │  SuggestionsDoc (adapter)    │  ADR-S5  (Tomo-gated)
-   _suggestions.md   ◄─── │  load() / save() / signal()  │  ← the ONLY wire-aware file
+   _suggestions.json ───► │  SuggestionsDoc (adapter)    │  ADR-S5
+   _suggestions.md   ◄─── │  load()/save() · digest      │  ← the ONLY wire-aware file
                           └──────────────┬──────────────┘
-                                         │ pure EditModel (id-based graph)
+                                         │ pure EditModel (id-keyed)
                           ┌──────────────▼──────────────┐
                           │  suggestionsStore : Store<T> │  ADR-S2
                           │  editModel + dirty + select  │
@@ -32,171 +43,251 @@ than inventing a placement model, and the editor is **not** an approval gate.
                         subscribe        │        intent
                           ┌──────────────▼──────────────┐
                           │  SuggestionsEditorView       │  ADR-S1 (ItemView, leaf)
-                          │  renders list; opens pickers │
-                          └───┬─────────┬─────────┬──────┘
-                              │         │         │
-                    ┌─────────▼──┐ ┌────▼─────┐ ┌─▼──────────┐
-                    │ MocPicker  │ │ SpotPicker│ │ StatePicker│  ADR-S3 (SuggestModals)
-                    │ (op1/op3)  │ │ (op2)     │ │ (op4)      │
-                    └────────────┘ └───────────┘ └────────────┘
-                              │  op2 reads structure via
-                    ┌─────────▼───────────────────────────┐
-                    │ markdownStructure + anchorResolver   │  REUSE (spec 002)
-                    └──────────────────────────────────────┘
+                          │  Suggestions · Proposed MOCs │
+                          └───┬───────────────────┬──────┘
+                              │                   │
+                    ┌─────────▼──────┐   ┌────────▼─────────┐
+                    │ SpotPicker(op2)│   │ inline toggles/  │
+                    │ SuggestModal   │   │ text (op1/op3)   │
+                    └───────┬────────┘   └──────────────────┘
+                            │ existing MOC → real structure
+                    ┌───────▼──────────────────────────────┐
+                    │ markdownStructure + anchorResolver    │  REUSE (spec 002)
+                    └───────────────────────────────────────┘
 ```
 
-Pure/testable core (no Obsidian): `EditModel`, graph ops (op1/op3),
-`markdownStructure`, `anchorResolver`. Obsidian-facing shell: the `ItemView`,
-the `SuggestModal` pickers, and the `SuggestionsDoc` adapter's Obsidian side.
+Pure/testable core (no Obsidian): `EditModel`, the editable-field transforms,
+`markdownStructure`, `anchorResolver`, the digest **passthrough** rule. Obsidian
+shell: the `ItemView`, the `SpotPicker` modal, the adapter's Obsidian side.
 
-## 2. ADR-S1 — Surface is a leaf `ItemView`, not a Modal
+## 3. ADR-S1 — Surface is a leaf `ItemView`, not a Modal
 
-Mirror `TomoChatView` (`src/ui/chat-view/`): register a `VIEW_TYPE`, open in a
-workspace leaf, dockable beside the source note. **Rejected alternative:** a
-`Modal` à la `ExecutionModal` — that surface is a single-shot preview→execute
-confirm with a terminal `Execute` and documents "no reopen"; the editor is
-iterative, `Save`-terminated, and wants to live beside the note (op 2).
+Unchanged by reconciliation. Mirror `TomoChatView` (`src/ui/chat-view/`):
+register a `VIEW_TYPE`, open in a workspace leaf, dockable beside the source
+note. **Rejected:** a `Modal` à la `ExecutionModal` — single-shot preview→execute
+with a terminal `Execute`; the editor is iterative, `Save`-terminated, wants to
+live beside the note (op 2 references note structure).
 
-Lifecycle (matches the `Modal`/store discipline in `ExecutionModal`, adapted to
-`ItemView`):
+Lifecycle:
+- `onOpen()` → `suggestionsStore.subscribe(render)`; `adapter.load(docPath)` into
+  the store (async; loading state first).
+- `render(state)` → rebuild from `state.editModel`; dirty badge + `Save` /
+  `Revert`. Same subscribe→rebuild pattern as `ExecutionModal.render`.
+- `onClose()` → unsubscribe; if `state.dirty`, `ConfirmModal` save/discard.
+  `ItemView` **does** extend `Component` → `registerDomEvent`/`registerEvent`
+  here (unlike `Modal`/`SettingTab`). Verify against the class at build time.
+- Reopen is fine — the store is the source of truth, the view is a projection.
 
-- `onOpen()` → `suggestionsStore.subscribe(render)`; load current doc via the
-  adapter into the store (async; render a loading state first).
-- `render(state)` → rebuild the list from `state.editModel`; a dirty badge +
-  `Save` / `Revert` action row. (Same "subscribe → rebuild contentEl" pattern
-  as `ExecutionModal.render`.)
-- `onClose()` → unsubscribe; if `state.dirty`, prompt save/discard (reuse
-  `ConfirmModal`). **`ItemView` DOES extend `Component`** → prefer
-  `registerDomEvent`/`registerEvent` here (unlike `Modal`/`SettingTab`, which
-  do not — see `docs/ai/memory` note). Verify against the class at build time.
-- Reopen is fine (unlike the modal) — the store is the single source of truth,
-  the view is a stateless projection.
+Default: one active `_suggestions.json` at a time (matches the executor's single
+run). Multi-doc deferred.
 
-**Open (needs Obsidian verification, not a blocker):** whether the editor
-should be one-doc-at-a-time (simplest — the active `_suggestions.md` drives it)
-or multi-doc. Default: single active doc, like the executor's single run.
+## 4. ADR-S4 — Save path & the `emit_digest` rule (RESOLVED by the wire)
 
-## 3. ADR-S2 — State: a `suggestionsStore` singleton over `util/store.ts`
+The change-signal open point is **closed**: Tomo chose the **payload-digest**
+mechanism. Hashi's obligations:
 
-Follow `executionStore` / `connectionStore` / `ideBridgeStore`: a module-level
-`Store<SuggestionsState>` is the coordination point between the adapter, the
-view, and the pickers.
+1. **Carry `emit_digest` through verbatim.** Never recompute, never strip. Load
+   keeps it as an **opaque passthrough field** on the `EditModel`; save writes
+   the exact same string back.
+2. **Free to reformat/reorder keys** on save — the digest is over a canonical
+   re-serialization, so formatting alone is not "an edit."
+3. **Editing any editable field** makes Tomo's Pass-2 recompute differ from the
+   stored digest → Tomo treats the JSON as authoritative. Hashi does **nothing**
+   to signal this beyond writing the changed field.
+4. **Writing back unchanged** → digest still matches → Tomo falls back to the
+   markdown. So a no-op save is genuinely a no-op. **Consequence:** Hashi should
+   only write the file when the user actually changed an editable field — a
+   `dirty`-gated save avoids a spurious "JSON was touched" read on Tomo's side.
+   (`dirty` is Hashi's own in-memory UI state, NOT written to the wire.)
+
+Save steps: `adapter.save(model)` → serialise editable fields + verbatim
+`emit_digest` → write `_suggestions.json` via `VaultFS`; re-render
+`_suggestions.md` as a courtesy read view; **no digest recompute, no dirty flag
+on the wire**. Write failure → `Notice` + keep `dirty` (no silent loss); model
+is rebuilt-and-replaced, never mutated in place.
+
+## 5. ADR-S2 — State: `suggestionsStore` singleton over `util/store.ts`
+
+Real shape from the wire (id-keyed for stable graph ops):
 
 ```ts
-// sketch — field names illustrative, not the wire shape
+// reconciled to the wire; passthrough fields kept verbatim
 interface EditModel {
-  readonly docId: string;
-  readonly suggestions: readonly Suggestion[]; // id-keyed
-  readonly proposedMocs: readonly ProposedMoc[]; // id-keyed nodes (op3 scope)
+  readonly meta: {                      // all render-only + digest passthrough
+    readonly schemaVersion: "1";
+    readonly generated: string;
+    readonly runId: string;
+    readonly profile: string;
+    readonly sourceItems: number;
+    readonly emitDigest: string;        // OPAQUE — written back unchanged (§4)
+  };
+  readonly suggestions: readonly Suggestion[];
+  readonly proposedMocs: readonly ProposedMoc[];
+}
+
+interface Suggestion {
+  readonly id: string;                  // render-only (e.g. "S01", "S01#1")
+  readonly stem: string;                // render-only
+  readonly title: string;               // render-only (display)
+  readonly candidateMocs: readonly CandidateMoc[];
+}
+
+interface CandidateMoc {
+  readonly path: string;                // stable key, render-only
+  selected: boolean;                    // EDITABLE (op 1)
+  anchor: Anchor | null;                // EDITABLE (op 2)
+  readonly fitConfidence: number | null;// advisory, render-only
+}
+
+interface Anchor {                       // note: wire enum has NO `block`
+  type: "heading" | "callout" | "line";
+  value: string | null;
+  placement: "before" | "after" | "inside";
+  newSection: string | null;            // target a not-yet-existing `## Section`
+  readonly altHeadings: readonly string[]; // Tomo's snapshot pick-list (hint)
+}
+
+interface ProposedMoc {
+  readonly id: string;                  // stable ⇒ merge/rename is a graph op
+  readonly topic: string;               // render-only
+  name: string;                         // EDITABLE (rename)
+  parent: string;                       // EDITABLE (reparent)
+  memberIds: readonly string[];         // EDITABLE (membership moves, by id)
+  readonly tags: readonly string[];     // render-only
+  readonly reason: string;              // render-only
+  decision: "approve" | "skip";         // EDITABLE (default "skip")
 }
 
 type SuggestionsState =
   | { kind: "idle" }
-  | { kind: "loading"; docId: string }
+  | { kind: "loading"; docPath: string }
   | { kind: "editing"; model: EditModel; dirty: boolean }
-  | { kind: "load-failed"; docId: string; message: string };
+  | { kind: "load-failed"; docPath: string; message: string };
 ```
 
-All four ops are **pure `EditModel → EditModel` transforms** dispatched into the
-store (re-point edge / pick spot / merge-rename node / set state), each setting
-`dirty: true`. This keeps op1–op4 fully unit-testable with zero Obsidian and
-zero wire dependency — the store holds the abstract graph, the adapter is the
-only thing that knows how that graph serialises.
+Every edit is a pure `EditModel → EditModel` transform setting `dirty: true` —
+fully unit-testable with zero Obsidian and zero JSON I/O. The `meta.emitDigest`
+is never derived from the model; it rides along untouched.
 
-## 4. Picker contracts
+## 6. Operation → wire-field mapping (post-reconciliation)
 
-### ADR-S3a — MocPicker (op 1 re-point; reused by op 3 merge target)
+| ADR-026 op | Wire binding | Editor affordance | Notes |
+|---|---|---|---|
+| **1 — re-point to MOC** | toggle `candidate_mocs[].selected` | checkbox/switch per candidate row | **Narrower than ADR-026's "picker over existing MOCs":** the candidate set is Tomo-provided; adding an arbitrary vault MOC is **not** in the wire. Flag-back §8-A. |
+| **2 — choose spot** | edit `candidate_mocs[].anchor` | SpotPicker (ADR-S3) | Retains type→placement gating per executor (below). `alt_headings` = hint; real structure via `markdownStructure` is authoritative for existing MOCs. |
+| **3 — merge/rename proposed** | `proposed_mocs[].name` / `parent` / `member_ids` | inline text + member chips | **Merge model changed:** same-`name` ⇒ Tomo collapses + unions members; OR move `member_ids` by id. Hashi does **not** drop nodes. |
+| **(3b) — approve/create MOC** | `proposed_mocs[].decision` | approve/skip toggle | **New editable surface** beyond ADR-026's four ops; default `skip`. |
+| **4 — change lifecycle state** | *(absent in v1 wire)* | — | **Not expressible.** Deferred / flag-back §8-B. |
 
-`FuzzySuggestModal<MocRef>` over existing MOCs (idiom: `InstancePickerModal`,
-`FolderSuggest`). Returns a MOC id/path; the view dispatches a re-point
-transform. MOC inventory source: vault scan / metadataCache (existing MOCs) —
-**not** re-derived by Tomo. For op 3, the "candidates" list is restricted to
-**proposed** MOC nodes from the `EditModel`, not vault MOCs.
+## 7. Picker contracts
 
-### ADR-S3b — SpotPicker (op 2 choose the spot) — the executor-bound one
+### ADR-S3b — SpotPicker (op 2) — the executor-bound one
 
-Two-stage, and **branches on existing-vs-proposed MOC** (ADR-026 open point b):
+Branches on existing-vs-proposed MOC (ADR-026 open point b):
 
-- **Proposed MOC** (no file yet) → there is no section structure to show. The
-  picker degrades to **membership + ordering** over the proposed node's
-  children (list reorder), NOT a section picker.
-- **Existing MOC** → parse the note's own structure with
-  `markdownStructure.parseHeadings` + `findCallout` (race-safe, content-parsed
-  — the #68 guarantee), present headings + callouts, user picks:
-  1. an **anchor** — one of the parsed {callout | heading | line | block}, and
-  2. a **placement** — the set is derived from the chosen anchor by what
-     `anchorResolver` can actually honour:
+- **Proposed MOC** (no file yet) → no structure to parse → the picker degrades to
+  **membership + ordering**, not a section picker (a proposed MOC's "candidate"
+  is a not-yet-created file; only `new_section` / ordering apply).
+- **Existing MOC** → parse the note's real structure with
+  `markdownStructure.parseHeadings` + `findCallout` (race-safe, content-parsed —
+  the #68 guarantee). This is the **source of truth**; Tomo's `alt_headings` is a
+  fallback hint only (it can be stale). User picks:
+  1. an **anchor** — a parsed heading or callout (wire `type ∈ {heading, callout,
+     line}`; **no `block`** — the wire doesn't emit it), or `new_section` to
+     target a not-yet-existing `## Section`, and
+  2. a **placement** — **derived from the anchor type by what `anchorResolver`
+     can honour**, NOT the wire's flat enum:
      - callout anchor → `{ inside, before, after }`
-     - heading / line / block anchor → `{ before, after }` (no `inside`)
+     - heading / line anchor → `{ before, after }` (**no `inside`**)
 
-This directly answers ADR-026 open point (a): **the editor offers exactly the
-`(anchor, placement)` pairs `anchorResolver` resolves — nothing invented.** The
-chosen pair is stored on the suggestion; Pass 2 emits the matching
-`link_to_moc` / `insert_under_marker` action. Hashi does not preview the write
-here — it records intent that the existing executor will honour verbatim.
+**Why gate `inside` even though the wire enum permits it structurally:** Pass-2
+execution routes an `inside` anchor through `link_to_moc` / `insert_under_marker`,
+whose `anchorResolver` returns `insertInside: null` for non-callouts → the handler
+**hard-fails**. Offering `inside` on a heading would let the user author a
+suggestion the executor cannot apply. Gating it in the editor is exactly the
+ADR-026 §0 "bind to what the executor already does" push-back — the editor is
+**more** constrained than the raw wire, on purpose. `fit_confidence` renders as an
+advisory hint (not editable).
 
-### ADR-S3c — StatePicker (op 4 lifecycle state)
+### op 1 & op 3 — inline, no dedicated modal
 
-`SuggestModal<LifecycleTag>` offering **only valid transitions** from the
-current state, per Tomo `state-tag-lifecycle.md` §6 (exactly one lifecycle tag)
-and Invariant #5 (monotonic — no backward transitions). The transition table is
-Tomo-owned domain data; Hashi encodes it as a pure `validTransitions(current)`
-function (unit-tested), so an invalid state can never be offered. Safer than raw
-frontmatter editing because the illegal targets are simply absent from the list.
+- **op 1** (`selected`) is a per-candidate toggle rendered inline on the
+  suggestion row — no picker needed for v1 (the candidate set is fixed by Tomo).
+- **op 3** rename/reparent are inline text inputs; membership moves are
+  drag/though-more-likely a "move to MOC" `SuggestModal<ProposedMoc>` over the
+  *proposed* nodes; `decision` is an approve/skip toggle. Merge is emergent
+  (same-name) — surface a hint when two proposed MOCs share a `name`.
 
-## 5. ADR-S4 — Save path
+### ADR-S3c — StatePicker (op 4) — **removed from v1 sketch**
 
-On `Save`:
-1. `SuggestionsDoc.save(editModel)` → serialise + write `suggestions.json`
-   (via `VaultFS`, so `FakeVaultFS` covers it in tests).
-2. Re-render `_suggestions.md` from the model as a **courtesy read view** (Pass
-   2 does not depend on it, but a viewer should see consistent content).
-3. Emit the **change signal** Tomo chose (payload digest → nothing to do;
-   explicit dirty flag → set it). **Deferred** — exact mechanism is Tomo's
-   call (ADR-S5).
-4. Clear `dirty`.
+Op 4 has no wire binding (§6). The StatePicker is **not built for v1**. If we
+decide the lifecycle transition belongs in the editor, it is a flag-back to Tomo
+to extend the schema (§8-B), not something Hashi can synthesize alone (the
+transition table + the on-disk representation are Tomo-owned).
 
-Failure handling mirrors the executor: a write failure surfaces a `Notice` +
-keeps `dirty` (no silent data loss); no partial-model corruption because the
-model is rebuilt-and-replaced, never mutated in place.
+## 8. Flag-backs to Tomo (raised at reconciliation; awaiting the confirm round)
 
-## 6. ADR-S5 — `SuggestionsDoc` adapter port (the Tomo-gated seam)
+The handoff explicitly invites: *"confirm the contract works … or flag fields you
+need reshaped."* Three items:
 
-**The single file that knows the wire shape.** Everything above is written
-against the abstract `EditModel`; this port is the only place that maps
-`EditModel ⇄ suggestions.json` and knows the change-signal mechanism.
+- **A — op 1 scope.** ADR-026 op 1 reads as "re-point to a *different* MOC (id/path
+  picker over existing MOCs)"; the wire only lets the user toggle among
+  Tomo-proposed `candidate_mocs`. **Recommendation: accept the toggle model for
+  v1** (simpler; the Session View escape hatch covers "I want a MOC Tomo didn't
+  propose"). Confirm with Tomo that this is the intended reading, or ask for an
+  additive "user-added candidate path" field.
+- **B — op 4 lifecycle state.** ADR-026 lists it as one of the four ops, but it is
+  **not in the v1 wire** ("the atomic-note decision stays a markdown checkbox").
+  **Decision needed:** drop op 4 from the v1 editor (recommended — keep v1 to the
+  three surfaces the wire supports) OR ask Tomo for an additive lifecycle-state
+  field. Either way, Kokoro ADR-026 and this spec must agree.
+- **C — `inside` on non-callout.** The wire's `placement` enum is flat
+  ({before, after, inside}) but `inside` is only executable on callout anchors.
+  Confirm Tomo never emits, and will accept from the editor, `inside` **only** for
+  callout anchors (Hashi enforces this regardless).
+
+## 9. ADR-S5 — `SuggestionsDoc` adapter port (schema now known; still one seam)
+
+Still the single wire-aware file, now with a known target:
 
 ```ts
 interface SuggestionsDoc {
-  load(docPath: string): Promise<EditModel>;   // parse suggestions.json → model
-  save(model: EditModel): Promise<void>;        // model → json + md re-render + signal
+  load(docPath: string): Promise<EditModel>;   // parse _suggestions.json → model (keep emit_digest opaque)
+  save(model: EditModel): Promise<void>;        // editable fields + verbatim emit_digest → json + md re-render
 }
 ```
 
-- Real impl (`ObsidianSuggestionsDoc`) is written **after** Tomo pins the
-  schema — built/tested against **real Tomo emission**, not a hand-authored
-  fixture (spec-002 lesson: synthetic fixtures never surface Tomo↔Hashi drift).
-- A `FakeSuggestionsDoc` over an in-memory model lets ADR-S1..S4 be built and
-  tested now, before the schema exists.
+- **Vendor** `suggestions-wire.schema.json` into `src/schema/` (mirror the
+  `instructions.schema.json` precedent) once the Tomo branch is reachable; add a
+  version-`const` gate (`"1"`) that fails loud like the executor's, so a future
+  bump rejects legibly rather than mis-parsing.
+- Real impl (`ObsidianSuggestionsDoc`) written + tested against **real Tomo
+  emission** (spec-002 lesson: synthetic fixtures never surface Tomo↔Hashi drift).
+  `FakeSuggestionsDoc` over an in-memory model unblocks ADR-S1..S4 tests now.
+- **Digest safety test (mandatory):** load → mutate one editable field → save →
+  assert `emit_digest` byte-identical to input; and load → save-with-no-edit →
+  assert file content round-trips such that Tomo's canonical digest still matches
+  (canonical-form round-trip, not byte-identity).
 
-## 7. Testing posture (Constitution L1/L2)
+## 10. Testing posture (Constitution L1/L2)
 
-- **Pure core** (op1–op4 transforms, `validTransitions`, spot-placement
-  derivation, graph merge/rename) — unit-tested with authorization AND rejection
-  cases (e.g. merge into a non-proposed MOC rejected; backward state transition
-  absent).
-- **Adapter** — deferred; when written, tested against captured real
-  `suggestions.json` from a Tomo walk (not synthetic).
-- **View + pickers** — jsdom against the obsidian mock (the `import "obsidian"`
+- **Pure core** — the field transforms, `validPlacements(anchorType)` derivation,
+  proposed-MOC rename/reparent/decision/membership, same-name-merge detection —
+  unit-tested with authorization AND rejection cases (e.g. `inside` absent for a
+  heading anchor; membership move to a non-proposed MOC rejected).
+- **Adapter** — deferred; tested against captured real `_suggestions.json`, plus
+  the digest-passthrough tests in §9.
+- **View + SpotPicker** — jsdom against the obsidian mock (the `import "obsidian"`
   side-effect shim gotcha applies) + a manual-QA row set once wired.
-- **Reused code** (`markdownStructure`, `anchorResolver`) already carries its
-  own suite — op 2 adds only the anchor→placement-set derivation tests.
+- **Reused code** (`markdownStructure`, `anchorResolver`) already covered — op 2
+  adds only the anchor→placement-set derivation + the alt_headings-vs-real-structure
+  precedence tests.
 
-## 8. What stays open until Tomo (do not close on a guess)
+## 11. Still open until PRD (do not close on a guess)
 
-1. `suggestions.json` field shape → ADR-S5 real impl.
-2. Change-signal mechanism (digest vs dirty flag) → step 5.3.
-3. Whether Tomo emits proposed-MOC child ordering we must preserve verbatim
-   (affects op 2 proposed-branch + op 3) → confirm with schema.
-4. Re-read Kokoro ADR-026 (not synced here) → reconcile any §-level intent this
-   sketch under- or over-reaches before promoting to PRD.
+1. Flag-backs §8-A / §8-B / §8-C → need Tomo's confirm round + possibly a Kokoro
+   ADR-026 reconciliation for op 4.
+2. Vendor + verify `suggestions-wire.schema.json` (unreadable in this checkout).
+3. Re-read Kokoro ADR-026 (not synced here) before promoting this sketch to a PRD.
+4. Membership-move UX (drag vs `SuggestModal`) — pick at design phase (the HTML
+   mockups feed this decision).
