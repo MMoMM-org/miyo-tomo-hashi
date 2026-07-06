@@ -1,6 +1,11 @@
-# SDD — 004 Suggestions Editor (sketch, final-contract)
+# SDD — 004 Suggestions Editor (near-final; PRD-traced)
 
-> **Status: DRAFT SKETCH, ready to promote to PRD.** Reconciled 2026-07-06
+> **Status: DRAFT — PRD written (`requirements.md`, 2026-07-06); design traces
+> to all 10 PRD features (§12).** Two finalization gates remain, both out of
+> this checkout (not guesses — see §11): vendor+verify the executable schema,
+> re-read/reconcile Kokoro ADR-026. ADR-S1..S5 are settled in the README
+> decisions log but want an explicit owner ✓ before PLAN.
+> Reconciled 2026-07-06
 > against Tomo's **final** `_suggestions.json` contract
 > (`_inbox/from-tomo/2026-07-05_tomo-to-hashi_final-contract-and-example.md`)
 > and two real runs (`2026-07-06_0909`, `_0949`). Executable schema:
@@ -239,15 +244,47 @@ interface SuggestionsDoc {
   shim) + manual-QA rows.
 - **Reused** `markdownStructure`/`anchorResolver` already covered.
 
-## 11. Still open until PRD (do not close on a guess)
+## 11. Open finalization gates (do not close on a guess)
 
-1. **Rebuild the adapter/model against a fresh Pass-1 wire** carrying the §8 fixes
-   (real `candidate_mocs` on worthy notes + tag-handler context). No longer
-   speculative — Tomo shipped both.
+**Resolved since the sketch:**
+- PRD is written (`requirements.md`) — the "promote to PRD" gate is cleared; §12 traces it.
+- §8 fixes confirmed against a real emission — the `1115` run carries real
+  `candidate_mocs` on worthy notes (S07) and full tag-handler context.
+
+**Still open (block a *final* SDD; both out of this checkout):**
+1. **Vendor + verify `suggestions-wire.schema.json`** — unreadable here (Tomo repo
+   is `_outbox`-stub-only in this checkout). The adapter's version gate + round-trip
+   tests (§9) must be built/verified against the real schema, not a hand fixture
+   (spec-002 lesson). This is an implementation-time gate, not a design unknown.
 2. **Kokoro ADR-026 reconciliation** — it still records the override model + "no
-   per-note decision"; both are superseded by Tomo's JSON-only + `decision`.
-   Flag pending (spec task #3).
-3. Vendor + verify `suggestions-wire.schema.json` (unreadable here).
-4. Re-read Kokoro ADR-026 before promoting this sketch to a PRD.
-5. **Deferred (owner-decided 2026-07-06):** "apply daily update + keep source note"
-   is OUT of v1 — `accepted` stays apply-and-delete. Revisit post-v1 (§8).
+   per-note decision"; both superseded by Tomo's JSON-only + `decision`. Drift
+   handoff sent (`_outbox/for-kokoro/2026-07-06_...adr-026-drift...`); Hashi conforms
+   to Tomo meanwhile. Re-read the reconciled ADR when it syncs; no code impact expected.
+3. **Owner ✓ on ADR-S1..S5** — settled in the README decisions log; want an explicit
+   confirmation (or a "keep lean structure vs adopt tcs SDD template" call) before PLAN.
+
+**Deferred (owner-decided 2026-07-06 — OUT of v1):** "apply daily update + keep
+source note" (decouple from `accepted`) — `accepted` stays apply-and-delete.
+Revisit post-v1 (§8). Recorded in the PRD "Won't Have" section.
+
+## 12. PRD traceability
+
+Every PRD feature (`requirements.md` → Must-Have F1–F10) maps to a design element
+here — coverage check for the SDD promotion:
+
+| PRD feature | Design element |
+|-------------|----------------|
+| F1 Tabbed review surface beside the note | §3 ADR-S1 (leaf `ItemView`, 4 tabs, lifecycle + dirty-guard) |
+| F2 Re-point to a different MOC (op 1) | §6 Suggestions tab (`candidate_mocs` select + `＋ Add MOC`); §7 fuzzy MOC picker (`source:"user"`) |
+| F3 Choose the spot inside a MOC (op 2) | §7 SpotPicker (real `markdownStructure`, anchor→placement gating, `inside` callout-only) |
+| F4 Rename / merge proposed MOCs (op 3) | §6 Proposed MOCs tab (inline name, member-id graph op, "Merge into…") |
+| F5 Per-note / per-MOC decision (op 4) | §5 `Suggestion.decision` / `ProposedMoc.decision` (worthiness-/skip-defaulted) |
+| F6 Editable note fields (title/template/location/tags) | §5 editable fields; §7 fuzzy pickers |
+| F7 Force-Atomic consistent per source | §6 "Force-Atomic is one decision per source" (stem sync) |
+| F8 Edit daily updates | §6 Daily tab (content/position/time/accept/force-atomic; click-to-open; auto-delete via `accepted`) |
+| F9 Approve tag-handler groups | §6 Tag-Handler tab (approve/keep-source toggles + read-only context) |
+| F10 Safe save — own the whole document | §1 + §4 ADR-S4 (full-document round-trip, `emit_digest` passthrough, dirty gate, version fail-loud); §9 ADR-S5 round-trip tests |
+
+PRD Won't-Have items (Tomo-reasoning round-trips, editing existing-MOC structure,
+new approval gate, schema ownership, decoupled keep-source) are enforced by §0
+(bind to what the executor does) + §8 (deferred capability).

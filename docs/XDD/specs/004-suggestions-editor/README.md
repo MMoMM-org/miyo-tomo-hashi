@@ -5,14 +5,14 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-07-03 |
-| **Current Phase** | **PRD** — `requirements.md` drafted (2026-07-06), grounded in the settled SDD sketch + real runs (`0909/0949/1115`); 10 Must features, 32 Gherkin acceptance criteria, 0 clarification markers. Both PRD-gating preconditions cleared. Next: SDD finalization (promote the sketch) → PLAN. |
+| **Current Phase** | **SDD (near-final)** — PRD written; `solution.md` promoted with PRD→design traceability (§12, all 10 features covered) + refreshed open-gates (§11). Two finalization gates remain, both **out of this checkout**: vendor+verify the executable schema, ADR-026 reread. ADR-S1..S5 want an explicit owner ✓. **PLAN gated on those** — not started. |
 | **Last Updated** | 2026-07-06 |
 
 ## Documents
 
 | Document | Status | Notes |
 |----------|--------|-------|
-| solution.md | sketch (final-contract, 2026-07-06) | SDD — leaf ItemView + 4 tabs; full `EditModel` (own-the-whole-document / verbatim passthrough); `emit_digest` passthrough; op→field mapping; picker contracts; force-atomic stem-sync; §8 records the 3 flags Tomo resolved. |
+| solution.md | near-final (PRD-traced, 2026-07-06) | SDD — leaf ItemView + 4 tabs; full `EditModel` (own-the-whole-document / verbatim passthrough); `emit_digest` passthrough; op→field mapping; picker contracts; force-atomic stem-sync; §8 records the 3 flags Tomo resolved; **§12 traces all 10 PRD features**; §11 refreshed (2 finalization gates remain, both out of checkout). |
 | mockups/ | draft | `suggestions-editor.html` — built on the real `2026-07-06_0949` run: 4 tabs, worthy/suppressed cards, daily editing, pickers, live vs flat-markdown compare. |
 | requirements.md | draft (2026-07-06) | PRD — vision/problem/value; primary persona = vault owner; 10 Must features (4 ops + full editable surface + safe save), Should/Could/Won't; op 2 detailed spec; success metrics honour no-telemetry (verified via tests/QA); risks + open questions (vendor schema, Kokoro ADR-026 reconcile). Strictly WHAT/WHY — op→field mapping stays in the SDD. |
 | plan/ | — | **Deferred** until PRD. |
@@ -94,6 +94,7 @@ Confirmations (no new field): merge-by-same-name; `inside` only for callout anch
 | 2026-07-06 | **Layout finalized = Tabbed, A/C dropped.** Mockup rebuilt on the real 8-item `0949` run (4 tabs, worthy/suppressed, daily, tag-handler) + left source-pane shows the same run's flat markdown for direct compare. | The A/C comparison served its purpose; the mockup is now the actual design, not a skeleton survey. |
 | 2026-07-06 | **Owner sign-off: DEFER "apply daily update + keep source note."** v1 keeps `accepted` = apply-and-delete; the decoupled keep-source control is out of v1. | Tomo's flag-2 reply named it as the one genuine gap (needs a new wire field + a vault-deletion behaviour change requiring owner sign-off). Owner chose to keep v1 scope tight — no Tomo item raised; revisit post-v1. Confirmed live in the `1115` run: worthy note S07 carries real `candidate_mocs`, tag-handler carries full context. |
 | 2026-07-06 | **Promote to PRD phase.** Both PRD-gating preconditions cleared: (a) ADR-026 reconciliation is Hashi-done — drift handoff sent to Kokoro, wire-decisions inbox item `done`, conformed to Tomo's executable schema; (b) fresh Pass-1 wire with §8 fixes vendored (real `1115` run). Standard mode; no research fan-out (domain already settled via SDD sketch + real runs + full handoff chain). | XDD-order note: SDD was written first (sketch) because design had to be nailed against Tomo's evolving contract; PRD now follows, grounded in the settled sketch. |
+| 2026-07-06 | **PRD drafted; SDD promoted (near-final, PRD-traced).** `requirements.md`: 10 Must features, 32 Gherkin ACs, 0 markers, success metrics honour no-telemetry. `solution.md`: added §12 PRD→design traceability + refreshed §11 gates; did **not** force-fit the tcs enterprise SDD template onto the lean owner-iterated doc. **Did not start PLAN** — genuinely gated on 2 out-of-checkout artifacts (schema vendoring, ADR-026 reread) + owner ✓ on ADR-S1..S5. | Honest gate discipline over fabricated finalization (spec-002 lesson): the schema is unreadable in this checkout and ADR-026 isn't synced; finalizing/PLAN-ing against a guess would repeat exactly the drift risk this spec spent days closing. |
 
 ## References
 
