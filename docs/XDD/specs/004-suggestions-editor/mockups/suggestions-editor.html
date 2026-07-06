@@ -365,12 +365,18 @@
   .daily-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
   .daily-date { font-size: 14px; font-weight: 650; }
   .warn-pill { font-size: 11px; color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 40%, var(--border)); border-radius: 20px; padding: 2px 10px; cursor: pointer; }
-  .log-entry { border-top: 1px solid var(--border); padding: 10px 0 12px; }
-  .le-head { display: flex; gap: 9px; align-items: baseline; }
-  .le-time { font-family: var(--mono); font-size: 11px; color: var(--accent); flex: none; padding-top: 1px; }
-  .le-content { font-size: 13px; color: var(--text); }
-  .le-meta { font-size: 11.5px; color: var(--text-faint); margin: 5px 0 8px; }
-  .le-controls { display: flex; gap: 16px; }
+  .log-entry { border-top: 1px solid var(--border); padding: 11px 0 13px; }
+  .le-text { width: 100%; font-family: var(--ui); font-size: 13px; color: var(--text); background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 7px 9px; resize: vertical; line-height: 1.45; }
+  .le-text:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .le-meta { font-size: 11.5px; color: var(--text-faint); margin: 6px 0 9px; }
+  .le-controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .ctl { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted); }
+  .le-pos, .le-time-in { font-family: inherit; font-size: 12px; color: var(--text); background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 4px 7px; }
+  .le-time-in:disabled { opacity: .4; }
+  .wlink { color: var(--accent); cursor: pointer; border-bottom: 1px solid transparent; text-decoration: none; }
+  .wlink:hover { border-bottom-color: var(--accent); }
+  .wlink .ext { opacity: .55; margin-left: 3px; vertical-align: -1px; }
+  .chip.member { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* ---- tag-handler ---- */
   .card.tagh .th-title { font-size: 13.5px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -579,6 +585,7 @@
   const vaultTags = ["topic/mind/concepts","topic/learning","topic/knowledge/frameworks","topic/knowledge/lyt","topic/health","topic/people","topic/communication","topic/growth/aol/development","topic/other"];
   const templates = ["t_note_tomo.md","t_note_plain.md","t_zettel.md","t_source.md"];
   const folders = ["Atlas/202 Notes/","Atlas/203 Fleeting/","100 Inbox/","Atlas/204 Sources/"];
+  const parentMocs = ["2000 - Knowledge Management","Atlas/200 Maps/Root (MOC)","1000 - Life Areas","3000 - Projects","Atlas/200 Maps/Learning (MOC)"];
 
   const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 6"/></svg>';
   const PENCIL = '<svg class="pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13 5l4 4"/></svg>';
@@ -655,7 +662,7 @@
     return `<div class="pmoc">
       <div class="pmoc-row1">
         <div class="field" style="flex:1"><label>Name (${m.id})</label><input class="inp name" value="${m.name}" /></div>
-        <div class="field" style="width:140px"><label>Parent</label><input class="inp" value="${m.parent}" /></div>
+        <div class="field" style="width:180px"><label>Parent</label><button class="mini-pick" data-pickparent>${m.parent}</button></div>
         <div class="field"><label>Create?</label>
           <div class="decision">
             <button class="approve" aria-pressed="${m.decision==='approve'}">Approve</button>
@@ -664,7 +671,7 @@
         </div>
       </div>
       <div class="pmoc-row2">
-        <div class="members"><span class="lbl">Members</span>${m.members.map(x=>`<span class="chip member" title="${titleOf(x)}">${x}</span>`).join("")}</div>
+        <div class="members"><span class="lbl">Members</span>${m.members.map(x=>`<span class="chip member" title="${x}">${titleOf(x)}</span>`).join("")}</div>
         <div style="flex:1"></div>
         <button class="link-btn" data-merge>⇄ Merge into…</button>
       </div>
@@ -679,17 +686,24 @@
   }
 
   // ---------- daily + tag-handler cards ----------
+  const POS = [["after_last_line","After last line"],["before_first_line","Before first line"],["at_time","At time"]];
   function dailyCard(d){
     return `<div class="card daily">
       <div class="daily-head">
-        <span class="path-link daily-date" data-open>[[${d.date}]]${EXT}</span>
+        <span class="wlink daily-date" data-open>${d.date}${EXT}</span>
         ${d.exists ? '' : `<span class="warn-pill" data-open title="Click to create the daily note">⚠ note doesn't exist — click to create</span>`}
       </div>
       ${d.entries.map(e=>`
         <div class="log-entry">
-          <div class="le-head"><span class="le-time">${e.time || e.position}</span><span class="le-content">${e.content}</span></div>
-          <div class="le-meta">${e.reason} · <span class="path-link" data-open>[[${e.source}]]${EXT}</span></div>
+          <textarea class="le-text" data-dirty rows="2" aria-label="Log entry text">${e.content}</textarea>
+          <div class="le-meta">${e.reason} · from <span class="wlink" data-open>${e.source}${EXT}</span></div>
           <div class="le-controls">
+            <label class="ctl"><span>Position</span>
+              <select class="le-pos" data-dirty aria-label="Log entry position">
+                ${POS.map(([v,l])=>`<option value="${v}" ${e.position===v?'selected':''}>${l}</option>`).join("")}
+              </select>
+            </label>
+            <input type="time" class="le-time-in" value="${e.time||''}" ${e.position==='at_time'?'':'disabled'} data-dirty aria-label="Time" />
             <label class="cbx"><input type="checkbox" ${e.accepted?'checked':''} data-dirty/> Accept</label>
             <label class="cbx"><input type="checkbox" ${e.forceAtomic?'checked':''} data-dirty/> Force Atomic Note</label>
           </div>
@@ -699,7 +713,7 @@
   function tagCard(g){
     return `<div class="card tagh">
       <div class="card-top">
-        <div class="th-title"><span class="path-link" data-open>[[${g.target}]]${EXT}</span> <span class="th-marker">${g.marker}</span></div>
+        <div class="th-title"><span class="wlink" data-open>${g.target}${EXT}</span> <span class="th-marker">${g.marker}</span></div>
         <div class="th-ctx">
           <span class="ctx-flag" title="These fields aren't in the wire yet">ⓘ context (target · marker · sources · preview) not in the JSON — flag to Tomo</span>
           <div class="th-row">Handler <code>${g.handler}</code> · Sources ${g.sources.length}</div>
@@ -765,7 +779,14 @@
     stage.querySelectorAll("[data-merge]").forEach(b=>b.addEventListener("click",()=>openFuzzy("merge")));
     stage.querySelectorAll("[data-picktpl]").forEach(b=>b.addEventListener("click",()=>openFuzzy("tpl", b)));
     stage.querySelectorAll("[data-pickloc]").forEach(b=>b.addEventListener("click",()=>openFuzzy("loc", b)));
+    stage.querySelectorAll("[data-pickparent]").forEach(b=>b.addEventListener("click",()=>openFuzzy("parent", b)));
     stage.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); flashOpen(b); }));
+    // daily position → enable/disable the time input
+    stage.querySelectorAll(".le-pos").forEach(sel=>sel.addEventListener("change",()=>{
+      const t = sel.closest(".le-controls").querySelector(".le-time-in");
+      if(t) t.disabled = sel.value!=="at_time";
+      showDirty();
+    }));
     rebindSpots();
   }
   function flashOpen(el){ el.style.color = "var(--accent)"; setTimeout(()=>{ el.style.color=""; }, 500); }
@@ -834,6 +855,7 @@
     merge: { kick:"Merge · op 3",      title:"Merge into…",         sub:"pick another proposed MOC — members get unioned",   note:"proposed MOCs in this run", src:()=>proposed.map(p=>p.name), paths:false, verb:"" },
     tpl:   { kick:"Template",          title:"Choose a template",   sub:"note templates in the vault",                      note:"Templates/",                src:()=>templates,  paths:false, verb:"" },
     loc:   { kick:"Location",          title:"Choose a folder",     sub:"destination folder for the note",                  note:"vault folders",             src:()=>folders,    paths:false, verb:"create" },
+    parent:{ kick:"Parent MOC",        title:"Choose a parent",     sub:"the MOC this one nests under",                      note:"vault MOCs",                src:()=>parentMocs, paths:false, verb:"create" },
   };
   function openFuzzy(mode, trigger){
     fpMode = mode; fpTrigger = trigger || null; const c = fpConf[mode];
@@ -845,7 +867,7 @@
     setTimeout(()=>fpSearch.focus(), 0);
   }
   function pickFp(value){
-    if((fpMode==="tpl"||fpMode==="loc") && fpTrigger) fpTrigger.textContent = value;
+    if((fpMode==="tpl"||fpMode==="loc"||fpMode==="parent") && fpTrigger) fpTrigger.textContent = value;
     fpScrim.classList.remove("open"); showDirty();
   }
   function renderFp(q){
