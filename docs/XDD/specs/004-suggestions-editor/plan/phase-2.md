@@ -1,6 +1,6 @@
 ---
 title: "Phase 2: SuggestionsDoc Adapter — full-document round-trip"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 2
 ---
@@ -45,7 +45,7 @@ Delivers the single wire-aware adapter and the mandatory data-safety tests — t
   4. Validate: save + failure-path tests.
   5. Success: `emit_digest` carried verbatim; courtesy md re-rendered; failure handled `[ref: PRD/F10]` `[ref: SDD/§4]`.
 
-- [ ] **T2.3 Round-trip fidelity tests (own-the-whole-document)** `[activity: test-strategy]`
+- [x] **T2.3 Round-trip fidelity tests (own-the-whole-document)** `[activity: test-strategy]`
 
   1. Prime: SDD §9 mandatory tests `[ref: SDD/§9]`.
   2. Test (against **real** `0949`/`1115` emissions, not hand fixtures):
@@ -56,6 +56,6 @@ Delivers the single wire-aware adapter and the mandatory data-safety tests — t
   4. Validate: all three cases green.
   5. Success: **zero data-loss on save** — the load-bearing KPI `[ref: PRD/Success Metrics]` `[ref: PRD/F10]`.
 
-- [ ] **T2.4 Phase Validation** `[activity: validate]`
+- [x] **T2.4 Phase Validation** `[activity: validate]`
 
   - Run all Phase 2 tests against real Tomo emissions. `npm test` + `npm run lint` + `npm run build` green. Confirm no wire-schema knowledge leaked outside `src/suggestions/ObsidianSuggestionsDoc.ts` + `src/schema/` (ADR-S5 — one wire-aware file).

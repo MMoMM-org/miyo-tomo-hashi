@@ -85,7 +85,7 @@ Each phase is a separate file. Tasks follow red-green-refactor: **Prime** → **
 > **Tracking Principle**: track logical units that produce verifiable outcomes; the TDD cycle is the method, not separate tracked items.
 
 - [x] [Phase 1: Domain Core — EditModel + pure transforms](phase-1.md)
-- [ ] [Phase 2: SuggestionsDoc Adapter — full-document round-trip](phase-2.md)
+- [x] [Phase 2: SuggestionsDoc Adapter — full-document round-trip](phase-2.md)
 - [ ] [Phase 3: Editor View + Pickers](phase-3.md)
 - [ ] [Phase 4: Integration & Validation](phase-4.md)
 
