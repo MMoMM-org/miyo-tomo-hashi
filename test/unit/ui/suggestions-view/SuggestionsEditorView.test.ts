@@ -157,12 +157,12 @@ describe("SuggestionsEditorView", () => {
 
 			const suggestionsBtn = findTabButton(view, "Suggestions");
 			expect(suggestionsBtn.classList.contains("is-active")).toBe(true);
+			// count lives on the tab-bar button
+			expect(suggestionsBtn.textContent).toContain("7");
 
+			// the real SuggestionsTab renders one card per suggestion
 			const content = tabContent(view);
-			expect(
-				content?.querySelector(".hashi-suggestions-editor-tab-stub"),
-			).not.toBeNull();
-			expect(content?.textContent).toContain("Suggestions (7)");
+			expect(content?.querySelector(".hashi-suggestion-card")).not.toBeNull();
 		});
 	});
 
@@ -182,11 +182,10 @@ describe("SuggestionsEditorView", () => {
 				findTabButton(view, "Suggestions").classList.contains("is-active"),
 			).toBe(false);
 
+			// count lives on the tab-bar button; the real DailyTab renders date groups
+			expect(findTabButton(view, "Daily").textContent).toContain("2");
 			const content = tabContent(view);
-			expect(content?.textContent).toContain("Daily (2)");
-			expect(
-				content?.querySelector(".hashi-suggestions-editor-tab-stub"),
-			).not.toBeNull();
+			expect(content?.querySelector(".hashi-daily-group")).not.toBeNull();
 		});
 
 		it("re-clicking the already-active tab is a no-op (content unchanged)", async () => {
