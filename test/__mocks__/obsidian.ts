@@ -551,6 +551,73 @@ export abstract class AbstractInputSuggest<T> {
 	abstract selectSuggestion(value: T, evt?: MouseEvent | KeyboardEvent): void;
 }
 
+// --- Suggest modals (command-palette-style pickers) ---
+//
+// Mirrors the surface SpotPicker (SuggestModal) and the fuzzy field pickers
+// (FuzzySuggestModal) rely on. As with AbstractInputSuggest, tests drive the
+// logic directly (call getSuggestions / getItems / getItemText / onChooseItem)
+// rather than the real popover. open()/close() invoke onOpen/onClose so
+// lifecycle spies work.
+export abstract class SuggestModal<T> {
+	app: App;
+	limit = 100;
+	inputEl = document.createElement("input");
+	resultContainerEl = document.createElement("div");
+
+	constructor(app: App) {
+		this.app = app;
+	}
+
+	setPlaceholder = vi.fn((_placeholder: string) => {});
+	setInstructions = vi.fn();
+	open = vi.fn(() => {
+		void this.onOpen();
+	});
+	close = vi.fn(() => {
+		void this.onClose();
+	});
+
+	onOpen(): void {
+		// default no-op; subclasses may override
+	}
+	onClose(): void {
+		// default no-op; subclasses may override
+	}
+
+	abstract getSuggestions(query: string): T[] | Promise<T[]>;
+	abstract renderSuggestion(value: T, el: HTMLElement): void;
+	abstract onChooseSuggestion(item: T, evt: MouseEvent | KeyboardEvent): void;
+}
+
+export interface FuzzyMatch<T> {
+	item: T;
+	match: { score: number; matches: number[][] };
+}
+
+export abstract class FuzzySuggestModal<T> extends SuggestModal<FuzzyMatch<T>> {
+	abstract getItems(): T[];
+	abstract getItemText(item: T): string;
+	abstract onChooseItem(item: T, evt: MouseEvent | KeyboardEvent): void;
+
+	getSuggestions(query: string): FuzzyMatch<T>[] {
+		const q = query.toLowerCase();
+		return this.getItems()
+			.filter((item) => this.getItemText(item).toLowerCase().includes(q))
+			.map((item) => ({ item, match: { score: 0, matches: [] } }));
+	}
+
+	renderSuggestion(match: FuzzyMatch<T>, el: HTMLElement): void {
+		el.textContent = this.getItemText(match.item);
+	}
+
+	onChooseSuggestion(
+		match: FuzzyMatch<T>,
+		evt: MouseEvent | KeyboardEvent,
+	): void {
+		this.onChooseItem(match.item, evt);
+	}
+}
+
 // --- Event ref (opaque marker) ---
 
 export class EventRef {}
