@@ -87,7 +87,7 @@ Each phase is a separate file. Tasks follow red-green-refactor: **Prime** → **
 - [x] [Phase 1: Domain Core — EditModel + pure transforms](phase-1.md)
 - [x] [Phase 2: SuggestionsDoc Adapter — full-document round-trip](phase-2.md)
 - [x] [Phase 3: Editor View + Pickers](phase-3.md)
-- [ ] [Phase 4: Integration & Validation](phase-4.md)
+- [x] [Phase 4: Integration & Validation](phase-4.md)
 
 **Dependency order**: Phase 1 (pure core + `FakeSuggestionsDoc`) unblocks everything. Phase 2 (real adapter) and Phase 3 (view against the fake) can proceed in parallel once Phase 1 lands. Phase 4 integrates the real adapter + view and validates end-to-end.
 
