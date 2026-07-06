@@ -1,6 +1,6 @@
 ---
 title: "Phase 2: SuggestionsDoc Adapter — full-document round-trip"
-status: pending
+status: in_progress
 version: "1.0"
 phase: 2
 ---
@@ -29,7 +29,7 @@ phase: 2
 
 Delivers the single wire-aware adapter and the mandatory data-safety tests — the load-bearing "no dropped section" guarantee (PRD F10).
 
-- [ ] **T2.1 `ObsidianSuggestionsDoc.load()`** `[activity: backend-api]`
+- [x] **T2.1 `ObsidianSuggestionsDoc.load()`** `[activity: backend-api]`
 
   1. Prime: SDD §9 load contract + the vendored schema `[ref: SDD/§9]`.
   2. Test: parse the **whole** JSON → `EditModel` keeping every read-only/unknown field; unknown `schema_version` **fails loud** and signals fall-back to the markdown path (ADR-025 discipline); a real `1115`-run file loads without loss.
@@ -37,7 +37,7 @@ Delivers the single wire-aware adapter and the mandatory data-safety tests — t
   4. Validate: load + version-gate tests against real emission.
   5. Success: version gate fail-loud `[ref: PRD/F10]` `[ref: SDD/§9]`.
 
-- [ ] **T2.2 `ObsidianSuggestionsDoc.save()`** `[activity: backend-api]`
+- [x] **T2.2 `ObsidianSuggestionsDoc.save()`** `[activity: backend-api]`
 
   1. Prime: SDD §4 save semantics `[ref: SDD/§4]`.
   2. Test: `save()` writes the **whole** model with `emit_digest` byte-identical; re-renders `_suggestions.md` as a courtesy view; on write failure emits a `Notice`, keeps `dirty`, and does not mutate the model in place; a byte-identical (no-edit) save keeps the digest matching so Tomo stays on the markdown path.
