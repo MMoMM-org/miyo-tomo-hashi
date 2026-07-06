@@ -358,6 +358,39 @@ describe("ProposedMocsTab", () => {
 			const transform = firstAppliedTransform(ctx.apply);
 			const result = transform(model);
 			expect(result).toBe(model);
+			expect(result.dirty).toBe(false);
+		});
+
+		it("fails closed (same reference, dirty untouched) when the target moc no longer exists by the time the transform runs", () => {
+			// Regression for the unknown-mocId branch of the local
+			// addProposedMocTag helper — e.g. a merge already collapsed M1
+			// out of the model between render and this apply() actually
+			// running. Wired the same way as every other test in this file:
+			// through the tab's public render/click/onChoose surface, then
+			// applying the captured transform — here to a model that no
+			// longer has the moc the picker was opened for.
+			const tab = new ProposedMocsTab();
+			const container = document.createElement("div");
+			const model = seededModel();
+			const ctx = makeCtx();
+			tab.render(container, model, ctx);
+
+			const addTagBtn = cardFor(container, "M1").querySelector<HTMLElement>(".hashi-proposed-moc-add-tag");
+			addTagBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			tagPickerInstances[0]?.onChoose("#new-tag");
+
+			const transform = firstAppliedTransform(ctx.apply);
+			const modelWithoutM1: EditModel = {
+				doc: {
+					...model.doc,
+					proposed_mocs: model.doc.proposed_mocs.filter((m) => m.id !== "M1"),
+				},
+				dirty: false,
+			};
+
+			const result = transform(modelWithoutM1);
+			expect(result).toBe(modelWithoutM1);
+			expect(result.dirty).toBe(false);
 		});
 	});
 

@@ -62,10 +62,41 @@ import type { EditorTab, TabContext } from "../tabContract.js";
 // Local anchor-set helper — see file header re: no Phase-1 transform for this
 // ---------------------------------------------------------------------------
 
+/** Structural equality for `alt_headings` — order-sensitive, absent treated as empty. */
+function altHeadingsEqual(a?: readonly string[], b?: readonly string[]): boolean {
+	const left = a ?? [];
+	const right = b ?? [];
+	return left.length === right.length && left.every((value, i) => value === right[i]);
+}
+
+/**
+ * Structural equality between a candidate's CURRENT anchor (`null` when
+ * unresolved) and an INCOMING anchor from the picker. `AnchorWire` is flat,
+ * so a field-by-field compare (rather than a reference `===` or a
+ * key-order-fragile `JSON.stringify`) is enough. `null`/`undefined` never
+ * equals an incoming anchor — `onPick` always supplies a concrete
+ * `AnchorWire` (never `null`), so an unresolved candidate always counts as a
+ * real change.
+ */
+function anchorsEqual(current: AnchorWire | null | undefined, incoming: AnchorWire): boolean {
+	if (current === null || current === undefined) return false;
+	return (
+		current.type === incoming.type &&
+		(current.value ?? null) === (incoming.value ?? null) &&
+		current.placement === incoming.placement &&
+		(current.new_section ?? null) === (incoming.new_section ?? null) &&
+		(current.fit_confidence ?? null) === (incoming.fit_confidence ?? null) &&
+		altHeadingsEqual(current.alt_headings, incoming.alt_headings)
+	);
+}
+
 /**
  * Sets `anchor` on the candidate MOC named `mocPath` within `suggestionId`.
  * No-op (same model reference, `dirty` untouched) when the suggestion or the
- * candidate is unknown.
+ * candidate is unknown, OR when the candidate's current anchor already
+ * structurally equals `anchor` — mirrors every sibling setter in
+ * `transforms/suggestion.ts`: re-picking the same spot must not dirty the
+ * doc.
  */
 function setCandidateAnchor(
 	model: EditModel,
@@ -76,8 +107,9 @@ function setCandidateAnchor(
 	const suggestion = model.doc.suggestions.find((s) => s.id === suggestionId);
 	if (suggestion === undefined) return model;
 
-	const hasCandidate = suggestion.candidate_mocs.some((c) => c.path === mocPath);
-	if (!hasCandidate) return model;
+	const candidate = suggestion.candidate_mocs.find((c) => c.path === mocPath);
+	if (candidate === undefined) return model;
+	if (anchorsEqual(candidate.anchor, anchor)) return model;
 
 	const candidate_mocs: CandidateMocWire[] = suggestion.candidate_mocs.map((c) =>
 		c.path === mocPath ? { ...c, anchor } : c,

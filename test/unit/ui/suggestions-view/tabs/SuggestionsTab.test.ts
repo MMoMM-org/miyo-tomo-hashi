@@ -148,6 +148,25 @@ function renderTab(model: EditModel, ctx: TabContext): HTMLElement {
 	return container;
 }
 
+/**
+ * Clicks a candidate MOC's "Set spot…" button and drives its `SpotPicker`
+ * mock's `onPick` with `anchor` — the arrange sequence shared by the
+ * `setCandidateAnchor` behavior tests below (happy path + both no-op
+ * guards). No vault mocking needed: `getAbstractFileByPath` returns
+ * `undefined` by default in the obsidian mock, so `readMocContent` resolves
+ * `""` and still proceeds to construct the (mocked) `SpotPicker` — these
+ * tests only care about the dispatched transform, not the picker's content.
+ */
+async function pickSpot(container: HTMLElement, candidatePath: string, anchor: AnchorWire): Promise<void> {
+	const row = container.querySelector(`.hashi-suggestion-moc[data-moc-path="${candidatePath}"]`)!;
+	row.querySelector<HTMLButtonElement>(".hashi-suggestion-moc-spot")!.click();
+
+	await vi.waitFor(() => {
+		expect(spotPickerInstances.length).toBeGreaterThan(0);
+	});
+	spotPickerInstances[spotPickerInstances.length - 1]!.onPick(anchor);
+}
+
 // ---------------------------------------------------------------------------
 
 describe("SuggestionsTab", () => {
@@ -375,6 +394,115 @@ describe("SuggestionsTab", () => {
 				(c) => c.path === firstCandidate.path,
 			);
 			expect(nextCandidate?.anchor).toEqual(anchor);
+		});
+
+		describe("setCandidateAnchor no-op guards", () => {
+			// Each test drives the SAME dispatched closure — `(model) =>
+			// setCandidateAnchor(model, WORTHY_ID, firstCandidate.path, anchor)`
+			// — against a DIFFERENT model, to exercise setCandidateAnchor's
+			// internal branches without exporting it from SuggestionsTab.ts.
+
+			it("no-ops when the suggestion id is unknown (dirty preserved)", async () => {
+				const model = await loadModel();
+				const { ctx, applyCalls } = makeCtx();
+				const container = renderTab(model, ctx);
+				const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+				const firstCandidate = suggestion.candidate_mocs[0]!;
+				const anchor: AnchorWire = { type: "heading", value: "Notes", placement: "after" };
+
+				await pickSpot(container, firstCandidate.path, anchor);
+				const transform = applyCalls[0]!;
+
+				// Same shape as `model`, but WORTHY_ID no longer exists — the
+				// suggestion id the transform closes over is now unknown.
+				const modelWithoutSuggestion: EditModel = {
+					...model,
+					doc: {
+						...model.doc,
+						suggestions: model.doc.suggestions.filter((s) => s.id !== WORTHY_ID),
+					},
+				};
+
+				const result = transform(modelWithoutSuggestion);
+
+				expect(result).toBe(modelWithoutSuggestion);
+				expect(result.dirty).toBe(false);
+			});
+
+			it("no-ops when the candidate path is unknown (dirty preserved)", async () => {
+				const model = await loadModel();
+				const { ctx, applyCalls } = makeCtx();
+				const container = renderTab(model, ctx);
+				const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+				const firstCandidate = suggestion.candidate_mocs[0]!;
+				const anchor: AnchorWire = { type: "heading", value: "Notes", placement: "after" };
+
+				await pickSpot(container, firstCandidate.path, anchor);
+				const transform = applyCalls[0]!;
+
+				// Suggestion S07 still exists, but its candidate list no longer
+				// carries the path the transform closes over.
+				const modelWithoutCandidate: EditModel = {
+					...model,
+					doc: {
+						...model.doc,
+						suggestions: model.doc.suggestions.map((s) =>
+							s.id === WORTHY_ID
+								? {
+										...s,
+										candidate_mocs: s.candidate_mocs.filter(
+											(c) => c.path !== firstCandidate.path,
+										),
+									}
+								: s,
+						),
+					},
+				};
+
+				const result = transform(modelWithoutCandidate);
+
+				expect(result).toBe(modelWithoutCandidate);
+				expect(result.dirty).toBe(false);
+			});
+
+			it("no-ops when the incoming anchor structurally equals the candidate's current anchor", async () => {
+				const model = await loadModel();
+				const { ctx, applyCalls } = makeCtx();
+				const container = renderTab(model, ctx);
+				const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+				const firstCandidate = suggestion.candidate_mocs[0]!;
+				const anchor: AnchorWire = { type: "heading", value: "Notes", placement: "after" };
+
+				await pickSpot(container, firstCandidate.path, anchor);
+				const transform = applyCalls[0]!;
+
+				// A CLEAN model where the candidate's anchor already equals the
+				// incoming one — a fresh object (`{ ...anchor }`), not the same
+				// reference, so this proves a structural compare, not `===`.
+				const modelWithAnchorAlreadySet: EditModel = {
+					dirty: false,
+					doc: {
+						...model.doc,
+						suggestions: model.doc.suggestions.map((s) =>
+							s.id === WORTHY_ID
+								? {
+										...s,
+										candidate_mocs: s.candidate_mocs.map((c) =>
+											c.path === firstCandidate.path
+												? { ...c, anchor: { ...anchor } }
+												: c,
+										),
+									}
+								: s,
+						),
+					},
+				};
+
+				const result = transform(modelWithAnchorAlreadySet);
+
+				expect(result).toBe(modelWithAnchorAlreadySet);
+				expect(result.dirty).toBe(false);
+			});
 		});
 
 		it("toggling keep-source dispatches setKeepSource", async () => {
