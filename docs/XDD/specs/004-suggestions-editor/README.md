@@ -5,14 +5,14 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-07-03 |
-| **Current Phase** | **SDD (near-final)** — PRD written; `solution.md` PRD-traced (§12). **Schema vendored + verified** (`src/schema/suggestions-wire.schema.json` from `miyo-tomo` main; 3 §5 fixes applied). **ADR-S1..S5 owner-confirmed.** Two gates before PLAN: (1) daily-editing v1 scope **pending Tomo** (handoff sent); (2) ADR-026 reconciliation **paused** on (1). |
+| **Current Phase** | **SDD FINAL — ready for PLAN.** All gates cleared 2026-07-06: schema vendored + verified (re-vendored after Tomo tightened `daily_updates`); ADR-S1..S5 confirmed; **daily-editing v1 confirmed + golden-tested by Tomo**; **Kokoro reconciled ADR-026 on `main`** (`d8410d4`). PRD (10 features / 32 ACs) + SDD (§12 PRD-traced, field-for-field to the shipped wire) both current. |
 | **Last Updated** | 2026-07-06 |
 
 ## Documents
 
 | Document | Status | Notes |
 |----------|--------|-------|
-| solution.md | near-final (PRD-traced, 2026-07-06) | SDD — leaf ItemView + 4 tabs; full `EditModel` (own-the-whole-document / verbatim passthrough); `emit_digest` passthrough; op→field mapping; picker contracts; force-atomic stem-sync; §8 records the 3 flags Tomo resolved; **§12 traces all 10 PRD features**; §11 refreshed (2 finalization gates remain, both out of checkout). |
+| solution.md | **FINAL** (PRD-traced, 2026-07-06) | SDD — leaf ItemView + 4 tabs; full `EditModel` incl. typed `DailyUpdate` shape (own-the-whole-document / verbatim passthrough); `emit_digest` passthrough; op→field mapping; picker contracts; force-atomic stem-sync; §8 the 3 resolved flags; §11 all gates cleared; **§12 traces all 10 PRD features** field-for-field to the shipped wire. |
 | mockups/ | draft | `suggestions-editor.html` — built on the real `2026-07-06_0949` run: 4 tabs, worthy/suppressed cards, daily editing, pickers, live vs flat-markdown compare. |
 | requirements.md | draft (2026-07-06) | PRD — vision/problem/value; primary persona = vault owner; 10 Must features (4 ops + full editable surface + safe save), Should/Could/Won't; op 2 detailed spec; success metrics honour no-telemetry (verified via tests/QA); risks + open questions (vendor schema, Kokoro ADR-026 reconcile). Strictly WHAT/WHY — op→field mapping stays in the SDD. |
 | plan/ | — | **Deferred** until PRD. |
@@ -26,7 +26,7 @@ ADR-026 (Draft) amends Hashi's charter: Hashi may render an **editable, structur
 1. **Re-point a suggestion to a different MOC** — id/path picker over existing MOCs. Graph edit on `suggestions.json` (re-points the suggestion's target edge).
 2. **Choose the spot inside a MOC** — Hashi parses the **note's own structure** (headings, callouts) and the user picks an anchor + placement. **Bound to the executor's real insert primitive** (`anchorResolver`/`blockInsert`): anchor ∈ {callout, heading, line, block}; placement ∈ {before, after} + `inside` (callouts only). **Do NOT reimplement Tomo's protected-zone/placement heuristics** — surface the real structure, the user chooses (ADR-026 §0).
 3. **Merge / rename *proposed* MOCs** — id-based graph op over `suggestions.json`: rename a node, or merge A→B (re-point child edges by id, drop the empty node). Scope: **proposed** MOCs only.
-4. **Change a note's scan / lifecycle state** — offer only the **valid** transitions (Tomo `state-tag-lifecycle.md` §6: exactly one lifecycle tag; Invariant #5: monotonic). Safer than raw frontmatter editing.
+4. **Per-note decision (approve / skip)** — the v1 realization of ADR-026 painpoint 4. The shipped wire carries `suggestions[].decision ∈ approve|skip` (worthiness-defaulted); the editor flips it. This is **not** a lifecycle-tag transition editor — the `proposed → confirmed` scan-state flip remains the user's approval act (ADR-026 Shipped-contract §, confirmed 2026-07-06). Lifecycle-tag editing has no v1 wire binding.
 
 Anything the editor can't express **escalates through the existing Session View chat** (spec 001) — not a new feature.
 
@@ -98,6 +98,7 @@ Confirmations (no new field): merge-by-same-name; `inside` only for callout anch
 | 2026-07-06 | **Schema vendored + verified; ADR-S1..S5 confirmed.** Pulled `suggestions-wire.schema.json` from `miyo-tomo` main → `src/schema/`. Verification found 3 §5 fixes (applied): `fit_confidence` on `anchor` not candidate; `worthiness` nullable; `candidate_mocs[].source` optional → default `"tomo"`. | Owner confirmed the schema is now reachable on main + ADRs are fine. Executable schema is the source of truth (verify-against-ground-truth); the model must match the real wire, not the sketch's guess. |
 | 2026-07-06 | **Daily-editing v1 scope conflict surfaced → keep in v1, ask Tomo.** Tomo's schema + final-contract scope daily as *preserve-only in v1* ("editing UI deferred"); Marcus's 07-06 decision + PRD F8 put daily content/position/time editing in v1. Owner chose: **keep it in v1, raise a Tomo support+golden-test handoff** (`_outbox/for-tomo/2026-07-06_...daily-editing-v1-scope.md`). Hashi holds the daily-editor build; F8 descopes to accept-toggle-only if Tomo declines. | Executable schema wins over ambition on an **untested** path — build_from_wire only golden-tests the *unedited* daily round-trip. Flag the conflict + get Tomo to lock the edited-daily contract before building (spec-002 drift-discipline lesson). |
 | 2026-07-06 | **ADR-026 reconciliation PAUSED on Tomo's daily answer** (owner-directed). Kokoro is mid-update on its side; the reconciled ADR must state the correct v1 daily scope. | Reconciling now would bake in an unresolved scope. Drifts queued for when unblocked: override → JSON-only rebuild + own-the-whole-document; per-note `decision` shipped; `baseline_digest`→`emit_digest`; daily/tag-handler full-mirror scope. |
+| 2026-07-06 | **ALL GATES CLEARED — SDD FINAL, ready for PLAN.** Tomo confirmed daily rich-editing v1 (build_from_wire honours edited content/position/time; edited-daily golden test; `daily_updates` schema tightened — re-vendored). Kokoro **reconciled ADR-026** on `main` (`d8410d4`): new "Shipped contract (PR #128)" section = JSON-only rebuild + own-the-whole-document, D2/D4 superseded, per-note `decision`, daily-v1 scope. Hashi spec conforms field-for-field. SDD §5 now types `DailyUpdate`; README scope op 4 reconciled (decision, not lifecycle editing). | The paused work resolved itself the right way: Tomo confirmed the untested path is now tested, and Kokoro (source of truth) reconciled the ADR to the shipped contract — no fabricated closure, no cross-repo edit from Hashi. |
 
 ## References
 

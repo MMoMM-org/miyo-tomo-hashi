@@ -147,12 +147,10 @@ The minimum for the editor to replace hand-editing for Pass-1 review: the four d
 
 #### Feature 8: Edit daily updates
 
-> **⚠ v1 scope pending Tomo confirmation (2026-07-06).** Tomo's schema/contract currently
-> scope daily as *preserve-only in v1*; the `content`/`position`/`time` editing below is in
-> v1 pending Tomo confirming `build_from_wire` honours the edited-daily path + a golden test
-> (`_outbox/for-tomo/2026-07-06_hashi-to-tomo_daily-editing-v1-scope.md`). If Tomo declines,
-> this feature descopes to the `accepted` accept-toggle only (which is confirmed-live). The
-> `accepted`-driven accept/auto-delete behaviour holds either way.
+> **✅ v1 scope confirmed by Tomo (2026-07-06).** Daily rich-editing (`content`/`position`/
+> `time`) stays in v1: Tomo confirmed `build_from_wire` honours the edited-daily path, added
+> an edited-daily golden test, and tightened the `daily_updates` schema to pin the editable
+> surface. Kokoro recorded this v1 scope in ADR-026 ("rich daily editing IS v1").
 
 - **User Story:** As the vault owner, I want to adjust daily-log entries so that inline logs land correctly and I control which are applied.
 - **Acceptance Criteria (Gherkin Format):**

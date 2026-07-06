@@ -1,11 +1,12 @@
-# SDD — 004 Suggestions Editor (near-final; PRD-traced)
+# SDD — 004 Suggestions Editor (FINAL; PRD-traced)
 
-> **Status: DRAFT — PRD written (`requirements.md`, 2026-07-06); design traces
-> to all 10 PRD features (§12).** Schema **vendored + verified** and ADR-S1..S5
-> **owner-confirmed** (2026-07-06). Two gates remain before PLAN (§11): (1)
-> daily-editing v1 scope is **pending Tomo** (support+golden-test ask sent — §6 ⚠);
-> (2) Kokoro ADR-026 reconciliation is **paused** on (1). Schema is verified against
-> `src/schema/suggestions-wire.schema.json`.
+> **Status: FINAL — ready for PLAN (2026-07-06).** PRD written (`requirements.md`);
+> design traces to all 10 PRD features (§12). **All gates cleared** (§11): schema
+> vendored + verified (`src/schema/suggestions-wire.schema.json`, re-vendored after the
+> `daily_updates` tightening); ADR-S1..S5 owner-confirmed; **daily-editing v1 scope
+> confirmed + golden-tested by Tomo**; **Kokoro reconciled ADR-026 on `main`**
+> (JSON-only rebuild + own-the-whole-document + per-note decision + daily-v1). Hashi
+> conforms field-for-field.
 > Reconciled 2026-07-06
 > against Tomo's **final** `_suggestions.json` contract
 > (`_inbox/from-tomo/2026-07-05_tomo-to-hashi_final-contract-and-example.md`)
@@ -100,7 +101,7 @@ interface EditModel {
           sourceItems:number; emitDigest:string };      // all read-only / passthrough
   suggestions: Suggestion[];
   proposedMocs: ProposedMoc[];
-  dailyUpdates: unknown[];        // v1: opaque passthrough (see §7 Daily for the edited subset)
+  dailyUpdates: DailyUpdate[];    // v1: EDITED — schema-pinned shape (§6 Daily), not opaque
   tagHandlerGroups: TagGroup[];
 }
 
@@ -131,6 +132,21 @@ interface ProposedMoc {
 }
 interface TagGroup { groupId:string; approved:boolean; keepSource:boolean;        // EDITABLE toggles (wire required)
   handler:string; targetPath:string|null; marker:string; sourcePaths:string[]; preview:string } // read-only (§8-3)
+
+// daily_updates — schema-pinned 2026-07-06 (Tomo tightened it; additionalProperties:false)
+interface DailyUpdate { date:string;                                             // read-only
+  trackers:DailyTracker[]; logEntries:DailyLogEntry[]; logLinks:DailyLogLink[] }
+interface DailyTracker { field:string; value:string; reason:string; sourceStem:string; // read-only
+  accepted:boolean }                                                             // EDITABLE
+interface DailyLogEntry { reason:string; sourceStem:string;                      // read-only
+  content:string;                                                                // EDITABLE
+  position:"at_time"|"after_last_line"|"before_first_line";                      // EDITABLE
+  time:string|null;                                                              // EDITABLE (only when position==at_time)
+  accepted:boolean;                                                              // EDITABLE
+  forceAtomicNote:boolean }                                                      // EDITABLE — synced per stem w/ Suggestion.forceAtomic
+interface DailyLogLink { targetStem:string; time:string|null;                    // read-only
+  position:"at_time"|"after_last_line"|"before_first_line"; reason:string;       // read-only
+  accepted:boolean }                                                             // EDITABLE
 ```
 
 Every edit is a pure `EditModel → EditModel` transform setting `dirty`. `meta`
@@ -159,14 +175,13 @@ entry: **editable content**, **position** ∈ {`after_last_line`, `before_first_
 fields pass through verbatim. Deleting a daily-only source is **automatic** —
 `accepted` ⇒ delete, uncheck ⇒ keep (§8-2); no separate control.
 
-> **⚠ Daily rich-editing (`content`/`position`/`time`) is v1 PENDING Tomo confirmation.**
-> Tomo's schema + final-contract scope daily as **preserve-only in v1** ("editing UI
-> deferred"); only `accepted`/`force_atomic_note` are confirmed-live. Marcus kept daily
-> editing in v1 (2026-07-06) and Hashi sent a support+golden-test ask
-> (`_outbox/for-tomo/2026-07-06_hashi-to-tomo_daily-editing-v1-scope.md`). **Hashi holds
-> the daily-editor build until Tomo confirms `build_from_wire` honours the edited-daily
-> path.** If Tomo declines, F8 descopes to accept-toggle only. The `accepted` accept/
-> auto-delete behaviour is unaffected either way.
+> **✅ Daily rich-editing (`content`/`position`/`time`) CONFIRMED v1 (2026-07-06).**
+> Tomo confirmed all three asks (`_inbox/from-tomo/2026-07-06_tomo-to-hashi_daily-editing-confirmed-and-tested.md`):
+> (1) `build_from_wire` honours edited `content`/`position`/`time` — `instruction-render`
+> reads them straight off each `log_entries[]` item, gated by `accepted`, no re-derivation;
+> (2) an **edited-daily golden test** was added (suite 2054 green); (3) the `daily_updates`
+> schema was **tightened** to pin the exact editable-vs-read-only shape (re-vendored — §9).
+> Kokoro recorded this v1 scope in ADR-026 ("rich daily editing IS v1"). No descope.
 
 **Tag-Handler:** Approve / Keep-source (skip = not approved). Descriptive context —
 `handler` / `target_path` / `marker` / `source_paths` / `preview` — is now in the
@@ -236,10 +251,13 @@ interface SuggestionsDoc {
 ```
 
 - **Vendored** `suggestions-wire.schema.json` into `src/schema/` (2026-07-06, from
-  `miyo-tomo` main) — verified against the `1115` run + §5 model. Build a version-`const`
-  gate (`"1"`, fail-loud on mismatch, mirror the executor precedent). Verification found
-  three §5 fixes (now applied): `fit_confidence` lives on `anchor` not the candidate;
-  `worthiness` is nullable; `candidate_mocs[].source` is optional (default `"tomo"`).
+  `miyo-tomo` main; **re-vendored** after Tomo tightened `daily_updates`) — verified against
+  the `1115` run + §5 model. Build a version-`const` gate (`"1"`, fail-loud on mismatch,
+  mirror the executor precedent). Verification found three §5 fixes (now applied):
+  `fit_confidence` lives on `anchor` not the candidate; `worthiness` is nullable;
+  `candidate_mocs[].source` is optional (default `"tomo"`). The tightened `daily_updates`
+  is now a closed shape (`additionalProperties:false`) matching §5's `DailyUpdate` — its
+  `additionalProperties:false` will **catch a dropped daily field in the round-trip test**.
 - Real impl (`ObsidianSuggestionsDoc`) written + tested against **real Tomo
   emission** (spec-002 lesson). `FakeSuggestionsDoc` unblocks ADR-S1..S4 now.
 - **Mandatory tests:** (a) load → edit one field → save → `emit_digest` byte-identical;
@@ -264,23 +282,21 @@ interface SuggestionsDoc {
 - §8 fixes confirmed against a real emission — the `1115` run carries real
   `candidate_mocs` on worthy notes (S07) and full tag-handler context.
 
-**Resolved 2026-07-06 (this session):**
-- **Schema vendored + verified** — `suggestions-wire.schema.json` pulled from `miyo-tomo`
-  main into `src/schema/`, verified against the `1115` run; three §5 fixes applied (§9).
-  Gate 1 (was "vendor + verify") is **closed**.
-- **Owner ✓ on ADR-S1..S5** — confirmed 2026-07-06; keep the lean SDD structure (do not
-  force-fit the tcs enterprise template).
+**ALL GATES CLEARED 2026-07-06 — SDD final, ready for PLAN:**
+- **Schema vendored + verified** — `suggestions-wire.schema.json` from `miyo-tomo` main into
+  `src/schema/` (re-vendored after the `daily_updates` tightening), verified against the
+  `1115` run; three §5 fixes applied (§9). ✅
+- **Owner ✓ on ADR-S1..S5** — confirmed 2026-07-06; lean SDD structure kept (no tcs
+  enterprise-template force-fit). ✅
+- **Daily-editing v1 scope — CONFIRMED by Tomo** (§6 ✅): `build_from_wire` honours edited
+  `content`/`position`/`time`, golden-tested, schema tightened. Daily rich-editing stays v1. ✅
+- **Kokoro ADR-026 — RECONCILED by Kokoro** on `main` (commit `d8410d4`): new "Shipped
+  contract (PR #128) — JSON-only Pass-2, full-doc mirror" section records override →
+  JSON-only rebuild + own-the-whole-document, D2/D4 superseded, per-note `decision`, and
+  the v1 daily-editing scope. Hashi spec 004 conforms field-for-field (§12). ✅
 
-**Still open (block a *final* SDD + PLAN):**
-1. **Daily-editing v1 scope — PENDING Tomo** (§6 ⚠). Marcus kept daily rich-editing in
-   v1; Tomo's schema/contract defer it. Support+golden-test ask sent
-   (`_outbox/for-tomo/2026-07-06_hashi-to-tomo_daily-editing-v1-scope.md`). Hashi holds
-   the daily-editor build; F8 descopes to accept-toggle-only if Tomo declines.
-2. **Kokoro ADR-026 reconciliation — PAUSED on gate 1.** The reconciled ADR must state the
-   correct v1 daily scope, so it waits on Tomo's daily answer. (Kokoro is mid-update on its
-   side.) Drifts to fix when unblocked: override → **JSON-only rebuild + own-the-whole-
-   document**; per-note `decision` **is** shipped (op 4); `baseline_digest` → `emit_digest`;
-   record daily/tag-handler full-mirror scope. Hashi conforms to Tomo meanwhile; no code impact.
+**Deferred (owner-decided — OUT of v1):** "apply daily update + keep source note" (decouple
+from `accepted`) — logged in Kokoro `open-questions.md`; revisit post-v1 (§8).
 
 **Deferred (owner-decided 2026-07-06 — OUT of v1):** "apply daily update + keep
 source note" (decouple from `accepted`) — `accepted` stays apply-and-delete.
