@@ -13,12 +13,13 @@
 
 import "obsidian";
 import { App, WorkspaceLeaf } from "obsidian";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	DEFAULT_SEED,
 	FakeSuggestionsDoc,
 } from "../../../__mocks__/FakeSuggestionsDoc";
+import { SuggestionsStore } from "../../../../src/suggestions/store";
 import type { EditModel } from "../../../../src/types/suggestions";
 import { VIEW_TYPE_SUGGESTIONS_EDITOR } from "../../../../src/ui/suggestions-view/index";
 import { SuggestionsEditorView } from "../../../../src/ui/suggestions-view/SuggestionsEditorView";
@@ -311,6 +312,52 @@ describe("SuggestionsEditorView", () => {
 			await view.setState({}, { history: false });
 
 			expect(view.getState()).toEqual({ docPath: DOC_PATH });
+		});
+
+		describe("retarget subscription teardown (regression)", () => {
+			// SuggestionsStore.subscribe() returns an unsubscribe function — the
+			// real contract a caller must honor to stop being notified. Wrapping
+			// the REAL implementation (not replacing it) lets the store still
+			// behave normally while letting us observe whether loadAndRender()
+			// actually invokes the old store's unsubscribe before subscribing to
+			// the new one. Without that teardown, a retargeted-while-open leaf
+			// would keep a stale subscription to the discarded doc's store alive.
+			afterEach(() => {
+				vi.restoreAllMocks();
+			});
+
+			it("calls the PREVIOUS doc's unsubscribe exactly once when setState retargets an already-open view", async () => {
+				const originalSubscribe = SuggestionsStore.prototype.subscribe;
+				const unsubscribeSpies: Array<ReturnType<typeof vi.fn>> = [];
+				vi.spyOn(SuggestionsStore.prototype, "subscribe").mockImplementation(
+					function (
+						this: SuggestionsStore,
+						listener: (model: EditModel) => void,
+					): () => void {
+						const realUnsubscribe = originalSubscribe.call(this, listener);
+						const wrapped = vi.fn(realUnsubscribe);
+						unsubscribeSpies.push(wrapped);
+						return wrapped;
+					},
+				);
+
+				const view = makeView(new FakeSuggestionsDoc());
+				await view.onOpen();
+
+				expect(unsubscribeSpies).toHaveLength(1);
+				expect(unsubscribeSpies[0]).not.toHaveBeenCalled();
+
+				const OTHER_PATH = "100 Inbox/2026-07-06_0949_suggestions.json";
+				await view.setState({ docPath: OTHER_PATH }, { history: false });
+
+				// A second store was constructed and subscribed to for the new doc...
+				expect(unsubscribeSpies).toHaveLength(2);
+				// ...and the FIRST (now-discarded) store's subscription was torn
+				// down exactly once — proving the old store can no longer trigger
+				// this view's render().
+				expect(unsubscribeSpies[0]).toHaveBeenCalledTimes(1);
+				expect(unsubscribeSpies[1]).not.toHaveBeenCalled();
+			});
 		});
 	});
 

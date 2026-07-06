@@ -50,13 +50,16 @@ const MOC_PATH = "Atlas/200 Maps/Type of Notes (MOC).md";
 const MOC_CONTENT = ["# Type of Notes", "", "## Existing", "", "- one", ""].join("\n");
 
 /**
- * Mirrors `SuggestionsTab.ts`'s local, intentionally-unexported
- * `setCandidateAnchor` byte for byte (see that file's header for why it is
- * not promoted to `transforms/suggestion.ts`: Phase 1 has no dedicated
- * transform for `candidate_mocs[].anchor`, and this is its one call site).
- * Re-implemented here (not imported) because it is not part of the tab's
- * public surface — this test still drives it against a REAL `AnchorWire`
- * produced by the real `buildAnchorWire`, so the edit itself is genuine.
+ * Simulates the HAPPY PATH of `SuggestionsTab.ts`'s local, intentionally-
+ * unexported `setCandidateAnchor` (Phase 1 has no dedicated transform for
+ * `candidate_mocs[].anchor`, and the tab is its one call site). Re-implemented
+ * here (not imported) because it is not part of the tab's public surface; this
+ * test drives it against a REAL `AnchorWire` produced by the real
+ * `buildAnchorWire`, so the edit itself is genuine. NOTE: the real helper also
+ * carries an `anchorsEqual` no-op guard (skip dirty when re-picking the same
+ * spot) that this stand-in omits — that guard is covered directly by T3.2's
+ * unit tests (test/unit/ui/suggestions-view/tabs/SuggestionsTab.test.ts), not
+ * here.
  */
 function setCandidateAnchor(
 	model: EditModel,
