@@ -497,3 +497,39 @@ describe("setDailyLogLinkAccepted", () => {
 		expect(result.doc).toBe(model.doc);
 	});
 });
+
+describe("no-op paths preserve a pre-existing dirty:true (regression)", () => {
+	// A no-op (same-value call, unknown date, or bad index) must never
+	// fabricate a new model or force dirty back to false — that would wipe
+	// an already-pending, unsaved edit from an earlier real transform. Every
+	// no-op path must return the EXACT SAME model reference the caller
+	// passed in, dirty value included.
+
+	it("a same-value no-op returns the identical model reference and preserves dirty:true", () => {
+		const model: EditModel = { ...getMultiDailyModel(), dirty: true };
+
+		// entry 0's accepted is already false (see getMockLogEntry default).
+		const result = setDailyLogAccepted(model, "2026-07-06", 0, false);
+
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(true);
+	});
+
+	it("an unknown-date rejection returns the identical model reference and preserves dirty:true", () => {
+		const model: EditModel = { ...getMultiDailyModel(), dirty: true };
+
+		const result = setDailyLogAccepted(model, "does-not-exist", 0, true);
+
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(true);
+	});
+
+	it("an out-of-range index rejection returns the identical model reference and preserves dirty:true", () => {
+		const model: EditModel = { ...getMultiDailyModel(), dirty: true };
+
+		const result = setDailyLogAccepted(model, "2026-07-06", 99, true);
+
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(true);
+	});
+});

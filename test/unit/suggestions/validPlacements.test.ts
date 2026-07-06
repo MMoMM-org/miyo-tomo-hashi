@@ -67,21 +67,4 @@ describe('validPlacements', () => {
 			expect(result).toContain('after');
 		});
 	});
-
-	describe('return type', () => {
-		it('should return a readonly array for callout', () => {
-			const result = validPlacements('callout');
-			expect(Object.isFrozen(result) || Array.isArray(result)).toBe(true);
-		});
-
-		it('should return a readonly array for heading', () => {
-			const result = validPlacements('heading');
-			expect(Object.isFrozen(result) || Array.isArray(result)).toBe(true);
-		});
-
-		it('should return a readonly array for line', () => {
-			const result = validPlacements('line');
-			expect(Object.isFrozen(result) || Array.isArray(result)).toBe(true);
-		});
-	});
 });

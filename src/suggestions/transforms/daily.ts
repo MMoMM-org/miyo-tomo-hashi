@@ -6,22 +6,18 @@
  * keyed by `date`. Every transform here is a pure `EditModel -> EditModel`
  * function: it never mutates `model.doc` (all fields are deeply readonly —
  * see src/types/suggestions.ts), and it sets `dirty: true` only when it
- * actually changed something. An unknown `date` or an out-of-range index is
- * a no-op that returns the model unchanged with `dirty: false`, so callers
- * can rely on "nothing happened" being indistinguishable from "did not
- * apply" without throwing.
+ * actually changed something. An unknown `date`, an out-of-range index, or a
+ * same-value call is a no-op that returns the EXACT SAME `model` reference
+ * the caller passed in — untouched, including whatever `dirty` value it
+ * already had. This is deliberate, not incidental: `dirty` gates `save`
+ * (ADR-S4), so a no-op must never fabricate a new object or force `dirty`
+ * to `false` — doing so would silently wipe a pending unsaved edit from an
+ * earlier, real transform and the user's change could go unsaved.
  *
  * `force_atomic_note` sync (DailyLogEntryWire) is intentionally NOT touched
  * here — that field is kept in sync with `suggestions[].force_atomic` by
  * T1.4, in a different file. These transforms only ever set content,
  * position, time, and accepted toggles.
- *
- * Every setter also gates on "value(s) actually changed": a call that
- * requests the same value the field already holds is a no-op, same as an
- * unknown date or out-of-range index — it returns the model unchanged with
- * `dirty: false`. This matters beyond tidiness: `dirty` gates `save` (ADR-S4),
- * and a spurious `dirty: true` on a same-value call would write out an
- * otherwise-untouched doc, defeating Tomo's unchanged-doc digest short-circuit.
  */
 
 import type {
@@ -34,11 +30,6 @@ import type {
 
 type DailyLogPosition = DailyLogEntryWire["position"];
 
-/** Rejection / no-op result: same doc reference, dirty explicitly false. */
-function unchanged(model: EditModel): EditModel {
-	return { doc: model.doc, dirty: false };
-}
-
 /** Returns a new array with the item at `index` replaced by `value`. */
 function replaceAt<T>(items: readonly T[], index: number, value: T): readonly T[] {
 	return items.map((item, i) => (i === index ? value : item));
@@ -47,9 +38,11 @@ function replaceAt<T>(items: readonly T[], index: number, value: T): readonly T[
 /**
  * Locates the `DailyUpdateWire` for `date` and applies `patch` to it.
  * `patch` returns `null` to signal "reject / no-op" (unknown index, or a
- * transform-specific gating rule) — in which case the whole call resolves
- * to `unchanged(model)`. Otherwise the patched daily update replaces the
- * original in a freshly-spread `doc`/`daily_updates`, and `dirty` is set.
+ * transform-specific gating rule, incl. "value already equals the request")
+ * — in which case the whole call returns the SAME `model` reference passed
+ * in, untouched (so its `dirty` value survives exactly as-is). Otherwise the
+ * patched daily update replaces the original in a freshly-spread
+ * `doc`/`daily_updates`, and `dirty` is set to `true`.
  */
 function withDailyUpdate(
 	model: EditModel,
@@ -58,10 +51,10 @@ function withDailyUpdate(
 ): EditModel {
 	const dailyIndex = model.doc.daily_updates.findIndex((d) => d.date === date);
 	const daily = dailyIndex === -1 ? undefined : model.doc.daily_updates[dailyIndex];
-	if (daily === undefined) return unchanged(model);
+	if (daily === undefined) return model;
 
 	const patched = patch(daily);
-	if (patched === null) return unchanged(model);
+	if (patched === null) return model;
 
 	const daily_updates = replaceAt(model.doc.daily_updates, dailyIndex, patched);
 	return { doc: { ...model.doc, daily_updates }, dirty: true };
@@ -107,7 +100,8 @@ export function setDailyLogPosition(
 /**
  * Sets a daily log entry's `time`, but only when the entry's `position` is
  * `"at_time"` — a time is meaningless for `after_last_line`/`before_first_line`
- * entries, so any such attempt is rejected (unchanged model, `dirty: false`).
+ * entries, so any such attempt is rejected (returns the same model reference,
+ * `dirty` preserved).
  */
 export function setDailyLogTime(
 	model: EditModel,

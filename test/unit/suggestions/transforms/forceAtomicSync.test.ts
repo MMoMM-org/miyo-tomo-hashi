@@ -131,8 +131,8 @@ describe("setForceAtomicFromSuggestion", () => {
 
 		const result = setForceAtomicFromSuggestion(model, "S99", true);
 
-		expect(result.dirty).toBe(false);
-		expect(result.doc).toEqual(model.doc);
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(model.dirty);
 	});
 
 	it("is a no-op when the value already matches everywhere", () => {
@@ -147,8 +147,8 @@ describe("setForceAtomicFromSuggestion", () => {
 
 		const result = setForceAtomicFromSuggestion(model, "S01", true);
 
-		expect(result.dirty).toBe(false);
-		expect(result.doc).toEqual(model.doc);
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(model.dirty);
 	});
 
 	it("does not mutate the original model or doc", () => {
@@ -246,8 +246,8 @@ describe("setForceAtomicFromDaily", () => {
 
 		const result = setForceAtomicFromDaily(model, "no-such-stem", true);
 
-		expect(result.dirty).toBe(false);
-		expect(result.doc).toEqual(model.doc);
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(model.dirty);
 	});
 
 	it("is a no-op when the value already matches everywhere", () => {
@@ -262,8 +262,8 @@ describe("setForceAtomicFromDaily", () => {
 
 		const result = setForceAtomicFromDaily(model, "shared-stem", true);
 
-		expect(result.dirty).toBe(false);
-		expect(result.doc).toEqual(model.doc);
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(model.dirty);
 	});
 
 	it("does not mutate the original model or doc", () => {
