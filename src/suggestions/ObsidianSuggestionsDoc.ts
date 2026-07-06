@@ -14,6 +14,12 @@
  * `Notice`, and even that is injectable (mirrors
  * src/ui/status-bar/StatusBarIcon.ts's `copyAuthToken` pattern) so tests
  * never need the real Obsidian `Notice`.
+ *
+ * One adapter instance per open document (SDD ADR-S1 "one active doc").
+ * `save()` writes to the most-recently-loaded `docPath` — `EditModel`
+ * carries no path identity of its own, so the caller (the editor view) owns
+ * the single-active-doc invariant: it must not call `load(A)`, `load(B)`,
+ * then `save(modelFromA)` and expect A's path to be written to.
  */
 
 import { Notice } from "obsidian";
@@ -60,19 +66,34 @@ export class ObsidianSuggestionsDoc implements SuggestionsDoc {
 		// any path, success or failure — "rebuild-and-replace" is free.
 		if (!model.dirty) return;
 		const docPath = this.requireActiveDocPath();
-		const mdPath = courtesyMdPath(docPath);
 		const json = JSON.stringify(model.doc, null, 2) + "\n";
 
+		// The JSON write is the durable, load-bearing half of save() (ADR-S4
+		// #1/#2): emit_digest and every read-only/daily/tag-handler field ride
+		// along verbatim because they are fields on `model.doc` this transform
+		// never touches. A failure here is a hard failure — nothing was
+		// persisted, so `model` (and its `dirty` flag) must stay exactly as
+		// the caller handed it to us.
 		try {
-			// Whole-document write (ADR-S4 #1/#2): emit_digest and every
-			// read-only/daily/tag-handler field ride along verbatim because
-			// they are fields on `model.doc` that this transform never touches.
-			await this.vault.process(docPath, () => json);
-			await this.vault.process(mdPath, () => renderCourtesyMarkdown(model));
+			await this.writeFile(docPath, json);
 		} catch (err) {
 			const reason = err instanceof Error ? err.message : String(err);
 			this.notify(`Could not save suggestions to ${docPath}: ${reason}`);
 			throw err;
+		}
+
+		// The courtesy `.md` re-render is disposable — Tomo's build_from_wire
+		// overwrites it on the next /inbox run regardless. Once the JSON write
+		// above has succeeded the edits are durable, so a failure here must
+		// NOT be reported (or behave) like a data-loss failure: save() still
+		// resolves successfully so the caller can clear `dirty`.
+		try {
+			await this.writeFile(courtesyMdPath(docPath), renderCourtesyMarkdown(model));
+		} catch (err) {
+			const reason = err instanceof Error ? err.message : String(err);
+			this.notify(
+				`Suggestions saved; couldn't refresh the courtesy _suggestions.md view: ${reason}`,
+			);
 		}
 	}
 
@@ -96,17 +117,33 @@ export class ObsidianSuggestionsDoc implements SuggestionsDoc {
 			);
 		}
 	}
+
+	/**
+	 * Upsert write: `VaultFS.process` requires the file to already exist
+	 * (`ObsidianVaultFS.process` throws "File not found" otherwise) and
+	 * `VaultFS.create` requires that it does NOT — there is no single
+	 * upsert primitive on the port, so both `save()` writes (JSON + courtesy
+	 * markdown) go through this helper to get create-or-overwrite semantics.
+	 */
+	private async writeFile(path: string, content: string): Promise<void> {
+		if (await this.vault.exists(path)) await this.vault.process(path, () => content);
+		else await this.vault.create(path, content);
+	}
 }
 
 /**
- * Derive the sibling `_suggestions.md` courtesy path from the `.json` path
- * Tomo always emits them as a pair (SDD §1) — falls back to appending
- * `.md` if handed a path that doesn't end in `.json`.
+ * Derive the sibling `_suggestions.md` courtesy path from the `.json` path.
+ * Tomo always emits them as a pair (SDD §1), so a `docPath` that doesn't end
+ * in `.json` is a programmer error in the caller, not a case to paper over —
+ * fail loud rather than silently writing to a made-up `<path>.md`.
  */
 function courtesyMdPath(docPath: string): string {
-	return docPath.endsWith(".json")
-		? `${docPath.slice(0, -".json".length)}.md`
-		: `${docPath}.md`;
+	if (!docPath.endsWith(".json")) {
+		throw new Error(
+			`ObsidianSuggestionsDoc: expected a ".json" docPath, got "${docPath}"`,
+		);
+	}
+	return `${docPath.slice(0, -".json".length)}.md`;
 }
 
 // ---------------------------------------------------------------------------

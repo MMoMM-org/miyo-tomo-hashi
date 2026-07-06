@@ -95,13 +95,31 @@ describe("ObsidianSuggestionsDoc.save()", () => {
 	it("does not write when the model is not dirty", async () => {
 		const vault = await seededVault();
 		const processSpy = vi.spyOn(vault, "process");
+		const createSpy = vi.spyOn(vault, "create");
 		const adapter = new ObsidianSuggestionsDoc(vault);
 		const model = await adapter.load(DOC_PATH);
 
 		await adapter.save(model); // dirty: false
 
 		expect(processSpy).not.toHaveBeenCalled();
+		expect(createSpy).not.toHaveBeenCalled();
 		expect(await vault.read(DOC_PATH)).toBe(JSON.stringify(rawFixture, null, 2) + "\n");
+	});
+
+	it("creates the courtesy .md when it doesn't already exist (upsert, not just overwrite)", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(DOC_PATH, JSON.stringify(rawFixture, null, 2) + "\n");
+		// MD_PATH is deliberately NOT pre-seeded here — exercises the create()
+		// branch of writeFile(), which the seededVault()-backed tests above
+		// never hit because they always pre-seed the sibling .md.
+		const adapter = new ObsidianSuggestionsDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+		const edited: EditModel = { doc: model.doc, dirty: true };
+
+		await adapter.save(edited);
+
+		expect(await vault.exists(MD_PATH)).toBe(true);
+		expect(await vault.read(MD_PATH)).toBe(renderCourtesyMarkdown(edited));
 	});
 
 	it("re-renders the courtesy .md sibling on a dirty save", async () => {
@@ -117,7 +135,7 @@ describe("ObsidianSuggestionsDoc.save()", () => {
 		expect(md).toBe(renderCourtesyMarkdown(edited));
 	});
 
-	it("on write failure: notifies, keeps the model unchanged, and surfaces the failure to the caller", async () => {
+	it("on JSON write failure: hard-fails — notifies, keeps the model unchanged, and rethrows to the caller", async () => {
 		const vault = await seededVault();
 		const failingVault = withFailingWrite(vault, DOC_PATH);
 		const notify = vi.fn();
@@ -129,7 +147,7 @@ describe("ObsidianSuggestionsDoc.save()", () => {
 		};
 		const snapshotBefore = JSON.parse(JSON.stringify(edited)) as EditModel;
 
-		await expect(adapter.save(edited)).rejects.toThrow();
+		await expect(adapter.save(edited)).rejects.toThrow("disk full");
 
 		expect(notify).toHaveBeenCalledTimes(1);
 		expect(notify.mock.calls[0]?.[0]).toEqual(expect.stringContaining("disk full"));
@@ -139,12 +157,80 @@ describe("ObsidianSuggestionsDoc.save()", () => {
 		expect(await vault.read(DOC_PATH)).toBe(JSON.stringify(rawFixture, null, 2) + "\n");
 	});
 
+	it("on courtesy .md write failure (JSON already durable): soft-fails — resolves, soft notice, JSON stays saved", async () => {
+		const vault = await seededVault();
+		const failingVault = withFailingWrite(vault, MD_PATH);
+		const notify = vi.fn();
+		const adapter = new ObsidianSuggestionsDoc(failingVault, notify);
+		const model = await adapter.load(DOC_PATH);
+		const edited: EditModel = {
+			doc: { ...model.doc, run_id: "durably-saved" },
+			dirty: true,
+		};
+
+		await expect(adapter.save(edited)).resolves.toBeUndefined();
+
+		expect(notify).toHaveBeenCalledTimes(1);
+		const [message] = notify.mock.calls[0] ?? [];
+		expect(message).toEqual(expect.stringContaining("Suggestions saved"));
+		expect(message).toEqual(expect.stringContaining("disk full"));
+		// the load-bearing JSON write went through despite the courtesy-view failure
+		const written = JSON.parse(await vault.read(DOC_PATH)) as SuggestionsWire;
+		expect(written.run_id).toBe("durably-saved");
+	});
+
 	it("throws a clear error when save() is called before load()", async () => {
 		const vault = await seededVault();
 		const adapter = new ObsidianSuggestionsDoc(vault);
 		const model: EditModel = { doc: rawFixture as SuggestionsWire, dirty: true };
 
 		await expect(adapter.save(model)).rejects.toThrow(/load\(\)/);
+	});
+
+	it("single-active-doc trust boundary: load(A) then load(B) then save(modelFromA) writes A's edits to B's path", async () => {
+		const vault = new FakeVaultFS();
+		const pathA = "100 Inbox/a_suggestions.json";
+		const pathB = "100 Inbox/b_suggestions.json";
+		const docA: SuggestionsWire = { ...(rawFixture as SuggestionsWire), run_id: "run-a" };
+		const docB: SuggestionsWire = { ...(rawFixture as SuggestionsWire), run_id: "run-b" };
+		await vault.create(pathA, JSON.stringify(docA, null, 2) + "\n");
+		await vault.create(pathB, JSON.stringify(docB, null, 2) + "\n");
+		const adapter = new ObsidianSuggestionsDoc(vault);
+
+		const modelA = await adapter.load(pathA);
+		await adapter.load(pathB); // switches the adapter's single active doc to B
+
+		const editedFromA: EditModel = {
+			doc: { ...modelA.doc, run_id: "edited-from-a" },
+			dirty: true,
+		};
+		await adapter.save(editedFromA);
+
+		const writtenB = JSON.parse(await vault.read(pathB)) as SuggestionsWire;
+		expect(writtenB.run_id).toBe("edited-from-a"); // A's edited content landed on B's path
+		const writtenA = JSON.parse(await vault.read(pathA)) as SuggestionsWire;
+		expect(writtenA.run_id).toBe("run-a"); // A's own on-disk file is untouched
+	});
+
+	it("treats a non-.json docPath as a loud programmer error deriving the courtesy path, not a silent <path>.md write", async () => {
+		const vault = new FakeVaultFS();
+		const oddPath = "100 Inbox/note-without-extension";
+		await vault.create(oddPath, JSON.stringify(rawFixture, null, 2) + "\n");
+		const notify = vi.fn();
+		const adapter = new ObsidianSuggestionsDoc(vault, notify);
+		const model = await adapter.load(oddPath);
+		const edited: EditModel = { doc: { ...model.doc, run_id: "edited" }, dirty: true };
+
+		await expect(adapter.save(edited)).resolves.toBeUndefined();
+
+		expect(notify).toHaveBeenCalledTimes(1);
+		expect(notify.mock.calls[0]?.[0]).toEqual(
+			expect.stringContaining('expected a ".json" docPath'),
+		);
+		expect(await vault.exists(`${oddPath}.md`)).toBe(false);
+		// the durable JSON write still succeeded despite the courtesy-path error
+		const written = JSON.parse(await vault.read(oddPath)) as SuggestionsWire;
+		expect(written.run_id).toBe("edited");
 	});
 });
 
