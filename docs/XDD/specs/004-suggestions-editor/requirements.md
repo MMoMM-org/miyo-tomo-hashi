@@ -147,6 +147,13 @@ The minimum for the editor to replace hand-editing for Pass-1 review: the four d
 
 #### Feature 8: Edit daily updates
 
+> **⚠ v1 scope pending Tomo confirmation (2026-07-06).** Tomo's schema/contract currently
+> scope daily as *preserve-only in v1*; the `content`/`position`/`time` editing below is in
+> v1 pending Tomo confirming `build_from_wire` honours the edited-daily path + a golden test
+> (`_outbox/for-tomo/2026-07-06_hashi-to-tomo_daily-editing-v1-scope.md`). If Tomo declines,
+> this feature descopes to the `accepted` accept-toggle only (which is confirmed-live). The
+> `accepted`-driven accept/auto-delete behaviour holds either way.
+
 - **User Story:** As the vault owner, I want to adjust daily-log entries so that inline logs land correctly and I control which are applied.
 - **Acceptance Criteria (Gherkin Format):**
   - [ ] Given a daily-log entry, When I edit its content, position (after-last-line / before-first-line / at-time), or — only when position is at-time — its time, Then the change is recorded.

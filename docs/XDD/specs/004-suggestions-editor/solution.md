@@ -1,10 +1,11 @@
 # SDD — 004 Suggestions Editor (near-final; PRD-traced)
 
 > **Status: DRAFT — PRD written (`requirements.md`, 2026-07-06); design traces
-> to all 10 PRD features (§12).** Two finalization gates remain, both out of
-> this checkout (not guesses — see §11): vendor+verify the executable schema,
-> re-read/reconcile Kokoro ADR-026. ADR-S1..S5 are settled in the README
-> decisions log but want an explicit owner ✓ before PLAN.
+> to all 10 PRD features (§12).** Schema **vendored + verified** and ADR-S1..S5
+> **owner-confirmed** (2026-07-06). Two gates remain before PLAN (§11): (1)
+> daily-editing v1 scope is **pending Tomo** (support+golden-test ask sent — §6 ⚠);
+> (2) Kokoro ADR-026 reconciliation is **paused** on (1). Schema is verified against
+> `src/schema/suggestions-wire.schema.json`.
 > Reconciled 2026-07-06
 > against Tomo's **final** `_suggestions.json` contract
 > (`_inbox/from-tomo/2026-07-05_tomo-to-hashi_final-contract-and-example.md`)
@@ -105,7 +106,7 @@ interface EditModel {
 
 interface Suggestion {
   id:string; stem:string;                              // read-only
-  audioPeer:string|null; suppressed:boolean; worthiness:number; // read-only
+  audioPeer:string|null; suppressed:boolean; worthiness:number|null; // read-only
   title:string;                                        // EDITABLE (stem derives, Tomo)
   template:string; location:string;                    // EDITABLE (pickers)
   tags:string[];                                       // EDITABLE (fuzzy)
@@ -115,12 +116,12 @@ interface Suggestion {
   candidateMocs:CandidateMoc[];
 }
 interface CandidateMoc {
-  path:string; source:"tomo"|"user";                   // path read-only key
-  selected:boolean; anchor:Anchor|null;                // EDITABLE (op 1 / op 2)
-  fitConfidence:number|null;                           // read-only advisory
+  path:string; source?:"tomo"|"user";                  // path read-only key; source OPTIONAL in wire → default "tomo"
+  selected:boolean; anchor:Anchor|null;                // EDITABLE (op 1 / op 2); required in wire = [path, selected]
 }
 interface Anchor { type:"heading"|"callout"|"line"; value:string|null;
-  placement:"before"|"after"|"inside"; newSection:string|null; altHeadings:string[] /*hint*/ }
+  placement:"before"|"after"|"inside"; newSection:string|null;
+  altHeadings:string[] /*hint*/; fitConfidence:number|null /* read-only advisory — lives ON the anchor per schema, not the candidate */ }
 
 interface ProposedMoc {
   id:string; topic:string; reason:string;              // read-only
@@ -128,8 +129,8 @@ interface ProposedMoc {
   memberIds:string[];                                  // EDITABLE (merge/move by id; render titles)
   tags:string[]; decision:"approve"|"skip";            // EDITABLE (default skip)
 }
-interface TagGroup { groupId:string; approved:boolean; keepSource:boolean;        // EDITABLE toggles
-  handler:string; targetPath:string; marker:string; sourcePaths:string[]; preview:string } // read-only (§8-3)
+interface TagGroup { groupId:string; approved:boolean; keepSource:boolean;        // EDITABLE toggles (wire required)
+  handler:string; targetPath:string|null; marker:string; sourcePaths:string[]; preview:string } // read-only (§8-3)
 ```
 
 Every edit is a pure `EditModel → EditModel` transform setting `dirty`. `meta`
@@ -157,6 +158,15 @@ entry: **editable content**, **position** ∈ {`after_last_line`, `before_first_
 **Force Atomic** (`force_atomic_note`). Trackers: Accept toggle. Non-edited daily
 fields pass through verbatim. Deleting a daily-only source is **automatic** —
 `accepted` ⇒ delete, uncheck ⇒ keep (§8-2); no separate control.
+
+> **⚠ Daily rich-editing (`content`/`position`/`time`) is v1 PENDING Tomo confirmation.**
+> Tomo's schema + final-contract scope daily as **preserve-only in v1** ("editing UI
+> deferred"); only `accepted`/`force_atomic_note` are confirmed-live. Marcus kept daily
+> editing in v1 (2026-07-06) and Hashi sent a support+golden-test ask
+> (`_outbox/for-tomo/2026-07-06_hashi-to-tomo_daily-editing-v1-scope.md`). **Hashi holds
+> the daily-editor build until Tomo confirms `build_from_wire` honours the edited-daily
+> path.** If Tomo declines, F8 descopes to accept-toggle only. The `accepted` accept/
+> auto-delete behaviour is unaffected either way.
 
 **Tag-Handler:** Approve / Keep-source (skip = not approved). Descriptive context —
 `handler` / `target_path` / `marker` / `source_paths` / `preview` — is now in the
@@ -225,8 +235,11 @@ interface SuggestionsDoc {
 }
 ```
 
-- **Vendor** `suggestions-wire.schema.json` into `src/schema/` with a version-`const`
-  gate (`"1"`, fail-loud on mismatch, mirror the executor precedent).
+- **Vendored** `suggestions-wire.schema.json` into `src/schema/` (2026-07-06, from
+  `miyo-tomo` main) — verified against the `1115` run + §5 model. Build a version-`const`
+  gate (`"1"`, fail-loud on mismatch, mirror the executor precedent). Verification found
+  three §5 fixes (now applied): `fit_confidence` lives on `anchor` not the candidate;
+  `worthiness` is nullable; `candidate_mocs[].source` is optional (default `"tomo"`).
 - Real impl (`ObsidianSuggestionsDoc`) written + tested against **real Tomo
   emission** (spec-002 lesson). `FakeSuggestionsDoc` unblocks ADR-S1..S4 now.
 - **Mandatory tests:** (a) load → edit one field → save → `emit_digest` byte-identical;
@@ -251,17 +264,23 @@ interface SuggestionsDoc {
 - §8 fixes confirmed against a real emission — the `1115` run carries real
   `candidate_mocs` on worthy notes (S07) and full tag-handler context.
 
-**Still open (block a *final* SDD; both out of this checkout):**
-1. **Vendor + verify `suggestions-wire.schema.json`** — unreadable here (Tomo repo
-   is `_outbox`-stub-only in this checkout). The adapter's version gate + round-trip
-   tests (§9) must be built/verified against the real schema, not a hand fixture
-   (spec-002 lesson). This is an implementation-time gate, not a design unknown.
-2. **Kokoro ADR-026 reconciliation** — it still records the override model + "no
-   per-note decision"; both superseded by Tomo's JSON-only + `decision`. Drift
-   handoff sent (`_outbox/for-kokoro/2026-07-06_...adr-026-drift...`); Hashi conforms
-   to Tomo meanwhile. Re-read the reconciled ADR when it syncs; no code impact expected.
-3. **Owner ✓ on ADR-S1..S5** — settled in the README decisions log; want an explicit
-   confirmation (or a "keep lean structure vs adopt tcs SDD template" call) before PLAN.
+**Resolved 2026-07-06 (this session):**
+- **Schema vendored + verified** — `suggestions-wire.schema.json` pulled from `miyo-tomo`
+  main into `src/schema/`, verified against the `1115` run; three §5 fixes applied (§9).
+  Gate 1 (was "vendor + verify") is **closed**.
+- **Owner ✓ on ADR-S1..S5** — confirmed 2026-07-06; keep the lean SDD structure (do not
+  force-fit the tcs enterprise template).
+
+**Still open (block a *final* SDD + PLAN):**
+1. **Daily-editing v1 scope — PENDING Tomo** (§6 ⚠). Marcus kept daily rich-editing in
+   v1; Tomo's schema/contract defer it. Support+golden-test ask sent
+   (`_outbox/for-tomo/2026-07-06_hashi-to-tomo_daily-editing-v1-scope.md`). Hashi holds
+   the daily-editor build; F8 descopes to accept-toggle-only if Tomo declines.
+2. **Kokoro ADR-026 reconciliation — PAUSED on gate 1.** The reconciled ADR must state the
+   correct v1 daily scope, so it waits on Tomo's daily answer. (Kokoro is mid-update on its
+   side.) Drifts to fix when unblocked: override → **JSON-only rebuild + own-the-whole-
+   document**; per-note `decision` **is** shipped (op 4); `baseline_digest` → `emit_digest`;
+   record daily/tag-handler full-mirror scope. Hashi conforms to Tomo meanwhile; no code impact.
 
 **Deferred (owner-decided 2026-07-06 — OUT of v1):** "apply daily update + keep
 source note" (decouple from `accepted`) — `accepted` stays apply-and-delete.
