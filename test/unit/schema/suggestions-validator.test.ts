@@ -3,6 +3,7 @@ import { validate } from "../../../src/schema/suggestions-validator.js";
 import type {
 	DailyLogEntryWire,
 	DailyUpdateWire,
+	EditModel,
 	ProposedMocWire,
 	SuggestionWire,
 	SuggestionsWire,
@@ -150,5 +151,27 @@ describe("validate (suggestions wire)", () => {
 	it("validateSuggestionsWire raw export is still accessible from the module", async () => {
 		const mod = await import("../../../src/schema/suggestions-validator.js");
 		expect(typeof mod.validateSuggestionsWire).toBe("function");
+	});
+});
+
+describe("EditModel (in-memory edit model)", () => {
+	it("holds the whole validated wire doc verbatim, starting clean (dirty:false)", () => {
+		const result = validate(VALID_FIXTURE);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+
+		const model: EditModel = { doc: result.data, dirty: false };
+
+		// "Own the whole document" (ADR-S4): every wire field survives,
+		// including read-only/passthrough ones like emit_digest and
+		// tag_handler_groups — not just the fields the editor UI touches.
+		expect(model.doc).toEqual(VALID_FIXTURE);
+		expect(model.doc.emit_digest).toBe(VALID_FIXTURE.emit_digest);
+		expect(model.doc.tag_handler_groups).toEqual(
+			VALID_FIXTURE.tag_handler_groups,
+		);
+		// dirty is in-memory UI state, never part of the wire doc.
+		expect(model.dirty).toBe(false);
+		expect("dirty" in model.doc).toBe(false);
 	});
 });

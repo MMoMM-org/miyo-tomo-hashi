@@ -200,3 +200,21 @@ export interface SuggestionsWire {
 export type SuggestionsValidationOutcome =
 	| { readonly ok: true; readonly data: SuggestionsWire }
 	| { readonly ok: false; readonly message: string };
+
+// ---------------------------------------------------------------------------
+// EditModel — in-memory edit model the Suggestions Editor operates on.
+// ---------------------------------------------------------------------------
+
+/**
+ * In-memory edit model. Wraps the whole wire document plus Hashi's own
+ * `dirty` flag (SDD §4: dirty is UI state, NEVER serialized to the wire).
+ * Wrapping the wire doc verbatim (rather than remapping to a camelCase
+ * shape) is what makes ADR-S4 "own the whole document" free: the adapter
+ * parses JSON straight into `doc` and writes `doc` straight back, so no
+ * field can be dropped by a lossy remap. Supersedes SDD §5's illustrative
+ * camelCase `EditModel`/nested-`meta` sketch (impl-wins-over-lagging-SDD).
+ */
+export interface EditModel {
+	doc: SuggestionsWire; // the whole wire object, incl. read-only + passthrough fields
+	dirty: boolean; // in-memory only; every mutating transform sets this true
+}
