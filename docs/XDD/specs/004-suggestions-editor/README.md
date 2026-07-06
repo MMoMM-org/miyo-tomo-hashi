@@ -5,16 +5,16 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-07-03 |
-| **Current Phase** | Design sketch — reconciled + **owner-reviewed** (2026-07-04). Layout = **Tabbed**. Editable surface broadened; field-needs handoff **sent to Tomo**. Awaiting Tomo's consume-side before PRD. |
-| **Last Updated** | 2026-07-04 |
+| **Current Phase** | Design sketch — reconciled with Tomo's **final JSON-only contract** + real runs (2026-07-06); 3 flags raised & **resolved by Tomo**. Layout = **Tabbed** (4 tabs). Ready to promote to PRD (after Kokoro ADR-026 reconciliation). |
+| **Last Updated** | 2026-07-06 |
 
 ## Documents
 
 | Document | Status | Notes |
 |----------|--------|-------|
-| solution.md | sketch (reconciled 2026-07-04) | SDD skeleton — surface + edit-model + store shape + view lifecycle + picker contracts, reconciled to Tomo's `_suggestions.json` wire. Real `EditModel` shape, op→field mapping, `emit_digest` passthrough rule, and 3 flag-backs to Tomo (§8). |
-| mockups/ | draft | HTML interface mockups (variants) to drive the "how do we build it" decision in the design phase. |
-| requirements.md | — | **Deferred** until Tomo's confirm round closes the 3 flag-backs (esp. op 4 scope). Writing ACs before then would encode a guess about which ops are in v1. |
+| solution.md | sketch (final-contract, 2026-07-06) | SDD — leaf ItemView + 4 tabs; full `EditModel` (own-the-whole-document / verbatim passthrough); `emit_digest` passthrough; op→field mapping; picker contracts; force-atomic stem-sync; §8 records the 3 flags Tomo resolved. |
+| mockups/ | draft | `suggestions-editor.html` — built on the real `2026-07-06_0949` run: 4 tabs, worthy/suppressed cards, daily editing, pickers, live vs flat-markdown compare. |
+| requirements.md | — | **Deferred** until (a) Kokoro ADR-026 reconciled to JSON-only + per-note decision, (b) a fresh Pass-1 wire with the §8 fixes is vendored. |
 | plan/ | — | **Deferred** until PRD. |
 
 ## Scope (from Kokoro ADR-026, amends ADR-009 §3)
@@ -86,6 +86,12 @@ Confirmations (no new field): merge-by-same-name; `inside` only for callout anch
 | 2026-07-04 | **Layout = Tabbed (variant B).** | Owner: "nicht zuviel auf einmal, aber alles sichtbar." Each list uncluttered as runs grow; both one click away. A/stacked + C/master-detail rejected. |
 | 2026-07-04 | **Editable surface broadened past the v1 wire** after owner mockup review; reframed the Tomo coordination from "flag-backs / asks" to "field-needs the editor writes; Tomo consumes." | Owner stance: Hashi designs from the review goal and writes what it needs into the JSON; Tomo's scripts process it (his original Kokoro ask). op 1 broadened to a fuzzy MOC picker; op 4 kept as a per-note `decision` field (not dropped); atomic-note `title` + proposed-MOC `tags` made editable. Sent as a field-needs handoff; owner syncs Tomo directly. |
 | 2026-07-04 | **Three Hashi-only affordances confirmed** (no wire change): click-to-open missing targets (creation outside Hashi), explicit "Merge into…" driving same-name collapse, member-chip hover → atomic-note title. | These hit owner asks 1c/2a/2b using data already present (titles live in the same doc; merge is same-name; Obsidian creates notes on open) — no Tomo dependency. |
+| 2026-07-06 | **Kokoro ADR-026 is stale vs Tomo's implementation — conform to Tomo, flag Kokoro.** Two contradictions: Kokoro says *override* Pass-2 + *no per-note decision*; Tomo (implemented, tested) says **JSON-only** rebuild + ships `suggestions[].decision`. | Tomo's schema is the executable source of truth (wire owner). Owner chose: build against Tomo, send Kokoro a handoff to update ADR-026. This is the "massive Kokoro handover problems" the owner flagged. |
+| 2026-07-06 | **Architecture: "own the whole document."** JSON-only ⇒ if the editor edits any field, Pass-2 rebuilds from the JSON alone; every untouched section (`daily_updates`, `tag_handler_groups`, `emit_digest`, read-only fields) must round-trip **verbatim** or it's dropped. | Kokoro's stale override model would have had us round-trip only the editable subset → real data-loss bug. The `EditModel` now holds the full document with opaque passthrough. |
+| 2026-07-06 | **v1 scope: full editable surface incl. daily_updates + tag_handler_groups.** Suggestion cards branch worthy vs suppressed (worthiness + Force-Atomic only). Added: template/location/parent pickers, keep/delete-source, editable daily text + position + time. | Owner review of the real 0949 run. **Hashi never creates daily notes** — missing daily notes are click-to-open (Obsidian creates on open); the editor only toggles per-item state. |
+| 2026-07-06 | **Force-Atomic is one decision per source (Hashi-side sync).** `suggestions[].force_atomic` ⇄ `daily_updates[].log_entries[].force_atomic_note` kept in sync by stem. | A source can be both a suppressed suggestion and a daily log entry (`call-mueller`); independent fields would let the user set contradictory states. Owner: sync it, no Tomo change. |
+| 2026-07-06 | **3 flags raised on the real-run compare, all resolved same day by Tomo.** (1) `candidate_mocs` empty on worthy notes → **fixed** (reducer bug; now emits all candidates, `anchor:null`). (2) daily-only delete → **no-op** (automatic downstream from `accepted`; MD checkbox is decorative). (3) tag-handler context → **fixed** (wire now carries handler/target_path/marker/source_paths/preview). | Handoffs: `_outbox/for-tomo/2026-07-06_hashi-to-tomo_final-contract-confirmed-3-flags.md` → `_inbox/from-tomo/2026-07-06_tomo-to-hashi_flags-1-3-fixed-2-clarified.md`. Deferred (owner sign-off): "apply daily update + keep source". |
+| 2026-07-06 | **Layout finalized = Tabbed, A/C dropped.** Mockup rebuilt on the real 8-item `0949` run (4 tabs, worthy/suppressed, daily, tag-handler) + left source-pane shows the same run's flat markdown for direct compare. | The A/C comparison served its purpose; the mockup is now the actual design, not a skeleton survey. |
 
 ## References
 

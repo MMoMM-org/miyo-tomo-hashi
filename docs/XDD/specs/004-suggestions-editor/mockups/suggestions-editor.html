@@ -384,6 +384,9 @@
   .th-marker { font-family: var(--mono); font-size: 11.5px; color: var(--text-muted); background: var(--bg-alt); border-radius: 4px; padding: 1px 7px; }
   .th-ctx { border: 1px dashed var(--border-strong); border-radius: var(--r-sm); padding: 9px 11px; margin-bottom: 11px; }
   .ctx-flag { display: block; font-size: 11px; color: var(--amber); margin-bottom: 7px; }
+  .th-ctx.resolved { border-style: solid; border-color: var(--border); }
+  .ctx-note { display: block; font-size: 11px; color: var(--text-faint); margin-bottom: 7px; }
+  .ctx-note code { font-family: var(--mono); font-size: 10.5px; background: var(--bg-alt); border-radius: 3px; padding: 0 4px; color: var(--text-muted); }
   .th-row { font-size: 12px; color: var(--text-muted); }
   .th-row code, .th-ctx code { font-family: var(--mono); font-size: 11.5px; background: var(--bg-alt); border-radius: 3px; padding: 0 4px; color: var(--text); }
   .th-preview { font-family: var(--mono); font-size: 11px; color: var(--text-faint); margin-top: 6px; overflow-x: auto; white-space: nowrap; }
@@ -471,9 +474,9 @@
     <h4>What the mockup encodes — real 0949 run, four tabs</h4>
     <ul>
       <li><b>Suggestions</b> has two card modes: <b>worthy</b> (S05/S08 — rename, template &amp; location pickers, tags, MOC link, keep-source, approve/skip) and <b>suppressed</b> (S01–04/S06/S07 — worthiness badge + a single <b>Force Atomic</b> control; that's the only real decision Tomo offers).</li>
-      <li>🔴 <b>candidate_mocs gap:</b> the worthy notes show MOC options here, but the real JSON has <code>candidate_mocs: []</code> — the markdown lists them, the wire drops them. Mocked as the <b>fix we asked Tomo for</b> (unconfirmed matches with <code>selected:false</code>); until then it's manual <b>＋ Add MOC</b>.</li>
-      <li><b>Daily</b> tab: per-date <b>click-to-open</b> with a live "doesn't exist" pill (Hashi checks the vault — the JSON carries no exists flag); per log entry <b>Accept</b> + <b>Force Atomic</b>. Hashi never creates the daily note itself.</li>
-      <li><b>Tag-Handler</b> tab: approve / keep-source. 🔴 <b>context gap</b> — target/marker/sources/preview aren't in the wire (only <code>group_id</code>); flagged for Tomo.</li>
+      <li>✅ <b>candidate_mocs</b> (was a wire bug): worthy notes now carry their MOC options — Tomo emits every candidate with <code>selected</code> mirrored and <code>anchor:null</code> until a spot is set. This is now <b>real</b>, not mocked. Plus manual <b>＋ Add MOC</b>.</li>
+      <li><b>Daily</b> tab: per-date <b>click-to-open</b> with a live "doesn't exist" pill (Hashi checks the vault — the JSON carries no exists flag); per log entry editable text, position/time, <b>Accept</b> + <b>Force Atomic</b>. Hashi never creates the daily note. Deleting a daily-only source is <b>automatic</b> via <code>accepted</code> — no separate control.</li>
+      <li>✅ <b>Tag-Handler</b> tab: approve / keep-source, now with real display context (<code>handler · target_path · marker · source_paths · preview</code>) carried read-only in the wire.</li>
       <li><b>Own the whole document:</b> because Pass 2 is JSON-only, everything untouched (<code>daily_updates</code>, <code>tag_handler_groups</code>, <code>emit_digest</code>, all read-only fields) round-trips <b>verbatim</b> on Save. <code>emit_digest</code> is never recomputed — the mismatch is how Tomo learns the JSON was edited.</li>
     </ul>
   </div>
@@ -715,8 +718,8 @@
     return `<div class="card tagh">
       <div class="card-top">
         <div class="th-title"><span class="wlink" data-open>${g.target}${EXT}</span> <span class="th-marker">${g.marker}</span></div>
-        <div class="th-ctx">
-          <span class="ctx-flag" title="These fields aren't in the wire yet">ⓘ context (target · marker · sources · preview) not in the JSON — flag to Tomo</span>
+        <div class="th-ctx resolved">
+          <span class="ctx-note">read-only display context — now carried in the wire (<code>handler · target_path · marker · source_paths · preview</code>)</span>
           <div class="th-row">Handler <code>${g.handler}</code> · Sources ${g.sources.length}</div>
           <div class="th-preview">${g.preview}</div>
         </div>
