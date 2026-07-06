@@ -204,9 +204,10 @@ All additive, `schema_version` stays `"1"`:
 Confirmations that hold: `emit_digest` passthrough; `inside` callout-only; per-note
 `decision`; daily-note existence is Hashi's job.
 
-**One deferred capability (not v1):** "apply the daily update **and** keep the
-source note" exists in neither surface — a new control + a change to vault-deletion
-behaviour, gated on the owner's sign-off. Raise as its own spec item if wanted.
+**One deferred capability (owner-decided 2026-07-06 — OUT of v1):** "apply the daily
+update **and** keep the source note" (decouple from `accepted`) is a new control + a
+vault-deletion behaviour change. Owner signed off on **deferring** it — v1 keeps
+`accepted` = apply-and-delete. Revisit post-v1 as its own item if the need arises.
 
 ## 9. ADR-S5 — `SuggestionsDoc` adapter (full-document round-trip)
 
@@ -248,5 +249,5 @@ interface SuggestionsDoc {
    Flag pending (spec task #3).
 3. Vendor + verify `suggestions-wire.schema.json` (unreadable here).
 4. Re-read Kokoro ADR-026 before promoting this sketch to a PRD.
-5. **Deferred capability** (owner sign-off): "apply daily update + keep source note"
-   (§8) — new control + vault-deletion change; not v1.
+5. **Deferred (owner-decided 2026-07-06):** "apply daily update + keep source note"
+   is OUT of v1 — `accepted` stays apply-and-delete. Revisit post-v1 (§8).
