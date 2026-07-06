@@ -95,7 +95,31 @@ extends `Component` → use `registerDomEvent`/`registerEvent`. One active doc.
 
 ## 5. ADR-S2 — EditModel (the full wire shape)
 
+> **Implemented shape (Phase 1, 2026-07-06) — reconciled.** The camelCase
+> `interface EditModel` below is an *illustrative field reference*. The code
+> (`src/types/suggestions.ts`) instead uses **wire-shaped, deeply-`readonly`
+> types** mirroring the JSON schema field-for-field (snake_case: `SuggestionWire`,
+> `CandidateMocWire`, `AnchorWire`, `ProposedMocWire`, `TagGroupWire`,
+> `DailyUpdateWire`/`DailyLogEntryWire`/`DailyTrackerWire`/`DailyLogLinkWire`,
+> and a flat root `SuggestionsWire`), and the actual edit model is:
+> ```ts
+> interface EditModel { doc: SuggestionsWire; dirty: boolean }
+> ```
+> `doc` holds the WHOLE wire object (the schema is flat at the root — `meta` was
+> an SDD-side grouping, not a wire concept — so `schema_version`/`generated`/
+> `run_id`/`profile`/`source_items`/`emit_digest` live on `doc`). `dirty` is
+> in-memory only (§4: never serialized). **Why this supersedes the camelCase
+> sketch:** wrapping the wire doc verbatim makes ADR-S4 "own the whole document"
+> free — the adapter parses JSON straight into `doc` and writes `doc` straight
+> back, so no field can be dropped by a lossy remap (the exact failure §1/§4
+> warn against). It also matches the executable schema (source of truth) and the
+> `src/schema/types.ts` (InstructionSet) precedent. Every transform is a pure
+> `EditModel → EditModel` that returns the SAME reference on a no-op (so `dirty`
+> only flips on a real change) and sets `dirty:true` on a real edit.
+
 ```ts
+// Illustrative field reference (see reconciliation note above for the
+// implemented wire-shaped types + the { doc, dirty } EditModel):
 interface EditModel {
   meta: { schemaVersion:"1"; generated:string; runId:string; profile:string;
           sourceItems:number; emitDigest:string };      // all read-only / passthrough
