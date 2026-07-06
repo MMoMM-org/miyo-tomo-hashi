@@ -64,6 +64,15 @@ export function selectCandidateMoc(
 ): EditModel {
 	return updateSuggestion(model, suggestionId, (suggestion) => {
 		if (suggestion.suppressed) return null;
+		// No-op guard: mirrors the equality-gate pattern on every sibling
+		// setter below. `mocPath` is already the sole selection when every
+		// candidate's current `selected` already matches what the map below
+		// would set it to — i.e. re-selecting the already-sole-selected
+		// candidate must not spuriously flip `dirty` (dirty gates save).
+		const alreadySole = suggestion.candidate_mocs.every(
+			(c) => c.selected === (c.path === mocPath),
+		);
+		if (alreadySole) return null;
 		const candidate_mocs = suggestion.candidate_mocs.map((c) => ({
 			...c,
 			selected: c.path === mocPath,

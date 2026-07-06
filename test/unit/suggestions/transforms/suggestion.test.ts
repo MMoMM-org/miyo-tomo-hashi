@@ -119,6 +119,27 @@ describe("selectCandidateMoc (op 1 re-point)", () => {
 		expect(result.dirty).toBe(true);
 	});
 
+	it("is a no-op (unchanged, dirty false) when re-selecting the already-sole-selected candidate", () => {
+		const model = getMockModel({
+			doc: getMockDoc({
+				suggestions: [
+					getMockSuggestion({
+						id: "S01",
+						candidate_mocs: [
+							getMockCandidateMoc({ path: "Atlas/A.md", selected: true }),
+							getMockCandidateMoc({ path: "Atlas/B.md", selected: false }),
+						],
+					}),
+				],
+			}),
+		});
+
+		const result = selectCandidateMoc(model, "S01", "Atlas/A.md");
+
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(false);
+	});
+
 	it("does not mutate the original model's candidate array", () => {
 		const original = getMockModel({
 			doc: getMockDoc({

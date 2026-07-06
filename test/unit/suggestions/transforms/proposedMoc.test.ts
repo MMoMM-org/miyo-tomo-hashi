@@ -92,6 +92,15 @@ describe("renameProposedMoc", () => {
 		expect(model.dirty).toBe(false);
 	});
 
+	it("is a no-op when the name is unchanged — same reference, dirty false", () => {
+		const model = twoMocModel();
+
+		const result = renameProposedMoc(model, "M01", "Cooking");
+
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(false);
+	});
+
 	it("rejects an unknown mocId — model unchanged, dirty false", () => {
 		const model = twoMocModel();
 
@@ -120,6 +129,15 @@ describe("reparentProposedMoc", () => {
 		reparentProposedMoc(model, "M02", "Food & Drink");
 
 		expect(model.doc.proposed_mocs[1]?.parent).toBe("");
+	});
+
+	it("is a no-op when the parent is unchanged — same reference, dirty false", () => {
+		const model = twoMocModel();
+
+		const result = reparentProposedMoc(model, "M01", "");
+
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(false);
 	});
 
 	it("rejects an unknown mocId — model unchanged, dirty false", () => {
@@ -165,6 +183,15 @@ describe("setProposedMocDecision", () => {
 		setProposedMocDecision(model, "M01", "approve");
 
 		expect(model.doc.proposed_mocs[0]?.decision).toBe("skip");
+	});
+
+	it("is a no-op when the decision is unchanged — same reference, dirty false", () => {
+		const model = twoMocModel();
+
+		const result = setProposedMocDecision(model, "M01", "skip");
+
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(false);
 	});
 
 	it("rejects an unknown mocId — model unchanged, dirty false", () => {

@@ -177,6 +177,16 @@ describe("setDailyLogContent", () => {
 		expect(result.dirty).toBe(false);
 		expect(result.doc).toBe(model.doc);
 	});
+
+	it("returns the model unchanged with dirty:false when content already equals the requested value", () => {
+		const model = getMultiDailyModel();
+		const existingContent = model.doc.daily_updates[0]?.log_entries[0]?.content as string;
+
+		const result = setDailyLogContent(model, "2026-07-06", 0, existingContent);
+
+		expect(result.dirty).toBe(false);
+		expect(result.doc).toBe(model.doc);
+	});
 });
 
 describe("setDailyLogPosition", () => {
@@ -245,6 +255,23 @@ describe("setDailyLogPosition", () => {
 		const model = getMultiDailyModel();
 
 		const result = setDailyLogPosition(model, "2026-07-06", 42, "after_last_line");
+
+		expect(result.dirty).toBe(false);
+		expect(result.doc).toBe(model.doc);
+	});
+
+	it("returns unchanged with dirty:false when position already equals the requested value", () => {
+		const model = getMockEditModel({
+			doc: getMockWire({
+				daily_updates: [
+					getMockDailyUpdate({
+						log_entries: [getMockLogEntry({ position: "at_time", time: "09:00" })],
+					}),
+				],
+			}),
+		});
+
+		const result = setDailyLogPosition(model, "2026-07-06", 0, "at_time");
 
 		expect(result.dirty).toBe(false);
 		expect(result.doc).toBe(model.doc);
@@ -321,6 +348,23 @@ describe("setDailyLogTime", () => {
 		expect(result.dirty).toBe(false);
 		expect(result.doc).toBe(model.doc);
 	});
+
+	it("returns unchanged with dirty:false when position is at_time and time already equals the requested value", () => {
+		const model = getMockEditModel({
+			doc: getMockWire({
+				daily_updates: [
+					getMockDailyUpdate({
+						log_entries: [getMockLogEntry({ position: "at_time", time: "09:00" })],
+					}),
+				],
+			}),
+		});
+
+		const result = setDailyLogTime(model, "2026-07-06", 0, "09:00");
+
+		expect(result.dirty).toBe(false);
+		expect(result.doc).toBe(model.doc);
+	});
 });
 
 describe("setDailyTrackerAccepted", () => {
@@ -352,6 +396,15 @@ describe("setDailyTrackerAccepted", () => {
 		expect(result.dirty).toBe(false);
 		expect(result.doc).toBe(model.doc);
 	});
+
+	it("returns unchanged with dirty:false when accepted already equals the requested value", () => {
+		const model = getMultiDailyModel();
+
+		const result = setDailyTrackerAccepted(model, "2026-07-06", 0, false);
+
+		expect(result.dirty).toBe(false);
+		expect(result.doc).toBe(model.doc);
+	});
 });
 
 describe("setDailyLogAccepted", () => {
@@ -378,6 +431,15 @@ describe("setDailyLogAccepted", () => {
 		const model = getMultiDailyModel();
 
 		const result = setDailyLogAccepted(model, "2026-07-06", 99, true);
+
+		expect(result.dirty).toBe(false);
+		expect(result.doc).toBe(model.doc);
+	});
+
+	it("returns unchanged with dirty:false when accepted already equals the requested value", () => {
+		const model = getMultiDailyModel();
+
+		const result = setDailyLogAccepted(model, "2026-07-06", 0, false);
 
 		expect(result.dirty).toBe(false);
 		expect(result.doc).toBe(model.doc);
@@ -421,6 +483,15 @@ describe("setDailyLogLinkAccepted", () => {
 		const model = getMultiDailyModel();
 
 		const result = setDailyLogLinkAccepted(model, "2026-07-06", 99, true);
+
+		expect(result.dirty).toBe(false);
+		expect(result.doc).toBe(model.doc);
+	});
+
+	it("returns unchanged with dirty:false when accepted already equals the requested value", () => {
+		const model = getMultiDailyModel();
+
+		const result = setDailyLogLinkAccepted(model, "2026-07-06", 0, false);
 
 		expect(result.dirty).toBe(false);
 		expect(result.doc).toBe(model.doc);

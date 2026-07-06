@@ -15,6 +15,13 @@
  * here — that field is kept in sync with `suggestions[].force_atomic` by
  * T1.4, in a different file. These transforms only ever set content,
  * position, time, and accepted toggles.
+ *
+ * Every setter also gates on "value(s) actually changed": a call that
+ * requests the same value the field already holds is a no-op, same as an
+ * unknown date or out-of-range index — it returns the model unchanged with
+ * `dirty: false`. This matters beyond tidiness: `dirty` gates `save` (ADR-S4),
+ * and a spurious `dirty: true` on a same-value call would write out an
+ * otherwise-untouched doc, defeating Tomo's unchanged-doc digest short-circuit.
  */
 
 import type {
@@ -70,6 +77,7 @@ export function setDailyLogContent(
 	return withDailyUpdate(model, date, (daily) => {
 		const entry = daily.log_entries[entryIndex];
 		if (entry === undefined) return null;
+		if (entry.content === content) return null;
 		const log_entries = replaceAt(daily.log_entries, entryIndex, { ...entry, content });
 		return { ...daily, log_entries };
 	});
@@ -89,6 +97,7 @@ export function setDailyLogPosition(
 	return withDailyUpdate(model, date, (daily) => {
 		const entry = daily.log_entries[entryIndex];
 		if (entry === undefined) return null;
+		if (entry.position === position) return null;
 		const time = position === "at_time" ? entry.time : null;
 		const log_entries = replaceAt(daily.log_entries, entryIndex, { ...entry, position, time });
 		return { ...daily, log_entries };
@@ -110,6 +119,7 @@ export function setDailyLogTime(
 		const entry = daily.log_entries[entryIndex];
 		if (entry === undefined) return null;
 		if (entry.position !== "at_time") return null;
+		if (entry.time === time) return null;
 		const log_entries = replaceAt(daily.log_entries, entryIndex, { ...entry, time });
 		return { ...daily, log_entries };
 	});
@@ -125,6 +135,7 @@ export function setDailyTrackerAccepted(
 	return withDailyUpdate(model, date, (daily) => {
 		const tracker: DailyTrackerWire | undefined = daily.trackers[trackerIndex];
 		if (tracker === undefined) return null;
+		if (tracker.accepted === accepted) return null;
 		const trackers = replaceAt(daily.trackers, trackerIndex, { ...tracker, accepted });
 		return { ...daily, trackers };
 	});
@@ -140,6 +151,7 @@ export function setDailyLogAccepted(
 	return withDailyUpdate(model, date, (daily) => {
 		const entry = daily.log_entries[entryIndex];
 		if (entry === undefined) return null;
+		if (entry.accepted === accepted) return null;
 		const log_entries = replaceAt(daily.log_entries, entryIndex, { ...entry, accepted });
 		return { ...daily, log_entries };
 	});
@@ -155,6 +167,7 @@ export function setDailyLogLinkAccepted(
 	return withDailyUpdate(model, date, (daily) => {
 		const link: DailyLogLinkWire | undefined = daily.log_links[linkIndex];
 		if (link === undefined) return null;
+		if (link.accepted === accepted) return null;
 		const log_links = replaceAt(daily.log_links, linkIndex, { ...link, accepted });
 		return { ...daily, log_links };
 	});
