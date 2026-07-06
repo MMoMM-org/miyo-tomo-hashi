@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-07-03 |
-| **Current Phase** | Design sketch — reconciled with Tomo's **final JSON-only contract** + real runs (2026-07-06); 3 flags raised & **resolved by Tomo**. Layout = **Tabbed** (4 tabs). Ready to promote to PRD (after Kokoro ADR-026 reconciliation). |
+| **Current Phase** | **PRD** — `requirements.md` drafted (2026-07-06), grounded in the settled SDD sketch + real runs (`0909/0949/1115`); 10 Must features, 32 Gherkin acceptance criteria, 0 clarification markers. Both PRD-gating preconditions cleared. Next: SDD finalization (promote the sketch) → PLAN. |
 | **Last Updated** | 2026-07-06 |
 
 ## Documents
@@ -14,7 +14,7 @@
 |----------|--------|-------|
 | solution.md | sketch (final-contract, 2026-07-06) | SDD — leaf ItemView + 4 tabs; full `EditModel` (own-the-whole-document / verbatim passthrough); `emit_digest` passthrough; op→field mapping; picker contracts; force-atomic stem-sync; §8 records the 3 flags Tomo resolved. |
 | mockups/ | draft | `suggestions-editor.html` — built on the real `2026-07-06_0949` run: 4 tabs, worthy/suppressed cards, daily editing, pickers, live vs flat-markdown compare. |
-| requirements.md | — | **Deferred** until (a) Kokoro ADR-026 reconciled to JSON-only + per-note decision, (b) a fresh Pass-1 wire with the §8 fixes is vendored. |
+| requirements.md | draft (2026-07-06) | PRD — vision/problem/value; primary persona = vault owner; 10 Must features (4 ops + full editable surface + safe save), Should/Could/Won't; op 2 detailed spec; success metrics honour no-telemetry (verified via tests/QA); risks + open questions (vendor schema, Kokoro ADR-026 reconcile). Strictly WHAT/WHY — op→field mapping stays in the SDD. |
 | plan/ | — | **Deferred** until PRD. |
 
 ## Scope (from Kokoro ADR-026, amends ADR-009 §3)
@@ -93,6 +93,7 @@ Confirmations (no new field): merge-by-same-name; `inside` only for callout anch
 | 2026-07-06 | **3 flags raised on the real-run compare, all resolved same day by Tomo.** (1) `candidate_mocs` empty on worthy notes → **fixed** (reducer bug; now emits all candidates, `anchor:null`). (2) daily-only delete → **no-op** (automatic downstream from `accepted`; MD checkbox is decorative). (3) tag-handler context → **fixed** (wire now carries handler/target_path/marker/source_paths/preview). | Handoffs: `_outbox/for-tomo/2026-07-06_hashi-to-tomo_final-contract-confirmed-3-flags.md` → `_inbox/from-tomo/2026-07-06_tomo-to-hashi_flags-1-3-fixed-2-clarified.md`. Deferred (owner sign-off): "apply daily update + keep source". |
 | 2026-07-06 | **Layout finalized = Tabbed, A/C dropped.** Mockup rebuilt on the real 8-item `0949` run (4 tabs, worthy/suppressed, daily, tag-handler) + left source-pane shows the same run's flat markdown for direct compare. | The A/C comparison served its purpose; the mockup is now the actual design, not a skeleton survey. |
 | 2026-07-06 | **Owner sign-off: DEFER "apply daily update + keep source note."** v1 keeps `accepted` = apply-and-delete; the decoupled keep-source control is out of v1. | Tomo's flag-2 reply named it as the one genuine gap (needs a new wire field + a vault-deletion behaviour change requiring owner sign-off). Owner chose to keep v1 scope tight — no Tomo item raised; revisit post-v1. Confirmed live in the `1115` run: worthy note S07 carries real `candidate_mocs`, tag-handler carries full context. |
+| 2026-07-06 | **Promote to PRD phase.** Both PRD-gating preconditions cleared: (a) ADR-026 reconciliation is Hashi-done — drift handoff sent to Kokoro, wire-decisions inbox item `done`, conformed to Tomo's executable schema; (b) fresh Pass-1 wire with §8 fixes vendored (real `1115` run). Standard mode; no research fan-out (domain already settled via SDD sketch + real runs + full handoff chain). | XDD-order note: SDD was written first (sketch) because design had to be nailed against Tomo's evolving contract; PRD now follows, grounded in the settled sketch. |
 
 ## References
 
