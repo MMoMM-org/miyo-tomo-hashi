@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-07-03 |
-| **Current Phase** | **SDD FINAL — ready for PLAN.** All gates cleared 2026-07-06: schema vendored + verified (re-vendored after Tomo tightened `daily_updates`); ADR-S1..S5 confirmed; **daily-editing v1 confirmed + golden-tested by Tomo**; **Kokoro reconciled ADR-026 on `main`** (`d8410d4`). PRD (10 features / 32 ACs) + SDD (§12 PRD-traced, field-for-field to the shipped wire) both current. |
+| **Current Phase** | **PLAN drafted — spec ready to implement.** PRD (10 features / 32 ACs) + SDD (FINAL, §12 PRD-traced) + PLAN (4 phases / 25 tasks, TDD) all current. All gates cleared 2026-07-06; ADR-026 reconciled on Kokoro `main`. Next: `/implement` (or owner review of the plan first). |
 | **Last Updated** | 2026-07-06 |
 
 ## Documents
@@ -15,7 +15,7 @@
 | solution.md | **FINAL** (PRD-traced, 2026-07-06) | SDD — leaf ItemView + 4 tabs; full `EditModel` incl. typed `DailyUpdate` shape (own-the-whole-document / verbatim passthrough); `emit_digest` passthrough; op→field mapping; picker contracts; force-atomic stem-sync; §8 the 3 resolved flags; §11 all gates cleared; **§12 traces all 10 PRD features** field-for-field to the shipped wire. |
 | mockups/ | draft | `suggestions-editor.html` — built on the real `2026-07-06_0949` run: 4 tabs, worthy/suppressed cards, daily editing, pickers, live vs flat-markdown compare. |
 | requirements.md | draft (2026-07-06) | PRD — vision/problem/value; primary persona = vault owner; 10 Must features (4 ops + full editable surface + safe save), Should/Could/Won't; op 2 detailed spec; success metrics honour no-telemetry (verified via tests/QA); risks + open questions (vendor schema, Kokoro ADR-026 reconcile). Strictly WHAT/WHY — op→field mapping stays in the SDD. |
-| plan/ | — | **Deferred** until PRD. |
+| plan/ | draft (2026-07-06) | PLAN — 4 phases, 25 tasks, TDD (Prime→Test→Implement→Validate). P1 pure domain core (EditModel + transforms + fake); P2 real adapter (round-trip fidelity); P3 view + 4 tabs + pickers; P4 integration + manual-QA. All 10 PRD features + all SDD components mapped; grounded in real `src/` reuse (markdownStructure/anchorResolver/updateLogEntry). |
 
 ## Scope (from Kokoro ADR-026, amends ADR-009 §3)
 
