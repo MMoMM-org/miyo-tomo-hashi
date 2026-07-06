@@ -19,7 +19,13 @@
 // shim before the plugin's onload exercises createDiv / createEl etc. via
 // the StatusBarIcon mount.
 import "obsidian";
-import { App, WorkspaceLeaf, type PluginManifest } from "obsidian";
+import {
+	App,
+	Notice,
+	TFile,
+	WorkspaceLeaf,
+	type PluginManifest,
+} from "obsidian";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 // dockerode mock — minimal surface so listTomoInstances / inspectContainer
@@ -60,6 +66,24 @@ vi.mock("dockerode", () => {
 import { TomoConnection } from "../../src/connection/TomoConnection";
 import TomoHashiPlugin from "../../src/main";
 import { VIEW_TYPE_TOMO_CHAT } from "../../src/ui/chat-view/index";
+import {
+	SuggestionsEditorView,
+	VIEW_TYPE_SUGGESTIONS_EDITOR,
+} from "../../src/ui/suggestions-view/index";
+
+const OPEN_SUGGESTIONS_EDITOR_ID = "open-suggestions-editor";
+
+interface CommandSpec {
+	id: string;
+	callback?: () => unknown;
+}
+
+function findCommand(plugin: TomoHashiPlugin, id: string): CommandSpec | undefined {
+	return vi
+		.mocked(plugin.addCommand)
+		.mock.calls.map((call) => call[0] as CommandSpec)
+		.find((spec) => spec.id === id);
+}
 
 describe("TomoHashiPlugin integration (T5.3)", () => {
 	let plugin: TomoHashiPlugin;
@@ -106,7 +130,8 @@ describe("TomoHashiPlugin integration (T5.3)", () => {
 	describe("onload registrations", () => {
 		it("registers the chat view via plugin.registerView", async () => {
 			await plugin.onload();
-			expect(plugin.registerView).toHaveBeenCalledTimes(1);
+			// 004's T4.1 registers a second view type (Suggestions Editor) — this
+			// 001 integration test only asserts the 001 chat-view surface is wired.
 			expect(plugin.registerView).toHaveBeenCalledWith(
 				VIEW_TYPE_TOMO_CHAT,
 				expect.any(Function),
@@ -197,6 +222,72 @@ describe("TomoHashiPlugin integration (T5.3)", () => {
 			await plugin.onload();
 			plugin.onunload();
 			await expect(plugin.onload()).resolves.toBeUndefined();
+		});
+	});
+
+	describe("Suggestions Editor registration (spec-004 T4.1)", () => {
+		it("registers VIEW_TYPE_SUGGESTIONS_EDITOR via plugin.registerView with a factory producing a SuggestionsEditorView", async () => {
+			await plugin.onload();
+
+			const call = vi
+				.mocked(plugin.registerView)
+				.mock.calls.find(([type]) => type === VIEW_TYPE_SUGGESTIONS_EDITOR);
+			expect(call).toBeDefined();
+
+			const factory = call?.[1] as (leaf: WorkspaceLeaf) => unknown;
+			const leaf = new WorkspaceLeaf();
+			const view = factory(leaf);
+			expect(view).toBeInstanceOf(SuggestionsEditorView);
+		});
+
+		it("registers the 'open-suggestions-editor' command", async () => {
+			await plugin.onload();
+			expect(findCommand(plugin, OPEN_SUGGESTIONS_EDITOR_ID)).toBeDefined();
+		});
+	});
+
+	describe("Open suggestions editor command wiring (spec-004 T4.1)", () => {
+		it("active _suggestions.json → opens a new split leaf with the resolved docPath", async () => {
+			await plugin.onload();
+			const docPath = "100 Inbox/2026-07-06_1115_suggestions.json";
+			const activeFile = new TFile();
+			activeFile.path = docPath;
+			vi.mocked(plugin.app.workspace.getActiveFile).mockReturnValue(
+				activeFile,
+			);
+			vi.mocked(plugin.app.workspace.getLeavesOfType).mockReturnValue([]);
+			const newLeaf = new WorkspaceLeaf();
+			vi.mocked(plugin.app.workspace.getLeaf).mockReturnValue(newLeaf);
+
+			const cmd = findCommand(plugin, OPEN_SUGGESTIONS_EDITOR_ID);
+			expect(cmd).toBeDefined();
+			cmd?.callback?.();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(newLeaf.setViewState).toHaveBeenCalledWith({
+				type: VIEW_TYPE_SUGGESTIONS_EDITOR,
+				active: true,
+				state: { docPath },
+			});
+		});
+
+		it("active file unrelated to suggestions → shows a Notice and does not open a leaf", async () => {
+			await plugin.onload();
+			const activeFile = new TFile();
+			activeFile.path = "notes/random.md";
+			vi.mocked(plugin.app.workspace.getActiveFile).mockReturnValue(
+				activeFile,
+			);
+
+			const cmd = findCommand(plugin, OPEN_SUGGESTIONS_EDITOR_ID);
+			cmd?.callback?.();
+			await Promise.resolve();
+
+			expect(vi.mocked(Notice)).toHaveBeenCalledWith(
+				"Open a Tomo _suggestions.json (or its .md) first",
+			);
+			expect(plugin.app.workspace.getLeaf).not.toHaveBeenCalled();
 		});
 	});
 });

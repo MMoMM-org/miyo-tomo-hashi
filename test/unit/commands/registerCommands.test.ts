@@ -678,3 +678,128 @@ describe("registerExecutorFileMenu (002)", () => {
 		});
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 004 spec — Suggestions Editor open command (T4.1)
+// ---------------------------------------------------------------------------
+//
+// Spec refs: spec-004 SDD §3 (ADR-S1); PRD F1; plan/phase-4.md T4.1.
+
+import {
+	registerSuggestionsEditorCommand,
+	resolveSuggestionsDocPath,
+	type SuggestionsEditorCommandDeps,
+} from "../../../src/commands/registerCommands";
+
+const OPEN_SUGGESTIONS_EDITOR_ID = "open-suggestions-editor";
+const NO_SUGGESTIONS_DOC_NOTICE =
+	"Open a Tomo _suggestions.json (or its .md) first";
+
+describe("resolveSuggestionsDocPath", () => {
+	it("returns the path itself when it ends with _suggestions.json", () => {
+		expect(
+			resolveSuggestionsDocPath("100 Inbox/2026-07-06_1115_suggestions.json"),
+		).toBe("100 Inbox/2026-07-06_1115_suggestions.json");
+	});
+
+	it("derives the .json sibling when the path ends with _suggestions.md", () => {
+		expect(
+			resolveSuggestionsDocPath("100 Inbox/2026-07-06_1115_suggestions.md"),
+		).toBe("100 Inbox/2026-07-06_1115_suggestions.json");
+	});
+
+	it("returns null for an unrelated note", () => {
+		expect(resolveSuggestionsDocPath("notes/random.md")).toBeNull();
+	});
+
+	it("returns null when there is no active file", () => {
+		expect(resolveSuggestionsDocPath(null)).toBeNull();
+	});
+});
+
+describe("registerSuggestionsEditorCommand", () => {
+	let pluginMock: PluginMock;
+	let plugin: Plugin;
+	let getActiveFilePath: Mock<() => string | null>;
+	let openSuggestionsEditorSpy: Mock<(docPath: string) => Promise<void>>;
+	let deps: SuggestionsEditorCommandDeps;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		pluginMock = new PluginMock();
+		plugin = asPlugin(pluginMock);
+		getActiveFilePath = vi.fn<() => string | null>(() => null);
+		openSuggestionsEditorSpy = vi.fn<(docPath: string) => Promise<void>>(
+			async () => {},
+		);
+		deps = {
+			getActiveFilePath,
+			openSuggestionsEditor: openSuggestionsEditorSpy,
+		};
+	});
+
+	it("registers the 'Open suggestions editor' command", () => {
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmds = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID);
+		expect(cmds).toHaveLength(1);
+		expect(cmds[0]?.name).toBe("Open suggestions editor");
+	});
+
+	it("active _suggestions.json → opens the editor with that path", async () => {
+		getActiveFilePath.mockReturnValue(
+			"100 Inbox/2026-07-06_1115_suggestions.json",
+		);
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openSuggestionsEditorSpy).toHaveBeenCalledWith(
+			"100 Inbox/2026-07-06_1115_suggestions.json",
+		);
+		expect(vi.mocked(Notice)).not.toHaveBeenCalled();
+	});
+
+	it("active _suggestions.md → opens the editor with the .json sibling", async () => {
+		getActiveFilePath.mockReturnValue(
+			"100 Inbox/2026-07-06_1115_suggestions.md",
+		);
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openSuggestionsEditorSpy).toHaveBeenCalledWith(
+			"100 Inbox/2026-07-06_1115_suggestions.json",
+		);
+	});
+
+	it("active file unrelated to suggestions → shows a Notice and does NOT open", async () => {
+		getActiveFilePath.mockReturnValue("notes/random.md");
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+
+		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
+		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_SUGGESTIONS_DOC_NOTICE);
+	});
+
+	it("no active file → shows a Notice and does NOT open", async () => {
+		getActiveFilePath.mockReturnValue(null);
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+
+		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
+		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_SUGGESTIONS_DOC_NOTICE);
+	});
+});

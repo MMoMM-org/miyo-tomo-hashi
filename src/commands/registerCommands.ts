@@ -306,3 +306,82 @@ async function toggleIdeBridge(deps: IdeBridgeCommandDeps): Promise<void> {
 			: deps.getPort();
 	new Notice(`IDE Bridge started on :${port}`);
 }
+
+// ---------------------------------------------------------------------------
+// 004 spec — Suggestions Editor open command (T4.1)
+// ---------------------------------------------------------------------------
+//
+// Spec refs: spec-004 SDD §3 (ADR-S1); PRD F1; plan/phase-4.md T4.1.
+//
+// Decisions:
+//
+// 1. Doc-path resolution only looks at the ACTIVE file — the command opens
+//    the run for whatever `_suggestions.json`/`.md` pair the user is
+//    currently looking at, not a picker over every run in the vault.
+// 2. `resolveSuggestionsDocPath` is exported (pure, no Obsidian dependency)
+//    so its mapping rules can be asserted directly, same as
+//    `resolveActiveInvocation` above.
+// 3. `deps.openSuggestionsEditor` is injected rather than importing
+//    `ui/suggestions-view/openSuggestionsEditor.ts` directly — keeps this
+//    module's only Obsidian-side dependency the `Notice`/`Plugin` surface
+//    already imported above, and lets tests substitute a spy without
+//    touching real workspace leaves.
+
+const OPEN_SUGGESTIONS_EDITOR_ID = "open-suggestions-editor";
+const OPEN_SUGGESTIONS_EDITOR_LABEL = "Open suggestions editor";
+const NO_SUGGESTIONS_DOC_NOTICE =
+	"Open a Tomo _suggestions.json (or its .md) first";
+
+export interface SuggestionsEditorCommandDeps {
+	/** Vault-relative path of the active file, or null if none is open. */
+	readonly getActiveFilePath: () => string | null;
+	/** Opens (or retargets/reveals) the Suggestions Editor leaf for docPath. */
+	readonly openSuggestionsEditor: (docPath: string) => Promise<void>;
+}
+
+/**
+ * Register the 004 "Open suggestions editor" palette command. Called
+ * separately from the 001/002/003 registrars so 004 wiring stays decoupled —
+ * main.ts calls it after constructing the vault-backed `openSuggestionsEditor`.
+ */
+export function registerSuggestionsEditorCommand(
+	plugin: Plugin,
+	deps: SuggestionsEditorCommandDeps,
+): void {
+	plugin.addCommand({
+		id: OPEN_SUGGESTIONS_EDITOR_ID,
+		name: OPEN_SUGGESTIONS_EDITOR_LABEL,
+		callback: () => {
+			void dispatchOpenSuggestionsEditor(deps);
+		},
+	});
+}
+
+async function dispatchOpenSuggestionsEditor(
+	deps: SuggestionsEditorCommandDeps,
+): Promise<void> {
+	const docPath = resolveSuggestionsDocPath(deps.getActiveFilePath());
+	if (docPath === null) {
+		new Notice(NO_SUGGESTIONS_DOC_NOTICE);
+		return;
+	}
+	await deps.openSuggestionsEditor(docPath);
+}
+
+/**
+ * Map the active file path to the `_suggestions.json` doc to open:
+ *   - `<stem>_suggestions.json` → itself.
+ *   - `<stem>_suggestions.md` → the `.json` sibling.
+ *   - anything else (no active file, unrelated note) → null; the caller
+ *     shows a Notice rather than opening anything.
+ */
+export function resolveSuggestionsDocPath(
+	activePath: string | null,
+): string | null {
+	if (activePath === null) return null;
+	if (activePath.endsWith("_suggestions.json")) return activePath;
+	if (activePath.endsWith("_suggestions.md")) {
+		return activePath.slice(0, -".md".length) + ".json";
+	}
+	return null;
+}

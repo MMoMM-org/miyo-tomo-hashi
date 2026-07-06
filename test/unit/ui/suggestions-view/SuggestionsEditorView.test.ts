@@ -240,6 +240,80 @@ describe("SuggestionsEditorView", () => {
 		});
 	});
 
+	describe("view-state wiring (T4.1)", () => {
+		it("without a docPath in deps, onOpen renders a placeholder without calling adapter.load", async () => {
+			const adapter = new FakeSuggestionsDoc();
+			const loadSpy = vi.spyOn(adapter, "load");
+			const leaf = new WorkspaceLeaf();
+			const view = new SuggestionsEditorView(leaf, { adapter });
+			view.app = new App();
+
+			await view.onOpen();
+
+			expect(loadSpy).not.toHaveBeenCalled();
+			expect(
+				view.contentEl.querySelector(".hashi-suggestions-editor-no-doc"),
+			).not.toBeNull();
+			expect(tabBar(view)).toBeNull();
+		});
+
+		it("getState reflects the currently loaded docPath", async () => {
+			const view = makeView(new FakeSuggestionsDoc());
+			await view.onOpen();
+
+			expect(view.getState()).toEqual({ docPath: DOC_PATH });
+		});
+
+		it("setState called before onOpen records docPath; onOpen then loads it", async () => {
+			const adapter = new FakeSuggestionsDoc();
+			const loadSpy = vi.spyOn(adapter, "load");
+			const leaf = new WorkspaceLeaf();
+			const view = new SuggestionsEditorView(leaf, { adapter });
+			view.app = new App();
+
+			await view.setState({ docPath: DOC_PATH }, { history: false });
+			// Leaf isn't open yet — Obsidian calls setState before onOpen, so no
+			// load should happen until onOpen actually runs.
+			expect(loadSpy).not.toHaveBeenCalled();
+
+			await view.onOpen();
+
+			expect(loadSpy).toHaveBeenCalledWith(DOC_PATH);
+			expect(tabButtonTexts(view)).toEqual([
+				"Suggestions (7)",
+				"Proposed MOCs (0)",
+				"Daily (2)",
+				"Tag-Handler (1)",
+			]);
+		});
+
+		it("setState called while already open (retarget) re-loads and re-renders for the new docPath", async () => {
+			const adapter = new FakeSuggestionsDoc();
+			const loadSpy = vi.spyOn(adapter, "load");
+			const view = makeView(adapter);
+			await view.onOpen();
+			expect(loadSpy).toHaveBeenCalledWith(DOC_PATH);
+
+			const OTHER_PATH = "100 Inbox/2026-07-06_0949_suggestions.json";
+			await view.setState({ docPath: OTHER_PATH }, { history: false });
+
+			expect(loadSpy).toHaveBeenCalledTimes(2);
+			expect(loadSpy).toHaveBeenLastCalledWith(OTHER_PATH);
+			expect(view.getState()).toEqual({ docPath: OTHER_PATH });
+			// Re-rendered — tab bar still present with fresh content.
+			expect(tabBar(view)).not.toBeNull();
+		});
+
+		it("setState with a state object lacking docPath does not change the current docPath", async () => {
+			const view = makeView(new FakeSuggestionsDoc());
+			await view.onOpen();
+
+			await view.setState({}, { history: false });
+
+			expect(view.getState()).toEqual({ docPath: DOC_PATH });
+		});
+	});
+
 	describe("onClose — dirty guard", () => {
 		it("opens a ConfirmModal when the current model is dirty", async () => {
 			const view = makeView(makeDirtyAdapter());

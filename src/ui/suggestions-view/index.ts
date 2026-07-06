@@ -14,3 +14,4 @@ export {
 } from "./SuggestionsEditorView.js";
 export type { EditorTab, TabContext } from "./tabContract.js";
 export { DEFAULT_TABS } from "./tabs/defaultTabs.js";
+export { openSuggestionsEditor } from "./openSuggestionsEditor.js";

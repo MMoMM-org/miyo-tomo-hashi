@@ -37,9 +37,30 @@
  *    an accepted v1 gap (plan/phase-3.md T3.1: "at minimum prompt on
  *    dirty"): the prompt itself is the safeguard against silent data loss,
  *    even though Cancel cannot stop the detach already in flight.
+ *
+ * 6. (T4.1) `docPath` is now mutable, sourced from Obsidian's view-state
+ *    mechanism rather than only the constructor. `registerView`'s factory
+ *    signature is `(leaf) => View` — it cannot receive a per-open docPath —
+ *    so the real open path is `leaf.setViewState({ type, state: { docPath }
+ *    })`, which Obsidian resolves by constructing the view via the factory
+ *    (deps.docPath defaults to `""`) and then calling `setState(state,
+ *    result)` BEFORE `onOpen()`. `deps.docPath` stays as an optional
+ *    constructor default purely so existing/unit tests can keep injecting
+ *    it directly without going through setState.
+ *
+ * 7. `loadAndRender()` factors the load+build-DOM logic out of `onOpen` so
+ *    `setState` can re-run it when the view is already open (ADR-S1 "one
+ *    active doc": re-invoking the open command while a Suggestions Editor
+ *    leaf already exists retargets that leaf via `setState` instead of
+ *    opening a second one — see `openSuggestionsEditor.ts`). An empty
+ *    `docPath` (no document chosen yet) renders a benign placeholder rather
+ *    than calling `adapter.load("")`. Retargeting to a different docPath
+ *    while the current one is dirty silently discards in-memory edits — an
+ *    accepted v1 gap symmetric with decision 5's onClose gap; there is no
+ *    hook to veto a `setState` call either.
  */
 
-import { ItemView, type WorkspaceLeaf } from "obsidian";
+import { ItemView, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 
 import { SuggestionsStore } from "../../suggestions/store.js";
 import type { EditModel } from "../../types/suggestions.js";
@@ -53,10 +74,21 @@ import { DEFAULT_TABS } from "./tabs/defaultTabs.js";
 export interface SuggestionsEditorViewDeps {
 	/** The only wire-aware collaborator — owns all JSON/vault I/O. */
 	readonly adapter: SuggestionsDoc;
-	/** Vault-relative path of the `_suggestions.json` document to open. */
-	readonly docPath: string;
+	/**
+	 * Vault-relative path of the `_suggestions.json` document to open.
+	 * Optional (see decision 6) — production leaves this unset and supplies
+	 * the path later via `setState`; tests may still inject it directly.
+	 */
+	readonly docPath?: string;
 	/** Test seam — defaults to `DEFAULT_TABS`; production never overrides it. */
 	readonly tabs?: readonly EditorTab[];
+}
+
+/** Narrow, defensive read of `state.docPath` — never throws on a malformed state. */
+function extractDocPath(state: unknown): string | null {
+	if (typeof state !== "object" || state === null) return null;
+	const docPath = (state as Record<string, unknown>).docPath;
+	return typeof docPath === "string" ? docPath : null;
 }
 
 export class SuggestionsEditorView extends ItemView {
@@ -64,6 +96,11 @@ export class SuggestionsEditorView extends ItemView {
 	private store: SuggestionsStore | null = null;
 	private unsubscribe: (() => void) | null = null;
 	private activeTabId: string;
+	private docPath: string;
+	// Set once onOpen has run; lets setState() know whether a retarget should
+	// re-render immediately (leaf already open) or just record the path for
+	// the upcoming onOpen (leaf being freshly constructed).
+	private opened = false;
 
 	// DOM refs — captured in onOpen so render() can rebuild them on every
 	// store change (TomoChatView precedent).
@@ -77,6 +114,7 @@ export class SuggestionsEditorView extends ItemView {
 		super(leaf);
 		this.tabs = deps.tabs ?? DEFAULT_TABS;
 		this.activeTabId = this.tabs[0]?.id ?? "";
+		this.docPath = deps.docPath ?? "";
 	}
 
 	override getViewType(): string {
@@ -92,13 +130,47 @@ export class SuggestionsEditorView extends ItemView {
 	}
 
 	override async onOpen(): Promise<void> {
+		this.opened = true;
+		await this.loadAndRender();
+	}
+
+	override getState(): Record<string, unknown> {
+		return { docPath: this.docPath };
+	}
+
+	override async setState(
+		state: unknown,
+		_result: ViewStateResult,
+	): Promise<void> {
+		const docPath = extractDocPath(state);
+		if (docPath !== null) this.docPath = docPath;
+		// Only re-render if onOpen has already built the DOM — otherwise the
+		// upcoming onOpen call will pick up `this.docPath` on its own.
+		if (this.opened) await this.loadAndRender();
+	}
+
+	private async loadAndRender(): Promise<void> {
+		// Tear down any previously-loaded doc's subscription first — setState
+		// can retarget an already-open leaf to a different docPath (decision 7),
+		// and a stale subscription would keep notifying a discarded store.
+		if (this.unsubscribe !== null) {
+			this.unsubscribe();
+			this.unsubscribe = null;
+		}
+		this.store = null;
+
 		const root = this.contentEl;
 		root.empty();
 		root.addClass("hashi-suggestions-editor-view");
 
+		if (this.docPath === "") {
+			this.renderNoDocument(root);
+			return;
+		}
+
 		let model: EditModel;
 		try {
-			model = await this.deps.adapter.load(this.deps.docPath);
+			model = await this.deps.adapter.load(this.docPath);
 		} catch (err) {
 			// Version mismatch / malformed doc — fail loud in the adapter's own
 			// contract, but never crash the view. Render a clear error instead.
@@ -122,6 +194,7 @@ export class SuggestionsEditorView extends ItemView {
 	}
 
 	override async onClose(): Promise<void> {
+		this.opened = false;
 		if (this.unsubscribe !== null) {
 			this.unsubscribe();
 			this.unsubscribe = null;
@@ -146,6 +219,13 @@ export class SuggestionsEditorView extends ItemView {
 		root.createDiv({
 			cls: "hashi-suggestions-editor-error",
 			text: `Couldn't load suggestions: ${message}`,
+		});
+	}
+
+	private renderNoDocument(root: HTMLElement): void {
+		root.createDiv({
+			cls: "hashi-suggestions-editor-no-doc",
+			text: "Open a Tomo _suggestions.json (or its .md) first.",
 		});
 	}
 
