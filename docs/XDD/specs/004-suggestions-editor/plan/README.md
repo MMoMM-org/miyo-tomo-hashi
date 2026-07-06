@@ -99,7 +99,7 @@ Each phase is a separate file. Tasks follow red-green-refactor: **Prime** → **
 |-----------|--------|
 | A developer can follow this plan without additional clarification | ✅ |
 | Every task produces a verifiable deliverable | ✅ |
-| All PRD acceptance criteria map to specific tasks | ✅ (F1→T3.1 · F2→T1.3/T3.2/T3.4 · F3→T1.6/T3.3 · F4→T1.5/T3.5 · F5→T1.3/T3.2/T3.5 · F6→T1.3/T3.4 · F7→T1.4/T3.2/T3.6 · F8→T1.7/T3.6 · F9→T1.3/T3.7 · F10→T1.1/T2.*) |
+| All PRD acceptance criteria map to specific tasks | ✅ (F1→T3.1 · F2→T1.3/T3.2/T3.4 · F3→T1.6/T3.3 · F4→T1.5/T3.5 · F5→T1.3/T3.2/T3.5 · F6→T1.3/T3.4 · F7→T1.4/T3.2/T3.6 · F8→T1.7/T3.6 · F9→T1.8/T3.7 · F10→T1.1/T2.*) |
 | All SDD components have implementation tasks | ✅ (§3→P3 · §5→P1 · §6→P3 · §7→P3 · §9→P2) |
 | Dependencies are explicit with no circular references | ✅ |
 | Parallel opportunities are marked with `[parallel: true]` | ✅ |

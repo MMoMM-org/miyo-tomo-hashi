@@ -87,14 +87,22 @@ Establishes the whole testable domain: the model types, the adapter port + fake,
   4. Validate: authorization + rejection (at_time gating) tests.
   5. Success: daily editing per the confirmed v1 surface `[ref: PRD/F8]`.
 
-- [ ] **T1.8 `suggestionsStore` (`Store<T>`)** `[activity: domain-modeling]`
+- [ ] **T1.8 Tag-handler toggle transform** `[activity: domain-modeling]` `[parallel: true]`
+
+  1. Prime: SDD §6 Tag-Handler + §5 `TagGroup` `[ref: SDD/§6]`.
+  2. Test: flipping `approved`/`keep_source` on a group sets `dirty`; not-approved reads as skipped; read-only context (`handler`/`target_path`/`marker`/`source_paths`/`preview`) is untouched by the transform; unrelated groups unaffected.
+  3. Implement: `src/suggestions/transforms/tagHandler.ts` (pure `EditModel → EditModel`).
+  4. Validate: authorization + rejection unit tests.
+  5. Success: tag-handler approval as a testable transform `[ref: PRD/F9]` `[ref: SDD/§6]`.
+
+- [ ] **T1.9 `suggestionsStore` (`Store<T>`)** `[activity: domain-modeling]`
 
   1. Prime: SDD §2 component diagram (store between adapter and view) `[ref: SDD/§2]`.
   2. Test: `subscribe` fires on a transform; `dirty` reflects real edits; a no-op leaves `dirty` false.
-  3. Implement: `src/suggestions/store.ts` wrapping the transforms from T1.3–T1.7.
+  3. Implement: `src/suggestions/store.ts` wrapping the transforms from T1.3–T1.8.
   4. Validate: subscription + dirty-tracking tests.
   5. Success: view can `subscribe` + dispatch intents `[ref: SDD/§2]`.
 
-- [ ] **T1.9 Phase Validation** `[activity: validate]`
+- [ ] **T1.10 Phase Validation** `[activity: validate]`
 
   - Run all Phase 1 tests. Confirm zero Obsidian imports in `src/suggestions/` + `src/types/suggestions.ts` (Constitution L1 — pure core). `npm test` + `npm run lint` + `npm run build` green.

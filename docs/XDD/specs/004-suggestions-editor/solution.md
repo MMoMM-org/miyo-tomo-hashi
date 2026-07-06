@@ -10,11 +10,11 @@
 > Reconciled 2026-07-06
 > against Tomo's **final** `_suggestions.json` contract
 > (`_inbox/from-tomo/2026-07-05_tomo-to-hashi_final-contract-and-example.md`)
-> and two real runs (`2026-07-06_0909`, `_0949`). Executable schema:
-> `Tomo/tomo/schemas/suggestions-wire.schema.json` (`schema_version: "1"`) —
-> **not readable in this checkout**; vendor + verify when the Tomo branch is
-> reachable. **Conform to Tomo's schema** (executable source of truth); Kokoro
-> ADR-026 lags it (§8) and needs a follow-up. ADR ids below are `ADR-Sn` (sketch).
+> and three real runs (`2026-07-06_0909`, `_0949`, `_1115`). Executable schema
+> **vendored + verified**: `src/schema/suggestions-wire.schema.json`
+> (`schema_version: "1"`, from `miyo-tomo` main). **Conform to Tomo's schema**
+> (executable source of truth); Kokoro ADR-026 **reconciled** to it on `main`
+> (2026-07-06, commit `d8410d4`). ADR ids below are `ADR-Sn`.
 
 ## 0. Guiding constraint (ADR-026 §0)
 
@@ -107,7 +107,7 @@ interface EditModel {
 
 interface Suggestion {
   id:string; stem:string;                              // read-only
-  audioPeer:string|null; suppressed:boolean; worthiness:number|null; // read-only
+  audioPeer?:string|null; suppressed:boolean; worthiness?:number|null; // read-only; audioPeer/worthiness OPTIONAL in wire
   title:string;                                        // EDITABLE (stem derives, Tomo)
   template:string; location:string;                    // EDITABLE (pickers)
   tags:string[];                                       // EDITABLE (fuzzy)
@@ -125,13 +125,13 @@ interface Anchor { type:"heading"|"callout"|"line"; value:string|null;
   altHeadings:string[] /*hint*/; fitConfidence:number|null /* read-only advisory — lives ON the anchor per schema, not the candidate */ }
 
 interface ProposedMoc {
-  id:string; topic:string; reason:string;              // read-only
+  id:string; topic:string; reason?:string;             // read-only; reason OPTIONAL in wire
   name:string; parent:string;                          // EDITABLE (parent = fuzzy)
   memberIds:string[];                                  // EDITABLE (merge/move by id; render titles)
-  tags:string[]; decision:"approve"|"skip";            // EDITABLE (default skip)
+  tags?:string[]; decision:"approve"|"skip";           // EDITABLE (tags OPTIONAL in wire; decision default skip)
 }
 interface TagGroup { groupId:string; approved:boolean; keepSource:boolean;        // EDITABLE toggles (wire required)
-  handler:string; targetPath:string|null; marker:string; sourcePaths:string[]; preview:string } // read-only (§8-3)
+  handler?:string; targetPath?:string|null; marker?:string; sourcePaths?:string[]; preview?:string } // read-only display, all OPTIONAL in wire (§8-3)
 
 // daily_updates — schema-pinned 2026-07-06 (Tomo tightened it; additionalProperties:false)
 interface DailyUpdate { date:string;                                             // read-only
@@ -295,12 +295,9 @@ interface SuggestionsDoc {
   JSON-only rebuild + own-the-whole-document, D2/D4 superseded, per-note `decision`, and
   the v1 daily-editing scope. Hashi spec 004 conforms field-for-field (§12). ✅
 
-**Deferred (owner-decided — OUT of v1):** "apply daily update + keep source note" (decouple
-from `accepted`) — logged in Kokoro `open-questions.md`; revisit post-v1 (§8).
-
-**Deferred (owner-decided 2026-07-06 — OUT of v1):** "apply daily update + keep
-source note" (decouple from `accepted`) — `accepted` stays apply-and-delete.
-Revisit post-v1 (§8). Recorded in the PRD "Won't Have" section.
+**Deferred (owner-decided 2026-07-06 — OUT of v1):** "apply daily update + keep source
+note" (decouple from `accepted`) — `accepted` stays apply-and-delete. Logged in Kokoro
+`open-questions.md` + the PRD "Won't Have" section; revisit post-v1 (§8).
 
 ## 12. PRD traceability
 

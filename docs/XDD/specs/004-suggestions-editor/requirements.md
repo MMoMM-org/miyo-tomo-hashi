@@ -263,13 +263,13 @@ The minimum for the editor to replace hand-editing for Pass-1 review: the four d
 | Tomo ↔ Hashi wire drift (schema changes underneath the editor) | High | Medium | Fail-loud version gate; conform to Tomo's executable schema as source of truth; build/test against real Tomo emission, not hand fixtures |
 | Data loss on save (partial round-trip drops a section) | High | Medium | "Own the whole document" requirement + mandatory round-trip-fidelity tests as a release gate |
 | Stale structure read during spot pick (metadataCache rebuild race, #68) | Medium | Medium | Read the MOC's real structure from note content at pick time, not from a cached snapshot |
-| Schema file unreadable in this checkout | Medium | High (present) | Vendor + verify the schema when the Tomo branch is reachable; treat as an open task, not a guess |
+| Schema drift underneath the vendored copy | Medium | Low | Schema **vendored + verified** (`src/schema/suggestions-wire.schema.json`, from `miyo-tomo` main); fail-loud version gate + build/test against real emission catch a drift |
 | Kokoro ADR-026 stays stale vs Tomo | Low | Medium | Drift handoff already sent; Hashi conforms to Tomo; reconciliation is a Kokoro-side doc task, no code impact |
 
 ## Open Questions
 
-- [ ] Vendor and verify `suggestions-wire.schema.json` from the Tomo branch (unreadable in this checkout) before locking the read/write layer.
-- [ ] Confirm Kokoro has absorbed the ADR-026 drift handoff (Pass-2 is JSON-only, not override; per-note `decision` is shipped) — external, Kokoro-side; does not block Hashi implementation.
+- [x] Vendor and verify `suggestions-wire.schema.json` — **done** 2026-07-06 (`src/schema/`, from `miyo-tomo` main; verified against the `1115` run + re-vendored after Tomo tightened `daily_updates`).
+- [x] Confirm Kokoro absorbed the ADR-026 drift — **done** 2026-07-06: Kokoro reconciled ADR-026 on `main` (`d8410d4`) to JSON-only rebuild + own-the-whole-document + per-note `decision` + daily-v1 scope.
 - [ ] Post-v1 only: revisit the deferred "apply daily update + keep source note" decoupled control if the need arises.
 
 ---
