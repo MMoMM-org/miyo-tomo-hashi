@@ -335,6 +335,54 @@
   .fp-item .fp-path { color: var(--text-faint); font-family: var(--mono); font-size: 11px; }
   .fp-item .fp-new { color: var(--green); font-weight: 600; }
 
+  /* ---- suppressed suggestion ---- */
+  .card.suppressed { border-left: 3px solid var(--text-faint); }
+  .worthiness { display: flex; flex-direction: column; align-items: flex-end; flex: none; }
+  .worthiness .wv { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .worthiness .wl { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); }
+  .worthiness.low .wv { color: var(--red); }
+  .worthiness.mid .wv { color: var(--amber); }
+  .suppressed-note { font-size: 12px; color: var(--text-muted); margin: 9px 0 10px; }
+  .force-atomic { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); cursor: pointer; }
+  .muted { color: var(--text-faint); font-weight: 400; }
+
+  /* ---- worthy meta row: template / location / keep-source ---- */
+  .pmoc-row2.meta { margin-top: 11px; align-items: flex-end; gap: 14px; }
+  .mini-pick { font-family: var(--mono); font-size: 12px; color: var(--text); background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 5px 9px; cursor: pointer; text-align: left; }
+  .mini-pick:hover { border-color: var(--accent); color: var(--accent); }
+  .cbx { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); cursor: pointer; }
+  .cbx input { accent-color: var(--accent); }
+  .cbx.keep { margin-bottom: 2px; }
+  .pmoc-row2.tags { margin-top: 10px; }
+  .tags-lbl { font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; }
+  .sec-label { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; padding: 10px 13px 4px; }
+  .sec-label .muted { text-transform: none; letter-spacing: 0; font-style: italic; }
+  .add-hint { font-size: 11px; color: var(--text-faint); }
+  .xref { font-size: 11.5px; color: var(--accent); padding: 8px 13px 11px; }
+
+  /* ---- daily ---- */
+  .card.daily { padding: 12px 13px 6px; }
+  .daily-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .daily-date { font-size: 14px; font-weight: 650; }
+  .warn-pill { font-size: 11px; color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 40%, var(--border)); border-radius: 20px; padding: 2px 10px; cursor: pointer; }
+  .log-entry { border-top: 1px solid var(--border); padding: 10px 0 12px; }
+  .le-head { display: flex; gap: 9px; align-items: baseline; }
+  .le-time { font-family: var(--mono); font-size: 11px; color: var(--accent); flex: none; padding-top: 1px; }
+  .le-content { font-size: 13px; color: var(--text); }
+  .le-meta { font-size: 11.5px; color: var(--text-faint); margin: 5px 0 8px; }
+  .le-controls { display: flex; gap: 16px; }
+
+  /* ---- tag-handler ---- */
+  .card.tagh .th-title { font-size: 13.5px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .th-marker { font-family: var(--mono); font-size: 11.5px; color: var(--text-muted); background: var(--bg-alt); border-radius: 4px; padding: 1px 7px; }
+  .th-ctx { border: 1px dashed var(--border-strong); border-radius: var(--r-sm); padding: 9px 11px; margin-bottom: 11px; }
+  .ctx-flag { display: block; font-size: 11px; color: var(--amber); margin-bottom: 7px; }
+  .th-row { font-size: 12px; color: var(--text-muted); }
+  .th-row code, .th-ctx code { font-family: var(--mono); font-size: 11.5px; background: var(--bg-alt); border-radius: 3px; padding: 0 4px; color: var(--text); }
+  .th-preview { font-family: var(--mono); font-size: 11px; color: var(--text-faint); margin-top: 6px; overflow-x: auto; white-space: nowrap; }
+
+  .empty-state { padding: 40px 16px; text-align: center; color: var(--text-faint); font-size: 13px; }
+
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -345,44 +393,40 @@
     <div>
       <div class="eyebrow">Hashi · spec 004 · design phase</div>
       <h1>Suggestions Editor — interface mockups</h1>
-      <p class="sub"><b>Tabbed</b> is the chosen layout (A / C kept for comparison). The editable surface is the reviewed-and-broadened one: rename notes, approve/skip, add any MOC, edit tags, merge proposals. Toggle variant + theme; open the anchor chip (spot), <b>＋ Add MOC</b>, <b>Merge into…</b> and <b>＋ tag</b> to feel the pickers.</p>
+      <p class="sub">The real <code>2026-07-06_0949</code> run (8 items) — worthy notes with MOC options, 6 suppressed (Force-Atomic only), 1 proposed MOC, daily-log entries, a tag-handler group. Four tabs; edit inline; open the anchor chip, <b>＋ Add MOC</b>, <b>Template/Location</b> and <b>＋ tag</b> pickers. Every untouched section round-trips verbatim.</p>
     </div>
     <div class="controls">
-      <div class="seg" role="group" aria-label="Layout variant">
-        <button data-variant="A" aria-pressed="false">A · Stacked</button>
-        <button data-variant="B" aria-pressed="true">B · Tabbed</button>
-        <button data-variant="C" aria-pressed="false">C · Master–detail</button>
-      </div>
       <button class="ghost-btn" id="themeToggle" title="Toggle light/dark">◐ Theme</button>
     </div>
   </div>
-
-  <div class="variant-caption" id="vcap"></div>
 
   <!-- ===================== MOCK OBSIDIAN WINDOW ===================== -->
   <div class="obsidian">
     <div class="titlebar">
       <div class="lights"><i></i><i></i><i></i></div>
       <div class="tabstrip">
-        <div class="tab">2026-07-03_1000_suggestions.md</div>
+        <div class="tab">2026-07-06_0949_suggestions.md</div>
         <div class="tab active"><span class="dot"></span>Suggestions Editor</div>
       </div>
     </div>
 
     <div class="split">
-      <!-- left: source note context -->
+      <!-- left: the flat markdown of the SAME run — the hand-edit view -->
       <div class="source-pane">
-        <div class="fname">100 Inbox / 2026-07-03_1000_suggestions.md</div>
+        <div class="fname">100 Inbox / 2026-07-06_0949_suggestions.md</div>
         <div class="md">
-          <h2>Atomic notes</h2>
-          <p><span class="cb">☑</span> Bauhaus typography principles → <span class="wl">[[Design Systems MOC]]</span></p>
-          <p><span class="cb">☑</span> Grid systems in editorial layout → <span class="wl">[[Design Systems MOC]]</span></p>
-          <p><span class="cb">☐</span> Josef Müller-Brockmann → <span class="wl">[[Visual Language MOC]]</span></p>
-          <div class="callout"><span class="ct">＋ Proposed MOCs</span>
-            <p>Swiss Design MOC · Typography MOC</p>
-          </div>
-          <h2>Notes</h2>
-          <p>The editor is the structured face of this document. Edits here are written back to the <span class="wl">.json</span> sibling; this markdown stays the human read view.</p>
+          <h2>Suggestions</h2>
+          <p><b>S05 — Interleaving</b></p>
+          <p><b>Link to MOC:</b></p>
+          <ul><li><span class="cb">☐</span> <span class="wl">[[Concepts (MOC)]]</span></li></ul>
+          <p><span class="cb">☑</span> Approve &nbsp;·&nbsp; <span class="cb">☐</span> Keep source files</p>
+          <p><b>S03 — Krafttraining</b> <span class="cb">worthiness 30%</span></p>
+          <p><span class="cb">☐</span> Force Atomic Note</p>
+          <h2>Daily Notes Updates</h2>
+          <p><span class="wl">[[2026-07-06]]</span> ⚠️ daily note doesn't exist</p>
+          <ul><li>Krafttraining, 45 Minuten…</li></ul>
+          <p><span class="cb">☐</span> Accept &nbsp;·&nbsp; <span class="cb">☐</span> Force Atomic Note</p>
+          <p style="margin-top:14px;color:var(--text-faint);font-style:italic">Flat checkboxes. No MOC re-point, no anchor/spot, no rename, no fuzzy-add. That's the gap the editor closes →</p>
         </div>
       </div>
 
@@ -393,7 +437,7 @@
             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 9h8M8 13h5"/></svg>
             <div style="min-width:0">
               <h3>Suggestions Editor</h3>
-              <div class="meta">run 2026-07-03-1000 · profile miyo · 3 items</div>
+              <div class="meta">run 2026-07-06-0949 · profile miyo · 8 items</div>
             </div>
           </div>
           <div class="leaf-actions">
@@ -417,14 +461,13 @@
   </div>
 
   <div class="foot-explain">
-    <h4>What the mockup encodes — after the owner review</h4>
+    <h4>What the mockup encodes — real 0949 run, four tabs</h4>
     <ul>
-      <li><b>Rename a note</b> (title field) · <b>Approve / Skip</b> per note — both are new fields the editor writes; Tomo makes <code>title</code> editable and adds <code>suggestions[].decision</code> (= ADR-026 op 4). <em>(Tomo-ask 3 &amp; 2)</em></li>
-      <li><b>＋ Add MOC</b> = fuzzy pick <em>any</em> vault note, not just Tomo's candidates (added ones carry an <span class="src-badge">added</span> badge). Tomo honours editor-added candidates. <em>(Tomo-ask 1)</em></li>
-      <li><b>Choose the spot</b> (anchor chip → SpotPicker) edits <code>candidate_mocs[].anchor</code>. Structure is the real note (<code>markdownStructure</code>), not Tomo's <code>alt_headings</code>. <code>inside</code> only for callout anchors — the executor hard-fails it on a heading. <em>(Hashi-enforced)</em></li>
-      <li><b>Edit tags</b> = fuzzy over vault tags; Tomo makes <code>tags</code> editable. <em>(Tomo-ask 4)</em></li>
-      <li><b>Merge into…</b> · <b>member hover</b> (shows the note title) · <b>click-to-open</b> a path (creates outside Hashi) — all <em>Hashi-only</em>, no wire change: merge drives same-name collapse, titles live in the same doc, Obsidian creates notes on open.</li>
-      <li><b>Save</b> writes the <code>.json</code> and leaves <code>emit_digest</code> untouched — that mismatch is how Tomo learns the structured surface was edited.</li>
+      <li><b>Suggestions</b> has two card modes: <b>worthy</b> (S05/S08 — rename, template &amp; location pickers, tags, MOC link, keep-source, approve/skip) and <b>suppressed</b> (S01–04/S06/S07 — worthiness badge + a single <b>Force Atomic</b> control; that's the only real decision Tomo offers).</li>
+      <li>🔴 <b>candidate_mocs gap:</b> the worthy notes show MOC options here, but the real JSON has <code>candidate_mocs: []</code> — the markdown lists them, the wire drops them. Mocked as the <b>fix we asked Tomo for</b> (unconfirmed matches with <code>selected:false</code>); until then it's manual <b>＋ Add MOC</b>.</li>
+      <li><b>Daily</b> tab: per-date <b>click-to-open</b> with a live "doesn't exist" pill (Hashi checks the vault — the JSON carries no exists flag); per log entry <b>Accept</b> + <b>Force Atomic</b>. Hashi never creates the daily note itself.</li>
+      <li><b>Tag-Handler</b> tab: approve / keep-source. 🔴 <b>context gap</b> — target/marker/sources/preview aren't in the wire (only <code>group_id</code>); flagged for Tomo.</li>
+      <li><b>Own the whole document:</b> because Pass 2 is JSON-only, everything untouched (<code>daily_updates</code>, <code>tag_handler_groups</code>, <code>emit_digest</code>, all read-only fields) round-trips <b>verbatim</b> on Save. <code>emit_digest</code> is never recomputed — the mismatch is how Tomo learns the JSON was edited.</li>
     </ul>
   </div>
 
@@ -436,14 +479,14 @@
     <div class="modal-head">
       <div class="kick">Choose the spot · op 2</div>
       <h3 id="spTitle">Where in this MOC?</h3>
-      <div class="tgt">Design Systems MOC.md</div>
+      <div class="tgt">Frameworks (MOC).md</div>
     </div>
     <div class="modal-body">
       <div class="pick-label">Anchor <span class="hint">— parsed from the note's real structure</span></div>
       <div class="struct" id="struct">
         <div class="snode" data-type="heading" data-callout="false"><span class="type h">Heading</span><span class="label">Overview</span><span class="lvl">H2</span></div>
-        <div class="snode sel" data-type="heading" data-callout="false"><span class="type h">Heading</span><span class="label">Typography</span><span class="lvl">H2</span></div>
-        <div class="snode" data-type="callout" data-callout="true"><span class="type">Callout</span><span class="label">[!concepts] Layout</span><span class="lvl">callout</span></div>
+        <div class="snode" data-type="heading" data-callout="false"><span class="type h">Heading</span><span class="label">Core ideas</span><span class="lvl">H2</span></div>
+        <div class="snode sel" data-type="callout" data-callout="true"><span class="type">Callout</span><span class="label">[!concepts] Key concepts</span><span class="lvl">callout</span></div>
         <div class="snode" data-type="heading" data-callout="false"><span class="type h">Heading</span><span class="label">References</span><span class="lvl">H2</span></div>
         <div class="snode newsec" data-type="new" data-callout="false"><span class="type">New</span><input placeholder="Create a new ## section…" aria-label="New section name" /></div>
       </div>
@@ -455,11 +498,11 @@
           <button data-p="inside" aria-pressed="true">Inside</button>
           <button data-p="after">After</button>
         </div>
-        <div class="place-note" id="placeNote">Insert as the last line under the <b>Typography</b> heading's section.</div>
+        <div class="place-note" id="placeNote">Insert as the last line inside the <b>[!concepts] Key concepts</b> callout body.</div>
       </div>
     </div>
     <div class="modal-foot">
-      <span class="left">Tomo hint · fit 0.82</span>
+      <span class="left">Tomo match · no confidence — manual pick</span>
       <div style="display:flex; gap:8px;">
         <button class="btn subtle" id="spCancel">Cancel</button>
         <button class="btn primary" id="spApply">Set spot</button>
@@ -488,35 +531,54 @@
 </div>
 
 <script>
-  // ---- data (from the wire contract example, fleshed out) ----
+  // ---- data: the real 2026-07-06_0949 run (8 items) ----
+  const T = "t_note_tomo.md", L = "Atlas/202 Notes/";
   const suggestions = [
-    { id:"S01", title:"Bauhaus typography principles", stem:"bauhaus-typography", decision:"approve",
-      cands:[
-        { path:"Atlas/200 Maps/Design Systems MOC.md", src:"tomo", on:true,  anchor:{type:"heading",value:"Typography",placement:"inside"}, conf:0.82 },
-        { path:"Atlas/200 Maps/Visual Language MOC.md", src:"tomo", on:false, anchor:null, conf:0.44 },
-      ]},
-    { id:"S02", title:"Grid systems in editorial layout", stem:"grid-systems", decision:"approve",
-      cands:[
-        { path:"Atlas/200 Maps/Design Systems MOC.md", src:"tomo", on:true,  anchor:{type:"callout",value:"[!concepts] Layout",placement:"inside"}, conf:0.71 },
-        { path:"Atlas/200 Maps/Print Heritage MOC.md",  src:"tomo", on:false, anchor:null, conf:0.50 },
-      ]},
-    { id:"S03", title:"Josef Müller-Brockmann", stem:"josef-muller-brockmann", decision:"skip",
-      cands:[
-        { path:"Atlas/200 Maps/Visual Language MOC.md", src:"tomo", on:true, anchor:null, conf:0.60 },
-        { path:"Atlas/200 Maps/Swiss Style MOC.md",     src:"user", on:true, anchor:{type:"heading",value:"Figures",placement:"after"}, conf:null },
-      ]},
+    { id:"S01", title:"Anruf Mueller — Angebot bis Freitag, Referenzen nachschicken", stem:"call-mueller",
+      template:T, location:L, tags:["topic/communication","topic/people"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.3, cands:[] },
+    { id:"S02", title:"Deliberate Practice — Focused Effort at the Edge of Ability Builds Expertise", stem:"deliberate-practice",
+      template:T, location:L, tags:["topic/growth/aol/development","topic/mind/concepts"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
+    { id:"S03", title:"Krafttraining 2026-07-06 — Kniebeugen, Bankdruecken, Rudern", stem:"gym-log",
+      template:T, location:L, tags:["topic/health"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.3, cands:[] },
+    { id:"S04", title:"PKM-Systeme scheitern an fehlender Wiedervorlage, nicht an fehlender Struktur", stem:"idea-capture",
+      template:T, location:L, tags:["topic/knowledge/lyt"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
+    { id:"S05", title:"Interleaving — Why Mixed Practice Produces Better Retention", stem:"interleaving",
+      template:T, location:L, tags:["topic/mind/concepts","topic/learning"], decision:"approve", keep_source:false, force_atomic:false, suppressed:false, worthiness:0.6, proposedRef:"M01",
+      cands:[ { path:"Atlas/200 Maps/Concepts (MOC).md", src:"tomo", on:false, anchor:null, conf:null } ] },
+    { id:"S06", title:"Glühbirne im Flur wechseln", stem:"quick-thought",
+      template:T, location:L, tags:["topic/other"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.2, cands:[] },
+    { id:"S07", title:"Spaced Repetition — Effortful Retrieval is Where Learning Happens", stem:"spaced-repetition",
+      template:T, location:L, tags:["topic/mind/concepts"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
+    { id:"S08", title:"The Zettelkasten Method — Atomic Notes and Emergent Connections", stem:"zettelkasten-method",
+      template:T, location:L, tags:["topic/knowledge/frameworks"], decision:"approve", keep_source:false, force_atomic:false, suppressed:false, worthiness:0.6,
+      cands:[ { path:"Atlas/200 Maps/Frameworks (MOC).md", src:"tomo", on:false, anchor:null, conf:null },
+              { path:"Atlas/200 Maps/Type of Notes (MOC).md", src:"tomo", on:false, anchor:null, conf:null },
+              { path:"Atlas/200 Maps/Linking Your Thinking (MOC).md", src:"tomo", on:false, anchor:null, conf:null } ] },
   ];
-  // vault notes offered by the ＋Add MOC fuzzy picker (v1: any note, no MOC detection)
-  const vaultNotes = [
-    "Atlas/200 Maps/Design Systems MOC.md","Atlas/200 Maps/Visual Language MOC.md",
-    "Atlas/200 Maps/Print Heritage MOC.md","Atlas/200 Maps/Swiss Style MOC.md",
-    "Atlas/200 Maps/Colour Theory MOC.md","Atlas/202 Notes/Typography scale.md",
-  ];
-  const vaultTags = ["topic/typography","topic/swiss-design","topic/layout","topic/print","design/grid","design/colour"];
   const proposed = [
-    { id:"M01", name:"Swiss Design MOC", parent:"Design MOC", members:["S02","S03"], tags:["topic/swiss-design"], reason:"cluster of 2 notes on Swiss/International style", decision:"approve" },
-    { id:"M02", name:"Typography MOC",   parent:"Design MOC", members:["S01"],        tags:["topic/typography"],   reason:"single note; consider merging into Swiss Design", decision:"skip" },
+    { id:"M01", name:"Knowledge and Memory (MOC)", parent:"2000 - Knowledge Management", members:["S05"],
+      tags:["topic/mind/concepts","topic/learning"], reason:"1 note shares topic Knowledge and Memory and has no dedicated MOC.", decision:"skip" },
   ];
+  const daily = [
+    { date:"2026-07-05", exists:false, entries:[
+      { time:null, position:"after_last_line", content:"Nachmittags mit Herrn Mueller telefoniert. Er will das Angebot bis Freitag pruefen und meldet sich. Referenzen nachschicken.", reason:"Short call note (157 chars), not atomic-worthy → inline log entry", source:"call-mueller", accepted:false, forceAtomic:false } ] },
+    { date:"2026-07-06", exists:false, entries:[
+      { time:null, position:"after_last_line", content:"Krafttraining, 45 Minuten. Kniebeugen, Bankdruecken, Rudern. Danach 10 Minuten Stretching. Energielevel danach deutlich hoeher.", reason:"Short gym log (131 chars), no atomic-worthy thread → inline log entry", source:"gym-log", accepted:false, forceAtomic:false } ] },
+  ];
+  const tagGroups = [
+    { id:"th-tsukai-efforts-tomo-dev-log-md", approved:true, keep_source:false,
+      target:"Efforts/Tomo Dev Log", marker:"## Captures", handler:"tsukai",
+      sources:["100 Inbox/202606291658_companion-p1-followon-ux-and-dataview-skill"],
+      preview:"| 2026-06-29 | feature | UX hardening + Dataview skill — 6 fixes shipped |" },
+  ];
+  // fuzzy-picker candidate lists
+  const vaultNotes = [
+    "Atlas/200 Maps/Concepts (MOC).md","Atlas/200 Maps/Frameworks (MOC).md","Atlas/200 Maps/Type of Notes (MOC).md",
+    "Atlas/200 Maps/Linking Your Thinking (MOC).md","Atlas/200 Maps/Knowledge Management (MOC).md","Atlas/202 Notes/Learning index.md",
+  ];
+  const vaultTags = ["topic/mind/concepts","topic/learning","topic/knowledge/frameworks","topic/knowledge/lyt","topic/health","topic/people","topic/communication","topic/growth/aol/development","topic/other"];
+  const templates = ["t_note_tomo.md","t_note_plain.md","t_zettel.md","t_source.md"];
+  const folders = ["Atlas/202 Notes/","Atlas/203 Fleeting/","100 Inbox/","Atlas/204 Sources/"];
 
   const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 6"/></svg>';
   const PENCIL = '<svg class="pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13 5l4 4"/></svg>';
@@ -541,7 +603,13 @@
       ${c.conf!==null ? confBar(c.conf) : ''}
     </div>`;
   }
-  function suggestionCard(s){
+  const tagRow = (tags) => `<div class="pmoc-row2 tags">
+      <span class="lbl tags-lbl">Tags</span>
+      ${tags.map(t=>`<span class="tag editable" data-edittag title="Edit tag">${t}</span>`).join("")}
+      <span class="tag add" data-addtag>＋ tag</span>
+    </div>`;
+
+  function worthyCard(s){
     return `<div class="card">
       <div class="card-top">
         <div class="pmoc-row1">
@@ -553,12 +621,35 @@
             </div>
           </div>
         </div>
-        <div class="card-sub">${s.stem}.md · filename follows the title</div>
+        <div class="pmoc-row2 meta">
+          <div class="field"><label>Template</label><button class="mini-pick" data-picktpl>${s.template}</button></div>
+          <div class="field"><label>Location</label><button class="mini-pick" data-pickloc>${s.location}</button></div>
+          <label class="cbx keep"><input type="checkbox" ${s.keep_source?'checked':''} data-dirty/> Keep source file</label>
+        </div>
+        ${tagRow(s.tags)}
       </div>
+      <div class="sec-label">Link to a MOC ${s.cands.length?'':'<span class="muted">— none proposed</span>'}</div>
       ${s.cands.map(candRow).join("")}
-      <div class="add-moc"><button data-addmoc>＋ Add MOC…</button><span style="font-size:11px;color:var(--text-faint)">pick any note — not just Tomo's suggestions</span></div>
+      <div class="add-moc"><button data-addmoc>＋ Add MOC…</button><span class="add-hint">Tomo's matches + any vault note</span></div>
+      ${s.proposedRef?`<div class="xref">↳ also offered as a new MOC (${s.proposedRef}) — see the Proposed MOCs tab</div>`:''}
     </div>`;
   }
+
+  function suppressedCard(s){
+    const low = s.worthiness < 0.3;
+    return `<div class="card suppressed">
+      <div class="card-top">
+        <div class="pmoc-row1">
+          <div class="field" style="flex:1"><label>Note (${s.id}) · not promoted</label><input class="inp name" value="${s.title}" aria-label="Atomic note title" /></div>
+          <div class="worthiness ${low?'low':'mid'}" title="atomic-worthiness"><span class="wv">${Math.round(s.worthiness*100)}%</span><span class="wl">worthiness</span></div>
+        </div>
+        <div class="suppressed-note">Below the 0.5 threshold — kept in inbox, not made an atomic note. Its content typically goes to the daily log instead.</div>
+        <label class="force-atomic"><input type="checkbox" ${s.force_atomic?'checked':''} data-dirty/> <b>Force Atomic Note</b> <span class="muted">— create a standalone note anyway</span></label>
+      </div>
+    </div>`;
+  }
+
+  function suggestionCard(s){ return s.suppressed ? suppressedCard(s) : worthyCard(s); }
   function proposedCard(m){
     const dup = proposed.filter(x=>x.name===m.name).length>1;
     return `<div class="pmoc">
@@ -587,78 +678,68 @@
     </div>`;
   }
 
-  // ---------- variant renderers ----------
-  function secHead(t,n){ return `<div class="sec-h"><h4>${t}</h4><span class="count">${n}</span><span class="rule"></span></div>`; }
-
-  function renderA(){
-    return `<div class="leaf-body">
-      ${secHead("Suggestions", suggestions.length)}
-      ${suggestions.map(suggestionCard).join("")}
-      ${secHead("Proposed MOCs", proposed.length)}
-      ${proposed.map(proposedCard).join("")}
+  // ---------- daily + tag-handler cards ----------
+  function dailyCard(d){
+    return `<div class="card daily">
+      <div class="daily-head">
+        <span class="path-link daily-date" data-open>[[${d.date}]]${EXT}</span>
+        ${d.exists ? '' : `<span class="warn-pill" data-open title="Click to create the daily note">⚠ note doesn't exist — click to create</span>`}
+      </div>
+      ${d.entries.map(e=>`
+        <div class="log-entry">
+          <div class="le-head"><span class="le-time">${e.time || e.position}</span><span class="le-content">${e.content}</span></div>
+          <div class="le-meta">${e.reason} · <span class="path-link" data-open>[[${e.source}]]${EXT}</span></div>
+          <div class="le-controls">
+            <label class="cbx"><input type="checkbox" ${e.accepted?'checked':''} data-dirty/> Accept</label>
+            <label class="cbx"><input type="checkbox" ${e.forceAtomic?'checked':''} data-dirty/> Force Atomic Note</label>
+          </div>
+        </div>`).join("")}
     </div>`;
   }
-  function renderB(){
-    return `<div class="subtabs" role="group" aria-label="Section">
-        <button class="subtab" data-sub="s" aria-pressed="true">Suggestions · ${suggestions.length}</button>
-        <button class="subtab" data-sub="m" aria-pressed="false">Proposed MOCs · ${proposed.length}</button>
+  function tagCard(g){
+    return `<div class="card tagh">
+      <div class="card-top">
+        <div class="th-title"><span class="path-link" data-open>[[${g.target}]]${EXT}</span> <span class="th-marker">${g.marker}</span></div>
+        <div class="th-ctx">
+          <span class="ctx-flag" title="These fields aren't in the wire yet">ⓘ context (target · marker · sources · preview) not in the JSON — flag to Tomo</span>
+          <div class="th-row">Handler <code>${g.handler}</code> · Sources ${g.sources.length}</div>
+          <div class="th-preview">${g.preview}</div>
+        </div>
+        <div class="pmoc-row2">
+          <div class="decision" data-approvegroup>
+            <button class="approve" aria-pressed="${g.approved}">Approve</button>
+            <button class="skip" aria-pressed="${!g.approved}">Skip</button>
+          </div>
+          <div style="flex:1"></div>
+          <label class="cbx"><input type="checkbox" ${g.keep_source?'checked':''} data-dirty/> Keep source files</label>
+        </div>
       </div>
-      <div class="leaf-body" id="subBody">${suggestions.map(suggestionCard).join("")}</div>`;
-  }
-  function renderC(){
-    const items = [
-      ...suggestions.map(s=>({g:"s", id:s.id, nm:s.title, st: s.cands.some(c=>c.on&&!c.anchor)?"warn":(s.cands.some(c=>c.on)?"ok":"off")})),
-      ...proposed.map(m=>({g:"m", id:m.id, nm:m.name, st: m.decision==="approve"?"ok":"off"})),
-    ];
-    const listHtml = `
-      <div class="md-group">Suggestions</div>
-      ${items.filter(i=>i.g==="s").map((i,idx)=>`<div class="md-item ${idx===0?'sel':''}" data-mdid="${i.id}"><span class="st ${i.st}"></span><span class="nm">${i.nm}</span></div>`).join("")}
-      <div class="md-group">Proposed MOCs</div>
-      ${items.filter(i=>i.g==="m").map(i=>`<div class="md-item" data-mdid="${i.id}"><span class="st ${i.st}"></span><span class="nm">${i.nm}</span></div>`).join("")}`;
-    return `<div class="md-split">
-      <div class="md-list">${listHtml}</div>
-      <div class="md-detail" id="mdDetail">${detailFor("S01")}</div>
     </div>`;
   }
-  function detailFor(id){
-    const s = suggestions.find(x=>x.id===id);
-    if (s){
-      return `<div class="dt-title">${s.title}</div><div class="dt-sub">${s.id} · ${s.stem}</div>
-        <div class="dt-field"><label>Candidate MOCs — link &amp; spot</label>
-          <div class="card" style="margin:0">${s.cands.map(candRow).join("")}</div>
-        </div>`;
-    }
-    const m = proposed.find(x=>x.id===id);
-    return `<div class="dt-title">${m.name}</div><div class="dt-sub">${m.id} · proposed MOC</div>
-      <div class="dt-field"><label>Name</label><input class="inp name" style="width:100%" value="${m.name}" /></div>
-      <div class="dt-field"><label>Parent</label><input class="inp" style="width:100%" value="${m.parent}" /></div>
-      <div class="dt-field"><label>Create this MOC?</label>
-        <div class="decision"><button class="approve" aria-pressed="${m.decision==='approve'}">Approve</button><button class="skip" aria-pressed="${m.decision==='skip'}">Skip</button></div>
-      </div>
-      <div class="dt-field"><label>Members</label><div class="members">${m.members.map(x=>`<span class="chip">${x}</span>`).join("")}</div></div>`;
-  }
+  const empty = (msg) => `<div class="empty-state">${msg}</div>`;
 
-  const captions = {
-    A: ["Variant A · Stacked", "Both lists in one scroll. Fewest clicks to toggle; best when the run is small."],
-    B: ["Variant B · Tabbed", "One list at a time. Scales to long runs; you lose the at-a-glance overview of both."],
-    C: ["Variant C · Master–detail", "List rail + focused editor. Best for large runs and deliberate per-item work; more clicks for a quick toggle."],
-  };
+  // ---------- 4-tab renderer ----------
+  const TABS = [
+    { key:"s", label:"Suggestions",  count:()=>suggestions.length, render:()=>suggestions.map(suggestionCard).join("") },
+    { key:"m", label:"Proposed MOCs",count:()=>proposed.length,    render:()=>proposed.length?proposed.map(proposedCard).join(""):empty("No proposed MOCs in this run.") },
+    { key:"d", label:"Daily",        count:()=>daily.length,       render:()=>daily.length?daily.map(dailyCard).join(""):empty("No daily-note updates.") },
+    { key:"t", label:"Tag-Handler",  count:()=>tagGroups.length,   render:()=>tagGroups.length?tagGroups.map(tagCard).join(""):empty("No tag-handler updates.") },
+  ];
+  let tab = "s";
 
   const stage = document.getElementById("stage");
-  const vcap = document.getElementById("vcap");
-  let variant = "B";
-
   function paint(){
-    vcap.innerHTML = `<b>${captions[variant][0]}</b> — ${captions[variant][1]}`;
-    stage.innerHTML = variant==="A"?renderA():variant==="B"?renderB():renderC();
+    const bar = `<div class="subtabs" role="group" aria-label="Section">${TABS.map(t=>
+      `<button class="subtab" data-sub="${t.key}" aria-pressed="${t.key===tab}">${t.label} · ${t.count()}</button>`).join("")}</div>`;
+    const active = TABS.find(t=>t.key===tab);
+    stage.innerHTML = bar + `<div class="leaf-body" id="subBody">${active.render()}</div>`;
     wire();
   }
 
   function wire(){
-    // MOC toggles
+    // MOC toggles (worthy cards only)
     stage.querySelectorAll("[data-toggle]").forEach(el=>{
       const act = ()=>{ const row = el.closest(".cand"); const on = row.classList.toggle("on"); row.classList.toggle("off",!on); el.setAttribute("aria-checked",on);
-        // show/hide anchor row
         let main = row.querySelector(".cand-main");
         if(on && !main.querySelector(".anchor-row")){ main.insertAdjacentHTML("beforeend", `<div class="anchor-row">${anchorChip(null)}</div>`); rebindSpots(); }
         if(!on){ const ar = main.querySelector(".anchor-row"); if(ar) ar.remove(); }
@@ -666,45 +747,30 @@
       el.addEventListener("click", act);
       el.addEventListener("keydown", e=>{ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); act(); } });
     });
-    // decision segmented (per-note + proposed-MOC use the same control)
+    // segmented decisions (per-note + proposed + tag-handler approve/skip)
     stage.querySelectorAll(".decision").forEach(d=>{
       d.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
         d.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));
         b.setAttribute("aria-pressed","true"); showDirty();
       }));
     });
-    // inputs → dirty
+    // inputs + checkboxes → dirty
     stage.querySelectorAll("input").forEach(i=>i.addEventListener("input",showDirty));
-    // variant B subtabs
-    stage.querySelectorAll(".subtab").forEach(t=>t.addEventListener("click",()=>{
-      stage.querySelectorAll(".subtab").forEach(x=>x.setAttribute("aria-pressed","false"));
-      t.setAttribute("aria-pressed","true");
-      document.getElementById("subBody").innerHTML = t.dataset.sub==="s"?suggestions.map(suggestionCard).join(""):proposed.map(proposedCard).join("");
-      wire();
-    }));
-    // variant C selection
-    stage.querySelectorAll(".md-item").forEach(it=>it.addEventListener("click",()=>{
-      stage.querySelectorAll(".md-item").forEach(x=>x.classList.remove("sel"));
-      it.classList.add("sel");
-      document.getElementById("mdDetail").innerHTML = detailFor(it.dataset.mdid);
-      wire();
-    }));
-    // added affordances (owner review)
+    stage.querySelectorAll("[data-dirty]").forEach(i=>i.addEventListener("change",showDirty));
+    // tabs → repaint the active section
+    stage.querySelectorAll(".subtab").forEach(t=>t.addEventListener("click",()=>{ tab=t.dataset.sub; paint(); }));
+    // pickers + click-to-open links
     stage.querySelectorAll("[data-addmoc]").forEach(b=>b.addEventListener("click",()=>openFuzzy("moc")));
     stage.querySelectorAll("[data-addtag],[data-edittag]").forEach(b=>b.addEventListener("click",()=>openFuzzy("tag")));
     stage.querySelectorAll("[data-merge]").forEach(b=>b.addEventListener("click",()=>openFuzzy("merge")));
+    stage.querySelectorAll("[data-picktpl]").forEach(b=>b.addEventListener("click",()=>openFuzzy("tpl", b)));
+    stage.querySelectorAll("[data-pickloc]").forEach(b=>b.addEventListener("click",()=>openFuzzy("loc", b)));
     stage.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); flashOpen(b); }));
     rebindSpots();
   }
   function flashOpen(el){ el.style.color = "var(--accent)"; setTimeout(()=>{ el.style.color=""; }, 500); }
   function rebindSpots(){ document.querySelectorAll("[data-spot]").forEach(b=>{ b.onclick = openSpot; }); }
   function showDirty(){ document.getElementById("dirtyBadge").style.visibility="visible"; }
-
-  // variant switcher
-  document.querySelectorAll(".seg [data-variant]").forEach(b=>b.addEventListener("click",()=>{
-    document.querySelectorAll(".seg [data-variant]").forEach(x=>x.setAttribute("aria-pressed","false"));
-    b.setAttribute("aria-pressed","true"); variant=b.dataset.variant; paint();
-  }));
 
   // theme toggle
   const root = document.documentElement;
@@ -761,13 +827,16 @@
   const fpSearch = document.getElementById("fpSearch");
   const fpList = document.getElementById("fpList");
   let fpMode = "moc";
+  let fpTrigger = null;
   const fpConf = {
-    moc:   { kick:"Add MOC · op 1",    title:"Pick a note as MOC", sub:'any vault note — v1 does no "is it a MOC?" check',  note:"metadataCache — all notes",    src:()=>vaultNotes,               paths:true,  verb:"create" },
-    tag:   { kick:"Edit tags · op 2c", title:"Add a tag",          sub:"fuzzy over existing vault tags",                    note:"metadataCache.getTags()",      src:()=>vaultTags,                paths:false, verb:"add" },
-    merge: { kick:"Merge · op 3",      title:"Merge into…",         sub:"pick another proposed MOC — members get unioned",   note:"proposed MOCs in this run",    src:()=>proposed.map(p=>p.name),  paths:false, verb:"" },
+    moc:   { kick:"Add MOC · op 1",    title:"Pick a note as MOC", sub:'any vault note — v1 does no "is it a MOC?" check',  note:"metadataCache — all notes", src:()=>vaultNotes, paths:true,  verb:"create" },
+    tag:   { kick:"Edit tags",         title:"Add a tag",          sub:"fuzzy over existing vault tags",                    note:"metadataCache.getTags()",   src:()=>vaultTags,  paths:false, verb:"add" },
+    merge: { kick:"Merge · op 3",      title:"Merge into…",         sub:"pick another proposed MOC — members get unioned",   note:"proposed MOCs in this run", src:()=>proposed.map(p=>p.name), paths:false, verb:"" },
+    tpl:   { kick:"Template",          title:"Choose a template",   sub:"note templates in the vault",                      note:"Templates/",                src:()=>templates,  paths:false, verb:"" },
+    loc:   { kick:"Location",          title:"Choose a folder",     sub:"destination folder for the note",                  note:"vault folders",             src:()=>folders,    paths:false, verb:"create" },
   };
-  function openFuzzy(mode){
-    fpMode = mode; const c = fpConf[mode];
+  function openFuzzy(mode, trigger){
+    fpMode = mode; fpTrigger = trigger || null; const c = fpConf[mode];
     document.getElementById("fpKick").textContent = c.kick;
     document.getElementById("fpTitle").textContent = c.title;
     document.getElementById("fpSub").textContent = c.sub;
@@ -775,18 +844,22 @@
     fpSearch.value = ""; renderFp(""); fpScrim.classList.add("open");
     setTimeout(()=>fpSearch.focus(), 0);
   }
+  function pickFp(value){
+    if((fpMode==="tpl"||fpMode==="loc") && fpTrigger) fpTrigger.textContent = value;
+    fpScrim.classList.remove("open"); showDirty();
+  }
   function renderFp(q){
     const c = fpConf[fpMode]; const ql = q.toLowerCase();
     const items = c.src().filter(x=>x.toLowerCase().includes(ql));
     let html = items.map((x,i)=>{
-      if(c.paths){ const [d,f]=dir(x); return `<div class="fp-item ${i===0?'hi':''}" data-fp>${f}<span class="fp-path">${d}</span></div>`; }
-      return `<div class="fp-item ${i===0?'hi':''}" data-fp>${x}</div>`;
+      if(c.paths){ const [d,f]=dir(x); return `<div class="fp-item ${i===0?'hi':''}" data-fp="${x}">${f}<span class="fp-path">${d}</span></div>`; }
+      return `<div class="fp-item ${i===0?'hi':''}" data-fp="${x}">${x}</div>`;
     }).join("");
     if(q && c.verb && !items.some(x=>x.toLowerCase()===ql)){
-      html += `<div class="fp-item" data-fp><span class="fp-new">＋ ${c.verb} “${q}”</span></div>`;
+      html += `<div class="fp-item" data-fp="${q}"><span class="fp-new">＋ ${c.verb} “${q}”</span></div>`;
     }
     fpList.innerHTML = html || `<div class="fp-item" style="color:var(--text-faint)">No matches</div>`;
-    fpList.querySelectorAll("[data-fp]").forEach(el=>el.addEventListener("click",()=>{ fpScrim.classList.remove("open"); showDirty(); }));
+    fpList.querySelectorAll("[data-fp]").forEach(el=>el.addEventListener("click",()=>pickFp(el.dataset.fp)));
   }
   fpSearch.addEventListener("input", e=>renderFp(e.target.value));
   document.getElementById("fpCancel").addEventListener("click",()=>fpScrim.classList.remove("open"));
