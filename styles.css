@@ -410,3 +410,202 @@
 	gap: 8px;
 	margin-top: 12px;
 }
+
+/* ---------------------------------------------------------------------------
+ * Suggestions Editor (spec-004) — leaf ItemView, 4 tabs, cards + pickers.
+ * Functional layout; visual polish is intentionally light for v1 (manual QA).
+ * The active-tab cue rides on `border-bottom` (not text-decoration) per the
+ * Obsidian CSS lint rule — see the underline note earlier in this file.
+ * ------------------------------------------------------------------------- */
+
+.hashi-suggestions-editor-view {
+	padding: 0;
+	overflow-y: auto;
+	height: 100%;
+}
+
+.hashi-suggestions-editor-tabbar {
+	display: flex;
+	gap: 4px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding: 0 8px;
+	position: sticky;
+	top: 0;
+	background: var(--background-primary);
+	z-index: 1;
+}
+
+.hashi-suggestions-editor-tab {
+	background: transparent;
+	border: none;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	box-shadow: none;
+	padding: 8px 10px;
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+}
+
+.hashi-suggestions-editor-tab:hover {
+	color: var(--text-normal);
+}
+
+.hashi-suggestions-editor-tab.is-active {
+	color: var(--text-normal);
+	border-bottom-color: var(--interactive-accent);
+}
+
+.hashi-suggestions-editor-content {
+	padding: 12px;
+}
+
+.hashi-suggestions-editor-empty,
+.hashi-suggestions-editor-error {
+	padding: 24px 12px;
+	text-align: center;
+	color: var(--text-muted);
+}
+
+.hashi-suggestions-editor-error {
+	color: var(--text-error);
+}
+
+/* Shared card shell across the four tabs. */
+.hashi-suggestion-card,
+.hashi-proposed-moc-card,
+.hashi-daily-group,
+.hashi-suggestions-editor-tag-handler-card {
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: 12px;
+	margin-bottom: 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.hashi-suggestion-card-suppressed {
+	opacity: 0.75;
+}
+
+/* Suggestions tab. */
+.hashi-suggestion-title {
+	width: 100%;
+	font-weight: var(--font-semibold);
+}
+
+.hashi-suggestion-worthiness {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-smaller);
+}
+
+.hashi-suggestion-skip-hint {
+	color: var(--text-muted);
+	font-size: var(--font-smaller);
+}
+
+.hashi-suggestion-tags,
+.hashi-suggestion-mocs,
+.hashi-proposed-moc-tags,
+.hashi-proposed-moc-members {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+}
+
+.hashi-suggestion-tag,
+.hashi-proposed-moc-tag,
+.hashi-proposed-moc-member {
+	padding: 1px 6px;
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-border);
+	font-size: var(--font-smaller);
+}
+
+.hashi-suggestion-moc {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+
+.hashi-suggestion-moc-path,
+.hashi-daily-log-entry-reason,
+.hashi-daily-log-link-reason,
+.hashi-daily-tracker-reason {
+	color: var(--text-muted);
+	font-size: var(--font-smaller);
+}
+
+/* Daily tab. */
+.hashi-daily-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: var(--font-semibold);
+}
+
+.hashi-daily-date-missing {
+	color: var(--text-warning);
+	font-size: var(--font-smaller);
+}
+
+.hashi-daily-tracker,
+.hashi-daily-log-entry,
+.hashi-daily-log-link {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 6px 0;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.hashi-daily-log-entry-content {
+	width: 100%;
+	min-height: 3em;
+	resize: vertical;
+}
+
+/* Tag-Handler tab. */
+.hashi-suggestions-editor-tag-handler-field {
+	display: flex;
+	gap: 6px;
+	font-size: var(--font-smaller);
+}
+
+.hashi-suggestions-editor-tag-handler-field-label {
+	color: var(--text-muted);
+	min-width: 6em;
+}
+
+.hashi-suggestions-editor-tag-handler-preview {
+	background: var(--background-primary);
+	border-radius: var(--radius-s);
+	padding: 6px 8px;
+	font-size: var(--font-smaller);
+	white-space: pre-wrap;
+	overflow-x: auto;
+}
+
+.hashi-suggestions-editor-tag-handler-controls {
+	display: flex;
+	gap: 12px;
+}
+
+/* SpotPicker suggestion rows. */
+.hashi-spot-picker-item {
+	display: flex;
+	gap: 8px;
+	align-items: baseline;
+}
+
+.hashi-spot-picker-placement {
+	color: var(--text-muted);
+	font-size: var(--font-smaller);
+}
