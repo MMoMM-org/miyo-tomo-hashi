@@ -410,6 +410,13 @@ export class WorkspaceLeaf {
 export class ItemView extends Component {
 	leaf: WorkspaceLeaf;
 	contentEl = document.createElement("div");
+	// Real Obsidian's `View` base class exposes `app`, populated by the
+	// Workspace when a leaf actually opens the view (before onOpen runs) —
+	// not passed through the constructor. Declared as definite-assignment
+	// here so views constructed directly in tests (bypassing the real
+	// leaf.setViewState flow) must assign it themselves, mirroring that
+	// real-world wiring order.
+	app!: App;
 
 	constructor(leaf: WorkspaceLeaf) {
 		super();
