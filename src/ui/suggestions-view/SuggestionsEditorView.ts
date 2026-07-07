@@ -5,7 +5,8 @@
  * tab's non-empty content to an `EditorTab` implementation (tabContract.ts).
  *
  * Spec refs: spec-004 SDD §3 (ADR-S1 — leaf ItemView, 4 tabs, lifecycle +
- * dirty-guard); PRD F1; plan/phase-3.md T3.1.
+ * dirty-guard); PRD F1; plan/phase-3.md T3.1; ADR-026 follow-up (Save
+ * affordance, this revision) — see decision 8.
  *
  * --- Decisions ---
  *
@@ -21,10 +22,11 @@
  *    to `DEFAULT_TABS`) so tests can substitute tabs without touching the
  *    view; production code never needs to pass it.
  *
- * 3. Tab buttons use raw `addEventListener`, not `registerDomEvent` —
- *    mirrors `TomoChatView`'s zoom/force-reconnect buttons. Buttons are
- *    fully recreated on every `render()` (`tabBarEl.empty()` first), so
- *    there is nothing to leak: the listener goes away with its element.
+ * 3. Tab and action buttons use raw `addEventListener`, not
+ *    `registerDomEvent` — mirrors `TomoChatView`'s zoom/force-reconnect
+ *    buttons. The subtab strip and leaf-head are fully recreated on every
+ *    `render()` (`.empty()` first), so there is nothing to leak: the
+ *    listener goes away with its element.
  *
  * 4. Empty-state handling lives HERE, not in each `EditorTab`: the view
  *    checks `tab.count(model) === 0` and renders a generic empty state
@@ -58,9 +60,29 @@
  *    while the current one is dirty silently discards in-memory edits — an
  *    accepted v1 gap symmetric with decision 5's onClose gap; there is no
  *    hook to veto a `setState` call either.
+ *
+ * 8. (spec-004 follow-up) Save/Revert chrome — the view previously had no
+ *    way to persist edits at all. `Save` calls `deps.adapter.save(model)`
+ *    and, on success, applies a transform through the store that clears
+ *    `dirty` (a real reference change so `Store.set`'s `Object.is` dedup
+ *    still notifies). `ObsidianSuggestionsDoc.save()` rethrows on the
+ *    load-bearing JSON-write failure after already showing its own
+ *    `Notice` (see src/suggestions/ObsidianSuggestionsDoc.ts) — so the
+ *    Save handler only needs to swallow that rejection, not double-report
+ *    it; the model stays dirty and the badge/button state is simply
+ *    whatever the next render shows. `Revert` re-runs `loadAndRender()` —
+ *    the same load path `onOpen`/`setState` use — discarding in-memory
+ *    edits in favor of a fresh, clean model. Root chrome classes
+ *    (`hashi-se-*`) replace the earlier ad hoc `hashi-suggestions-editor-*`
+ *    names to match the approved mockup; see styles.css.
  */
 
-import { ItemView, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import {
+	ItemView,
+	setIcon,
+	type ViewStateResult,
+	type WorkspaceLeaf,
+} from "obsidian";
 
 import { SuggestionsStore } from "../../suggestions/store.js";
 import type { EditModel } from "../../types/suggestions.js";
@@ -102,10 +124,11 @@ export class SuggestionsEditorView extends ItemView {
 	// the upcoming onOpen (leaf being freshly constructed).
 	private opened = false;
 
-	// DOM refs — captured in onOpen so render() can rebuild them on every
-	// store change (TomoChatView precedent).
-	private tabBarEl: HTMLElement | null = null;
-	private tabContentEl: HTMLElement | null = null;
+	// DOM refs — captured in loadAndRender so render() can rebuild them on
+	// every store change (TomoChatView precedent).
+	private leafHeadEl: HTMLElement | null = null;
+	private subtabsEl: HTMLElement | null = null;
+	private bodyEl: HTMLElement | null = null;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -153,15 +176,21 @@ export class SuggestionsEditorView extends ItemView {
 		// Tear down any previously-loaded doc's subscription first — setState
 		// can retarget an already-open leaf to a different docPath (decision 7),
 		// and a stale subscription would keep notifying a discarded store.
+		// Revert (decision 8) reuses this same path, so a stale subscription
+		// from the model being reverted must be torn down the same way.
 		if (this.unsubscribe !== null) {
 			this.unsubscribe();
 			this.unsubscribe = null;
 		}
 		this.store = null;
+		this.leafHeadEl = null;
+		this.subtabsEl = null;
+		this.bodyEl = null;
 
 		const root = this.contentEl;
 		root.empty();
 		root.addClass("hashi-suggestions-editor-view");
+		root.addClass("hashi-se-view");
 
 		if (this.docPath === "") {
 			this.renderNoDocument(root);
@@ -180,14 +209,13 @@ export class SuggestionsEditorView extends ItemView {
 
 		this.store = new SuggestionsStore(model);
 
-		this.tabBarEl = root.createDiv({ cls: "hashi-suggestions-editor-tabbar" });
-		this.tabContentEl = root.createDiv({
-			cls: "hashi-suggestions-editor-content",
-		});
+		this.leafHeadEl = root.createDiv({ cls: "hashi-se-leaf-head" });
+		this.subtabsEl = root.createDiv({ cls: "hashi-se-subtabs" });
+		this.bodyEl = root.createDiv({ cls: "hashi-se-body" });
 
 		// Subscribe AFTER the skeleton is built — the store fires the listener
 		// immediately on subscribe with the current model, and render() needs
-		// tabBarEl/tabContentEl already attached.
+		// leafHeadEl/subtabsEl/bodyEl already attached.
 		this.unsubscribe = this.store.subscribe(() => {
 			this.render();
 		});
@@ -214,17 +242,34 @@ export class SuggestionsEditorView extends ItemView {
 		}
 	}
 
+	/**
+	 * Persists the current model via the adapter, then clears `dirty` on
+	 * success. `ObsidianSuggestionsDoc.save()` already shows its own `Notice`
+	 * and rethrows on the load-bearing JSON-write failure (decision 8) — so a
+	 * rejection here means the user has already been told; the model simply
+	 * stays dirty (nothing to do beyond letting the render reflect that).
+	 */
+	private async handleSave(): Promise<void> {
+		if (this.store === null) return;
+		try {
+			await this.deps.adapter.save(this.store.getModel());
+		} catch {
+			return;
+		}
+		this.store.apply((m) => (m.dirty ? { doc: m.doc, dirty: false } : m));
+	}
+
 	private renderError(root: HTMLElement, err: unknown): void {
 		const message = err instanceof Error ? err.message : String(err);
 		root.createDiv({
-			cls: "hashi-suggestions-editor-error",
+			cls: "hashi-se-error",
 			text: `Couldn't load suggestions: ${message}`,
 		});
 	}
 
 	private renderNoDocument(root: HTMLElement): void {
 		root.createDiv({
-			cls: "hashi-suggestions-editor-no-doc",
+			cls: "hashi-se-nodoc",
 			text: "Open a Tomo _suggestions.json (or its .md) first.",
 		});
 	}
@@ -232,26 +277,70 @@ export class SuggestionsEditorView extends ItemView {
 	private render(): void {
 		if (
 			this.store === null ||
-			this.tabBarEl === null ||
-			this.tabContentEl === null
+			this.leafHeadEl === null ||
+			this.subtabsEl === null ||
+			this.bodyEl === null
 		) {
 			return;
 		}
 		const model = this.store.getModel();
-		this.renderTabBar(model);
-		this.renderActiveTabContent(model);
+		this.renderLeafHead(model);
+		this.renderSubtabs(model);
+		this.renderBody(model);
 	}
 
-	private renderTabBar(model: EditModel): void {
-		const bar = this.tabBarEl;
+	private renderLeafHead(model: EditModel): void {
+		const head = this.leafHeadEl;
+		if (head === null) return;
+		head.empty();
+
+		const title = head.createDiv({ cls: "hashi-se-leaf-title" });
+		const icon = title.createSpan();
+		setIcon(icon, "list-checks");
+		const textWrap = title.createDiv();
+		textWrap.createEl("h3", { text: "Suggestions editor" });
+		textWrap.createDiv({
+			cls: "hashi-se-leaf-meta",
+			text: `run ${model.doc.run_id} · profile ${model.doc.profile} · ${model.doc.source_items} items`,
+		});
+
+		const actions = head.createDiv({ cls: "hashi-se-leaf-actions" });
+		if (model.dirty) {
+			const dirty = actions.createSpan({ cls: "hashi-se-dirty" });
+			dirty.createEl("i");
+			dirty.createSpan({ text: "Edited" });
+		}
+
+		const revertBtn = actions.createEl("button", {
+			cls: ["hashi-se-btn", "hashi-se-subtle"],
+			text: "Revert",
+		});
+		revertBtn.setAttr("type", "button");
+		revertBtn.addEventListener("click", () => {
+			void this.loadAndRender();
+		});
+
+		const saveBtn = actions.createEl("button", {
+			cls: ["hashi-se-btn", "hashi-se-primary"],
+			text: "Save",
+		});
+		saveBtn.setAttr("type", "button");
+		saveBtn.disabled = !model.dirty;
+		saveBtn.addEventListener("click", () => {
+			void this.handleSave();
+		});
+	}
+
+	private renderSubtabs(model: EditModel): void {
+		const bar = this.subtabsEl;
 		if (bar === null) return;
 		bar.empty();
 
 		for (const tab of this.tabs) {
 			const count = tab.count(model);
 			const btn = bar.createEl("button", {
-				cls: "hashi-suggestions-editor-tab",
-				text: `${tab.label} (${count})`,
+				cls: "hashi-se-subtab",
+				text: `${tab.label} · ${count}`,
 			});
 			btn.setAttr("type", "button");
 			if (tab.id === this.activeTabId) btn.addClass("is-active");
@@ -264,18 +353,18 @@ export class SuggestionsEditorView extends ItemView {
 		}
 	}
 
-	private renderActiveTabContent(model: EditModel): void {
-		const content = this.tabContentEl;
-		if (content === null) return;
-		content.empty();
+	private renderBody(model: EditModel): void {
+		const body = this.bodyEl;
+		if (body === null) return;
+		body.empty();
 
 		const activeTab = this.tabs.find((tab) => tab.id === this.activeTabId);
 		if (activeTab === undefined) return;
 
 		const count = activeTab.count(model);
 		if (count === 0) {
-			content.createDiv({
-				cls: "hashi-suggestions-editor-empty",
+			body.createDiv({
+				cls: "hashi-se-empty",
 				text: `No ${activeTab.label.toLowerCase()} in this run.`,
 			});
 			return;
@@ -287,6 +376,6 @@ export class SuggestionsEditorView extends ItemView {
 				this.store?.apply(transform);
 			},
 		};
-		activeTab.render(content, model, ctx);
+		activeTab.render(body, model, ctx);
 	}
 }

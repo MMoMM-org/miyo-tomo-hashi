@@ -1,8 +1,9 @@
 /**
  * Unit tests for SuggestionsEditorView — Phase-3 T3.1 leaf ItemView + tab
- * chrome + tab contract.
+ * chrome + tab contract, plus the spec-004 follow-up Save/Revert affordance.
  *
- * Spec refs: spec-004 SDD §3 (ADR-S1); plan/phase-3.md T3.1.
+ * Spec refs: spec-004 SDD §3 (ADR-S1); plan/phase-3.md T3.1; ADR-026
+ * follow-up (Save affordance).
  *
  * Real Obsidian populates `View.app` after construction (WorkspaceLeaf wires
  * it before onOpen runs) — TomoChatView never needed `this.app`, so this is
@@ -13,7 +14,7 @@
 
 import "obsidian";
 import { App, WorkspaceLeaf } from "obsidian";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import {
 	DEFAULT_SEED,
@@ -23,6 +24,7 @@ import { SuggestionsStore } from "../../../../src/suggestions/store";
 import type { EditModel } from "../../../../src/types/suggestions";
 import { VIEW_TYPE_SUGGESTIONS_EDITOR } from "../../../../src/ui/suggestions-view/index";
 import { SuggestionsEditorView } from "../../../../src/ui/suggestions-view/SuggestionsEditorView";
+import type { EditorTab } from "../../../../src/ui/suggestions-view/tabContract";
 import type { SuggestionsDoc } from "../../../../src/vault/SuggestionsDoc";
 
 // --- ConfirmModal mock -------------------------------------------------------
@@ -59,6 +61,14 @@ vi.mock("../../../../src/ui/ConfirmModal", () => ({
 
 const DOC_PATH = "100 Inbox/2026-07-06_1115_suggestions.json";
 
+/** Waits enough microtask ticks for a fire-and-forget async click handler
+ * (`void this.handleSave()` / `void this.loadAndRender()`) to settle. */
+async function flushAsyncHandler(): Promise<void> {
+	await Promise.resolve();
+	await Promise.resolve();
+	await Promise.resolve();
+}
+
 function makeView(adapter: SuggestionsDoc): SuggestionsEditorView {
 	const leaf = new WorkspaceLeaf();
 	const view = new SuggestionsEditorView(leaf, { adapter, docPath: DOC_PATH });
@@ -66,16 +76,24 @@ function makeView(adapter: SuggestionsDoc): SuggestionsEditorView {
 	return view;
 }
 
-function tabBar(view: SuggestionsEditorView): HTMLElement | null {
-	return view.contentEl.querySelector(".hashi-suggestions-editor-tabbar");
+function subtabs(view: SuggestionsEditorView): HTMLElement | null {
+	return view.contentEl.querySelector(".hashi-se-subtabs");
 }
 
-function tabContent(view: SuggestionsEditorView): HTMLElement | null {
-	return view.contentEl.querySelector(".hashi-suggestions-editor-content");
+function body(view: SuggestionsEditorView): HTMLElement | null {
+	return view.contentEl.querySelector(".hashi-se-body");
+}
+
+function leafActions(view: SuggestionsEditorView): HTMLElement | null {
+	return view.contentEl.querySelector(".hashi-se-leaf-actions");
+}
+
+function dirtyBadge(view: SuggestionsEditorView): HTMLElement | null {
+	return view.contentEl.querySelector(".hashi-se-dirty");
 }
 
 function tabButtonTexts(view: SuggestionsEditorView): string[] {
-	return Array.from(tabBar(view)?.querySelectorAll("button") ?? []).map(
+	return Array.from(subtabs(view)?.querySelectorAll("button") ?? []).map(
 		(b) => b.textContent ?? "",
 	);
 }
@@ -84,11 +102,24 @@ function findTabButton(
 	view: SuggestionsEditorView,
 	labelPrefix: string,
 ): HTMLButtonElement {
-	const btn = Array.from(tabBar(view)?.querySelectorAll("button") ?? []).find(
+	const btn = Array.from(subtabs(view)?.querySelectorAll("button") ?? []).find(
 		(b) => (b.textContent ?? "").startsWith(labelPrefix),
 	);
 	if (btn === undefined) {
 		throw new Error(`no tab button starting with "${labelPrefix}"`);
+	}
+	return btn as HTMLButtonElement;
+}
+
+function findActionButton(
+	view: SuggestionsEditorView,
+	text: string,
+): HTMLButtonElement {
+	const btn = Array.from(
+		leafActions(view)?.querySelectorAll("button") ?? [],
+	).find((b) => b.textContent === text);
+	if (btn === undefined) {
+		throw new Error(`no action button with text "${text}"`);
 	}
 	return btn as HTMLButtonElement;
 }
@@ -112,6 +143,38 @@ function makeDirtyAdapter(): SuggestionsDoc {
 	};
 }
 
+interface SpyAdapter extends SuggestionsDoc {
+	load: Mock<(docPath: string) => Promise<EditModel>>;
+	save: Mock<(model: EditModel) => Promise<void>>;
+}
+
+/** A spy adapter whose seed model's `dirty` flag is controllable, so Save/
+ * Revert tests can start from either a clean or an already-dirty document. */
+function makeSpyAdapter(seedDirty: boolean): SpyAdapter {
+	return {
+		load: vi.fn<(docPath: string) => Promise<EditModel>>(async () => ({
+			doc: DEFAULT_SEED,
+			dirty: seedDirty,
+		})),
+		save: vi.fn<(model: EditModel) => Promise<void>>(async () => {}),
+	};
+}
+
+/** A single-tab override whose body renders one plain button; clicking it
+ * dispatches a real dirtying transform through `ctx.apply` — exercises the
+ * Save/dirty-badge wiring without needing a real EditorTab's edit surface. */
+const DIRTYING_TAB: EditorTab = {
+	id: "suggestions",
+	label: "Suggestions",
+	count: () => 1,
+	render: (container, _model, ctx) => {
+		const btn = container.createEl("button", { text: "mark dirty" });
+		btn.addEventListener("click", () => {
+			ctx.apply((m) => ({ doc: m.doc, dirty: true }));
+		});
+	},
+};
+
 // ---------------------------------------------------------------------------
 
 describe("SuggestionsEditorView", () => {
@@ -128,17 +191,17 @@ describe("SuggestionsEditorView", () => {
 	});
 
 	describe("onOpen — happy path", () => {
-		it("loads via the injected adapter and renders 4 tabs with counts from the fixture", async () => {
+		it("loads via the injected adapter and renders 4 subtabs with counts from the fixture", async () => {
 			const adapter = new FakeSuggestionsDoc();
 			const view = makeView(adapter);
 
 			await view.onOpen();
 
 			expect(tabButtonTexts(view)).toEqual([
-				"Suggestions (7)",
-				"Proposed MOCs (0)",
-				"Daily (2)",
-				"Tag-Handler (1)",
+				"Suggestions · 7",
+				"Proposed MOCs · 0",
+				"Daily · 2",
+				"Tag-Handler · 1",
 			]);
 		});
 
@@ -158,12 +221,26 @@ describe("SuggestionsEditorView", () => {
 
 			const suggestionsBtn = findTabButton(view, "Suggestions");
 			expect(suggestionsBtn.classList.contains("is-active")).toBe(true);
-			// count lives on the tab-bar button
+			// count lives on the subtab button
 			expect(suggestionsBtn.textContent).toContain("7");
 
 			// the real SuggestionsTab renders one card per suggestion
-			const content = tabContent(view);
-			expect(content?.querySelector(".hashi-suggestion-card")).not.toBeNull();
+			const content = body(view);
+			expect(content?.querySelector(".hashi-se-card")).not.toBeNull();
+		});
+
+		it("renders the leaf-head title and meta from the loaded doc", async () => {
+			const view = makeView(new FakeSuggestionsDoc());
+			await view.onOpen();
+
+			const head = view.contentEl.querySelector(".hashi-se-leaf-head");
+			expect(head?.querySelector("h3")?.textContent).toBe(
+				"Suggestions editor",
+			);
+			const meta = head?.querySelector(".hashi-se-leaf-meta");
+			expect(meta?.textContent).toBe(
+				`run ${DEFAULT_SEED.run_id} · profile ${DEFAULT_SEED.profile} · ${DEFAULT_SEED.source_items} items`,
+			);
 		});
 	});
 
@@ -172,7 +249,7 @@ describe("SuggestionsEditorView", () => {
 			const view = makeView(new FakeSuggestionsDoc());
 			await view.onOpen();
 
-			// render() recreates all tab buttons (bar.empty() then rebuild), so
+			// render() recreates all subtab buttons (bar.empty() then rebuild), so
 			// the pre-click element reference is stale after the click — re-query.
 			findTabButton(view, "Daily").click();
 
@@ -183,10 +260,13 @@ describe("SuggestionsEditorView", () => {
 				findTabButton(view, "Suggestions").classList.contains("is-active"),
 			).toBe(false);
 
-			// count lives on the tab-bar button; the real DailyTab renders date groups
+			// count lives on the subtab button; the real DailyTab renders date
+			// groups as daily-flavored cards.
 			expect(findTabButton(view, "Daily").textContent).toContain("2");
-			const content = tabContent(view);
-			expect(content?.querySelector(".hashi-daily-group")).not.toBeNull();
+			const content = body(view);
+			expect(
+				content?.querySelector(".hashi-se-card.hashi-se-daily"),
+			).not.toBeNull();
 		});
 
 		it("re-clicking the already-active tab is a no-op (content unchanged)", async () => {
@@ -194,10 +274,10 @@ describe("SuggestionsEditorView", () => {
 			await view.onOpen();
 
 			const suggestionsBtn = findTabButton(view, "Suggestions");
-			const before = tabContent(view)?.innerHTML;
+			const before = body(view)?.innerHTML;
 			suggestionsBtn.click();
 
-			expect(tabContent(view)?.innerHTML).toBe(before);
+			expect(body(view)?.innerHTML).toBe(before);
 		});
 	});
 
@@ -208,13 +288,8 @@ describe("SuggestionsEditorView", () => {
 
 			findTabButton(view, "Proposed MOCs").click();
 
-			const content = tabContent(view);
-			expect(
-				content?.querySelector(".hashi-suggestions-editor-empty"),
-			).not.toBeNull();
-			expect(
-				content?.querySelector(".hashi-suggestions-editor-tab-stub"),
-			).toBeNull();
+			const content = body(view);
+			expect(content?.querySelector(".hashi-se-empty")).not.toBeNull();
 		});
 	});
 
@@ -224,12 +299,10 @@ describe("SuggestionsEditorView", () => {
 
 			await expect(view.onOpen()).resolves.toBeUndefined();
 
-			const error = view.contentEl.querySelector(
-				".hashi-suggestions-editor-error",
-			);
+			const error = view.contentEl.querySelector(".hashi-se-error");
 			expect(error).not.toBeNull();
 			expect(error?.textContent).toContain("schema version mismatch");
-			expect(tabBar(view)).toBeNull();
+			expect(subtabs(view)).toBeNull();
 		});
 
 		it("onClose after a load failure does not throw and does not open a ConfirmModal", async () => {
@@ -253,9 +326,9 @@ describe("SuggestionsEditorView", () => {
 
 			expect(loadSpy).not.toHaveBeenCalled();
 			expect(
-				view.contentEl.querySelector(".hashi-suggestions-editor-no-doc"),
+				view.contentEl.querySelector(".hashi-se-nodoc"),
 			).not.toBeNull();
-			expect(tabBar(view)).toBeNull();
+			expect(subtabs(view)).toBeNull();
 		});
 
 		it("getState reflects the currently loaded docPath", async () => {
@@ -281,10 +354,10 @@ describe("SuggestionsEditorView", () => {
 
 			expect(loadSpy).toHaveBeenCalledWith(DOC_PATH);
 			expect(tabButtonTexts(view)).toEqual([
-				"Suggestions (7)",
-				"Proposed MOCs (0)",
-				"Daily (2)",
-				"Tag-Handler (1)",
+				"Suggestions · 7",
+				"Proposed MOCs · 0",
+				"Daily · 2",
+				"Tag-Handler · 1",
 			]);
 		});
 
@@ -301,8 +374,8 @@ describe("SuggestionsEditorView", () => {
 			expect(loadSpy).toHaveBeenCalledTimes(2);
 			expect(loadSpy).toHaveBeenLastCalledWith(OTHER_PATH);
 			expect(view.getState()).toEqual({ docPath: OTHER_PATH });
-			// Re-rendered — tab bar still present with fresh content.
-			expect(tabBar(view)).not.toBeNull();
+			// Re-rendered — subtab strip still present with fresh content.
+			expect(subtabs(view)).not.toBeNull();
 		});
 
 		it("setState with a state object lacking docPath does not change the current docPath", async () => {
@@ -380,6 +453,106 @@ describe("SuggestionsEditorView", () => {
 			await view.onClose();
 
 			expect(confirmModalInstances).toHaveLength(0);
+		});
+	});
+
+	describe("Save affordance (spec-004 follow-up)", () => {
+		it("Save is disabled and no dirty badge shows on a clean freshly-loaded doc", async () => {
+			const adapter = makeSpyAdapter(false);
+			const view = makeView(adapter);
+
+			await view.onOpen();
+
+			expect(findActionButton(view, "Save").disabled).toBe(true);
+			expect(dirtyBadge(view)).toBeNull();
+		});
+
+		it("after an edit, the dirty badge shows 'Edited' and Save becomes enabled", async () => {
+			const adapter = makeSpyAdapter(false);
+			const leaf = new WorkspaceLeaf();
+			const view = new SuggestionsEditorView(leaf, {
+				adapter,
+				docPath: DOC_PATH,
+				tabs: [DIRTYING_TAB],
+			});
+			view.app = new App();
+			await view.onOpen();
+
+			expect(findActionButton(view, "Save").disabled).toBe(true);
+			expect(dirtyBadge(view)).toBeNull();
+
+			const markDirtyBtn = Array.from(
+				body(view)?.querySelectorAll("button") ?? [],
+			).find((b) => b.textContent === "mark dirty");
+			markDirtyBtn?.click();
+
+			expect(dirtyBadge(view)?.textContent).toContain("Edited");
+			expect(findActionButton(view, "Save").disabled).toBe(false);
+		});
+
+		it("clicking Save calls adapter.save with the current (dirty) model", async () => {
+			const adapter = makeSpyAdapter(true);
+			const view = makeView(adapter);
+			await view.onOpen();
+
+			findActionButton(view, "Save").click();
+			await flushAsyncHandler();
+
+			expect(adapter.save).toHaveBeenCalledTimes(1);
+			expect(adapter.save).toHaveBeenCalledWith({
+				doc: DEFAULT_SEED,
+				dirty: true,
+			});
+		});
+
+		it("after a successful save, the dirty badge disappears and Save disables", async () => {
+			const adapter = makeSpyAdapter(true);
+			const view = makeView(adapter);
+			await view.onOpen();
+			expect(dirtyBadge(view)).not.toBeNull();
+
+			findActionButton(view, "Save").click();
+			await flushAsyncHandler();
+
+			expect(dirtyBadge(view)).toBeNull();
+			expect(findActionButton(view, "Save").disabled).toBe(true);
+		});
+
+		it("a failed save leaves the dirty badge and Save enabled (adapter already surfaced its own Notice)", async () => {
+			const adapter: SpyAdapter = {
+				load: vi.fn<(docPath: string) => Promise<EditModel>>(async () => ({
+					doc: DEFAULT_SEED,
+					dirty: true,
+				})),
+				save: vi.fn<(model: EditModel) => Promise<void>>(async () => {
+					throw new Error("disk full");
+				}),
+			};
+			const view = makeView(adapter);
+			await view.onOpen();
+
+			findActionButton(view, "Save").click();
+			await flushAsyncHandler();
+
+			expect(adapter.save).toHaveBeenCalledTimes(1);
+			expect(dirtyBadge(view)).not.toBeNull();
+			expect(findActionButton(view, "Save").disabled).toBe(false);
+		});
+	});
+
+	describe("Revert affordance (spec-004 follow-up)", () => {
+		it("clicking Revert re-invokes adapter.load(docPath), discarding in-memory edits", async () => {
+			const adapter = makeSpyAdapter(true);
+			const view = makeView(adapter);
+			await view.onOpen();
+			expect(adapter.load).toHaveBeenCalledTimes(1);
+			expect(dirtyBadge(view)).not.toBeNull();
+
+			findActionButton(view, "Revert").click();
+			await flushAsyncHandler();
+
+			expect(adapter.load).toHaveBeenCalledTimes(2);
+			expect(adapter.load).toHaveBeenLastCalledWith(DOC_PATH);
 		});
 	});
 });

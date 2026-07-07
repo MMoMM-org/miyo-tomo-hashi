@@ -1,10 +1,14 @@
 /**
  * Proposed MOCs tab (T3.5, SDD §6 Proposed MOCs, PRD F4/F5). Renders one
- * card per proposed MOC: inline-editable name, a parent control that opens
- * `ParentPicker`, an approve/skip decision toggle, member chips (rendered by
- * the referenced suggestion's TITLE — S## id shown on hover, falling back
- * to the raw id when no suggestion matches), a tag list with a `TagPicker`
- * add affordance, and a "Merge into…" control for same-name siblings.
+ * `hashi-se-pmoc` card per proposed MOC, matching the approved mockup
+ * (`docs/XDD/specs/004-suggestions-editor/mockups/suggestions-editor.html`,
+ * `proposedCard()`): an inline-editable name, a parent mini-pick control
+ * that opens `ParentPicker`, an approve/skip segmented decision control,
+ * member chips (rendered by the referenced suggestion's TITLE — S## id
+ * shown on hover, falling back to the raw id when no suggestion matches), a
+ * "⇄ Merge into…" affordance for same-name siblings, a tag list with a
+ * `TagPicker` add affordance, the read-only reason text, and a merge hint
+ * when another proposal shares this one's name.
  *
  * Tag edits have no dedicated Phase-1 transform (`transforms/proposedMoc.ts`
  * only covers rename/reparent/decision/merge) — `addProposedMocTag` below is
@@ -53,6 +57,11 @@ function memberTitle(model: EditModel, suggestionId: string): string {
 	return suggestion?.title ?? suggestionId;
 }
 
+/** Another proposed MOC in the doc shares `moc`'s name — the merge trigger. */
+function hasSameNameSibling(model: EditModel, moc: ProposedMocWire): boolean {
+	return model.doc.proposed_mocs.some((other) => other.id !== moc.id && other.name === moc.name);
+}
+
 export class ProposedMocsTab implements EditorTab {
 	readonly id = "proposed";
 	readonly label = "Proposed MOCs";
@@ -73,19 +82,30 @@ export class ProposedMocsTab implements EditorTab {
 		moc: ProposedMocWire,
 		ctx: TabContext,
 	): void {
-		const card = container.createDiv({ cls: "hashi-proposed-moc-card" });
+		const card = container.createDiv({ cls: "hashi-se-pmoc" });
 
-		this.renderNameInput(card, moc, ctx);
-		this.renderParentControl(card, moc, ctx);
-		this.renderDecisionToggle(card, moc, ctx);
-		this.renderMembers(card, model, moc);
-		this.renderTags(card, moc, ctx);
-		this.renderMergeControl(card, model, moc, ctx);
+		this.renderRow1(card, moc, ctx);
+		this.renderMembersRow(card, model, moc, ctx);
+		this.renderTagsRow(card, moc, ctx);
+		this.renderReason(card, moc);
+		this.renderMergeHint(card, model, moc);
 	}
 
-	private renderNameInput(card: HTMLElement, moc: ProposedMocWire, ctx: TabContext): void {
-		const input = card.createEl("input", {
-			cls: "hashi-proposed-moc-name",
+	// -- row 1: name / parent / decision ------------------------------------
+
+	private renderRow1(card: HTMLElement, moc: ProposedMocWire, ctx: TabContext): void {
+		const row = card.createDiv({ cls: "hashi-se-row1" });
+		this.renderNameField(row, moc, ctx);
+		this.renderParentField(row, moc, ctx);
+		this.renderDecisionField(row, moc, ctx);
+	}
+
+	private renderNameField(row: HTMLElement, moc: ProposedMocWire, ctx: TabContext): void {
+		const field = row.createDiv({ cls: "hashi-se-field" });
+		field.style.flex = "1";
+		field.createEl("label", { text: `Name (${moc.id})` });
+		const input = field.createEl("input", {
+			cls: ["hashi-se-inp", "hashi-se-name"],
 			attr: { type: "text", value: moc.name },
 		});
 		input.addEventListener("change", () => {
@@ -94,10 +114,13 @@ export class ProposedMocsTab implements EditorTab {
 		});
 	}
 
-	private renderParentControl(card: HTMLElement, moc: ProposedMocWire, ctx: TabContext): void {
-		const button = card.createEl("button", {
-			cls: "hashi-proposed-moc-parent",
-			text: moc.parent.length > 0 ? moc.parent : "Choose parent…",
+	private renderParentField(row: HTMLElement, moc: ProposedMocWire, ctx: TabContext): void {
+		const field = row.createDiv({ cls: "hashi-se-field" });
+		field.createEl("label", { text: "Parent" });
+		const button = field.createEl("button", {
+			cls: "hashi-se-mini-pick",
+			text: moc.parent,
+			attr: { type: "button" },
 		});
 		button.addEventListener("click", () => {
 			new ParentPicker(ctx.app, (parentPath) => {
@@ -106,36 +129,77 @@ export class ProposedMocsTab implements EditorTab {
 		});
 	}
 
-	private renderDecisionToggle(card: HTMLElement, moc: ProposedMocWire, ctx: TabContext): void {
-		const button = card.createEl("button", {
-			cls: "hashi-proposed-moc-decision",
-			text: moc.decision === "approve" ? "Approve" : "Skip",
+	private renderDecisionField(row: HTMLElement, moc: ProposedMocWire, ctx: TabContext): void {
+		const field = row.createDiv({ cls: "hashi-se-field" });
+		field.createEl("label", { text: "Create?" });
+		const decision = field.createDiv({ cls: "hashi-se-decision" });
+
+		const approveButton = decision.createEl("button", {
+			cls: "hashi-se-approve",
+			text: "Approve",
+			attr: { type: "button" },
 		});
-		button.addEventListener("click", () => {
-			const next = moc.decision === "approve" ? "skip" : "approve";
-			ctx.apply((m) => setProposedMocDecision(m, moc.id, next));
+		const skipButton = decision.createEl("button", {
+			cls: "hashi-se-skip",
+			text: "Skip",
+			attr: { type: "button" },
+		});
+		if (moc.decision === "approve") approveButton.addClass("is-active");
+		if (moc.decision === "skip") skipButton.addClass("is-active");
+
+		approveButton.addEventListener("click", () => {
+			ctx.apply((m) => setProposedMocDecision(m, moc.id, "approve"));
+		});
+		skipButton.addEventListener("click", () => {
+			ctx.apply((m) => setProposedMocDecision(m, moc.id, "skip"));
 		});
 	}
 
-	private renderMembers(card: HTMLElement, model: EditModel, moc: ProposedMocWire): void {
-		const members = card.createDiv({ cls: "hashi-proposed-moc-members" });
+	// -- row 2: members + merge affordance -----------------------------------
+
+	private renderMembersRow(
+		card: HTMLElement,
+		model: EditModel,
+		moc: ProposedMocWire,
+		ctx: TabContext,
+	): void {
+		const row = card.createDiv({ cls: "hashi-se-row2" });
+
+		const members = row.createDiv({ cls: "hashi-se-members" });
+		members.createSpan({ cls: "hashi-se-lbl", text: "Members" });
 		for (const memberId of moc.member_ids) {
 			members.createSpan({
-				cls: "hashi-proposed-moc-member",
+				cls: ["hashi-se-chip", "hashi-se-member"],
 				text: memberTitle(model, memberId),
 				attr: { title: memberId },
 			});
 		}
+
+		row.createDiv({ cls: "hashi-se-spacer" });
+
+		if (!hasSameNameSibling(model, moc)) return;
+
+		const mergeButton = row.createEl("button", {
+			cls: "hashi-se-link-btn",
+			text: "⇄ Merge into…",
+			attr: { type: "button" },
+		});
+		mergeButton.addEventListener("click", () => {
+			ctx.apply((m) => mergeSameNameProposedMocs(m, moc.id));
+		});
 	}
 
-	private renderTags(card: HTMLElement, moc: ProposedMocWire, ctx: TabContext): void {
-		const tags = card.createDiv({ cls: "hashi-proposed-moc-tags" });
+	// -- row 2: tags ----------------------------------------------------------
+
+	private renderTagsRow(card: HTMLElement, moc: ProposedMocWire, ctx: TabContext): void {
+		const row = card.createDiv({ cls: "hashi-se-row2" });
+		row.createSpan({ cls: "hashi-se-tags-lbl", text: "Tags" });
 		for (const tag of moc.tags ?? []) {
-			tags.createSpan({ cls: "hashi-proposed-moc-tag", text: tag });
+			row.createSpan({ cls: "hashi-se-tag", text: tag });
 		}
-		const addTagButton = tags.createEl("button", {
-			cls: "hashi-proposed-moc-add-tag",
-			text: "+ Tag",
+		const addTagButton = row.createSpan({
+			cls: ["hashi-se-tag", "hashi-se-add"],
+			text: "＋ tag",
 		});
 		addTagButton.addEventListener("click", () => {
 			new TagPicker(ctx.app, (tag) => {
@@ -144,23 +208,18 @@ export class ProposedMocsTab implements EditorTab {
 		});
 	}
 
-	private renderMergeControl(
-		card: HTMLElement,
-		model: EditModel,
-		moc: ProposedMocWire,
-		ctx: TabContext,
-	): void {
-		const hasSameNameSibling = model.doc.proposed_mocs.some(
-			(other) => other.id !== moc.id && other.name === moc.name,
-		);
-		if (!hasSameNameSibling) return;
+	// -- reason + merge hint --------------------------------------------------
 
-		const button = card.createEl("button", {
-			cls: "hashi-proposed-moc-merge",
-			text: "Merge into…",
-		});
-		button.addEventListener("click", () => {
-			ctx.apply((m) => mergeSameNameProposedMocs(m, moc.id));
+	private renderReason(card: HTMLElement, moc: ProposedMocWire): void {
+		if (moc.reason === undefined || moc.reason.length === 0) return;
+		card.createDiv({ cls: "hashi-se-reason", text: moc.reason });
+	}
+
+	private renderMergeHint(card: HTMLElement, model: EditModel, moc: ProposedMocWire): void {
+		if (!hasSameNameSibling(model, moc)) return;
+		card.createDiv({
+			cls: "hashi-se-merge-hint",
+			text: "◆ shares a name with another proposal → Tomo will merge them and union members",
 		});
 	}
 }

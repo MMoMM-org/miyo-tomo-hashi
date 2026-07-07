@@ -1,19 +1,34 @@
 /**
  * Suggestions tab (T3.2, SDD §6 Suggestions, PRD F2/F6/F7). Renders one card
- * per `SuggestionWire`, branching on `suggestion.suppressed`:
+ * per `SuggestionWire`, branching on `suggestion.suppressed`, to the
+ * approved mockup (`docs/XDD/specs/004-suggestions-editor/mockups/
+ * suggestions-editor.html`, `worthyCard`/`suppressedCard`) — DOM structure
+ * and `hashi-se-*` classes below mirror that mockup verbatim so the vendored
+ * `styles.css` rules apply unmodified.
  *
  * - **worthy** (`suppressed:false`) — the full note-editable surface: title
- *   (free text), template (`TemplatePicker`), location (`LocationPicker`),
- *   tags (list + `TagPicker` add), candidate MOCs (single-select re-point +
- *   per-candidate `SpotPicker` + `＋ Add MOC` via `MocPicker`), keep-source,
- *   and an approve/skip decision toggle.
- * - **suppressed** (`suppressed:true`) — ONLY a worthiness badge, a short
- *   "why skipped" hint, and the single Force-Atomic control
- *   (`setForceAtomicFromSuggestion`, which keeps the daily-log mirror in
- *   sync by stem — SDD §6 "Force-Atomic is one decision per source"). Tomo
- *   emits an empty `candidate_mocs` for suppressed suggestions, so there is
- *   no MOC UI to render here, and no other field is exposed for them either
- *   (matches the "single real control" framing in SDD §6).
+ *   (free text), a two-button Approve/Skip decision segment, template
+ *   (`TemplatePicker`), location (`LocationPicker`), keep-source, tags (list
+ *   + `TagPicker` add), candidate MOCs (single-select re-point + per-
+ *   candidate `SpotPicker` + `＋ Add MOC` via `MocPicker`).
+ * - **suppressed** (`suppressed:true`) — the title (editable — see bug fix
+ *   below), a worthiness badge, a short "why skipped" hint, and the single
+ *   Force-Atomic control (`setForceAtomicFromSuggestion`, which keeps the
+ *   daily-log mirror in sync by stem — SDD §6 "Force-Atomic is one decision
+ *   per source"). Tomo emits an empty `candidate_mocs` for suppressed
+ *   suggestions, so there is no MOC UI to render here.
+ *
+ * Two confirmed bugs fixed against the prior implementation:
+ *   1. Suppressed cards previously showed no title, only a worthiness
+ *      percentage — the user couldn't tell WHICH note a suppressed card was
+ *      about. Fixed: the suppressed card now renders the same editable
+ *      `hashi-se-inp hashi-se-name` title field as the worthy card (labeled
+ *      "Note ({id}) · not promoted"), wired to `setTitle`.
+ *   2. The prior single-button decision toggle didn't show which state was
+ *      current. Fixed: `hashi-se-decision` is now a two-button segmented
+ *      control (Approve / Skip), and whichever button matches
+ *      `suggestion.decision` gets an `is-active` class — the current state
+ *      is visibly highlighted (green for approve, via CSS).
  *
  * Plain render function, not an Obsidian `Component` — the view rebuilds
  * this tab's whole DOM subtree on every re-render (`ctx.apply` triggers a
@@ -32,7 +47,7 @@
  * (no-op) when the suggestion or candidate is unknown.
  */
 
-import { type App, TFile } from "obsidian";
+import { type App, setIcon, TFile } from "obsidian";
 
 import { setForceAtomicFromSuggestion } from "../../../suggestions/transforms/forceAtomicSync.js";
 import {
@@ -155,75 +170,88 @@ export class SuggestionsTab implements EditorTab {
 
 	private renderCard(container: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
 		const card = container.createDiv({
-			cls: suggestion.suppressed
-				? ["hashi-suggestion-card", "hashi-suggestion-card-suppressed"]
-				: ["hashi-suggestion-card"],
+			cls: suggestion.suppressed ? ["hashi-se-card", "hashi-se-suppressed"] : ["hashi-se-card"],
 			attr: { "data-suggestion-id": suggestion.id },
 		});
+		const top = card.createDiv({ cls: "hashi-se-card-top" });
 
 		if (suggestion.suppressed) {
-			this.renderSuppressed(card, suggestion, ctx);
+			this.renderSuppressed(top, suggestion, ctx);
 			return;
 		}
-		this.renderWorthy(card, suggestion, ctx);
-	}
-
-	// -- suppressed: worthiness badge + hint + the single Force-Atomic control --
-
-	private renderSuppressed(card: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
-		const worthinessPct = Math.round((suggestion.worthiness ?? 0) * 100);
-		card.createDiv({
-			cls: "hashi-suggestion-worthiness",
-			text: `Worthiness: ${worthinessPct}%`,
-		});
-		card.createDiv({
-			cls: "hashi-suggestion-skip-hint",
-			text: "Below the atomic-note threshold — kept as a light inbox block, not its own note.",
-		});
-		this.renderForceAtomic(card, suggestion, ctx);
-	}
-
-	private renderForceAtomic(card: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
-		const label = card.createEl("label", { cls: "hashi-suggestion-force-atomic-label" });
-		const checkbox = label.createEl("input", {
-			cls: "hashi-suggestion-force-atomic",
-			attr: { type: "checkbox" },
-		});
-		checkbox.checked = suggestion.force_atomic;
-		label.createSpan({ text: "Force atomic note" });
-		checkbox.addEventListener("change", () => {
-			const checked = checkbox.checked;
-			ctx.apply((model) => setForceAtomicFromSuggestion(model, suggestion.id, checked));
-		});
+		this.renderWorthy(top, suggestion, ctx);
 	}
 
 	// -- worthy: full note-editable surface --------------------------------
 
-	private renderWorthy(card: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
-		this.renderTitle(card, suggestion, ctx);
-		this.renderTemplate(card, suggestion, ctx);
-		this.renderLocation(card, suggestion, ctx);
-		this.renderTags(card, suggestion, ctx);
-		this.renderCandidateMocs(card, suggestion, ctx);
-		this.renderKeepSource(card, suggestion, ctx);
-		this.renderDecision(card, suggestion, ctx);
+	private renderWorthy(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+		this.renderWorthyRow1(top, suggestion, ctx);
+		this.renderMetaRow(top, suggestion, ctx);
+		this.renderTagsRow(top, suggestion, ctx);
+		this.renderMocSection(top, suggestion, ctx);
 	}
 
-	private renderTitle(card: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
-		const input = card.createEl("input", {
-			cls: "hashi-suggestion-title",
+	private renderWorthyRow1(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+		const row = top.createDiv({ cls: "hashi-se-row1" });
+
+		const titleField = row.createDiv({ cls: ["hashi-se-field", "hashi-se-spacer"] });
+		titleField.createEl("label", { text: `Note (${suggestion.id})` });
+		const input = titleField.createEl("input", {
+			cls: ["hashi-se-inp", "hashi-se-name"],
 			attr: { type: "text", value: suggestion.title },
 		});
 		input.addEventListener("change", () => {
 			const title = input.value;
 			ctx.apply((model) => setTitle(model, suggestion.id, title));
 		});
+
+		const decisionField = row.createDiv({ cls: "hashi-se-field" });
+		decisionField.createEl("label", { text: "Create?" });
+		this.renderDecisionControl(decisionField, suggestion, ctx);
 	}
 
-	private renderTemplate(card: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
-		const button = card.createEl("button", {
-			cls: "hashi-suggestion-template",
-			text: suggestion.template.length > 0 ? suggestion.template : "Choose template…",
+	/** Bug fix 2 — segmented Approve/Skip control, `is-active` on the current decision. */
+	private renderDecisionControl(
+		container: HTMLElement,
+		suggestion: SuggestionWire,
+		ctx: TabContext,
+	): void {
+		const control = container.createDiv({ cls: "hashi-se-decision" });
+
+		const approveActive = suggestion.decision === "approve";
+		const approve = control.createEl("button", {
+			cls: approveActive ? ["hashi-se-approve", "is-active"] : ["hashi-se-approve"],
+			text: "Approve",
+			attr: { type: "button" },
+		});
+		approve.addEventListener("click", () => {
+			ctx.apply((model) => setDecision(model, suggestion.id, "approve"));
+		});
+
+		const skipActive = suggestion.decision === "skip";
+		const skip = control.createEl("button", {
+			cls: skipActive ? ["hashi-se-skip", "is-active"] : ["hashi-se-skip"],
+			text: "Skip",
+			attr: { type: "button" },
+		});
+		skip.addEventListener("click", () => {
+			ctx.apply((model) => setDecision(model, suggestion.id, "skip"));
+		});
+	}
+
+	private renderMetaRow(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+		const row = top.createDiv({ cls: ["hashi-se-row2", "hashi-se-meta"] });
+		this.renderTemplateField(row, suggestion, ctx);
+		this.renderLocationField(row, suggestion, ctx);
+		this.renderKeepSourceField(row, suggestion, ctx);
+	}
+
+	private renderTemplateField(row: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+		const field = row.createDiv({ cls: "hashi-se-field" });
+		field.createEl("label", { text: "Template" });
+		const button = field.createEl("button", {
+			cls: "hashi-se-mini-pick",
+			text: suggestion.template,
 			attr: { type: "button" },
 		});
 		button.addEventListener("click", () => {
@@ -233,10 +261,12 @@ export class SuggestionsTab implements EditorTab {
 		});
 	}
 
-	private renderLocation(card: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
-		const button = card.createEl("button", {
-			cls: "hashi-suggestion-location",
-			text: suggestion.location.length > 0 ? suggestion.location : "Choose location…",
+	private renderLocationField(row: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+		const field = row.createDiv({ cls: "hashi-se-field" });
+		field.createEl("label", { text: "Location" });
+		const button = field.createEl("button", {
+			cls: "hashi-se-mini-pick",
+			text: suggestion.location,
 			attr: { type: "button" },
 		});
 		button.addEventListener("click", () => {
@@ -246,17 +276,33 @@ export class SuggestionsTab implements EditorTab {
 		});
 	}
 
-	private renderTags(card: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
-		const tags = card.createDiv({ cls: "hashi-suggestion-tags" });
+	private renderKeepSourceField(
+		row: HTMLElement,
+		suggestion: SuggestionWire,
+		ctx: TabContext,
+	): void {
+		const label = row.createEl("label", { cls: "hashi-se-cbx" });
+		const checkbox = label.createEl("input", { attr: { type: "checkbox" } });
+		checkbox.checked = suggestion.keep_source;
+		label.createSpan({ text: "Keep source file" });
+		checkbox.addEventListener("change", () => {
+			const checked = checkbox.checked;
+			ctx.apply((model) => setKeepSource(model, suggestion.id, checked));
+		});
+	}
+
+	private renderTagsRow(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+		const tagsRow = top.createDiv({ cls: "hashi-se-tags" });
+		tagsRow.createSpan({ cls: "hashi-se-tags-lbl", text: "Tags" });
 		for (const tag of suggestion.tags) {
-			tags.createSpan({ cls: "hashi-suggestion-tag", text: tag });
+			tagsRow.createSpan({ cls: "hashi-se-tag", text: tag });
 		}
-		const addTagButton = tags.createEl("button", {
-			cls: "hashi-suggestion-add-tag",
-			text: "+ Tag",
+		const addButton = tagsRow.createEl("button", {
+			cls: ["hashi-se-tag", "hashi-se-add"],
+			text: "＋ tag",
 			attr: { type: "button" },
 		});
-		addTagButton.addEventListener("click", () => {
+		addButton.addEventListener("click", () => {
 			new TagPicker(ctx.app, (tag) => {
 				ctx.apply((model) => {
 					const current = model.doc.suggestions.find((s) => s.id === suggestion.id);
@@ -267,88 +313,186 @@ export class SuggestionsTab implements EditorTab {
 		});
 	}
 
-	private renderCandidateMocs(card: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
-		const mocs = card.createDiv({ cls: "hashi-suggestion-mocs" });
-		for (const candidate of suggestion.candidate_mocs) {
-			this.renderCandidateMoc(mocs, suggestion, candidate, ctx);
+	private renderMocSection(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+		const label = top.createDiv({ cls: "hashi-se-sec-label", text: "Link to a MOC" });
+		if (suggestion.candidate_mocs.length === 0) {
+			label.createSpan({ cls: "hashi-se-muted", text: " — none proposed" });
 		}
-		const addMocButton = mocs.createEl("button", {
-			cls: "hashi-suggestion-add-moc",
-			text: "＋ Add MOC",
-			attr: { type: "button" },
-		});
-		addMocButton.addEventListener("click", () => {
+		for (const candidate of suggestion.candidate_mocs) {
+			this.renderCandidateRow(top, suggestion, candidate, ctx);
+		}
+		this.renderAddMoc(top, suggestion, ctx);
+	}
+
+	private renderAddMoc(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+		const wrap = top.createDiv({ cls: "hashi-se-add-moc" });
+		const button = wrap.createEl("button", { text: "＋ Add MOC…", attr: { type: "button" } });
+		button.addEventListener("click", () => {
 			new MocPicker(ctx.app, (path) => {
 				ctx.apply((model) => addMoc(model, suggestion.id, path));
 			}).open();
 		});
+		wrap.createSpan({ cls: "hashi-se-add-hint", text: "Tomo's matches + any vault note" });
 	}
 
-	private renderCandidateMoc(
-		container: HTMLElement,
+	private renderCandidateRow(
+		top: HTMLElement,
 		suggestion: SuggestionWire,
 		candidate: CandidateMocWire,
 		ctx: TabContext,
 	): void {
-		const row = container.createDiv({
-			cls: "hashi-suggestion-moc",
+		const row = top.createDiv({
+			cls: ["hashi-se-cand", candidate.selected ? "hashi-se-on" : "hashi-se-off"],
 			attr: { "data-moc-path": candidate.path },
 		});
+		this.renderCandidateCheck(row, suggestion, candidate, ctx);
+		this.renderCandidateMain(row, suggestion, candidate, ctx);
+	}
 
-		const radio = row.createEl("input", {
-			cls: "hashi-suggestion-moc-select",
-			attr: { type: "radio", name: `hashi-suggestion-moc-select-${suggestion.id}` },
+	private renderCandidateCheck(
+		row: HTMLElement,
+		suggestion: SuggestionWire,
+		candidate: CandidateMocWire,
+		ctx: TabContext,
+	): void {
+		const check = row.createDiv({
+			cls: "hashi-se-check",
+			attr: { role: "checkbox", "aria-checked": String(candidate.selected), tabindex: "0" },
 		});
-		radio.checked = candidate.selected;
-		radio.addEventListener("change", () => {
+		setIcon(check, "check");
+
+		const select = (): void => {
 			ctx.apply((model) => selectCandidateMoc(model, suggestion.id, candidate.path));
-		});
-
-		row.createSpan({ cls: "hashi-suggestion-moc-path", text: candidate.path });
-
-		const spotButton = row.createEl("button", {
-			cls: "hashi-suggestion-moc-spot",
-			text: "Set spot…",
-			attr: { type: "button" },
-		});
-		spotButton.addEventListener("click", () => {
-			void readMocContent(ctx.app, candidate.path).then((content) => {
-				new SpotPicker(ctx.app, {
-					content,
-					kind: "existing",
-					onPick: (anchor) => {
-						ctx.apply((model) =>
-							setCandidateAnchor(model, suggestion.id, candidate.path, anchor),
-						);
-					},
-				}).open();
-			});
+		};
+		check.addEventListener("click", select);
+		check.addEventListener("keydown", (evt) => {
+			if (evt.key !== "Enter" && evt.key !== " ") return;
+			evt.preventDefault();
+			select();
 		});
 	}
 
-	private renderKeepSource(card: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
-		const label = card.createEl("label", { cls: "hashi-suggestion-keep-source-label" });
-		const checkbox = label.createEl("input", {
-			cls: "hashi-suggestion-keep-source",
-			attr: { type: "checkbox" },
+	private renderCandidateMain(
+		row: HTMLElement,
+		suggestion: SuggestionWire,
+		candidate: CandidateMocWire,
+		ctx: TabContext,
+	): void {
+		const main = row.createDiv({ cls: "hashi-se-cand-main" });
+		this.renderCandidatePath(main, candidate, ctx);
+		if (candidate.source === "user") {
+			main.createSpan({ cls: "hashi-se-src-badge", text: "added" });
+		}
+		if (candidate.selected) {
+			this.renderAnchorRow(main, suggestion, candidate, ctx);
+		}
+	}
+
+	private renderCandidatePath(main: HTMLElement, candidate: CandidateMocWire, ctx: TabContext): void {
+		const pathEl = main.createDiv({ cls: "hashi-se-cand-path" });
+		const separator = candidate.path.lastIndexOf("/");
+		if (separator >= 0) {
+			pathEl.createSpan({ cls: "hashi-se-dir", text: candidate.path.slice(0, separator + 1) });
+			pathEl.createSpan({ text: candidate.path.slice(separator + 1) });
+		} else {
+			pathEl.createSpan({ text: candidate.path });
+		}
+		pathEl.addEventListener("click", () => {
+			void ctx.app.workspace.openLinkText(candidate.path, "", false);
 		});
-		checkbox.checked = suggestion.keep_source;
-		label.createSpan({ text: "Keep source" });
+	}
+
+	private renderAnchorRow(
+		main: HTMLElement,
+		suggestion: SuggestionWire,
+		candidate: CandidateMocWire,
+		ctx: TabContext,
+	): void {
+		const anchorRow = main.createDiv({ cls: "hashi-se-anchor-row" });
+		const anchor = candidate.anchor ?? null;
+
+		if (anchor === null) {
+			const chip = anchorRow.createEl("button", {
+				cls: ["hashi-se-anchor-chip", "hashi-se-empty"],
+				text: "＋ set a spot",
+				attr: { type: "button" },
+			});
+			chip.addEventListener("click", () => this.openSpotPicker(suggestion, candidate, ctx));
+			return;
+		}
+
+		const chip = anchorRow.createEl("button", {
+			cls: "hashi-se-anchor-chip",
+			attr: { type: "button" },
+		});
+		chip.createSpan({ cls: "hashi-se-k", text: anchor.type });
+		chip.createSpan({ text: ` · ${anchor.value ?? ""} · ${anchor.placement}` });
+		chip.addEventListener("click", () => this.openSpotPicker(suggestion, candidate, ctx));
+	}
+
+	private openSpotPicker(
+		suggestion: SuggestionWire,
+		candidate: CandidateMocWire,
+		ctx: TabContext,
+	): void {
+		void readMocContent(ctx.app, candidate.path).then((content) => {
+			new SpotPicker(ctx.app, {
+				content,
+				kind: "existing",
+				onPick: (anchor) => {
+					ctx.apply((model) =>
+						setCandidateAnchor(model, suggestion.id, candidate.path, anchor),
+					);
+				},
+			}).open();
+		});
+	}
+
+	// -- suppressed: worthiness + hint + Force-Atomic, PLUS the title (bug fix 1) --
+
+	private renderSuppressed(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+		this.renderSuppressedRow1(top, suggestion, ctx);
+		top.createDiv({
+			cls: "hashi-se-suppressed-note",
+			text:
+				"Below the 0.5 threshold — kept in inbox, not made an atomic note. Its content typically goes to the daily log instead.",
+		});
+		this.renderForceAtomic(top, suggestion, ctx);
+	}
+
+	/** Bug fix 1 — the suppressed card now shows an editable title, same as the worthy card. */
+	private renderSuppressedRow1(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+		const row = top.createDiv({ cls: "hashi-se-row1" });
+
+		const titleField = row.createDiv({ cls: ["hashi-se-field", "hashi-se-spacer"] });
+		titleField.createEl("label", { text: `Note (${suggestion.id}) · not promoted` });
+		const input = titleField.createEl("input", {
+			cls: ["hashi-se-inp", "hashi-se-name"],
+			attr: { type: "text", value: suggestion.title },
+		});
+		input.addEventListener("change", () => {
+			const title = input.value;
+			ctx.apply((model) => setTitle(model, suggestion.id, title));
+		});
+
+		const worthiness = Math.round((suggestion.worthiness ?? 0) * 100);
+		const isLow = (suggestion.worthiness ?? 0) < 0.3;
+		const worthinessEl = row.createDiv({
+			cls: ["hashi-se-worthiness", isLow ? "hashi-se-low" : "hashi-se-mid"],
+		});
+		worthinessEl.createSpan({ cls: "hashi-se-wv", text: `${worthiness}%` });
+		worthinessEl.createSpan({ cls: "hashi-se-wl", text: "worthiness" });
+	}
+
+	private renderForceAtomic(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+		const label = top.createEl("label", { cls: "hashi-se-force-atomic" });
+		const checkbox = label.createEl("input", { attr: { type: "checkbox" } });
+		checkbox.checked = suggestion.force_atomic;
+		label.createEl("b", { text: "Force Atomic Note" });
+		label.createSpan({ cls: "hashi-se-muted", text: "— create a standalone note anyway" });
 		checkbox.addEventListener("change", () => {
 			const checked = checkbox.checked;
-			ctx.apply((model) => setKeepSource(model, suggestion.id, checked));
-		});
-	}
-
-	private renderDecision(card: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
-		const button = card.createEl("button", {
-			cls: "hashi-suggestion-decision",
-			text: suggestion.decision === "approve" ? "Approve" : "Skip",
-			attr: { type: "button" },
-		});
-		button.addEventListener("click", () => {
-			const next = suggestion.decision === "approve" ? "skip" : "approve";
-			ctx.apply((model) => setDecision(model, suggestion.id, next));
+			ctx.apply((model) => setForceAtomicFromSuggestion(model, suggestion.id, checked));
 		});
 	}
 }

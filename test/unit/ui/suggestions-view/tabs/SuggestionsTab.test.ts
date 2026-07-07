@@ -1,12 +1,22 @@
 /**
  * Unit tests for SuggestionsTab (T3.2) — worthy vs suppressed suggestion
- * cards (SDD §6 Suggestions; PRD F2/F6/F7).
+ * cards (SDD §6 Suggestions; PRD F2/F6/F7), rebuilt to the approved mockup
+ * (`docs/XDD/specs/004-suggestions-editor/mockups/suggestions-editor.html`).
  *
  * Built against the real vendored `1115` Tomo emission via
  * `FakeSuggestionsDoc` (spec-002 lesson: real Tomo output over a synthetic
  * fixture). In that run: S01/S02/S03/S04/S05/S06 are suppressed, S07
  * ("zettelkasten-method") is the sole worthy suggestion, with 3 candidate
- * MOCs, all unselected.
+ * MOCs, all unselected. S01 ("call-vendor") and S05 ("quick-thought") are
+ * both suppressed at worthiness 0.2 (low).
+ *
+ * Two confirmed bugs verified as fixed here:
+ *   1. The suppressed card now renders an editable title input (previously
+ *      it showed only a worthiness percentage, with no way to tell WHICH
+ *      note it was).
+ *   2. The decision control is a two-button Approve/Skip segment with
+ *      `is-active` on whichever matches `suggestion.decision` (previously a
+ *      single ambiguous toggle button).
  *
  * Pickers are spied via `vi.mock` (mirrors SuggestionsEditorView.test.ts's
  * `ConfirmModal` mock) rather than driven through their real popover — this
@@ -117,7 +127,7 @@ vi.mock("../../../../../src/ui/suggestions-view/pickers/SpotPicker", () => ({
 
 const DOC_PATH = "100 Inbox/2026-07-06_1115_suggestions.json";
 const WORTHY_ID = "S07"; // zettelkasten-method — the 1115 run's sole worthy suggestion
-const SUPPRESSED_ID = "S01"; // call-vendor — suppressed, worthiness 0.2
+const SUPPRESSED_ID = "S01"; // call-vendor — suppressed, worthiness 0.2 (low)
 
 async function loadModel(): Promise<EditModel> {
 	return new FakeSuggestionsDoc().load(DOC_PATH);
@@ -149,7 +159,35 @@ function renderTab(model: EditModel, ctx: TabContext): HTMLElement {
 }
 
 /**
- * Clicks a candidate MOC's "Set spot…" button and drives its `SpotPicker`
+ * Test-only setup helper: the anchor chip only renders for a SELECTED
+ * candidate (mockup behavior — see SuggestionsTab.ts renderCandidateMain),
+ * and `ctx.apply` is a spy here (it records the dispatched transform rather
+ * than mutating-and-re-rendering) — so to exercise the anchor-chip click
+ * path, tests must render against a model where the target candidate is
+ * ALREADY marked `selected`, rather than relying on a live re-render after
+ * clicking the check.
+ */
+function withCandidateSelected(model: EditModel, suggestionId: string, path: string): EditModel {
+	return {
+		...model,
+		doc: {
+			...model.doc,
+			suggestions: model.doc.suggestions.map((s) =>
+				s.id === suggestionId
+					? {
+							...s,
+							candidate_mocs: s.candidate_mocs.map((c) =>
+								c.path === path ? { ...c, selected: true } : c,
+							),
+						}
+					: s,
+			),
+		},
+	};
+}
+
+/**
+ * Clicks a SELECTED candidate MOC's anchor chip and drives its `SpotPicker`
  * mock's `onPick` with `anchor` — the arrange sequence shared by the
  * `setCandidateAnchor` behavior tests below (happy path + both no-op
  * guards). No vault mocking needed: `getAbstractFileByPath` returns
@@ -158,8 +196,8 @@ function renderTab(model: EditModel, ctx: TabContext): HTMLElement {
  * tests only care about the dispatched transform, not the picker's content.
  */
 async function pickSpot(container: HTMLElement, candidatePath: string, anchor: AnchorWire): Promise<void> {
-	const row = container.querySelector(`.hashi-suggestion-moc[data-moc-path="${candidatePath}"]`)!;
-	row.querySelector<HTMLButtonElement>(".hashi-suggestion-moc-spot")!.click();
+	const row = container.querySelector(`.hashi-se-cand[data-moc-path="${candidatePath}"]`)!;
+	row.querySelector<HTMLButtonElement>(".hashi-se-anchor-chip")!.click();
 
 	await vi.waitFor(() => {
 		expect(spotPickerInstances.length).toBeGreaterThan(0);
@@ -190,40 +228,41 @@ describe("SuggestionsTab", () => {
 	});
 
 	describe("worthy card (S07)", () => {
-		it("renders title/template/location/tags/candidate-MOCs/+Add MOC/keep-source/decision", async () => {
+		it("renders title/decision/template/location/keep-source/tags/candidate-MOCs/+Add MOC", async () => {
 			const model = await loadModel();
 			const { ctx } = makeCtx();
 			const container = renderTab(model, ctx);
 			const card = cardFor(container, WORTHY_ID);
 
-			expect(card.classList.contains("hashi-suggestion-card-suppressed")).toBe(false);
+			expect(card.classList.contains("hashi-se-suppressed")).toBe(false);
 
-			const title = card.querySelector<HTMLInputElement>(".hashi-suggestion-title");
+			const title = card.querySelector<HTMLInputElement>(".hashi-se-inp.hashi-se-name");
 			expect(title?.value).toBe("The Zettelkasten Method — Atomic Notes and Link-Based Thinking");
 
-			expect(card.querySelector(".hashi-suggestion-template")?.textContent).toBe(
-				"t_note_tomo.md",
-			);
-			expect(card.querySelector(".hashi-suggestion-location")?.textContent).toBe(
-				"Atlas/202 Notes/",
-			);
+			const approveBtn = card.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-approve");
+			const skipBtn = card.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-skip");
+			expect(approveBtn?.classList.contains("is-active")).toBe(true);
+			expect(skipBtn?.classList.contains("is-active")).toBe(false);
 
-			const tags = Array.from(card.querySelectorAll(".hashi-suggestion-tag")).map(
+			expect(card.querySelector(".hashi-se-mini-pick")?.textContent).toBe("t_note_tomo.md");
+			const miniPicks = card.querySelectorAll(".hashi-se-mini-pick");
+			expect(miniPicks[1]?.textContent).toBe("Atlas/202 Notes/");
+
+			const tags = Array.from(card.querySelectorAll(".hashi-se-tag:not(.hashi-se-add)")).map(
 				(el) => el.textContent,
 			);
 			expect(tags).toEqual(["topic/knowledge/frameworks"]);
-			expect(card.querySelector(".hashi-suggestion-add-tag")).not.toBeNull();
+			expect(card.querySelector(".hashi-se-tag.hashi-se-add")).not.toBeNull();
 
-			const mocRows = card.querySelectorAll(".hashi-suggestion-moc");
-			expect(mocRows).toHaveLength(3);
-			expect(card.querySelector(".hashi-suggestion-add-moc")?.textContent).toBe("＋ Add MOC");
+			const candRows = card.querySelectorAll(".hashi-se-cand");
+			expect(candRows).toHaveLength(3);
+			expect(card.querySelector(".hashi-se-add-moc button")?.textContent).toBe("＋ Add MOC…");
 
-			expect(card.querySelector(".hashi-suggestion-keep-source")).not.toBeNull();
-			expect(card.querySelector(".hashi-suggestion-decision")?.textContent).toBe("Approve");
+			expect(card.querySelector(".hashi-se-cbx input[type='checkbox']")).not.toBeNull();
 
 			// No suppressed-only controls leak into the worthy card.
-			expect(card.querySelector(".hashi-suggestion-worthiness")).toBeNull();
-			expect(card.querySelector(".hashi-suggestion-force-atomic")).toBeNull();
+			expect(card.querySelector(".hashi-se-worthiness")).toBeNull();
+			expect(card.querySelector(".hashi-se-force-atomic")).toBeNull();
 		});
 
 		it("editing the title dispatches setTitle", async () => {
@@ -232,7 +271,7 @@ describe("SuggestionsTab", () => {
 			const container = renderTab(model, ctx);
 			const card = cardFor(container, WORTHY_ID);
 
-			const title = card.querySelector<HTMLInputElement>(".hashi-suggestion-title")!;
+			const title = card.querySelector<HTMLInputElement>(".hashi-se-inp.hashi-se-name")!;
 			title.value = "A renamed atomic note";
 			title.dispatchEvent(new Event("change"));
 
@@ -244,13 +283,37 @@ describe("SuggestionsTab", () => {
 			expect(next.dirty).toBe(true);
 		});
 
+		it("clicking Skip on the decision segment dispatches setDecision", async () => {
+			const model = await loadModel();
+			const { ctx, applyCalls } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, WORTHY_ID);
+
+			card.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-skip")!.click();
+
+			const next = applyCalls[0]!(model);
+			expect(next.doc.suggestions.find((s) => s.id === WORTHY_ID)?.decision).toBe("skip");
+		});
+
+		it("clicking Approve on the decision segment dispatches setDecision (no-op when already approved)", async () => {
+			const model = await loadModel();
+			const { ctx, applyCalls } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, WORTHY_ID);
+
+			card.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-approve")!.click();
+
+			const next = applyCalls[0]!(model);
+			expect(next.doc.suggestions.find((s) => s.id === WORTHY_ID)?.decision).toBe("approve");
+		});
+
 		it("choosing a template opens TemplatePicker and dispatches setTemplate", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
 			const container = renderTab(model, ctx);
 			const card = cardFor(container, WORTHY_ID);
 
-			card.querySelector<HTMLButtonElement>(".hashi-suggestion-template")!.click();
+			card.querySelectorAll<HTMLButtonElement>(".hashi-se-mini-pick")[0]!.click();
 
 			expect(templatePickerInstances).toHaveLength(1);
 			expect(templatePickerInstances[0]?.app).toBe(ctx.app);
@@ -270,7 +333,7 @@ describe("SuggestionsTab", () => {
 			const container = renderTab(model, ctx);
 			const card = cardFor(container, WORTHY_ID);
 
-			card.querySelector<HTMLButtonElement>(".hashi-suggestion-location")!.click();
+			card.querySelectorAll<HTMLButtonElement>(".hashi-se-mini-pick")[1]!.click();
 
 			expect(locationPickerInstances).toHaveLength(1);
 			locationPickerInstances[0]!.onChoose("Atlas/300 Reference/");
@@ -281,13 +344,27 @@ describe("SuggestionsTab", () => {
 			);
 		});
 
+		it("toggling keep-source dispatches setKeepSource", async () => {
+			const model = await loadModel();
+			const { ctx, applyCalls } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, WORTHY_ID);
+
+			const checkbox = card.querySelector<HTMLInputElement>(".hashi-se-cbx input[type='checkbox']")!;
+			checkbox.checked = true;
+			checkbox.dispatchEvent(new Event("change"));
+
+			const next = applyCalls[0]!(model);
+			expect(next.doc.suggestions.find((s) => s.id === WORTHY_ID)?.keep_source).toBe(true);
+		});
+
 		it("adding a tag opens TagPicker and dispatches an append-only tags update", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
 			const container = renderTab(model, ctx);
 			const card = cardFor(container, WORTHY_ID);
 
-			card.querySelector<HTMLButtonElement>(".hashi-suggestion-add-tag")!.click();
+			card.querySelector<HTMLButtonElement>(".hashi-se-tag.hashi-se-add")!.click();
 
 			expect(tagPickerInstances).toHaveLength(1);
 			tagPickerInstances[0]!.onChoose("topic/new-tag");
@@ -305,7 +382,7 @@ describe("SuggestionsTab", () => {
 			const container = renderTab(model, ctx);
 			const card = cardFor(container, WORTHY_ID);
 
-			card.querySelector<HTMLButtonElement>(".hashi-suggestion-add-tag")!.click();
+			card.querySelector<HTMLButtonElement>(".hashi-se-tag.hashi-se-add")!.click();
 			tagPickerInstances[0]!.onChoose("topic/knowledge/frameworks");
 
 			const next = applyCalls[0]!(model);
@@ -313,7 +390,7 @@ describe("SuggestionsTab", () => {
 			expect(next.dirty).toBe(false);
 		});
 
-		it("selecting a candidate MOC dispatches selectCandidateMoc as a single re-point", async () => {
+		it("selecting a candidate MOC dispatches selectCandidateMoc as a single re-point (click)", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
 			const container = renderTab(model, ctx);
@@ -322,21 +399,92 @@ describe("SuggestionsTab", () => {
 			const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
 			const secondCandidate = suggestion.candidate_mocs[1]!;
 			const row = card.querySelector(
-				`.hashi-suggestion-moc[data-moc-path="${secondCandidate.path}"]`,
+				`.hashi-se-cand[data-moc-path="${secondCandidate.path}"]`,
 			)!;
-			const radio = row.querySelector<HTMLInputElement>(".hashi-suggestion-moc-select")!;
-			radio.checked = true;
-			radio.dispatchEvent(new Event("change"));
+			row.querySelector<HTMLElement>(".hashi-se-check")!.click();
 
 			const next = applyCalls[0]!(model);
 			const nextSuggestion = next.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
-			expect(
-				nextSuggestion.candidate_mocs.map((c) => [c.path, c.selected]),
-			).toEqual([
+			expect(nextSuggestion.candidate_mocs.map((c) => [c.path, c.selected])).toEqual([
 				[suggestion.candidate_mocs[0]!.path, false],
 				[secondCandidate.path, true],
 				[suggestion.candidate_mocs[2]!.path, false],
 			]);
+		});
+
+		it("selecting a candidate MOC via keyboard (Enter/Space) dispatches selectCandidateMoc", async () => {
+			const model = await loadModel();
+			const { ctx, applyCalls } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, WORTHY_ID);
+
+			const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+			const firstCandidate = suggestion.candidate_mocs[0]!;
+			const row = card.querySelector(`.hashi-se-cand[data-moc-path="${firstCandidate.path}"]`)!;
+			const check = row.querySelector<HTMLElement>(".hashi-se-check")!;
+			check.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+
+			expect(ctx.apply).toHaveBeenCalledOnce();
+			const next = applyCalls[0]!(model);
+			const nextSuggestion = next.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+			expect(nextSuggestion.candidate_mocs.find((c) => c.path === firstCandidate.path)?.selected).toBe(
+				true,
+			);
+		});
+
+		it("a candidate check exposes role=checkbox and aria-checked reflecting selection", async () => {
+			const model = await loadModel();
+			const { ctx } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, WORTHY_ID);
+
+			const check = card.querySelector<HTMLElement>(".hashi-se-check")!;
+			expect(check.getAttribute("role")).toBe("checkbox");
+			expect(check.getAttribute("aria-checked")).toBe("false");
+			expect(check.getAttribute("tabindex")).toBe("0");
+		});
+
+		it("an unselected candidate shows no anchor row; a selected one with anchor:null shows the empty chip", async () => {
+			const model = await loadModel();
+			const { ctx, applyCalls } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, WORTHY_ID);
+
+			const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+			const firstCandidate = suggestion.candidate_mocs[0]!;
+			const row = card.querySelector(`.hashi-se-cand[data-moc-path="${firstCandidate.path}"]`)!;
+			expect(row.classList.contains("hashi-se-off")).toBe(true);
+			expect(row.querySelector(".hashi-se-anchor-row")).toBeNull();
+
+			row.querySelector<HTMLElement>(".hashi-se-check")!.click();
+			const next = applyCalls[0]!(model);
+			const rerendered = renderTab(next, ctx);
+
+			const reCard = cardFor(rerendered, WORTHY_ID);
+			const reRow = reCard.querySelector(`.hashi-se-cand[data-moc-path="${firstCandidate.path}"]`)!;
+			expect(reRow.classList.contains("hashi-se-on")).toBe(true);
+			const chip = reRow.querySelector(".hashi-se-anchor-chip");
+			expect(chip?.classList.contains("hashi-se-empty")).toBe(true);
+			expect(chip?.textContent).toBe("＋ set a spot");
+		});
+
+		it("a candidate marked source:user shows the 'added' badge", async () => {
+			const model = await loadModel();
+			const { ctx, applyCalls } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, WORTHY_ID);
+
+			card.querySelector<HTMLButtonElement>(".hashi-se-add-moc button")!.click();
+			expect(mocPickerInstances).toHaveLength(1);
+			mocPickerInstances[0]!.onChoose("Atlas/200 Maps/New MOC.md");
+
+			const next = applyCalls[0]!(model);
+			const rerendered = renderTab(next, ctx);
+			const reCard = cardFor(rerendered, WORTHY_ID);
+			const row = reCard.querySelector(
+				`.hashi-se-cand[data-moc-path="Atlas/200 Maps/New MOC.md"]`,
+			)!;
+			expect(row.querySelector(".hashi-se-src-badge")?.textContent).toBe("added");
 		});
 
 		it("adding a MOC opens MocPicker and dispatches addMoc", async () => {
@@ -345,7 +493,7 @@ describe("SuggestionsTab", () => {
 			const container = renderTab(model, ctx);
 			const card = cardFor(container, WORTHY_ID);
 
-			card.querySelector<HTMLButtonElement>(".hashi-suggestion-add-moc")!.click();
+			card.querySelector<HTMLButtonElement>(".hashi-se-add-moc button")!.click();
 
 			expect(mocPickerInstances).toHaveLength(1);
 			mocPickerInstances[0]!.onChoose("Atlas/200 Maps/New MOC.md");
@@ -359,6 +507,20 @@ describe("SuggestionsTab", () => {
 			expect(added?.source).toBe("user");
 		});
 
+		it("clicking a candidate's path opens it via workspace.openLinkText", async () => {
+			const model = await loadModel();
+			const { ctx } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, WORTHY_ID);
+
+			const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+			const firstCandidate = suggestion.candidate_mocs[0]!;
+			const row = card.querySelector(`.hashi-se-cand[data-moc-path="${firstCandidate.path}"]`)!;
+			row.querySelector<HTMLElement>(".hashi-se-cand-path")!.click();
+
+			expect(ctx.app.workspace.openLinkText).toHaveBeenCalledWith(firstCandidate.path, "", false);
+		});
+
 		it("setting a spot reads the MOC's content then opens SpotPicker and dispatches an anchor set", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
@@ -369,24 +531,16 @@ describe("SuggestionsTab", () => {
 			mockedVault.getAbstractFileByPath.mockReturnValue(new TFile());
 			mockedVault.read.mockResolvedValue("# Existing MOC content");
 
-			const container = renderTab(model, ctx);
-			const card = cardFor(container, WORTHY_ID);
 			const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
 			const firstCandidate = suggestion.candidate_mocs[0]!;
-			const row = card.querySelector(
-				`.hashi-suggestion-moc[data-moc-path="${firstCandidate.path}"]`,
-			)!;
+			// The anchor chip only renders for a selected candidate.
+			const container = renderTab(withCandidateSelected(model, WORTHY_ID, firstCandidate.path), ctx);
+			const anchor: AnchorWire = { type: "heading", value: "Notes", placement: "after" };
 
-			row.querySelector<HTMLButtonElement>(".hashi-suggestion-moc-spot")!.click();
+			await pickSpot(container, firstCandidate.path, { ...anchor });
 
-			await vi.waitFor(() => {
-				expect(spotPickerInstances).toHaveLength(1);
-			});
 			expect(spotPickerInstances[0]?.content).toBe("# Existing MOC content");
 			expect(spotPickerInstances[0]?.kind).toBe("existing");
-
-			const anchor: AnchorWire = { type: "heading", value: "Notes", placement: "after" };
-			spotPickerInstances[0]!.onPick(anchor);
 
 			const next = applyCalls[0]!(model);
 			const nextSuggestion = next.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
@@ -405,9 +559,9 @@ describe("SuggestionsTab", () => {
 			it("no-ops when the suggestion id is unknown (dirty preserved)", async () => {
 				const model = await loadModel();
 				const { ctx, applyCalls } = makeCtx();
-				const container = renderTab(model, ctx);
 				const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
 				const firstCandidate = suggestion.candidate_mocs[0]!;
+				const container = renderTab(withCandidateSelected(model, WORTHY_ID, firstCandidate.path), ctx);
 				const anchor: AnchorWire = { type: "heading", value: "Notes", placement: "after" };
 
 				await pickSpot(container, firstCandidate.path, anchor);
@@ -432,9 +586,9 @@ describe("SuggestionsTab", () => {
 			it("no-ops when the candidate path is unknown (dirty preserved)", async () => {
 				const model = await loadModel();
 				const { ctx, applyCalls } = makeCtx();
-				const container = renderTab(model, ctx);
 				const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
 				const firstCandidate = suggestion.candidate_mocs[0]!;
+				const container = renderTab(withCandidateSelected(model, WORTHY_ID, firstCandidate.path), ctx);
 				const anchor: AnchorWire = { type: "heading", value: "Notes", placement: "after" };
 
 				await pickSpot(container, firstCandidate.path, anchor);
@@ -468,9 +622,9 @@ describe("SuggestionsTab", () => {
 			it("no-ops when the incoming anchor structurally equals the candidate's current anchor", async () => {
 				const model = await loadModel();
 				const { ctx, applyCalls } = makeCtx();
-				const container = renderTab(model, ctx);
 				const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
 				const firstCandidate = suggestion.candidate_mocs[0]!;
+				const container = renderTab(withCandidateSelected(model, WORTHY_ID, firstCandidate.path), ctx);
 				const anchor: AnchorWire = { type: "heading", value: "Notes", placement: "after" };
 
 				await pickSpot(container, firstCandidate.path, anchor);
@@ -504,60 +658,60 @@ describe("SuggestionsTab", () => {
 				expect(result.dirty).toBe(false);
 			});
 		});
-
-		it("toggling keep-source dispatches setKeepSource", async () => {
-			const model = await loadModel();
-			const { ctx, applyCalls } = makeCtx();
-			const container = renderTab(model, ctx);
-			const card = cardFor(container, WORTHY_ID);
-
-			const checkbox = card.querySelector<HTMLInputElement>(".hashi-suggestion-keep-source")!;
-			checkbox.checked = true;
-			checkbox.dispatchEvent(new Event("change"));
-
-			const next = applyCalls[0]!(model);
-			expect(next.doc.suggestions.find((s) => s.id === WORTHY_ID)?.keep_source).toBe(true);
-		});
-
-		it("clicking the decision toggle flips approve to skip", async () => {
-			const model = await loadModel();
-			const { ctx, applyCalls } = makeCtx();
-			const container = renderTab(model, ctx);
-			const card = cardFor(container, WORTHY_ID);
-
-			card.querySelector<HTMLButtonElement>(".hashi-suggestion-decision")!.click();
-
-			const next = applyCalls[0]!(model);
-			expect(next.doc.suggestions.find((s) => s.id === WORTHY_ID)?.decision).toBe("skip");
-		});
 	});
 
-	describe("suppressed card (S01)", () => {
-		it("renders worthiness + hint + Force-Atomic only — no MOC UI, no note fields", async () => {
+	describe("suppressed card (S01) — bug fix 1: title is now visible", () => {
+		it("renders the editable title, worthiness, hint, and Force-Atomic — no MOC UI, no decision/template/tags", async () => {
 			const model = await loadModel();
 			const { ctx } = makeCtx();
 			const container = renderTab(model, ctx);
 			const card = cardFor(container, SUPPRESSED_ID);
 
-			expect(card.classList.contains("hashi-suggestion-card-suppressed")).toBe(true);
-			expect(card.querySelector(".hashi-suggestion-worthiness")?.textContent).toBe(
-				"Worthiness: 20%",
-			);
-			expect(card.querySelector(".hashi-suggestion-skip-hint")).not.toBeNull();
-			expect(card.querySelector(".hashi-suggestion-force-atomic")).not.toBeNull();
+			expect(card.classList.contains("hashi-se-suppressed")).toBe(true);
+
+			// Bug fix 1: the suppressed card must show WHICH note it is.
+			const title = card.querySelector<HTMLInputElement>(".hashi-se-inp.hashi-se-name");
+			expect(title).not.toBeNull();
+			expect(title?.value).toBe("Vendor call — review quote, send references");
+			const label = card.querySelector("label");
+			expect(label?.textContent).toBe(`Note (${SUPPRESSED_ID}) · not promoted`);
+
+			const worthiness = card.querySelector(".hashi-se-worthiness");
+			expect(worthiness?.classList.contains("hashi-se-low")).toBe(true);
+			expect(worthiness?.querySelector(".hashi-se-wv")?.textContent).toBe("20%");
+			expect(worthiness?.querySelector(".hashi-se-wl")?.textContent).toBe("worthiness");
+
+			expect(card.querySelector(".hashi-se-suppressed-note")).not.toBeNull();
+			expect(card.querySelector(".hashi-se-force-atomic input[type='checkbox']")).not.toBeNull();
 
 			for (const selector of [
-				".hashi-suggestion-title",
-				".hashi-suggestion-template",
-				".hashi-suggestion-location",
-				".hashi-suggestion-tags",
-				".hashi-suggestion-mocs",
-				".hashi-suggestion-add-moc",
-				".hashi-suggestion-keep-source",
-				".hashi-suggestion-decision",
+				".hashi-se-decision",
+				".hashi-se-mini-pick",
+				".hashi-se-tags",
+				".hashi-se-cand",
+				".hashi-se-add-moc",
+				".hashi-se-cbx",
 			]) {
 				expect(card.querySelector(selector)).toBeNull();
 			}
+		});
+
+		it("editing the suppressed title dispatches setTitle (the bug-1 regression)", async () => {
+			const model = await loadModel();
+			const { ctx, applyCalls } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, SUPPRESSED_ID);
+
+			const title = card.querySelector<HTMLInputElement>(".hashi-se-inp.hashi-se-name")!;
+			title.value = "Renamed vendor call note";
+			title.dispatchEvent(new Event("change"));
+
+			expect(ctx.apply).toHaveBeenCalledOnce();
+			const next = applyCalls[0]!(model);
+			expect(next.doc.suggestions.find((s) => s.id === SUPPRESSED_ID)?.title).toBe(
+				"Renamed vendor call note",
+			);
+			expect(next.dirty).toBe(true);
 		});
 
 		it("toggling Force-Atomic dispatches setForceAtomicFromSuggestion, syncing the daily mirror by stem", async () => {
@@ -566,7 +720,9 @@ describe("SuggestionsTab", () => {
 			const container = renderTab(model, ctx);
 			const card = cardFor(container, SUPPRESSED_ID);
 
-			const checkbox = card.querySelector<HTMLInputElement>(".hashi-suggestion-force-atomic")!;
+			const checkbox = card.querySelector<HTMLInputElement>(
+				".hashi-se-force-atomic input[type='checkbox']",
+			)!;
 			checkbox.checked = true;
 			checkbox.dispatchEvent(new Event("change"));
 
@@ -574,13 +730,29 @@ describe("SuggestionsTab", () => {
 			const next = applyCalls[0]!(model);
 
 			expect(next.doc.suggestions.find((s) => s.id === SUPPRESSED_ID)?.force_atomic).toBe(true);
-			// call-vendor is S01's stem AND the 2026-07-05 daily log entry's
-			// source_stem — the sync (T1.4) must flip both from one control.
+			// call-vendor is S01's stem AND the daily log entry's source_stem —
+			// the sync (T1.4) must flip both from one control.
 			const dailyEntry = next.doc.daily_updates
 				.flatMap((d) => d.log_entries)
 				.find((entry) => entry.source_stem === "call-vendor");
 			expect(dailyEntry?.force_atomic_note).toBe(true);
 			expect(next.dirty).toBe(true);
+		});
+	});
+
+	describe("suppressed card (S05) — a second suppressed note, distinguishable by title", () => {
+		it("renders its own title, distinct from S01's", async () => {
+			const model = await loadModel();
+			const { ctx } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, "S05");
+
+			const title = card.querySelector<HTMLInputElement>(".hashi-se-inp.hashi-se-name");
+			expect(title?.value).toBe("Replace the hallway light bulb");
+
+			const worthiness = card.querySelector(".hashi-se-worthiness");
+			expect(worthiness?.querySelector(".hashi-se-wv")?.textContent).toBe("20%");
+			expect(worthiness?.classList.contains("hashi-se-low")).toBe(true);
 		});
 	});
 });

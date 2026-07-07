@@ -1,14 +1,27 @@
 /**
- * Unit tests for DailyTab — Phase-3 T3.6 per-date log entry / tracker /
- * log-link editing UI (SDD §6 Daily, PRD F8).
+ * Unit tests for DailyTab — rebuilt to the approved mockup
+ * (docs/XDD/specs/004-suggestions-editor/mockups/suggestions-editor.html),
+ * covering the `hashi-se-*` card structure and 3 confirmed bug fixes:
+ *
+ *  1. The date is ALWAYS a clickable control (both when the daily note
+ *     exists and when it doesn't) — a missing note must never render a dead
+ *     element. Clicking it opens the note via `workspace.openLinkText` and
+ *     Hashi never calls `vault.create`. The `hashi-se-warn-pill` appears
+ *     ONLY when the note is missing, and is itself also clickable via the
+ *     same open path.
+ *  2. The missing-note wording is the mockup's
+ *     "⚠ note doesn't exist — click to create".
+ *  3. Every checkbox (tracker accept, log-entry accept, log-entry
+ *     force-atomic, log-link accept) renders inside a `<label>` with
+ *     visible text ("Accept" / "Force Atomic Note").
  *
  * Two families of fixtures, per the task brief:
  *  - The REAL 1115 Tomo emission (via FakeSuggestionsDoc) drives the
- *    date-group / existence-check tests — it has exactly the shape this
- *    task calls out: 2 daily dates, 1 log entry each, no trackers, no
- *    log links. Good for proving the "doesn't exist" / "exists" states and
- *    the one-entry-per-date render shape against something Tomo actually
- *    emits (spec-002 lesson — avoid a synthetic fixture silently drifting).
+ *    date-group / existence-check tests — it has exactly the shape called
+ *    out: 2 daily dates, 1 log entry each, no trackers, no log links. Good
+ *    for proving the "doesn't exist" / "exists" states and the
+ *    one-entry-per-date render shape against something Tomo actually emits
+ *    (spec-002 lesson — avoid a synthetic fixture silently drifting).
  *  - Local factories (mirrors test/unit/suggestions/transforms/daily.test.ts)
  *    build custom EditModels with trackers/log_links populated, since the
  *    1115 fixture has none — needed to exercise those two controls.
@@ -109,11 +122,16 @@ async function loadFixtureModel(): Promise<EditModel> {
 	return adapter.load(DOC_PATH);
 }
 
+/** Finds a `<label>` ancestor's visible text for a given checkbox. */
+function labelTextFor(checkbox: HTMLInputElement): string | null {
+	return checkbox.closest("label")?.textContent ?? null;
+}
+
 // ---------------------------------------------------------------------------
 
 describe("DailyTab", () => {
-	describe("date group — existence check", () => {
-		it("shows a \"doesn't exist\" state for both dates against a bare mock vault", async () => {
+	describe("date control — bug fix #1 (always clickable) + #2 (wording)", () => {
+		it("renders a clickable date control for both dates when neither note exists", async () => {
 			const model = await loadFixtureModel();
 			const app = new App();
 			const ctx = makeCtx(app);
@@ -121,18 +139,34 @@ describe("DailyTab", () => {
 
 			new DailyTab().render(container, model, ctx);
 
-			const groups = container.querySelectorAll(".hashi-daily-group");
-			expect(groups).toHaveLength(2);
-			expect(
-				container.querySelectorAll(".hashi-daily-date-missing"),
-			).toHaveLength(2);
-			expect(container.querySelectorAll(".hashi-daily-date-link")).toHaveLength(0);
+			const cards = container.querySelectorAll(".hashi-se-card.hashi-se-daily");
+			expect(cards).toHaveLength(2);
+
+			const dateButtons = container.querySelectorAll(".hashi-se-daily-date");
+			expect(dateButtons).toHaveLength(2);
+			for (const button of Array.from(dateButtons)) {
+				expect(button.tagName).toBe("BUTTON");
+			}
 			expect(container.textContent).toContain("2026-07-05");
 			expect(container.textContent).toContain("2026-07-06");
-			expect(container.textContent).toContain("doesn't exist");
 		});
 
-		it("shows a plain click-to-open link when the daily note file exists", async () => {
+		it("shows the warn pill with the exact mockup wording only when the note is missing", async () => {
+			const model = await loadFixtureModel();
+			const app = new App();
+			const ctx = makeCtx(app);
+			const container = document.createElement("div");
+
+			new DailyTab().render(container, model, ctx);
+
+			const pills = container.querySelectorAll(".hashi-se-warn-pill");
+			expect(pills).toHaveLength(2);
+			for (const pill of Array.from(pills)) {
+				expect(pill.textContent).toBe("⚠ note doesn't exist — click to create");
+			}
+		});
+
+		it("hides the warn pill and keeps the date clickable when the daily note exists", async () => {
 			const model = await loadFixtureModel();
 			const app = new App();
 			const existingFile = new TFile();
@@ -146,20 +180,33 @@ describe("DailyTab", () => {
 
 			new DailyTab().render(container, model, ctx);
 
-			const links = container.querySelectorAll(".hashi-daily-date-link");
-			expect(links).toHaveLength(1);
-			expect(links[0]?.textContent).toContain("2026-07-05");
-			// The other date is still missing.
-			expect(
-				container.querySelectorAll(".hashi-daily-date-missing"),
-			).toHaveLength(1);
+			const dateButtons = container.querySelectorAll(".hashi-se-daily-date");
+			expect(dateButtons).toHaveLength(2);
+			// Only the still-missing 2026-07-06 note keeps its warn pill.
+			expect(container.querySelectorAll(".hashi-se-warn-pill")).toHaveLength(1);
 		});
 
-		it("clicking the link opens the daily note via workspace.openLinkText, never creates it", async () => {
+		it("clicking the date opens the daily note via workspace.openLinkText and never creates it — note missing", async () => {
+			const model = await loadFixtureModel();
+			const app = new App();
+			const openLinkText = vi.spyOn(app.workspace, "openLinkText");
+			const ctx = makeCtx(app);
+			const container = document.createElement("div");
+
+			new DailyTab().render(container, model, ctx);
+			const dateButton = container.querySelector(".hashi-se-daily-date") as HTMLElement;
+			dateButton.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+			expect(openLinkText).toHaveBeenCalledWith("2026-07-05", "", false);
+			expect(app.vault.create).not.toHaveBeenCalled();
+		});
+
+		it("clicking the date opens the daily note via workspace.openLinkText and never creates it — note exists", async () => {
 			const model = await loadFixtureModel();
 			const app = new App();
 			const existingFile = new TFile();
 			existingFile.path = "2026-07-05.md";
+			existingFile.basename = "2026-07-05";
 			app.vault.getAbstractFileByPath = vi.fn((path: string) =>
 				path === "2026-07-05.md" ? existingFile : null,
 			);
@@ -168,10 +215,23 @@ describe("DailyTab", () => {
 			const container = document.createElement("div");
 
 			new DailyTab().render(container, model, ctx);
-			const link = container.querySelector(
-				".hashi-daily-date-link",
-			) as HTMLElement;
-			link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+			const dateButton = container.querySelector(".hashi-se-daily-date") as HTMLElement;
+			dateButton.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+			expect(openLinkText).toHaveBeenCalledWith("2026-07-05", "", false);
+			expect(app.vault.create).not.toHaveBeenCalled();
+		});
+
+		it("clicking the warn pill also opens the daily note via workspace.openLinkText and never creates it", async () => {
+			const model = await loadFixtureModel();
+			const app = new App();
+			const openLinkText = vi.spyOn(app.workspace, "openLinkText");
+			const ctx = makeCtx(app);
+			const container = document.createElement("div");
+
+			new DailyTab().render(container, model, ctx);
+			const pill = container.querySelector(".hashi-se-warn-pill") as HTMLElement;
+			pill.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 
 			expect(openLinkText).toHaveBeenCalledWith("2026-07-05", "", false);
 			expect(app.vault.create).not.toHaveBeenCalled();
@@ -187,7 +247,7 @@ describe("DailyTab", () => {
 
 			new DailyTab().render(container, model, ctx);
 			const textarea = container.querySelector(
-				".hashi-daily-log-entry-content",
+				".hashi-se-le-text",
 			) as HTMLTextAreaElement;
 			textarea.value = "Edited log content.";
 			textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -196,6 +256,23 @@ describe("DailyTab", () => {
 			expect(next.doc.daily_updates[0]?.log_entries[0]?.content).toBe(
 				"Edited log content.",
 			);
+		});
+
+		it("renders the reason and source_stem in the entry meta line", () => {
+			const model = getMockModel([
+				getMockDailyUpdate({
+					log_entries: [
+						getMockLogEntry({ reason: "short call log", source_stem: "call-mueller" }),
+					],
+				}),
+			]);
+			const ctx = makeCtx(new App());
+			const container = document.createElement("div");
+
+			new DailyTab().render(container, model, ctx);
+
+			const meta = container.querySelector(".hashi-se-le-meta");
+			expect(meta?.textContent).toBe("short call log · from call-mueller");
 		});
 	});
 
@@ -212,7 +289,7 @@ describe("DailyTab", () => {
 			new DailyTab().render(container, model, ctx);
 
 			const timeInput = container.querySelector(
-				".hashi-daily-log-entry-time",
+				".hashi-se-le-time",
 			) as HTMLInputElement;
 			expect(timeInput.disabled).toBe(true);
 		});
@@ -231,7 +308,7 @@ describe("DailyTab", () => {
 			new DailyTab().render(container, model, ctx);
 
 			const timeInput = container.querySelector(
-				".hashi-daily-log-entry-time",
+				".hashi-se-le-time",
 			) as HTMLInputElement;
 			expect(timeInput.disabled).toBe(true);
 		});
@@ -248,7 +325,7 @@ describe("DailyTab", () => {
 			new DailyTab().render(container, model, ctx);
 
 			const timeInput = container.querySelector(
-				".hashi-daily-log-entry-time",
+				".hashi-se-le-time",
 			) as HTMLInputElement;
 			expect(timeInput.disabled).toBe(false);
 			expect(timeInput.value).toBe("09:30");
@@ -265,7 +342,7 @@ describe("DailyTab", () => {
 
 			new DailyTab().render(container, model, ctx);
 			const select = container.querySelector(
-				".hashi-daily-log-entry-position",
+				".hashi-se-le-pos",
 			) as HTMLSelectElement;
 			select.value = "before_first_line";
 			select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -287,10 +364,10 @@ describe("DailyTab", () => {
 
 			new DailyTab().render(container, model, ctx);
 			const select = container.querySelector(
-				".hashi-daily-log-entry-position",
+				".hashi-se-le-pos",
 			) as HTMLSelectElement;
 			const timeInput = container.querySelector(
-				".hashi-daily-log-entry-time",
+				".hashi-se-le-time",
 			) as HTMLInputElement;
 			expect(timeInput.disabled).toBe(true);
 
@@ -311,7 +388,7 @@ describe("DailyTab", () => {
 
 			new DailyTab().render(container, model, ctx);
 			const timeInput = container.querySelector(
-				".hashi-daily-log-entry-time",
+				".hashi-se-le-time",
 			) as HTMLInputElement;
 			timeInput.value = "14:45";
 			timeInput.dispatchEvent(new Event("change", { bubbles: true }));
@@ -321,8 +398,8 @@ describe("DailyTab", () => {
 		});
 	});
 
-	describe("log entry — accept + force atomic", () => {
-		it("toggling accept dispatches setDailyLogAccepted", () => {
+	describe("log entry — accept + force atomic — bug fix #3 (labeled checkboxes)", () => {
+		it("the Accept checkbox is wrapped in a label with visible 'Accept' text", () => {
 			const model = getMockModel([
 				getMockDailyUpdate({ log_entries: [getMockLogEntry({ accepted: false })] }),
 			]);
@@ -331,13 +408,46 @@ describe("DailyTab", () => {
 
 			new DailyTab().render(container, model, ctx);
 			const accept = container.querySelector(
-				".hashi-daily-log-entry-accept",
+				".hashi-se-le-controls .hashi-se-cbx input[type=checkbox]",
 			) as HTMLInputElement;
+
+			expect(labelTextFor(accept)).toContain("Accept");
+		});
+
+		it("toggling accept dispatches setDailyLogAccepted", () => {
+			const model = getMockModel([
+				getMockDailyUpdate({ log_entries: [getMockLogEntry({ accepted: false })] }),
+			]);
+			const ctx = makeCtx(new App());
+			const container = document.createElement("div");
+
+			new DailyTab().render(container, model, ctx);
+			const accept = container.querySelectorAll(
+				".hashi-se-le-controls .hashi-se-cbx input[type=checkbox]",
+			)[0] as HTMLInputElement;
 			accept.checked = true;
 			accept.dispatchEvent(new Event("change", { bubbles: true }));
 
 			const next = runCaptured(ctx.apply, model);
 			expect(next.doc.daily_updates[0]?.log_entries[0]?.accepted).toBe(true);
+		});
+
+		it("the Force Atomic Note checkbox is wrapped in a label with visible text", () => {
+			const model = getMockModel([
+				getMockDailyUpdate({
+					log_entries: [getMockLogEntry({ force_atomic_note: false })],
+				}),
+			]);
+			const ctx = makeCtx(new App());
+			const container = document.createElement("div");
+
+			new DailyTab().render(container, model, ctx);
+			const checkboxes = container.querySelectorAll(
+				".hashi-se-le-controls .hashi-se-cbx input[type=checkbox]",
+			);
+			const forceAtomic = checkboxes[1] as HTMLInputElement;
+
+			expect(labelTextFor(forceAtomic)).toContain("Force Atomic Note");
 		});
 
 		it("toggling Force Atomic dispatches setForceAtomicFromDaily using the entry's source_stem", () => {
@@ -352,9 +462,10 @@ describe("DailyTab", () => {
 			const container = document.createElement("div");
 
 			new DailyTab().render(container, model, ctx);
-			const forceAtomic = container.querySelector(
-				".hashi-daily-log-entry-force-atomic",
-			) as HTMLInputElement;
+			const checkboxes = container.querySelectorAll(
+				".hashi-se-le-controls .hashi-se-cbx input[type=checkbox]",
+			);
+			const forceAtomic = checkboxes[1] as HTMLInputElement;
 			forceAtomic.checked = true;
 			forceAtomic.dispatchEvent(new Event("change", { bubbles: true }));
 
@@ -365,7 +476,31 @@ describe("DailyTab", () => {
 		});
 	});
 
-	describe("tracker — accept", () => {
+	describe("tracker — bug fix #3 (labeled checkbox) + accept", () => {
+		it("the tracker's Accept checkbox has visible label text and renders field/value/reason", () => {
+			const model = getMockModel([
+				getMockDailyUpdate({
+					trackers: [
+						getMockTracker({ field: "mood", value: "good", reason: "mentioned in log" }),
+					],
+					log_entries: [],
+				}),
+			]);
+			const ctx = makeCtx(new App());
+			const container = document.createElement("div");
+
+			new DailyTab().render(container, model, ctx);
+
+			expect(container.textContent).toContain("mood");
+			expect(container.textContent).toContain("good");
+			expect(container.textContent).toContain("mentioned in log");
+
+			const accept = container.querySelector(
+				".hashi-se-tracker input[type=checkbox]",
+			) as HTMLInputElement;
+			expect(labelTextFor(accept)).toContain("Accept");
+		});
+
 		it("toggling a tracker's accept dispatches setDailyTrackerAccepted", () => {
 			const model = getMockModel([
 				getMockDailyUpdate({
@@ -378,7 +513,7 @@ describe("DailyTab", () => {
 
 			new DailyTab().render(container, model, ctx);
 			const accept = container.querySelector(
-				".hashi-daily-tracker-accept",
+				".hashi-se-tracker input[type=checkbox]",
 			) as HTMLInputElement;
 			expect(accept).not.toBeNull();
 			accept.checked = true;
@@ -389,8 +524,8 @@ describe("DailyTab", () => {
 		});
 	});
 
-	describe("log link — accept", () => {
-		it("toggling a log link's accept dispatches setDailyLogLinkAccepted", () => {
+	describe("log link — bug fix #3 (labeled checkbox) + accept", () => {
+		it("the log link's Accept checkbox has visible label text and renders target_stem/reason", () => {
 			const model = getMockModel([
 				getMockDailyUpdate({
 					log_entries: [],
@@ -412,7 +547,31 @@ describe("DailyTab", () => {
 			expect(container.textContent).toContain("linked from log");
 
 			const accept = container.querySelector(
-				".hashi-daily-log-link-accept",
+				".hashi-se-log-link input[type=checkbox]",
+			) as HTMLInputElement;
+			expect(labelTextFor(accept)).toContain("Accept");
+		});
+
+		it("toggling a log link's accept dispatches setDailyLogLinkAccepted", () => {
+			const model = getMockModel([
+				getMockDailyUpdate({
+					log_entries: [],
+					log_links: [
+						getMockLogLink({
+							accepted: false,
+							target_stem: "atomic-target",
+							reason: "linked from log",
+						}),
+					],
+				}),
+			]);
+			const ctx = makeCtx(new App());
+			const container = document.createElement("div");
+
+			new DailyTab().render(container, model, ctx);
+
+			const accept = container.querySelector(
+				".hashi-se-log-link input[type=checkbox]",
 			) as HTMLInputElement;
 			expect(accept).not.toBeNull();
 			accept.checked = true;

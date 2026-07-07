@@ -1,8 +1,9 @@
 /**
  * Unit tests for the Proposed MOCs tab (T3.5, SDD §6 Proposed MOCs, PRD
- * F4/F5). Covers per-card rename / reparent / decision-toggle / merge
- * dispatch, member-chip title lookup (with raw-id fallback), and the tag
- * picker's inline (non-transform) tag-add helper.
+ * F4/F5), rebuilt to the approved mockup's `hashi-se-*` structure. Covers
+ * per-card rename / reparent / decision-segmented / merge dispatch,
+ * member-chip title lookup (with raw-id fallback), and the tag picker's
+ * inline (non-transform) tag-add helper.
  *
  * `ParentPicker`/`TagPicker` are mocked at module level (mirrors
  * `SuggestionsEditorView.test.ts`'s `ConfirmModal` mock) — they're already
@@ -138,6 +139,7 @@ function seededModel(): EditModel {
 					parent: "MOCs/Root.md",
 					member_ids: ["S1", "S99"],
 					tags: ["#area"],
+					reason: "2 notes share topic Projects and have no dedicated MOC.",
 					decision: "skip",
 				}),
 				makeProposedMoc({
@@ -160,7 +162,7 @@ function seededModel(): EditModel {
 }
 
 function cardFor(container: HTMLElement, mocId: string): HTMLElement {
-	const cards = Array.from(container.querySelectorAll<HTMLElement>(".hashi-proposed-moc-card"));
+	const cards = Array.from(container.querySelectorAll<HTMLElement>(".hashi-se-pmoc"));
 	const card = cards[["M1", "M2", "M3"].indexOf(mocId)];
 	if (card === undefined) throw new Error(`no card found for index of ${mocId}`);
 	return card;
@@ -188,39 +190,49 @@ describe("ProposedMocsTab", () => {
 	});
 
 	describe("render — card structure", () => {
-		it("renders one card per proposed MOC with a name input pre-filled", () => {
+		it("renders one hashi-se-pmoc card per proposed MOC with a name input pre-filled", () => {
 			const tab = new ProposedMocsTab();
 			const container = document.createElement("div");
 			const model = seededModel();
 
 			tab.render(container, model, makeCtx());
 
-			const cards = container.querySelectorAll(".hashi-proposed-moc-card");
+			const cards = container.querySelectorAll(".hashi-se-pmoc");
 			expect(cards).toHaveLength(3);
 			const nameInput = cardFor(container, "M1").querySelector<HTMLInputElement>(
-				".hashi-proposed-moc-name",
+				".hashi-se-inp.hashi-se-name",
 			);
 			expect(nameInput?.value).toBe("Projects");
+			expect(nameInput?.closest(".hashi-se-field")?.querySelector("label")?.textContent).toBe(
+				"Name (M1)",
+			);
 		});
 
-		it("renders a parent control showing the current parent", () => {
+		it("renders a parent mini-pick control showing the current parent", () => {
 			const tab = new ProposedMocsTab();
 			const container = document.createElement("div");
 			tab.render(container, seededModel(), makeCtx());
 
-			const parentEl = cardFor(container, "M1").querySelector(".hashi-proposed-moc-parent");
-			expect(parentEl?.textContent).toContain("MOCs/Root.md");
+			const parentEl = cardFor(container, "M1").querySelector(".hashi-se-mini-pick");
+			expect(parentEl?.textContent).toBe("MOCs/Root.md");
 		});
 
-		it("renders a decision toggle reflecting skip vs approve", () => {
+		it("renders a decision segmented control with the current decision marked is-active", () => {
 			const tab = new ProposedMocsTab();
 			const container = document.createElement("div");
 			tab.render(container, seededModel(), makeCtx());
 
-			const skipDecision = cardFor(container, "M1").querySelector(".hashi-proposed-moc-decision");
-			const approveDecision = cardFor(container, "M3").querySelector(".hashi-proposed-moc-decision");
-			expect(skipDecision?.textContent?.toLowerCase()).toContain("skip");
-			expect(approveDecision?.textContent?.toLowerCase()).toContain("approve");
+			const skipCard = cardFor(container, "M1");
+			const skipApprove = skipCard.querySelector(".hashi-se-decision .hashi-se-approve");
+			const skipSkip = skipCard.querySelector(".hashi-se-decision .hashi-se-skip");
+			expect(skipApprove?.classList.contains("is-active")).toBe(false);
+			expect(skipSkip?.classList.contains("is-active")).toBe(true);
+
+			const approveCard = cardFor(container, "M3");
+			const approveApprove = approveCard.querySelector(".hashi-se-decision .hashi-se-approve");
+			const approveSkip = approveCard.querySelector(".hashi-se-decision .hashi-se-skip");
+			expect(approveApprove?.classList.contains("is-active")).toBe(true);
+			expect(approveSkip?.classList.contains("is-active")).toBe(false);
 		});
 
 		it("renders member chips using the referenced suggestion's TITLE, with the raw id on hover, and falls back to the raw id when no suggestion matches", () => {
@@ -229,7 +241,7 @@ describe("ProposedMocsTab", () => {
 			tab.render(container, seededModel(), makeCtx());
 
 			const chips = Array.from(
-				cardFor(container, "M1").querySelectorAll<HTMLElement>(".hashi-proposed-moc-member"),
+				cardFor(container, "M1").querySelectorAll<HTMLElement>(".hashi-se-chip.hashi-se-member"),
 			);
 			expect(chips.map((c) => c.textContent)).toEqual(["Note A", "S99"]);
 			expect(chips[0]?.getAttribute("title")).toBe("S1");
@@ -242,19 +254,41 @@ describe("ProposedMocsTab", () => {
 			tab.render(container, seededModel(), makeCtx());
 
 			const card = cardFor(container, "M1");
-			const tags = Array.from(card.querySelectorAll(".hashi-proposed-moc-tag")).map((t) => t.textContent);
+			const tags = Array.from(
+				card.querySelectorAll(".hashi-se-tag:not(.hashi-se-add)"),
+			).map((t) => t.textContent);
 			expect(tags).toEqual(["#area"]);
-			expect(card.querySelector(".hashi-proposed-moc-add-tag")).not.toBeNull();
+			expect(card.querySelector(".hashi-se-tag.hashi-se-add")).not.toBeNull();
 		});
 
-		it("shows a Merge affordance only for MOCs with a same-name sibling", () => {
+		it("renders the reason text when present", () => {
 			const tab = new ProposedMocsTab();
 			const container = document.createElement("div");
 			tab.render(container, seededModel(), makeCtx());
 
-			expect(cardFor(container, "M1").querySelector(".hashi-proposed-moc-merge")).not.toBeNull();
-			expect(cardFor(container, "M2").querySelector(".hashi-proposed-moc-merge")).not.toBeNull();
-			expect(cardFor(container, "M3").querySelector(".hashi-proposed-moc-merge")).toBeNull();
+			const reasonEl = cardFor(container, "M1").querySelector(".hashi-se-reason");
+			expect(reasonEl?.textContent).toBe("2 notes share topic Projects and have no dedicated MOC.");
+		});
+
+		it("omits the reason element entirely when reason is absent", () => {
+			const tab = new ProposedMocsTab();
+			const container = document.createElement("div");
+			tab.render(container, seededModel(), makeCtx());
+
+			expect(cardFor(container, "M3").querySelector(".hashi-se-reason")).toBeNull();
+		});
+
+		it("shows a Merge affordance and merge hint only for MOCs with a same-name sibling", () => {
+			const tab = new ProposedMocsTab();
+			const container = document.createElement("div");
+			tab.render(container, seededModel(), makeCtx());
+
+			expect(cardFor(container, "M1").querySelector(".hashi-se-link-btn")).not.toBeNull();
+			expect(cardFor(container, "M1").querySelector(".hashi-se-merge-hint")).not.toBeNull();
+			expect(cardFor(container, "M2").querySelector(".hashi-se-link-btn")).not.toBeNull();
+			expect(cardFor(container, "M2").querySelector(".hashi-se-merge-hint")).not.toBeNull();
+			expect(cardFor(container, "M3").querySelector(".hashi-se-link-btn")).toBeNull();
+			expect(cardFor(container, "M3").querySelector(".hashi-se-merge-hint")).toBeNull();
 		});
 	});
 
@@ -266,7 +300,9 @@ describe("ProposedMocsTab", () => {
 			const ctx = makeCtx();
 			tab.render(container, model, ctx);
 
-			const input = cardFor(container, "M1").querySelector<HTMLInputElement>(".hashi-proposed-moc-name");
+			const input = cardFor(container, "M1").querySelector<HTMLInputElement>(
+				".hashi-se-inp.hashi-se-name",
+			);
 			expect(input).not.toBeNull();
 			if (input === null) throw new Error("unreachable");
 			input.value = "New Name";
@@ -287,7 +323,7 @@ describe("ProposedMocsTab", () => {
 			const ctx = makeCtx();
 			tab.render(container, model, ctx);
 
-			const parentControl = cardFor(container, "M1").querySelector<HTMLElement>(".hashi-proposed-moc-parent");
+			const parentControl = cardFor(container, "M1").querySelector<HTMLElement>(".hashi-se-mini-pick");
 			expect(parentControl).not.toBeNull();
 			parentControl?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
@@ -301,23 +337,41 @@ describe("ProposedMocsTab", () => {
 		});
 	});
 
-	describe("decision toggle", () => {
-		it("dispatches setProposedMocDecision via ctx.apply, flipping skip to approve", () => {
+	describe("decision segmented control", () => {
+		it("clicking Approve dispatches setProposedMocDecision(approve)", () => {
 			const tab = new ProposedMocsTab();
 			const container = document.createElement("div");
 			const model = seededModel();
 			const ctx = makeCtx();
 			tab.render(container, model, ctx);
 
-			const decisionControl = cardFor(container, "M1").querySelector<HTMLElement>(
-				".hashi-proposed-moc-decision",
+			const approveButton = cardFor(container, "M1").querySelector<HTMLElement>(
+				".hashi-se-decision .hashi-se-approve",
 			);
-			decisionControl?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			approveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
 			expect(ctx.apply).toHaveBeenCalledTimes(1);
 			const transform = firstAppliedTransform(ctx.apply);
 			const result = transform(model);
 			expect(result.doc.proposed_mocs.find((m) => m.id === "M1")?.decision).toBe("approve");
+		});
+
+		it("clicking Skip on an approved MOC dispatches setProposedMocDecision(skip)", () => {
+			const tab = new ProposedMocsTab();
+			const container = document.createElement("div");
+			const model = seededModel();
+			const ctx = makeCtx();
+			tab.render(container, model, ctx);
+
+			const skipButton = cardFor(container, "M3").querySelector<HTMLElement>(
+				".hashi-se-decision .hashi-se-skip",
+			);
+			skipButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+			expect(ctx.apply).toHaveBeenCalledTimes(1);
+			const transform = firstAppliedTransform(ctx.apply);
+			const result = transform(model);
+			expect(result.doc.proposed_mocs.find((m) => m.id === "M3")?.decision).toBe("skip");
 		});
 	});
 
@@ -329,7 +383,7 @@ describe("ProposedMocsTab", () => {
 			const ctx = makeCtx();
 			tab.render(container, model, ctx);
 
-			const addTagBtn = cardFor(container, "M2").querySelector<HTMLElement>(".hashi-proposed-moc-add-tag");
+			const addTagBtn = cardFor(container, "M2").querySelector<HTMLElement>(".hashi-se-tag.hashi-se-add");
 			addTagBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
 			expect(tagPickerInstances).toHaveLength(1);
@@ -351,7 +405,7 @@ describe("ProposedMocsTab", () => {
 			const ctx = makeCtx();
 			tab.render(container, model, ctx);
 
-			const addTagBtn = cardFor(container, "M1").querySelector<HTMLElement>(".hashi-proposed-moc-add-tag");
+			const addTagBtn = cardFor(container, "M1").querySelector<HTMLElement>(".hashi-se-tag.hashi-se-add");
 			addTagBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			tagPickerInstances[0]?.onChoose("#area");
 
@@ -375,7 +429,7 @@ describe("ProposedMocsTab", () => {
 			const ctx = makeCtx();
 			tab.render(container, model, ctx);
 
-			const addTagBtn = cardFor(container, "M1").querySelector<HTMLElement>(".hashi-proposed-moc-add-tag");
+			const addTagBtn = cardFor(container, "M1").querySelector<HTMLElement>(".hashi-se-tag.hashi-se-add");
 			addTagBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			tagPickerInstances[0]?.onChoose("#new-tag");
 
@@ -402,7 +456,7 @@ describe("ProposedMocsTab", () => {
 			const ctx = makeCtx();
 			tab.render(container, model, ctx);
 
-			const mergeBtn = cardFor(container, "M1").querySelector<HTMLElement>(".hashi-proposed-moc-merge");
+			const mergeBtn = cardFor(container, "M1").querySelector<HTMLElement>(".hashi-se-link-btn");
 			mergeBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
 			expect(ctx.apply).toHaveBeenCalledTimes(1);
@@ -415,12 +469,13 @@ describe("ProposedMocsTab", () => {
 			expect(result.doc.proposed_mocs.find((m) => m.id === "M2")).toBeUndefined();
 		});
 
-		it("does not render a Merge control at all when no sibling shares the name (M3)", () => {
+		it("does not render a Merge control or hint at all when no sibling shares the name (M3)", () => {
 			const tab = new ProposedMocsTab();
 			const container = document.createElement("div");
 			tab.render(container, seededModel(), makeCtx());
 
-			expect(cardFor(container, "M3").querySelector(".hashi-proposed-moc-merge")).toBeNull();
+			expect(cardFor(container, "M3").querySelector(".hashi-se-link-btn")).toBeNull();
+			expect(cardFor(container, "M3").querySelector(".hashi-se-merge-hint")).toBeNull();
 		});
 	});
 });
