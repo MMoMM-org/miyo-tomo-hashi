@@ -411,201 +411,695 @@
 	margin-top: 12px;
 }
 
-/* ---------------------------------------------------------------------------
- * Suggestions Editor (spec-004) — leaf ItemView, 4 tabs, cards + pickers.
- * Functional layout; visual polish is intentionally light for v1 (manual QA).
- * The active-tab cue rides on `border-bottom` (not text-decoration) per the
- * Obsidian CSS lint rule — see the underline note earlier in this file.
- * ------------------------------------------------------------------------- */
+/* ===========================================================================
+ * Suggestions Editor (spec-004) — leaf ItemView, 4 tabs, cards, pickers.
+ * Structure + design ported from the approved mockup
+ * (docs/XDD/specs/004-suggestions-editor/mockups/suggestions-editor.html),
+ * re-scoped onto Obsidian theme variables. All classes are `hashi-se-*`
+ * prefixed to avoid colliding with Obsidian core / other plugins.
+ * Underline cues ride on `border-bottom` (never text-decoration) per the
+ * obsidian stylelint rule (see the note earlier in this file).
+ * ========================================================================= */
 
-.hashi-suggestions-editor-view {
-	padding: 0;
-	overflow-y: auto;
+.hashi-se-view {
+	/* mockup token -> Obsidian theme variable */
+	--se-bg: var(--background-primary);
+	--se-bg-alt: var(--background-secondary);
+	--se-bg-elev: var(--background-primary);
+	--se-bg-input: var(--background-modifier-form-field);
+	--se-bg-hover: var(--background-modifier-hover);
+	--se-border: var(--background-modifier-border);
+	--se-border-strong: var(--background-modifier-border-hover);
+	--se-text: var(--text-normal);
+	--se-text-muted: var(--text-muted);
+	--se-text-faint: var(--text-faint);
+	--se-accent: var(--interactive-accent);
+	--se-on-accent: var(--text-on-accent);
+	--se-accent-soft: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+	--se-green: var(--color-green);
+	--se-amber: var(--color-orange);
+	--se-red: var(--color-red);
+	--se-mono: var(--font-monospace);
+	--se-r: var(--radius-m);
+	--se-r-sm: var(--radius-s);
+
+	display: flex;
+	flex-direction: column;
 	height: 100%;
+	overflow: hidden;
+	color: var(--se-text);
 }
 
-.hashi-suggestions-editor-tabbar {
+/* ---- leaf header: title + meta + dirty badge + Revert/Save --------------- */
+.hashi-se-leaf-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	justify-content: space-between;
+	padding: 10px 14px;
+	border-bottom: 1px solid var(--se-border);
+	flex: none;
+}
+.hashi-se-leaf-title {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	min-width: 0;
+}
+.hashi-se-leaf-title h3 {
+	font-size: 13.5px;
+	font-weight: 650;
+	margin: 0;
+	white-space: nowrap;
+}
+.hashi-se-leaf-meta {
+	font-family: var(--se-mono);
+	font-size: 11px;
+	color: var(--se-text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.hashi-se-leaf-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: none;
+}
+.hashi-se-dirty {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11.5px;
+	color: var(--se-amber);
+}
+.hashi-se-dirty i {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--se-amber);
+	display: block;
+}
+.hashi-se-btn {
+	font-family: inherit;
+	font-size: 12.5px;
+	font-weight: 600;
+	border-radius: var(--se-r-sm);
+	padding: 6px 13px;
+	cursor: pointer;
+	border: 1px solid transparent;
+}
+.hashi-se-btn.hashi-se-primary {
+	background: var(--se-accent);
+	color: var(--se-on-accent);
+}
+.hashi-se-btn.hashi-se-primary:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.hashi-se-btn.hashi-se-subtle {
+	background: transparent;
+	color: var(--se-text-muted);
+	border-color: var(--se-border);
+}
+.hashi-se-btn.hashi-se-subtle:hover {
+	color: var(--se-text);
+	border-color: var(--se-border-strong);
+}
+
+/* ---- tab strip ----------------------------------------------------------- */
+.hashi-se-subtabs {
 	display: flex;
 	gap: 4px;
-	border-bottom: 1px solid var(--background-modifier-border);
-	padding: 0 8px;
-	position: sticky;
-	top: 0;
-	background: var(--background-primary);
-	z-index: 1;
+	padding: 8px 12px 0;
+	border-bottom: 1px solid var(--se-border);
+	flex: none;
 }
-
-.hashi-suggestions-editor-tab {
+.hashi-se-subtab {
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--se-text-muted);
 	background: transparent;
 	border: none;
 	border-bottom: 2px solid transparent;
 	border-radius: 0;
 	box-shadow: none;
-	padding: 8px 10px;
-	color: var(--text-muted);
+	padding: 7px 12px 10px;
 	cursor: pointer;
-	font-size: var(--font-ui-small);
+}
+.hashi-se-subtab:hover {
+	color: var(--se-text);
+}
+.hashi-se-subtab.is-active {
+	color: var(--se-text);
+	border-bottom-color: var(--se-accent);
 }
 
-.hashi-suggestions-editor-tab:hover {
-	color: var(--text-normal);
+/* ---- scrolling body ------------------------------------------------------ */
+.hashi-se-body {
+	padding: 14px 16px 22px;
+	overflow-y: auto;
+	flex: 1;
 }
-
-.hashi-suggestions-editor-tab.is-active {
-	color: var(--text-normal);
-	border-bottom-color: var(--interactive-accent);
-}
-
-.hashi-suggestions-editor-content {
-	padding: 12px;
-}
-
-.hashi-suggestions-editor-empty,
-.hashi-suggestions-editor-error {
-	padding: 24px 12px;
+.hashi-se-empty {
+	padding: 40px 16px;
 	text-align: center;
-	color: var(--text-muted);
+	color: var(--se-text-faint);
+	font-size: 13px;
+}
+.hashi-se-error {
+	padding: 24px 16px;
+	color: var(--se-red);
+}
+.hashi-se-nodoc {
+	padding: 40px 16px;
+	text-align: center;
+	color: var(--se-text-faint);
 }
 
-.hashi-suggestions-editor-error {
-	color: var(--text-error);
-}
-
-/* Shared card shell across the four tabs. */
-.hashi-suggestion-card,
-.hashi-proposed-moc-card,
-.hashi-daily-group,
-.hashi-suggestions-editor-tag-handler-card {
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	padding: 12px;
+/* ---- generic card -------------------------------------------------------- */
+.hashi-se-card {
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r);
+	background: var(--se-bg-elev);
 	margin-bottom: 10px;
+	overflow: hidden;
+}
+.hashi-se-card-top {
+	padding: 12px 13px 14px;
+}
+.hashi-se-row1 {
 	display: flex;
-	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+}
+.hashi-se-row2 {
+	display: flex;
+	align-items: center;
 	gap: 8px;
-}
-
-.hashi-suggestion-card-suppressed {
-	opacity: 0.75;
-}
-
-/* Suggestions tab. */
-.hashi-suggestion-title {
-	width: 100%;
-	font-weight: var(--font-semibold);
-}
-
-.hashi-suggestion-worthiness {
-	display: inline-block;
-	padding: 1px 6px;
-	border-radius: var(--radius-s);
-	background: var(--background-modifier-border);
-	color: var(--text-muted);
-	font-size: var(--font-smaller);
-}
-
-.hashi-suggestion-skip-hint {
-	color: var(--text-muted);
-	font-size: var(--font-smaller);
-}
-
-.hashi-suggestion-tags,
-.hashi-suggestion-mocs,
-.hashi-proposed-moc-tags,
-.hashi-proposed-moc-members {
-	display: flex;
+	margin-top: 11px;
 	flex-wrap: wrap;
-	gap: 6px;
-	align-items: center;
 }
-
-.hashi-suggestion-tag,
-.hashi-proposed-moc-tag,
-.hashi-proposed-moc-member {
-	padding: 1px 6px;
-	border-radius: var(--radius-s);
-	background: var(--background-modifier-border);
-	font-size: var(--font-smaller);
+.hashi-se-row2.hashi-se-meta {
+	align-items: flex-end;
+	gap: 14px;
 }
-
-.hashi-suggestion-moc {
-	display: flex;
-	gap: 6px;
-	align-items: center;
-}
-
-.hashi-suggestion-moc-path,
-.hashi-daily-log-entry-reason,
-.hashi-daily-log-link-reason,
-.hashi-daily-tracker-reason {
-	color: var(--text-muted);
-	font-size: var(--font-smaller);
-}
-
-/* Daily tab. */
-.hashi-daily-header {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	font-weight: var(--font-semibold);
-}
-
-.hashi-daily-date-missing {
-	color: var(--text-warning);
-	font-size: var(--font-smaller);
-}
-
-.hashi-daily-tracker,
-.hashi-daily-log-entry,
-.hashi-daily-log-link {
+.hashi-se-field {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
-	padding: 6px 0;
-	border-top: 1px solid var(--background-modifier-border);
+	gap: 3px;
+	min-width: 0;
 }
-
-.hashi-daily-log-entry-content {
+.hashi-se-field label {
+	font-size: 10px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--se-text-faint);
+	font-weight: 600;
+}
+.hashi-se-inp {
+	font-family: inherit;
+	font-size: 13px;
+	color: var(--se-text);
+	background: var(--se-bg-input);
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r-sm);
+	padding: 5px 9px;
+	min-width: 0;
 	width: 100%;
-	min-height: 3em;
-	resize: vertical;
 }
-
-/* Tag-Handler tab. */
-.hashi-suggestions-editor-tag-handler-field {
-	display: flex;
+.hashi-se-inp.hashi-se-name {
+	font-weight: 600;
+}
+.hashi-se-mini-pick {
+	font-family: var(--se-mono);
+	font-size: 12px;
+	color: var(--se-text);
+	background: var(--se-bg-input);
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r-sm);
+	padding: 5px 9px;
+	cursor: pointer;
+	text-align: left;
+}
+.hashi-se-mini-pick:hover {
+	border-color: var(--se-accent);
+	color: var(--se-accent);
+}
+.hashi-se-cbx {
+	display: inline-flex;
+	align-items: center;
 	gap: 6px;
-	font-size: var(--font-smaller);
+	font-size: 12px;
+	color: var(--se-text-muted);
+	cursor: pointer;
+}
+.hashi-se-cbx input {
+	accent-color: var(--se-accent);
 }
 
-.hashi-suggestions-editor-tag-handler-field-label {
-	color: var(--text-muted);
-	min-width: 6em;
+/* ---- decision segmented control ------------------------------------------ */
+.hashi-se-decision {
+	display: inline-flex;
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r-sm);
+	overflow: hidden;
+	flex: none;
+}
+.hashi-se-decision button {
+	font-family: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	padding: 5px 12px;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	background: var(--se-bg-input);
+	color: var(--se-text-muted);
+	cursor: pointer;
+}
+.hashi-se-decision button.hashi-se-approve.is-active {
+	background: var(--se-green);
+	color: #fff;
+}
+.hashi-se-decision button.hashi-se-skip.is-active {
+	background: var(--se-bg-hover);
+	color: var(--se-text);
 }
 
-.hashi-suggestions-editor-tag-handler-preview {
-	background: var(--background-primary);
-	border-radius: var(--radius-s);
-	padding: 6px 8px;
-	font-size: var(--font-smaller);
-	white-space: pre-wrap;
-	overflow-x: auto;
+/* ---- section label ------------------------------------------------------- */
+.hashi-se-sec-label {
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--se-text-muted);
+	font-weight: 600;
+	padding: 10px 13px 4px;
+}
+.hashi-se-sec-label .hashi-se-muted {
+	text-transform: none;
+	letter-spacing: 0;
+	font-style: italic;
+	color: var(--se-text-faint);
 }
 
-.hashi-suggestions-editor-tag-handler-controls {
+/* ---- candidate MOC row --------------------------------------------------- */
+.hashi-se-cand {
 	display: flex;
-	gap: 12px;
+	align-items: center;
+	gap: 11px;
+	padding: 9px 13px;
+	border-top: 1px solid var(--se-border);
 }
-
-/* SpotPicker suggestion rows. */
-.hashi-spot-picker-item {
+.hashi-se-cand.hashi-se-off {
+	opacity: 0.55;
+}
+.hashi-se-check {
+	width: 18px;
+	height: 18px;
+	border-radius: 5px;
+	border: 1.5px solid var(--se-border-strong);
+	flex: none;
+	display: grid;
+	place-items: center;
+	cursor: pointer;
+	background: var(--se-bg-input);
+}
+.hashi-se-cand.hashi-se-on .hashi-se-check {
+	background: var(--se-accent);
+	border-color: var(--se-accent);
+	color: #fff;
+}
+.hashi-se-cand-main {
+	flex: 1;
+	min-width: 0;
+}
+.hashi-se-cand-path {
+	font-size: 13px;
+	color: var(--se-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+	border-bottom: 1px solid transparent;
+}
+.hashi-se-cand-path:hover {
+	color: var(--se-accent);
+	border-bottom-color: var(--se-accent);
+}
+.hashi-se-cand-path .hashi-se-dir {
+	color: var(--se-text-faint);
+}
+.hashi-se-src-badge {
+	font-size: 9.5px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	font-weight: 700;
+	color: var(--se-accent);
+	background: var(--se-accent-soft);
+	border-radius: 3px;
+	padding: 1px 5px;
+	margin-left: 7px;
+}
+.hashi-se-anchor-row {
 	display: flex;
+	align-items: center;
+	gap: 7px;
+	margin-top: 5px;
+	flex-wrap: wrap;
+}
+.hashi-se-anchor-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11.5px;
+	color: var(--se-text-muted);
+	background: var(--se-bg-alt);
+	border: 1px solid var(--se-border);
+	border-radius: 20px;
+	padding: 2px 9px;
+	cursor: pointer;
+}
+.hashi-se-anchor-chip:hover {
+	border-color: var(--se-accent);
+	color: var(--se-text);
+}
+.hashi-se-anchor-chip .hashi-se-k {
+	color: var(--se-accent);
+	font-weight: 600;
+}
+.hashi-se-anchor-chip.hashi-se-empty {
+	color: var(--se-amber);
+	border-color: color-mix(in srgb, var(--se-amber) 40%, var(--se-border));
+	border-style: dashed;
+}
+.hashi-se-add-moc {
+	display: flex;
+	align-items: center;
 	gap: 8px;
-	align-items: baseline;
+	padding: 8px 13px;
+	border-top: 1px dashed var(--se-border);
+}
+.hashi-se-add-moc button {
+	font-family: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--se-accent);
+	background: transparent;
+	border: 1px dashed color-mix(in srgb, var(--se-accent) 45%, var(--se-border));
+	border-radius: var(--se-r-sm);
+	padding: 5px 11px;
+	cursor: pointer;
+}
+.hashi-se-add-hint {
+	font-size: 11px;
+	color: var(--se-text-faint);
 }
 
-.hashi-spot-picker-placement {
-	color: var(--text-muted);
-	font-size: var(--font-smaller);
+/* ---- tags + chips -------------------------------------------------------- */
+.hashi-se-tags {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+	margin-top: 10px;
+}
+.hashi-se-tags-lbl {
+	font-size: 10.5px;
+	color: var(--se-text-faint);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+.hashi-se-tag {
+	font-size: 11px;
+	color: var(--se-text-muted);
+	background: var(--se-bg-alt);
+	border: 1px solid var(--se-border);
+	border-radius: 20px;
+	padding: 1px 9px;
+}
+.hashi-se-tag.hashi-se-add {
+	cursor: pointer;
+	color: var(--se-accent);
+	border-style: dashed;
+	border-color: color-mix(in srgb, var(--se-accent) 45%, var(--se-border));
+}
+.hashi-se-tag.hashi-se-add:hover {
+	background: var(--se-accent-soft);
+}
+.hashi-se-chip {
+	font-family: var(--se-mono);
+	font-size: 11px;
+	background: var(--se-accent-soft);
+	color: var(--se-accent);
+	border-radius: 5px;
+	padding: 1px 7px;
+	max-width: 240px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.hashi-se-chip.hashi-se-member {
+	cursor: help;
+}
+
+/* ---- suppressed card ----------------------------------------------------- */
+.hashi-se-card.hashi-se-suppressed {
+	border-left: 3px solid var(--se-text-faint);
+}
+.hashi-se-worthiness {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	flex: none;
+}
+.hashi-se-worthiness .hashi-se-wv {
+	font-size: 15px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+.hashi-se-worthiness .hashi-se-wl {
+	font-size: 9px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--se-text-faint);
+}
+.hashi-se-worthiness.hashi-se-low .hashi-se-wv {
+	color: var(--se-red);
+}
+.hashi-se-worthiness.hashi-se-mid .hashi-se-wv {
+	color: var(--se-amber);
+}
+.hashi-se-suppressed-note {
+	font-size: 12px;
+	color: var(--se-text-muted);
+	margin: 9px 0 10px;
+}
+.hashi-se-force-atomic {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12.5px;
+	color: var(--se-text);
+	cursor: pointer;
+}
+.hashi-se-muted {
+	color: var(--se-text-faint);
+	font-weight: 400;
+}
+.hashi-se-xref {
+	font-size: 11.5px;
+	color: var(--se-accent);
+	padding: 8px 13px 11px;
+}
+
+/* ---- proposed MOC card --------------------------------------------------- */
+.hashi-se-pmoc {
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r);
+	background: var(--se-bg-elev);
+	margin-bottom: 10px;
+	padding: 12px 13px;
+}
+.hashi-se-members {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.hashi-se-members .hashi-se-lbl {
+	font-size: 10.5px;
+	color: var(--se-text-faint);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+.hashi-se-reason {
+	font-size: 11.5px;
+	color: var(--se-text-faint);
+	font-style: italic;
+	margin-top: 8px;
+}
+.hashi-se-merge-hint {
+	font-size: 11px;
+	color: var(--se-amber);
+	margin-top: 8px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.hashi-se-link-btn {
+	font-family: inherit;
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--se-text-muted);
+	background: transparent;
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r-sm);
+	padding: 4px 10px;
+	cursor: pointer;
+}
+.hashi-se-link-btn:hover {
+	color: var(--se-accent);
+	border-color: var(--se-accent);
+}
+.hashi-se-spacer {
+	flex: 1;
+}
+
+/* ---- daily card ---------------------------------------------------------- */
+.hashi-se-card.hashi-se-daily {
+	padding: 12px 13px 6px;
+}
+.hashi-se-daily-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin-bottom: 4px;
+}
+.hashi-se-daily-date {
+	font-size: 14px;
+	font-weight: 650;
+	color: var(--se-accent);
+	cursor: pointer;
+	border-bottom: 1px solid transparent;
+}
+.hashi-se-daily-date:hover {
+	border-bottom-color: var(--se-accent);
+}
+.hashi-se-warn-pill {
+	font-size: 11px;
+	color: var(--se-amber);
+	background: color-mix(in srgb, var(--se-amber) 12%, transparent);
+	border: 1px solid color-mix(in srgb, var(--se-amber) 40%, var(--se-border));
+	border-radius: 20px;
+	padding: 2px 10px;
+	cursor: pointer;
+}
+.hashi-se-log-entry {
+	border-top: 1px solid var(--se-border);
+	padding: 11px 0 13px;
+}
+.hashi-se-le-text {
+	width: 100%;
+	font-family: inherit;
+	font-size: 13px;
+	color: var(--se-text);
+	background: var(--se-bg-input);
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r-sm);
+	padding: 7px 9px;
+	resize: vertical;
+	line-height: 1.45;
+}
+.hashi-se-le-meta {
+	font-size: 11.5px;
+	color: var(--se-text-faint);
+	margin: 6px 0 9px;
+}
+.hashi-se-le-controls {
+	display: flex;
+	gap: 14px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+.hashi-se-ctl {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11.5px;
+	color: var(--se-text-muted);
+}
+.hashi-se-le-pos,
+.hashi-se-le-time {
+	font-family: inherit;
+	font-size: 12px;
+	color: var(--se-text);
+	background: var(--se-bg-input);
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r-sm);
+	padding: 4px 7px;
+}
+.hashi-se-le-time:disabled {
+	opacity: 0.4;
+}
+.hashi-se-wlink {
+	color: var(--se-accent);
+	cursor: pointer;
+	border-bottom: 1px solid transparent;
+	white-space: nowrap;
+}
+.hashi-se-wlink:hover {
+	border-bottom-color: var(--se-accent);
+}
+
+/* ---- tag-handler card ---------------------------------------------------- */
+.hashi-se-tagh .hashi-se-th-title {
+	font-size: 13.5px;
+	font-weight: 600;
+	margin-bottom: 8px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.hashi-se-th-marker {
+	font-family: var(--se-mono);
+	font-size: 11.5px;
+	color: var(--se-text-muted);
+	background: var(--se-bg-alt);
+	border-radius: 4px;
+	padding: 1px 7px;
+}
+.hashi-se-th-ctx {
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r-sm);
+	padding: 9px 11px;
+	margin-bottom: 11px;
+}
+.hashi-se-ctx-note {
+	display: block;
+	font-size: 11px;
+	color: var(--se-text-faint);
+	margin-bottom: 7px;
+}
+.hashi-se-th-row {
+	font-size: 12px;
+	color: var(--se-text-muted);
+}
+.hashi-se-th-row code {
+	font-family: var(--se-mono);
+	font-size: 11.5px;
+	background: var(--se-bg-alt);
+	border-radius: 3px;
+	padding: 0 4px;
+	color: var(--se-text);
+}
+.hashi-se-th-preview {
+	font-family: var(--se-mono);
+	font-size: 11px;
+	color: var(--se-text-faint);
+	margin-top: 6px;
+	overflow-x: auto;
+	white-space: pre-wrap;
 }
