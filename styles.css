@@ -1058,6 +1058,51 @@
 	border-bottom-color: var(--se-accent);
 }
 
+/* trackers + log links share the log-entry row rhythm (separator + flex row).
+   The mockup only carried log-entry sample data, so these rows shipped with
+   class names but no CSS until a real run surfaced them (tracker = empty in
+   most runs; log_link first appeared in the 2026-04-22 link-to-atomic case). */
+.hashi-se-tracker,
+.hashi-se-log-link {
+	border-top: 1px solid var(--se-border);
+	padding: 10px 0;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.hashi-se-tracker-field {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--se-text);
+}
+.hashi-se-tracker-value {
+	font-family: var(--se-mono);
+	font-size: 12px;
+	color: var(--se-text);
+	background: var(--se-bg-alt);
+	border-radius: 4px;
+	padding: 1px 7px;
+}
+.hashi-se-tracker-reason,
+.hashi-se-log-link-reason {
+	font-size: 11.5px;
+	color: var(--se-text-faint);
+	flex: 1;
+	min-width: 120px;
+}
+.hashi-se-log-link-target {
+	font-size: 13px;
+	font-weight: 600;
+	display: inline-flex;
+	align-items: baseline;
+	gap: 2px;
+}
+.hashi-se-log-link-arrow {
+	color: var(--se-text-faint);
+	font-weight: 400;
+}
+
 /* ---- tag-handler card ---------------------------------------------------- */
 .hashi-se-tagh .hashi-se-th-title {
 	font-size: 13.5px;

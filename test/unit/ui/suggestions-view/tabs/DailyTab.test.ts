@@ -600,5 +600,28 @@ describe("DailyTab", () => {
 			const next = runCaptured(ctx.apply, model);
 			expect(next.doc.daily_updates[0]?.log_links[0]?.accepted).toBe(true);
 		});
+
+		it("renders the target_stem as a clickable link that opens the atomic note", () => {
+			const model = getMockModel([
+				getMockDailyUpdate({
+					log_entries: [],
+					log_links: [getMockLogLink({ target_stem: "atomic-target" })],
+				}),
+			]);
+			const app = new App();
+			const openLinkText = vi.spyOn(app.workspace, "openLinkText");
+			const ctx = makeCtx(app);
+			const container = document.createElement("div");
+
+			new DailyTab().render(container, model, ctx);
+
+			const link = container.querySelector<HTMLElement>(
+				".hashi-se-log-link-target .hashi-se-wlink",
+			);
+			expect(link?.textContent).toBe("atomic-target");
+			link!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+			expect(openLinkText).toHaveBeenCalledWith("atomic-target", "", false);
+		});
 	});
 });

@@ -39,6 +39,12 @@
  *     `.hashi-se-wlink` (via `renderNoteLink`) so the user can open the
  *     origin note — the approved mockup had this and the first rebuild
  *     dropped it to plain text (owner QA finding).
+ *  5. Trackers and log LINKS are now styled + the log-link target is a
+ *     clickable link. The mockup only ever had log-entry sample data, so
+ *     tracker/log-link rows shipped with class names but no CSS — the first
+ *     run to contain a `log_link` (a link-to-atomic-note, e.g. the 2026-04-22
+ *     "→ Tomo — Cost…") rendered as unstyled mashed-together spans. CSS added
+ *     in styles.css; target rendered via `renderNoteLink`.
  *
  * Daily-note existence check / open (v1 simplification): the wire only
  * gives us a bare date stem (e.g. "2026-07-06"), not a resolved vault path —
@@ -318,7 +324,9 @@ export class DailyTab implements EditorTab {
 		ctx: TabContext,
 	): void {
 		const row = card.createDiv({ cls: "hashi-se-log-link" });
-		row.createSpan({ cls: "hashi-se-log-link-target", text: link.target_stem });
+		const target = row.createSpan({ cls: "hashi-se-log-link-target" });
+		target.createSpan({ cls: "hashi-se-log-link-arrow", text: "→ " });
+		renderNoteLink(target, ctx.app, link.target_stem);
 		row.createSpan({ cls: "hashi-se-log-link-reason", text: link.reason });
 
 		const label = row.createEl("label", { cls: "hashi-se-cbx" });
