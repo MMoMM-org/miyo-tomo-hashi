@@ -555,4 +555,134 @@ describe("SuggestionsEditorView", () => {
 			expect(adapter.load).toHaveBeenLastCalledWith(DOC_PATH);
 		});
 	});
+
+	describe("Save/Revert race safety (code-quality-review fix)", () => {
+		// Both tests below hold `adapter.save`'s promise open manually so a
+		// second, independent view action can land WHILE the save is still
+		// in flight — reproducing the two races the reference-identity guard
+		// in handleSave() protects against (see its doc comment).
+
+		it("an edit that lands while a save is in flight is NOT silently marked clean", async () => {
+			let resolveSave: () => void = () => {};
+			const pendingSave = new Promise<void>((resolve) => {
+				resolveSave = resolve;
+			});
+			const adapter: SpyAdapter = {
+				load: vi.fn<(docPath: string) => Promise<EditModel>>(async () => ({
+					doc: DEFAULT_SEED,
+					dirty: false,
+				})),
+				save: vi.fn<(model: EditModel) => Promise<void>>(() => pendingSave),
+			};
+			const leaf = new WorkspaceLeaf();
+			const view = new SuggestionsEditorView(leaf, {
+				adapter,
+				docPath: DOC_PATH,
+				tabs: [DIRTYING_TAB],
+			});
+			view.app = new App();
+			await view.onOpen();
+
+			const clickMarkDirty = (): void => {
+				const btn = Array.from(
+					body(view)?.querySelectorAll("button") ?? [],
+				).find((b) => b.textContent === "mark dirty");
+				btn?.click();
+			};
+
+			// Model A: dirty via a first edit, enabling Save.
+			clickMarkDirty();
+			expect(findActionButton(view, "Save").disabled).toBe(false);
+
+			// Kick off Save — captures model A and awaits the still-pending
+			// adapter.save(A).
+			findActionButton(view, "Save").click();
+			await Promise.resolve();
+			expect(adapter.save).toHaveBeenCalledTimes(1);
+
+			// Model B lands WHILE the save above is still in flight — a second,
+			// independent edit the in-flight save knows nothing about.
+			clickMarkDirty();
+
+			// Now let the stale save resolve.
+			resolveSave();
+			await flushAsyncHandler();
+
+			// Model B's edits were never written — they must stay dirty, not
+			// get silently cleared just because SOME save resolved.
+			expect(dirtyBadge(view)).not.toBeNull();
+			expect(dirtyBadge(view)?.textContent).toContain("Edited");
+			expect(findActionButton(view, "Save").disabled).toBe(false);
+		});
+
+		it("a Revert (setState) that lands while a save is in flight does not throw, and the stale save's dirty-clear is skipped", async () => {
+			let resolveSave: () => void = () => {};
+			const pendingSave = new Promise<void>((resolve) => {
+				resolveSave = resolve;
+			});
+			// The retargeted (Revert) load is ALSO held open manually — this is
+			// what pins `this.store` at `null` for the window we need: the
+			// stale save must resolve WHILE loadAndRender has already nulled
+			// `this.store` but hasn't yet replaced it with the new doc's store.
+			// Without gating this second load too, both promises tend to settle
+			// in the same microtask batch and the crash window never opens.
+			let resolveRetargetLoad: (model: EditModel) => void = () => {};
+			const pendingRetargetLoad = new Promise<EditModel>((resolve) => {
+				resolveRetargetLoad = resolve;
+			});
+			let loadCount = 0;
+			const adapter: SpyAdapter = {
+				load: vi.fn<(docPath: string) => Promise<EditModel>>(() => {
+					loadCount += 1;
+					// First load (onOpen) comes back dirty immediately so Save is
+					// clickable; the retargeted (Revert) load stays pending until
+					// the test resolves it explicitly.
+					if (loadCount === 1) {
+						return Promise.resolve({ doc: DEFAULT_SEED, dirty: true });
+					}
+					return pendingRetargetLoad;
+				}),
+				save: vi.fn<(model: EditModel) => Promise<void>>(() => pendingSave),
+			};
+			const view = makeView(adapter);
+			await view.onOpen();
+			expect(dirtyBadge(view)).not.toBeNull();
+
+			findActionButton(view, "Save").click();
+			await Promise.resolve();
+			expect(adapter.save).toHaveBeenCalledTimes(1);
+
+			// Retarget the still-open leaf to a different doc WHILE the save
+			// above is still pending — this is what Revert's click handler
+			// does internally (loadAndRender via setState). loadAndRender nulls
+			// `this.store` synchronously before awaiting adapter.load, so by
+			// the time this call returns, `this.store` is already null and
+			// stays null until `pendingRetargetLoad` resolves below.
+			const OTHER_PATH = "100 Inbox/2026-07-06_0949_suggestions.json";
+			const setStatePromise = view.setState(
+				{ docPath: OTHER_PATH },
+				{ history: false },
+			);
+			expect(adapter.load).toHaveBeenCalledTimes(2);
+
+			// Resolve the STALE save now, while `this.store` is still null —
+			// this is exactly the window in which the unguarded pre-fix code
+			// threw "Cannot read properties of null (reading 'apply')" as an
+			// unhandled rejection from the fire-and-forget `void
+			// this.handleSave()` call site.
+			resolveSave();
+			await flushAsyncHandler();
+
+			// Only now does the retarget's own load resolve, completing Revert.
+			resolveRetargetLoad({ doc: DEFAULT_SEED, dirty: false });
+			await expect(setStatePromise).resolves.toBeUndefined();
+			await flushAsyncHandler();
+
+			expect(adapter.load).toHaveBeenLastCalledWith(OTHER_PATH);
+			// The retargeted doc loaded clean — the stale save's dirty-clear
+			// must have been skipped (store identity changed/nulled), not
+			// thrown and not applied against the new store.
+			expect(dirtyBadge(view)).toBeNull();
+		});
+	});
 });

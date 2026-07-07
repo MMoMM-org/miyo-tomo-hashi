@@ -74,7 +74,10 @@
  *    the same load path `onOpen`/`setState` use — discarding in-memory
  *    edits in favor of a fresh, clean model. Root chrome classes
  *    (`hashi-se-*`) replace the earlier ad hoc `hashi-suggestions-editor-*`
- *    names to match the approved mockup; see styles.css.
+ *    names to match the approved mockup; see styles.css. A `saving` flag
+ *    disables both buttons for the duration of an in-flight save (see
+ *    `handleSave()`'s doc comment for the reference-identity guard this
+ *    pairs with, closing two save/edit and save/revert race windows).
  */
 
 import {
@@ -129,6 +132,12 @@ export class SuggestionsEditorView extends ItemView {
 	private leafHeadEl: HTMLElement | null = null;
 	private subtabsEl: HTMLElement | null = null;
 	private bodyEl: HTMLElement | null = null;
+
+	// True while a Save is in flight — disables Save/Revert so a user can't
+	// double-click Save or Revert-out-from-under an in-flight write. See
+	// decision 8 / handleSave() for the store+model reference-identity guard
+	// this pairs with.
+	private saving = false;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -248,15 +257,46 @@ export class SuggestionsEditorView extends ItemView {
 	 * and rethrows on the load-bearing JSON-write failure (decision 8) — so a
 	 * rejection here means the user has already been told; the model simply
 	 * stays dirty (nothing to do beyond letting the render reflect that).
+	 *
+	 * Reference-identity guard against two races (code-quality-review
+	 * finding, spec-004 follow-up): `savedStore`/`savedModel` are captured
+	 * BEFORE the `await`, not re-read from `this.store` after it.
+	 *   1. Edit-during-save: a synchronous `ctx.apply` can land a NEWER model
+	 *      while `adapter.save(savedModel)` is still in flight. Clearing
+	 *      `dirty` on whatever `this.store` currently holds (rather than on
+	 *      `savedModel` specifically) would mark those newer, never-written
+	 *      edits as saved — silent data loss. Comparing
+	 *      `this.store.getModel() === savedModel` after the await catches
+	 *      this: if a newer model landed, its `dirty` stays true.
+	 *   2. Revert/setState-during-save: `loadAndRender()` (Revert's handler)
+	 *      replaces `this.store` — possibly with `null` mid-flight — while a
+	 *      save is still pending. Comparing `this.store === savedStore`
+	 *      catches a replaced/nulled store and skips the clear entirely
+	 *      instead of calling `.apply` on a discarded (or null) store.
+	 * The `saving` flag additionally disables Save/Revert for the whole
+	 * in-flight window (see renderLeafHead), narrowing — though for Revert
+	 * specifically not fully eliminating, since setState can still retarget
+	 * this leaf from outside a button click — the window these checks guard.
 	 */
 	private async handleSave(): Promise<void> {
-		if (this.store === null) return;
+		const savedStore = this.store;
+		if (savedStore === null) return;
+		const savedModel = savedStore.getModel();
+
+		this.saving = true;
+		this.render();
 		try {
-			await this.deps.adapter.save(this.store.getModel());
+			await this.deps.adapter.save(savedModel);
 		} catch {
 			return;
+		} finally {
+			this.saving = false;
+			this.render();
 		}
-		this.store.apply((m) => (m.dirty ? { doc: m.doc, dirty: false } : m));
+
+		if (this.store === savedStore && this.store.getModel() === savedModel) {
+			this.store.apply(() => ({ doc: savedModel.doc, dirty: false }));
+		}
 	}
 
 	private renderError(root: HTMLElement, err: unknown): void {
@@ -316,6 +356,7 @@ export class SuggestionsEditorView extends ItemView {
 			text: "Revert",
 		});
 		revertBtn.setAttr("type", "button");
+		revertBtn.disabled = this.saving;
 		revertBtn.addEventListener("click", () => {
 			void this.loadAndRender();
 		});
@@ -325,7 +366,7 @@ export class SuggestionsEditorView extends ItemView {
 			text: "Save",
 		});
 		saveBtn.setAttr("type", "button");
-		saveBtn.disabled = !model.dirty;
+		saveBtn.disabled = this.saving || !model.dirty;
 		saveBtn.addEventListener("click", () => {
 			void this.handleSave();
 		});

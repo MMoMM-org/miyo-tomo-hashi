@@ -243,6 +243,8 @@ describe("SuggestionsTab", () => {
 			const skipBtn = card.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-skip");
 			expect(approveBtn?.classList.contains("is-active")).toBe(true);
 			expect(skipBtn?.classList.contains("is-active")).toBe(false);
+			expect(approveBtn?.getAttribute("aria-pressed")).toBe("true");
+			expect(skipBtn?.getAttribute("aria-pressed")).toBe("false");
 
 			expect(card.querySelector(".hashi-se-mini-pick")?.textContent).toBe("t_note_tomo.md");
 			const miniPicks = card.querySelectorAll(".hashi-se-mini-pick");
@@ -283,7 +285,7 @@ describe("SuggestionsTab", () => {
 			expect(next.dirty).toBe(true);
 		});
 
-		it("clicking Skip on the decision segment dispatches setDecision", async () => {
+		it("clicking Skip on the decision segment dispatches setDecision, flipping aria-pressed on re-render", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
 			const container = renderTab(model, ctx);
@@ -293,6 +295,18 @@ describe("SuggestionsTab", () => {
 
 			const next = applyCalls[0]!(model);
 			expect(next.doc.suggestions.find((s) => s.id === WORTHY_ID)?.decision).toBe("skip");
+
+			// Re-render with the post-transform model (ctx.apply is a spy here,
+			// it doesn't live-mutate the DOM) to prove aria-pressed tracks
+			// `suggestion.decision` in both directions, not just the initial
+			// approve-active case.
+			const reCard = cardFor(renderTab(next, ctx), WORTHY_ID);
+			expect(
+				reCard.querySelector(".hashi-se-decision .hashi-se-approve")?.getAttribute("aria-pressed"),
+			).toBe("false");
+			expect(
+				reCard.querySelector(".hashi-se-decision .hashi-se-skip")?.getAttribute("aria-pressed"),
+			).toBe("true");
 		});
 
 		it("clicking Approve on the decision segment dispatches setDecision (no-op when already approved)", async () => {
@@ -412,7 +426,7 @@ describe("SuggestionsTab", () => {
 			]);
 		});
 
-		it("selecting a candidate MOC via keyboard (Enter/Space) dispatches selectCandidateMoc", async () => {
+		it("selecting a candidate MOC via keyboard Enter dispatches selectCandidateMoc", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
 			const container = renderTab(model, ctx);
@@ -430,6 +444,31 @@ describe("SuggestionsTab", () => {
 			expect(nextSuggestion.candidate_mocs.find((c) => c.path === firstCandidate.path)?.selected).toBe(
 				true,
 			);
+		});
+
+		it("selecting a candidate MOC via keyboard Space dispatches selectCandidateMoc and prevents the page scroll", async () => {
+			const model = await loadModel();
+			const { ctx, applyCalls } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, WORTHY_ID);
+
+			const suggestion = model.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+			const secondCandidate = suggestion.candidate_mocs[1]!;
+			const row = card.querySelector(`.hashi-se-cand[data-moc-path="${secondCandidate.path}"]`)!;
+			const check = row.querySelector<HTMLElement>(".hashi-se-check")!;
+			const spaceEvent = new KeyboardEvent("keydown", { key: " ", cancelable: true });
+			check.dispatchEvent(spaceEvent);
+
+			// Space must not scroll the page — the handler has to call
+			// preventDefault(), same as it does for Enter.
+			expect(spaceEvent.defaultPrevented).toBe(true);
+
+			expect(ctx.apply).toHaveBeenCalledOnce();
+			const next = applyCalls[0]!(model);
+			const nextSuggestion = next.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+			expect(
+				nextSuggestion.candidate_mocs.find((c) => c.path === secondCandidate.path)?.selected,
+			).toBe(true);
 		});
 
 		it("a candidate check exposes role=checkbox and aria-checked reflecting selection", async () => {

@@ -144,8 +144,7 @@ export class ProposedMocsTab implements EditorTab {
 			text: "Skip",
 			attr: { type: "button" },
 		});
-		if (moc.decision === "approve") approveButton.addClass("is-active");
-		if (moc.decision === "skip") skipButton.addClass("is-active");
+		this.setDecisionState(approveButton, skipButton, moc.decision === "approve");
 
 		approveButton.addEventListener("click", () => {
 			ctx.apply((m) => setProposedMocDecision(m, moc.id, "approve"));
@@ -153,6 +152,14 @@ export class ProposedMocsTab implements EditorTab {
 		skipButton.addEventListener("click", () => {
 			ctx.apply((m) => setProposedMocDecision(m, moc.id, "skip"));
 		});
+	}
+
+	/** Mirrors TagHandlerTab's decision-toggle convention: class + aria-pressed together. */
+	private setDecisionState(approve: HTMLElement, skip: HTMLElement, approved: boolean): void {
+		approve.classList.toggle("is-active", approved);
+		approve.setAttribute("aria-pressed", String(approved));
+		skip.classList.toggle("is-active", !approved);
+		skip.setAttribute("aria-pressed", String(!approved));
 	}
 
 	// -- row 2: members + merge affordance -----------------------------------
@@ -197,9 +204,10 @@ export class ProposedMocsTab implements EditorTab {
 		for (const tag of moc.tags ?? []) {
 			row.createSpan({ cls: "hashi-se-tag", text: tag });
 		}
-		const addTagButton = row.createSpan({
+		const addTagButton = row.createEl("button", {
 			cls: ["hashi-se-tag", "hashi-se-add"],
 			text: "＋ tag",
+			attr: { type: "button" },
 		});
 		addTagButton.addEventListener("click", () => {
 			new TagPicker(ctx.app, (tag) => {

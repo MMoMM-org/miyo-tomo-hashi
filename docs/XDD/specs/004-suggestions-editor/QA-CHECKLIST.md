@@ -11,7 +11,7 @@
    ```bash
    HASHI_DEPLOY_VAULT=1 npm run build
    ```
-   (Already done for this build — `0.15.0-dev.20260706-1731`.)
+   (Already done for the current build — `0.15.0-dev.20260707-0853`, rebuilt to the approved mockup.)
 2. In the test vault (`test/Hashi`), reload the plugin: hot-reload is enabled
    (`.hotreload` present), or toggle **miyo-tomo-hashi** off/on in Community
    plugins, or reload Obsidian (`Ctrl/Cmd-R`).
@@ -25,9 +25,9 @@
 
 ## Chrome & lifecycle (PRD F1)
 
-- [ ] Four tabs render: **Suggestions (7) · Proposed MOCs (0) · Daily (2) · Tag-Handler (1)** with those counts.
-- [ ] Clicking a tab switches content; the active tab is visually indicated (underline).
-- [ ] **Proposed MOCs (0)** shows an empty state (no cards).
+- [ ] A **leaf header** shows "Suggestions editor" + `run … · profile … · N items`, with **Save** + **Revert** buttons on the right.
+- [ ] Four tabs render: **Suggestions · 7 · Proposed MOCs · 0 · Daily · 2 · Tag-Handler · 1** with those counts; the active tab is underlined.
+- [ ] **Proposed MOCs · 0** shows an empty state (no cards).
 - [ ] Make any edit, then close the editor leaf → a "Unsaved changes" confirm
       prompt appears. (Known v1 gap: it can prompt but **cannot cancel** the
       close — Obsidian `ItemView.onClose` has no veto hook. Verify the prompt
@@ -42,11 +42,12 @@ Worthy note (e.g. **S07**, not suppressed):
 - [ ] Candidate MOCs list shows the 3 candidates; selecting one **clears the others** (re-point).
 - [ ] **+ Add MOC** opens a fuzzy picker over any vault note; the added MOC appears (source = user).
 - [ ] **Set spot…** on a selected candidate opens the SpotPicker (see below).
-- [ ] Keep-source toggle + Approve/Skip toggle work.
+- [ ] Keep-source toggle works.
+- [ ] **Decision** is an Approve/Skip **segmented control** with the *current* state highlighted (green = Approve) — confirm S07 reads as **approved** on open (matches its markdown), and toggling flips it.
 
 Suppressed note (e.g. **S01 / S05**, worthiness < 0.5):
-- [ ] Card shows a **worthiness badge** + a skip hint + a single **Force Atomic** control.
-- [ ] There is **NO** MOC UI, no title/template/location/tags/keep/decision controls on suppressed cards.
+- [ ] Card shows the **note title** (`Note (S01) · not promoted`), a **worthiness badge**, a skip note, and a single **Force Atomic Note** control — so you can tell *which* note it is.
+- [ ] There is **NO** MOC UI on suppressed cards (Tomo emits no candidates for them).
 
 ## SpotPicker — op 2 (PRD F3)
 
@@ -68,9 +69,9 @@ Pick **Set spot…** on a candidate MOC that is an **existing vault note** with 
 
 ## Daily tab (PRD F8)
 
-- [ ] Each date shows a **click-to-open** link; since the daily notes don't exist
-      in the test vault, they show a **"doesn't exist"** state.
-- [ ] Clicking opens the daily note (Obsidian creates it on open — **Hashi never creates it**).
+- [ ] Each date is a **clickable** control (always — even when the note doesn't exist); since the test-vault daily notes don't exist, each also shows a **"⚠ note doesn't exist — click to create"** pill.
+- [ ] Clicking the date (or the pill) opens the daily note; Obsidian creates it on open — **Hashi never creates it**.
+- [ ] Every daily checkbox (Accept, Force Atomic Note, tracker/link Accept) has a **visible text label**.
 - [ ] Per log entry: edit **content**; change **position** (at_time / after_last_line / before_first_line).
 - [ ] The **time** field is shown/enabled **only** when position = `at_time`, hidden/disabled otherwise.
 - [ ] **Accept** and **Force Atomic** toggles work. (Force-Atomic on a shared stem, e.g. `call-vendor`, should stay consistent with the same note's Suggestions-tab Force-Atomic — toggling one flips the other.)
@@ -85,7 +86,9 @@ Pick **Set spot…** on a candidate MOC that is an **existing vault note** with 
 ## Save — own the whole document (PRD F10)
 
 After making edits across tabs:
-- [ ] Trigger save (via the editor's save affordance / whatever the view exposes). The sibling **`_suggestions.json`** updates.
+- [ ] Making any edit shows the amber **"Edited"** badge in the header and **enables** the Save button (it's disabled when there are no unsaved changes).
+- [ ] Click **Save** → the sibling **`_suggestions.json`** updates; the "Edited" badge clears and Save disables again.
+- [ ] **Revert** discards unsaved edits (reloads from disk).
 - [ ] Open the `.json` and confirm your **edits landed**, and that sections you did **not** touch (other suggestions, daily entries, tag groups, `emit_digest`, read-only fields) are **unchanged**.
 - [ ] `_suggestions.md` is re-rendered as a Hashi courtesy summary (a concise "edited in Hashi — the `.json` is authoritative" view; Tomo will rebuild the full md on the next `/inbox`).
 - [ ] Run Tomo `/inbox` (Pass 2) on the edited run → Tomo rebuilds from the JSON and honours your edits (the real cross-tool check).

@@ -210,7 +210,13 @@ export class SuggestionsTab implements EditorTab {
 		this.renderDecisionControl(decisionField, suggestion, ctx);
 	}
 
-	/** Bug fix 2 — segmented Approve/Skip control, `is-active` on the current decision. */
+	/**
+	 * Bug fix 2 — segmented Approve/Skip control, `is-active` (visual) AND
+	 * `aria-pressed` (assistive-tech state) on the current decision. Matches
+	 * TagHandlerTab's `setDecisionState` convention (`aria-pressed` mirrors
+	 * `is-active` on both buttons, not just the active one) rather than
+	 * inventing a second pattern for the same toggle-pair shape.
+	 */
 	private renderDecisionControl(
 		container: HTMLElement,
 		suggestion: SuggestionWire,
@@ -222,7 +228,7 @@ export class SuggestionsTab implements EditorTab {
 		const approve = control.createEl("button", {
 			cls: approveActive ? ["hashi-se-approve", "is-active"] : ["hashi-se-approve"],
 			text: "Approve",
-			attr: { type: "button" },
+			attr: { type: "button", "aria-pressed": String(approveActive) },
 		});
 		approve.addEventListener("click", () => {
 			ctx.apply((model) => setDecision(model, suggestion.id, "approve"));
@@ -232,7 +238,7 @@ export class SuggestionsTab implements EditorTab {
 		const skip = control.createEl("button", {
 			cls: skipActive ? ["hashi-se-skip", "is-active"] : ["hashi-se-skip"],
 			text: "Skip",
-			attr: { type: "button" },
+			attr: { type: "button", "aria-pressed": String(skipActive) },
 		});
 		skip.addEventListener("click", () => {
 			ctx.apply((model) => setDecision(model, suggestion.id, "skip"));

@@ -217,7 +217,7 @@ describe("ProposedMocsTab", () => {
 			expect(parentEl?.textContent).toBe("MOCs/Root.md");
 		});
 
-		it("renders a decision segmented control with the current decision marked is-active", () => {
+		it("renders a decision segmented control with the current decision marked is-active and aria-pressed", () => {
 			const tab = new ProposedMocsTab();
 			const container = document.createElement("div");
 			tab.render(container, seededModel(), makeCtx());
@@ -226,13 +226,17 @@ describe("ProposedMocsTab", () => {
 			const skipApprove = skipCard.querySelector(".hashi-se-decision .hashi-se-approve");
 			const skipSkip = skipCard.querySelector(".hashi-se-decision .hashi-se-skip");
 			expect(skipApprove?.classList.contains("is-active")).toBe(false);
+			expect(skipApprove?.getAttribute("aria-pressed")).toBe("false");
 			expect(skipSkip?.classList.contains("is-active")).toBe(true);
+			expect(skipSkip?.getAttribute("aria-pressed")).toBe("true");
 
 			const approveCard = cardFor(container, "M3");
 			const approveApprove = approveCard.querySelector(".hashi-se-decision .hashi-se-approve");
 			const approveSkip = approveCard.querySelector(".hashi-se-decision .hashi-se-skip");
 			expect(approveApprove?.classList.contains("is-active")).toBe(true);
+			expect(approveApprove?.getAttribute("aria-pressed")).toBe("true");
 			expect(approveSkip?.classList.contains("is-active")).toBe(false);
+			expect(approveSkip?.getAttribute("aria-pressed")).toBe("false");
 		});
 
 		it("renders member chips using the referenced suggestion's TITLE, with the raw id on hover, and falls back to the raw id when no suggestion matches", () => {
@@ -259,6 +263,20 @@ describe("ProposedMocsTab", () => {
 			).map((t) => t.textContent);
 			expect(tags).toEqual(["#area"]);
 			expect(card.querySelector(".hashi-se-tag.hashi-se-add")).not.toBeNull();
+		});
+
+		it("renders the add-tag affordance as a real, keyboard-operable button — not a non-focusable span", () => {
+			const tab = new ProposedMocsTab();
+			const container = document.createElement("div");
+			tab.render(container, seededModel(), makeCtx());
+
+			const addTagBtn = cardFor(container, "M1").querySelector<HTMLButtonElement>(".hashi-se-tag.hashi-se-add");
+			expect(addTagBtn?.tagName).toBe("BUTTON");
+			expect(addTagBtn?.type).toBe("button");
+			// Native <button>s default to tabIndex 0 (in the tab order, Enter/Space
+			// activatable) — a <span> defaults to -1. This is the regression check
+			// for the a11y fix: the affordance must be reachable by keyboard.
+			expect(addTagBtn?.tabIndex).toBe(0);
 		});
 
 		it("renders the reason text when present", () => {
