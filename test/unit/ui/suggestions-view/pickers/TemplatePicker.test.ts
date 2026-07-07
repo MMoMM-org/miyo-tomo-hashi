@@ -54,4 +54,19 @@ describe("TemplatePicker", () => {
 
 		expect(onChoose).toHaveBeenCalledWith("Templates/t_note.md");
 	});
+
+	it("with a limit folder set, lists ONLY markdown under that folder (overriding the Templates/ default)", () => {
+		const app = new App();
+		app.vault.getMarkdownFiles = vi.fn(() =>
+			files(
+				"Templates/t_note.md",
+				"Meta/Tmpl/base.md",
+				"Meta/Tmpl/sub/deep.md",
+				"Inbox/note.md",
+			),
+		);
+		const picker = new TemplatePicker(app, () => {}, "Meta/Tmpl");
+
+		expect(picker.getItems()).toEqual(["Meta/Tmpl/base.md", "Meta/Tmpl/sub/deep.md"]);
+	});
 });

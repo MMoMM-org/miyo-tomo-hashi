@@ -56,6 +56,24 @@ vi.mock("../../../../../src/ui/suggestions-view/pickers/TagPicker", () => ({
 	}),
 }));
 
+interface CapturedMergePicker {
+	options: readonly { id: string; name: string }[];
+	onChoose: (targetId: string) => void;
+	open: Mock<() => void>;
+}
+const mergeTargetPickerInstances: CapturedMergePicker[] = [];
+vi.mock("../../../../../src/ui/suggestions-view/pickers/MergeTargetPicker", () => ({
+	MergeTargetPicker: vi.fn(function MergeTargetPicker(
+		_app: unknown,
+		options: readonly { id: string; name: string }[],
+		onChoose: (targetId: string) => void,
+	) {
+		const instance: CapturedMergePicker = { options, onChoose, open: vi.fn() };
+		mergeTargetPickerInstances.push(instance);
+		return instance;
+	}),
+}));
+
 // --- factories ---------------------------------------------------------------
 
 function makeSuggestion(overrides: Partial<SuggestionWire> & { id: string; title: string }): SuggestionWire {
@@ -174,6 +192,7 @@ describe("ProposedMocsTab", () => {
 	beforeEach(() => {
 		parentPickerInstances.length = 0;
 		tagPickerInstances.length = 0;
+		mergeTargetPickerInstances.length = 0;
 	});
 
 	describe("contract", () => {
@@ -258,11 +277,13 @@ describe("ProposedMocsTab", () => {
 			tab.render(container, seededModel(), makeCtx());
 
 			const card = cardFor(container, "M1");
-			const tags = Array.from(
-				card.querySelectorAll(".hashi-se-tag:not(.hashi-se-add)"),
-			).map((t) => t.textContent);
+			const tags = Array.from(card.querySelectorAll(".hashi-se-tag-text")).map(
+				(t) => t.textContent,
+			);
 			expect(tags).toEqual(["#area"]);
 			expect(card.querySelector(".hashi-se-tag.hashi-se-add")).not.toBeNull();
+			// each existing chip carries an × remove control
+			expect(card.querySelector(".hashi-se-tag .hashi-se-tag-x")).not.toBeNull();
 		});
 
 		it("renders the add-tag affordance as a real, keyboard-operable button — not a non-focusable span", () => {
@@ -296,16 +317,18 @@ describe("ProposedMocsTab", () => {
 			expect(cardFor(container, "M3").querySelector(".hashi-se-reason")).toBeNull();
 		});
 
-		it("shows a Merge affordance and merge hint only for MOCs with a same-name sibling", () => {
+		it("shows a Merge affordance on EVERY card (>1 proposal), but the merge hint only for same-name siblings", () => {
 			const tab = new ProposedMocsTab();
 			const container = document.createElement("div");
 			tab.render(container, seededModel(), makeCtx());
 
+			// Merge into… is now available on all three cards (any can fold into another).
 			expect(cardFor(container, "M1").querySelector(".hashi-se-link-btn")).not.toBeNull();
-			expect(cardFor(container, "M1").querySelector(".hashi-se-merge-hint")).not.toBeNull();
 			expect(cardFor(container, "M2").querySelector(".hashi-se-link-btn")).not.toBeNull();
+			expect(cardFor(container, "M3").querySelector(".hashi-se-link-btn")).not.toBeNull();
+			// The informational hint still only appears for the same-name pair (M1/M2).
+			expect(cardFor(container, "M1").querySelector(".hashi-se-merge-hint")).not.toBeNull();
 			expect(cardFor(container, "M2").querySelector(".hashi-se-merge-hint")).not.toBeNull();
-			expect(cardFor(container, "M3").querySelector(".hashi-se-link-btn")).toBeNull();
 			expect(cardFor(container, "M3").querySelector(".hashi-se-merge-hint")).toBeNull();
 		});
 	});
@@ -466,8 +489,8 @@ describe("ProposedMocsTab", () => {
 		});
 	});
 
-	describe("merge same-name siblings", () => {
-		it("dispatches mergeSameNameProposedMocs via ctx.apply, collapsing the duplicate", () => {
+	describe("merge into another proposal", () => {
+		it("opens MergeTargetPicker with the OTHER proposals and dispatches mergeProposedMocs on choice", () => {
 			const tab = new ProposedMocsTab();
 			const container = document.createElement("div");
 			const model = seededModel();
@@ -477,23 +500,36 @@ describe("ProposedMocsTab", () => {
 			const mergeBtn = cardFor(container, "M1").querySelector<HTMLElement>(".hashi-se-link-btn");
 			mergeBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 
+			// The picker is offered every OTHER proposal — M2 and M3, not M1 itself.
+			const picker = mergeTargetPickerInstances.at(-1);
+			expect(picker?.options.map((o) => o.id)).toEqual(["M2", "M3"]);
+
+			// Choosing M2 folds M1 INTO M2 (M1 dropped, its members unioned into M2).
+			picker?.onChoose("M2");
 			expect(ctx.apply).toHaveBeenCalledTimes(1);
 			const transform = firstAppliedTransform(ctx.apply);
 			const result = transform(model);
 
 			expect(result.doc.proposed_mocs).toHaveLength(2);
-			const merged = result.doc.proposed_mocs.find((m) => m.id === "M1");
-			expect(merged?.member_ids).toEqual(expect.arrayContaining(["S1", "S99", "S2"]));
-			expect(result.doc.proposed_mocs.find((m) => m.id === "M2")).toBeUndefined();
+			expect(result.doc.proposed_mocs.find((m) => m.id === "M1")).toBeUndefined();
+			const merged = result.doc.proposed_mocs.find((m) => m.id === "M2");
+			expect(merged?.member_ids).toEqual(expect.arrayContaining(["S2", "S1", "S99"]));
 		});
 
-		it("does not render a Merge control or hint at all when no sibling shares the name (M3)", () => {
+		it("removing a tag dispatches removeProposedMocTag via ctx.apply", () => {
 			const tab = new ProposedMocsTab();
 			const container = document.createElement("div");
-			tab.render(container, seededModel(), makeCtx());
+			const model = seededModel();
+			const ctx = makeCtx();
+			tab.render(container, model, ctx);
 
-			expect(cardFor(container, "M3").querySelector(".hashi-se-link-btn")).toBeNull();
-			expect(cardFor(container, "M3").querySelector(".hashi-se-merge-hint")).toBeNull();
+			const removeBtn = cardFor(container, "M1").querySelector<HTMLElement>(".hashi-se-tag-x");
+			removeBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+			expect(ctx.apply).toHaveBeenCalledTimes(1);
+			const result = firstAppliedTransform(ctx.apply)(model);
+			expect(result.doc.proposed_mocs.find((m) => m.id === "M1")?.tags).toEqual([]);
+			expect(result.dirty).toBe(true);
 		});
 	});
 });

@@ -17,12 +17,31 @@ interface MetadataCacheWithTags {
 }
 
 export class TagPicker extends FuzzyFieldPicker {
-	constructor(app: App, onChoose: (tag: string) => void) {
+	constructor(
+		app: App,
+		onChoose: (tag: string) => void,
+		private readonly limitPrefixes: readonly string[] = [],
+	) {
 		super(app, onChoose, "Choose a tag…");
 	}
 
 	getItems(): string[] {
 		const cache = this.app.metadataCache as unknown as MetadataCacheWithTags;
-		return Object.keys(cache.getTags());
+		const tags = Object.keys(cache.getTags());
+		if (this.limitPrefixes.length === 0) return tags;
+		return tags.filter((tag) => this.limitPrefixes.some((prefix) => matchesPrefix(tag, prefix)));
 	}
+}
+
+/**
+ * Namespace prefix match: `topic/` (or `topic`) keeps `topic` and
+ * `topic/people` but not `topical`. `metadataCache.getTags()` keys carry a
+ * leading `#`, which the configured prefixes generally won't, so both sides
+ * are compared with the `#` stripped.
+ */
+function matchesPrefix(tag: string, prefix: string): boolean {
+	const t = tag.replace(/^#/, "");
+	const p = prefix.replace(/^#/, "");
+	if (p === "") return true;
+	return t === p || t.startsWith(p.endsWith("/") ? p : `${p}/`);
 }

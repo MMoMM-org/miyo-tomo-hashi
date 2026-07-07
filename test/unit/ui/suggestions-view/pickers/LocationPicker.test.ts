@@ -54,4 +54,16 @@ describe("LocationPicker", () => {
 
 		expect(onChoose).toHaveBeenCalledWith("");
 	});
+
+	it("with limit folders set, keeps only folders equal to or nested under a configured folder", () => {
+		const app = new App();
+		app.vault.getAllFolders = vi.fn(() =>
+			folders("", "Atlas", "Atlas/202 Notes", "Atlas/200 Maps", "Inbox", "Inbox/sub"),
+		);
+		const picker = new LocationPicker(app, () => {}, ["Atlas/200 Maps", "Inbox"]);
+
+		// Atlas/200 Maps itself + Inbox and its subfolder; Atlas and Atlas/202
+		// Notes and the root are excluded (not under a configured folder).
+		expect(picker.getItems()).toEqual(["Atlas/200 Maps", "Inbox", "Inbox/sub"]);
+	});
 });

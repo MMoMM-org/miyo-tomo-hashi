@@ -721,6 +721,8 @@ describe("registerSuggestionsEditorCommand", () => {
 	let pluginMock: PluginMock;
 	let plugin: Plugin;
 	let getActiveFilePath: Mock<() => string | null>;
+	let listSuggestionsDocs: Mock<() => string[]>;
+	let pickSuggestionsDoc: Mock<(docs: string[], onPick: (docPath: string) => void) => void>;
 	let openSuggestionsEditorSpy: Mock<(docPath: string) => Promise<void>>;
 	let deps: SuggestionsEditorCommandDeps;
 
@@ -729,11 +731,19 @@ describe("registerSuggestionsEditorCommand", () => {
 		pluginMock = new PluginMock();
 		plugin = asPlugin(pluginMock);
 		getActiveFilePath = vi.fn<() => string | null>(() => null);
+		// Default: no runs in the vault → the no-active-doc path falls back to
+		// the Notice, matching the pre-picker tests below.
+		listSuggestionsDocs = vi.fn<() => string[]>(() => []);
+		pickSuggestionsDoc = vi.fn<(docs: string[], onPick: (docPath: string) => void) => void>(
+			() => {},
+		);
 		openSuggestionsEditorSpy = vi.fn<(docPath: string) => Promise<void>>(
 			async () => {},
 		);
 		deps = {
 			getActiveFilePath,
+			listSuggestionsDocs,
+			pickSuggestionsDoc,
 			openSuggestionsEditor: openSuggestionsEditorSpy,
 		};
 	});
@@ -801,5 +811,41 @@ describe("registerSuggestionsEditorCommand", () => {
 
 		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
 		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_SUGGESTIONS_DOC_NOTICE);
+	});
+
+	it("no active doc but runs exist → opens the doc picker instead of a Notice", async () => {
+		getActiveFilePath.mockReturnValue("notes/random.md");
+		listSuggestionsDocs.mockReturnValue([
+			"100 Inbox/a_suggestions.json",
+			"100 Inbox/b_suggestions.json",
+		]);
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+
+		expect(pickSuggestionsDoc).toHaveBeenCalledWith(
+			["100 Inbox/a_suggestions.json", "100 Inbox/b_suggestions.json"],
+			expect.any(Function),
+		);
+		expect(vi.mocked(Notice)).not.toHaveBeenCalled();
+		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
+	});
+
+	it("choosing a doc in the picker opens the editor for that path", async () => {
+		getActiveFilePath.mockReturnValue(null);
+		listSuggestionsDocs.mockReturnValue(["100 Inbox/a_suggestions.json"]);
+		pickSuggestionsDoc.mockImplementation((docs, onPick) => {
+			onPick(docs[0]!);
+		});
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openSuggestionsEditorSpy).toHaveBeenCalledWith("100 Inbox/a_suggestions.json");
 	});
 });

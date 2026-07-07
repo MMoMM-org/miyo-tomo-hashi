@@ -65,16 +65,18 @@ afterEach(() => {
 });
 
 describe("SettingsTab — folder autocomplete wiring", () => {
-	it("attaches a FolderSuggest to both path inputs", () => {
+	it("attaches a FolderSuggest to every folder-path input", () => {
 		const plugin = makePlugin();
 		const tab = new SettingsTab(new App(), plugin as unknown as TomoHashiPlugin, conn);
 
 		tab.display();
 
-		// One per path field: Tomo inbox folder, then Hooks directory.
-		expect(suggestCalls).toHaveLength(2);
+		// One per folder field, in render order: Tomo inbox folder, Hooks
+		// directory (executor section), then the Suggestions-editor template folder.
+		expect(suggestCalls).toHaveLength(3);
 		expect(suggestCalls[0]?.inputEl).toBeInstanceOf(HTMLInputElement);
 		expect(suggestCalls[1]?.inputEl).toBeInstanceOf(HTMLInputElement);
+		expect(suggestCalls[2]?.inputEl).toBeInstanceOf(HTMLInputElement);
 	});
 
 	it("picking a valid folder persists it through the path guard", async () => {

@@ -15,7 +15,6 @@ import { describe, expect, it } from "vitest";
 import type { EditModel, ProposedMocWire, SuggestionsWire } from "../../../../src/types/suggestions.js";
 import {
 	mergeProposedMocs,
-	mergeSameNameProposedMocs,
 	reparentProposedMoc,
 	renameProposedMoc,
 	setProposedMocDecision,
@@ -285,61 +284,28 @@ describe("mergeProposedMocs", () => {
 	});
 });
 
-describe("mergeSameNameProposedMocs", () => {
-	it("collapses two proposed MOCs that share a name", () => {
+describe("mergeProposedMocs — tag union", () => {
+	it("unions source tags into target (deduped, target's first)", () => {
 		const model = getMockModel([
-			getMockProposedMoc({ id: "M01", name: "Cooking", member_ids: ["S01"] }),
-			getMockProposedMoc({ id: "M02", name: "Cooking", member_ids: ["S02"] }),
-			getMockProposedMoc({ id: "M03", name: "Baking", member_ids: ["S03"] }),
+			getMockProposedMoc({ id: "M01", name: "AI", member_ids: ["S01"], tags: ["a", "shared"] }),
+			getMockProposedMoc({ id: "M02", name: "Cooking", member_ids: ["S02"], tags: ["shared", "b"] }),
 		]);
 
-		const result = mergeSameNameProposedMocs(model, "M01");
+		const result = mergeProposedMocs(model, "M01", "M02");
 
-		// The two same-named nodes collapse into one; the unrelated node survives.
-		const cookingNodes = result.doc.proposed_mocs.filter((m) => m.name === "Cooking");
-		expect(cookingNodes).toHaveLength(1);
-		expect(cookingNodes[0]?.member_ids).toEqual(expect.arrayContaining(["S01", "S02"]));
-		expect(result.doc.proposed_mocs).toHaveLength(2);
-		expect(result.doc.proposed_mocs.some((m) => m.id === "M03")).toBe(true);
+		const target = result.doc.proposed_mocs.find((m) => m.id === "M02");
+		// target's tags first, then source's not-already-present, deduped.
+		expect(target?.tags).toEqual(["shared", "b", "a"]);
 	});
 
-	it("sets dirty true on a successful collapse", () => {
+	it("leaves tags absent when neither side had any", () => {
 		const model = getMockModel([
-			getMockProposedMoc({ id: "M01", name: "Cooking", member_ids: ["S01"] }),
-			getMockProposedMoc({ id: "M02", name: "Cooking", member_ids: ["S02"] }),
+			getMockProposedMoc({ id: "M01", name: "AI", member_ids: ["S01"], tags: undefined }),
+			getMockProposedMoc({ id: "M02", name: "Cooking", member_ids: ["S02"], tags: undefined }),
 		]);
 
-		const result = mergeSameNameProposedMocs(model, "M01");
+		const result = mergeProposedMocs(model, "M01", "M02");
 
-		expect(result.dirty).toBe(true);
-	});
-
-	it("rejects when no other proposed MOC shares the name — model unchanged, dirty false", () => {
-		const model = twoMocModel(); // "Cooking" and "Baking" — no name collision
-
-		const result = mergeSameNameProposedMocs(model, "M01");
-
-		expect(result).toEqual(model);
-		expect(result.dirty).toBe(false);
-	});
-
-	it("rejects an unknown mocId — model unchanged, dirty false", () => {
-		const model = twoMocModel();
-
-		const result = mergeSameNameProposedMocs(model, "M99");
-
-		expect(result).toEqual(model);
-		expect(result.dirty).toBe(false);
-	});
-
-	it("does not mutate the original model", () => {
-		const model = getMockModel([
-			getMockProposedMoc({ id: "M01", name: "Cooking", member_ids: ["S01"] }),
-			getMockProposedMoc({ id: "M02", name: "Cooking", member_ids: ["S02"] }),
-		]);
-
-		mergeSameNameProposedMocs(model, "M01");
-
-		expect(model.doc.proposed_mocs).toHaveLength(2);
+		expect(result.doc.proposed_mocs.find((m) => m.id === "M02")?.tags).toBeUndefined();
 	});
 });

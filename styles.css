@@ -837,6 +837,22 @@
 	border: 1px solid var(--se-border);
 	border-radius: 20px;
 	padding: 1px 9px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.hashi-se-tag-x {
+	font-family: inherit;
+	font-size: 13px;
+	line-height: 1;
+	color: var(--se-text-faint);
+	background: transparent;
+	border: none;
+	padding: 0;
+	cursor: pointer;
+}
+.hashi-se-tag-x:hover {
+	color: var(--se-red);
 }
 .hashi-se-tag.hashi-se-add {
 	cursor: pointer;

@@ -9,8 +9,8 @@
  * - **worthy** (`suppressed:false`) — the full note-editable surface: title
  *   (free text), a two-button Approve/Skip decision segment, template
  *   (`TemplatePicker`), location (`LocationPicker`), keep-source, tags (list
- *   + `TagPicker` add), candidate MOCs (single-select re-point + per-
- *   candidate `SpotPicker` + `＋ Add MOC` via `MocPicker`).
+ *   + `TagPicker` add), candidate MOCs (independent per-candidate toggle +
+ *   per-candidate `SpotPicker` + `＋ Add MOC` via `MocPicker`).
  * - **suppressed** (`suppressed:true`) — a clickable link to the origin note
  *   (its `stem`, via `renderNoteLink`) so the user can tell WHICH note the
  *   card is about and open it; the editable atomic-title input; a worthiness
@@ -57,13 +57,13 @@ import { type App, setIcon, TFile } from "obsidian";
 import { setForceAtomicFromSuggestion } from "../../../suggestions/transforms/forceAtomicSync.js";
 import {
 	addMoc,
-	selectCandidateMoc,
 	setDecision,
 	setKeepSource,
 	setLocation,
 	setTags,
 	setTemplate,
 	setTitle,
+	toggleCandidateMoc,
 } from "../../../suggestions/transforms/suggestion.js";
 import type {
 	AnchorWire,
@@ -307,9 +307,13 @@ export class SuggestionsTab implements EditorTab {
 			attr: { type: "button" },
 		});
 		button.addEventListener("click", () => {
-			new TemplatePicker(ctx.app, (templatePath) => {
-				ctx.apply((model) => setTemplate(model, suggestion.id, templatePath));
-			}).open();
+			new TemplatePicker(
+				ctx.app,
+				(templatePath) => {
+					ctx.apply((model) => setTemplate(model, suggestion.id, templatePath));
+				},
+				ctx.pickerScopes?.templateFolder,
+			).open();
 		});
 	}
 
@@ -322,9 +326,13 @@ export class SuggestionsTab implements EditorTab {
 			attr: { type: "button" },
 		});
 		button.addEventListener("click", () => {
-			new LocationPicker(ctx.app, (folderPath) => {
-				ctx.apply((model) => setLocation(model, suggestion.id, folderPath));
-			}).open();
+			new LocationPicker(
+				ctx.app,
+				(folderPath) => {
+					ctx.apply((model) => setLocation(model, suggestion.id, folderPath));
+				},
+				ctx.pickerScopes?.locationFolders,
+			).open();
 		});
 	}
 
@@ -347,7 +355,7 @@ export class SuggestionsTab implements EditorTab {
 		const tagsRow = top.createDiv({ cls: "hashi-se-tags" });
 		tagsRow.createSpan({ cls: "hashi-se-tags-lbl", text: "Tags" });
 		for (const tag of suggestion.tags) {
-			tagsRow.createSpan({ cls: "hashi-se-tag", text: tag });
+			this.renderTagChip(tagsRow, suggestion, tag, ctx);
 		}
 		const addButton = tagsRow.createEl("button", {
 			cls: ["hashi-se-tag", "hashi-se-add"],
@@ -355,13 +363,44 @@ export class SuggestionsTab implements EditorTab {
 			attr: { type: "button" },
 		});
 		addButton.addEventListener("click", () => {
-			new TagPicker(ctx.app, (tag) => {
-				ctx.apply((model) => {
-					const current = model.doc.suggestions.find((s) => s.id === suggestion.id);
-					if (current === undefined || current.tags.includes(tag)) return model;
-					return setTags(model, suggestion.id, [...current.tags, tag]);
-				});
-			}).open();
+			new TagPicker(
+				ctx.app,
+				(tag) => {
+					ctx.apply((model) => {
+						const current = model.doc.suggestions.find((s) => s.id === suggestion.id);
+						if (current === undefined || current.tags.includes(tag)) return model;
+						return setTags(model, suggestion.id, [...current.tags, tag]);
+					});
+				},
+				ctx.pickerScopes?.tagFilters,
+			).open();
+		});
+	}
+
+	/** A tag chip with an `×` remove control (edit = remove + re-add via ＋ tag). */
+	private renderTagChip(
+		row: HTMLElement,
+		suggestion: SuggestionWire,
+		tag: string,
+		ctx: TabContext,
+	): void {
+		const chip = row.createSpan({ cls: "hashi-se-tag" });
+		chip.createSpan({ cls: "hashi-se-tag-text", text: tag });
+		const remove = chip.createEl("button", {
+			cls: "hashi-se-tag-x",
+			text: "×",
+			attr: { type: "button", "aria-label": `Remove tag ${tag}` },
+		});
+		remove.addEventListener("click", () => {
+			ctx.apply((model) => {
+				const current = model.doc.suggestions.find((s) => s.id === suggestion.id);
+				if (current === undefined) return model;
+				return setTags(
+					model,
+					suggestion.id,
+					current.tags.filter((t) => t !== tag),
+				);
+			});
 		});
 	}
 
@@ -411,16 +450,18 @@ export class SuggestionsTab implements EditorTab {
 			cls: "hashi-se-check",
 			attr: { role: "checkbox", "aria-checked": String(candidate.selected), tabindex: "0" },
 		});
-		setIcon(check, "check");
+		// Empty box when Tomo did NOT auto-approve this link; the check glyph
+		// only appears on a selected candidate (owner refinement).
+		if (candidate.selected) setIcon(check, "check");
 
-		const select = (): void => {
-			ctx.apply((model) => selectCandidateMoc(model, suggestion.id, candidate.path));
+		const toggle = (): void => {
+			ctx.apply((model) => toggleCandidateMoc(model, suggestion.id, candidate.path));
 		};
-		check.addEventListener("click", select);
+		check.addEventListener("click", toggle);
 		check.addEventListener("keydown", (evt) => {
 			if (evt.key !== "Enter" && evt.key !== " ") return;
 			evt.preventDefault();
-			select();
+			toggle();
 		});
 	}
 

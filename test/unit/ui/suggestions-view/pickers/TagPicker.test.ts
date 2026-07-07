@@ -49,4 +49,19 @@ describe("TagPicker", () => {
 
 		expect(onChoose).toHaveBeenCalledWith("#project");
 	});
+
+	it("with limit prefixes set, keeps only the namespace root and its children (a similar-but-outside tag is rejected)", () => {
+		const app = new App();
+		Object.assign(app.metadataCache, {
+			getTags: vi.fn(() => ({
+				"#topic/people": 2,
+				"#topic": 1,
+				"#topical": 1, // similar prefix but NOT in the topic namespace
+				"#project": 5,
+			})),
+		});
+		const picker = new TagPicker(app, () => {}, ["topic"]);
+
+		expect(picker.getItems()).toEqual(["#topic/people", "#topic"]);
+	});
 });

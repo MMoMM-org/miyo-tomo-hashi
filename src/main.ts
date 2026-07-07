@@ -112,6 +112,7 @@ import { showChatWindow } from "./ui/chat-view/showChatWindow";
 import { StatusBarIcon, copyAuthToken } from "./ui/status-bar/StatusBarIcon";
 import {
 	openSuggestionsEditor,
+	SuggestionsDocPicker,
 	SuggestionsEditorView,
 	VIEW_TYPE_SUGGESTIONS_EDITOR,
 } from "./ui/suggestions-view/index";
@@ -554,10 +555,23 @@ export default class TomoHashiPlugin extends Plugin {
 			(leaf: WorkspaceLeaf) =>
 				new SuggestionsEditorView(leaf, {
 					adapter: new ObsidianSuggestionsDoc(vault),
+					getPickerScopes: () => ({
+						templateFolder: this.settings.suggestionsTemplateFolder,
+						locationFolders: this.settings.suggestionsLocationFolders,
+						tagFilters: this.settings.suggestionsTagFilters,
+					}),
 				}),
 		);
 		registerSuggestionsEditorCommand(this, {
 			getActiveFilePath: () => this.app.workspace.getActiveFile()?.path ?? null,
+			listSuggestionsDocs: () =>
+				this.app.vault
+					.getFiles()
+					.map((file) => file.path)
+					.filter((path) => path.endsWith("_suggestions.json"))
+					.sort(),
+			pickSuggestionsDoc: (docs, onPick) =>
+				new SuggestionsDocPicker(this.app, docs, onPick).open(),
 			openSuggestionsEditor: (docPath: string) =>
 				openSuggestionsEditor(this.app, docPath),
 		});

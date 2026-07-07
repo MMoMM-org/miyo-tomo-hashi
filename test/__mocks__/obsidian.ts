@@ -157,6 +157,7 @@ export class App {
 		create: vi.fn(),
 		delete: vi.fn(),
 		getMarkdownFiles: vi.fn(() => []),
+		getFiles: vi.fn<() => TFile[]>(() => []),
 		adapter: { read: vi.fn(), write: vi.fn(), exists: vi.fn() },
 		process: vi.fn<(file: TFile, fn: (data: string) => string) => Promise<void>>(
 			async () => {},
@@ -310,6 +311,25 @@ export class Setting {
 				// Real Obsidian exposes the underlying <input> as `inputEl`;
 				// FolderSuggest attaches its type-ahead to it.
 				inputEl: document.createElement("input"),
+				setValue: vi.fn(() => component),
+				setPlaceholder: vi.fn(() => component),
+				onChange: vi.fn(() => component),
+			};
+			cb(component);
+			return this;
+		},
+	);
+	addTextArea = vi.fn(
+		(
+			cb: (text: {
+				inputEl: HTMLTextAreaElement;
+				setValue: ReturnType<typeof vi.fn>;
+				setPlaceholder: ReturnType<typeof vi.fn>;
+				onChange: ReturnType<typeof vi.fn>;
+			}) => void,
+		) => {
+			const component = {
+				inputEl: document.createElement("textarea"),
 				setValue: vi.fn(() => component),
 				setPlaceholder: vi.fn(() => component),
 				onChange: vi.fn(() => component),

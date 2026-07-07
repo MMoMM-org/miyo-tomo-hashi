@@ -127,10 +127,30 @@ export interface PluginSettings {
 	 * Spec: docs/XDD/specs/003-ide-bridge — SDD lines 300-308.
 	 */
 	ideBridgeAuthToken: string;
+
+	// --- 004 fields (NEW — suggestions editor picker scopes) ---
+
+	/**
+	 * Single folder the Suggestions Editor's template picker is limited to.
+	 * Empty string ⇒ no limit (the picker keeps its `Templates/`-then-all
+	 * fallback). Spec: docs/XDD/specs/004-suggestions-editor — owner pre-live
+	 * refinement (limit the template picker to one directory).
+	 */
+	suggestionsTemplateFolder: string;
+	/**
+	 * Folders the Suggestions Editor's location picker is limited to (a folder
+	 * and its descendants each count). Empty array ⇒ no limit (all folders).
+	 */
+	suggestionsLocationFolders: string[];
+	/**
+	 * Tag prefixes the Suggestions Editor's tag picker is limited to (namespace
+	 * match, e.g. `topic/` keeps `topic/people`). Empty array ⇒ no limit.
+	 */
+	suggestionsTagFilters: string[];
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
-	settings_version: 2,
+	settings_version: 3,
 	// 001 defaults
 	chosenInstanceName: null,
 	containerComponent: DEFAULT_COMPONENT,
@@ -147,4 +167,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	ideBridgeEnabled: false,
 	ideBridgePort: 23027,
 	ideBridgeAuthToken: "",
+	// 004 defaults
+	suggestionsTemplateFolder: "",
+	suggestionsLocationFolders: [],
+	suggestionsTagFilters: [],
 };

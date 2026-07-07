@@ -385,6 +385,7 @@ export class SettingsTab extends PluginSettingTab {
 
 		this.renderIdeBridgeSection(containerEl);
 		this.renderExecutorSection(containerEl);
+		this.renderSuggestionsSection(containerEl);
 	}
 
 	/**
@@ -541,6 +542,72 @@ export class SettingsTab extends PluginSettingTab {
 			.addToggle(toggle => {
 				toggle.setValue(this.plugin.settings.debugLogging);
 				toggle.onChange(handlers.debugLogging);
+			});
+	}
+
+	/**
+	 * Renders the "Suggestions editor" section (spec-004, owner pre-live
+	 * refinement): three controls that scope the editor's fuzzy pickers. All
+	 * three default to empty = "no limit". The template picker takes a single
+	 * folder; the location and tag pickers take a newline-separated list
+	 * (folders / tag prefixes).
+	 */
+	private renderSuggestionsSection(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName("Suggestions editor").setHeading();
+
+		new Setting(containerEl)
+			.setName("Template folder")
+			.setDesc("Limit the template picker to this one folder. Empty = default template search.")
+			.addText((text) => {
+				text.setValue(this.plugin.settings.suggestionsTemplateFolder);
+				const apply = async (v: string): Promise<void> => {
+					this.plugin.settings.suggestionsTemplateFolder = v.trim();
+					await this.plugin.saveSettings();
+				};
+				text.onChange(apply);
+				new FolderSuggest(this.app, text.inputEl, (path) => {
+					void apply(path);
+				});
+			});
+
+		this.addStringListSetting(
+			containerEl,
+			"Location folders",
+			"Limit the location picker to these folders (one per line; subfolders included). Empty = all folders.",
+			"suggestionsLocationFolders",
+		);
+
+		this.addStringListSetting(
+			containerEl,
+			"Tag filters",
+			"Limit the tag picker to these tag prefixes (one per line, e.g. topic/). Empty = all tags.",
+			"suggestionsTagFilters",
+		);
+	}
+
+	/**
+	 * Adds a multi-line (textarea) setting whose value is a newline-separated
+	 * list persisted as `string[]` (trimmed, blanks dropped). Used for the
+	 * location-folder and tag-prefix picker limits.
+	 */
+	private addStringListSetting(
+		containerEl: HTMLElement,
+		name: string,
+		desc: string,
+		key: "suggestionsLocationFolders" | "suggestionsTagFilters",
+	): void {
+		new Setting(containerEl)
+			.setName(name)
+			.setDesc(desc)
+			.addTextArea((area) => {
+				area.setValue(this.plugin.settings[key].join("\n"));
+				area.onChange(async (v: string) => {
+					this.plugin.settings[key] = v
+						.split("\n")
+						.map((line) => line.trim())
+						.filter((line) => line.length > 0);
+					await this.plugin.saveSettings();
+				});
 			});
 	}
 

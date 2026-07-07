@@ -335,6 +335,18 @@ const NO_SUGGESTIONS_DOC_NOTICE =
 export interface SuggestionsEditorCommandDeps {
 	/** Vault-relative path of the active file, or null if none is open. */
 	readonly getActiveFilePath: () => string | null;
+	/**
+	 * Every `*_suggestions.json` run in the vault (sorted). Used only when the
+	 * active file is not itself a suggestions doc — the command then offers a
+	 * picker instead of failing with a Notice.
+	 */
+	readonly listSuggestionsDocs: () => string[];
+	/**
+	 * Opens a fuzzy picker over `docs`, invoking `onPick` with the chosen path.
+	 * Injected (rather than importing the Obsidian picker here) so this module
+	 * stays testable without a real `FuzzySuggestModal`.
+	 */
+	readonly pickSuggestionsDoc: (docs: string[], onPick: (docPath: string) => void) => void;
 	/** Opens (or retargets/reveals) the Suggestions Editor leaf for docPath. */
 	readonly openSuggestionsEditor: (docPath: string) => Promise<void>;
 }
@@ -360,12 +372,22 @@ export function registerSuggestionsEditorCommand(
 async function dispatchOpenSuggestionsEditor(
 	deps: SuggestionsEditorCommandDeps,
 ): Promise<void> {
-	const docPath = resolveSuggestionsDocPath(deps.getActiveFilePath());
-	if (docPath === null) {
+	const activeDocPath = resolveSuggestionsDocPath(deps.getActiveFilePath());
+	if (activeDocPath !== null) {
+		await deps.openSuggestionsEditor(activeDocPath);
+		return;
+	}
+	// No suggestions doc is active — offer a picker over every run in the
+	// vault (owner UX refinement), falling back to the Notice only when the
+	// vault has none at all.
+	const docs = deps.listSuggestionsDocs();
+	if (docs.length === 0) {
 		new Notice(NO_SUGGESTIONS_DOC_NOTICE);
 		return;
 	}
-	await deps.openSuggestionsEditor(docPath);
+	deps.pickSuggestionsDoc(docs, (chosen) => {
+		void deps.openSuggestionsEditor(chosen);
+	});
 }
 
 /**

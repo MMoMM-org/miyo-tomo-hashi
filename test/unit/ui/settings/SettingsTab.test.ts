@@ -629,6 +629,10 @@ describe("SettingsTab — instruction executor controls", () => {
 			"ideBridgeEnabled",
 			"ideBridgePort",
 			"ideBridgeAuthToken",
+			// 004 fields (suggestions-editor picker scopes)
+			"suggestionsTemplateFolder",
+			"suggestionsLocationFolders",
+			"suggestionsTagFilters",
 		]);
 
 		// No extra keys (e.g. hookAskDecisions) in persisted data

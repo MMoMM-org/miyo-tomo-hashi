@@ -13,7 +13,6 @@
 import { describe, expect, it } from "vitest";
 import {
 	addMoc,
-	selectCandidateMoc,
 	setDecision,
 	setDeleteSource,
 	setKeepSource,
@@ -21,6 +20,7 @@ import {
 	setTags,
 	setTemplate,
 	setTitle,
+	toggleCandidateMoc,
 } from "../../../../src/suggestions/transforms/suggestion.js";
 import type {
 	CandidateMocWire,
@@ -92,8 +92,8 @@ function findSuggestion(model: EditModel, id: string): SuggestionWire | undefine
 	return model.doc.suggestions.find((s) => s.id === id);
 }
 
-describe("selectCandidateMoc (op 1 re-point)", () => {
-	it("selects the named candidate and clears every other selection", () => {
+describe("toggleCandidateMoc (op 1 independent multi-select)", () => {
+	it("checks an unselected candidate WITHOUT touching the others", () => {
 		const model = getMockModel({
 			doc: getMockDoc({
 				suggestions: [
@@ -110,16 +110,17 @@ describe("selectCandidateMoc (op 1 re-point)", () => {
 		});
 		Object.freeze(model.doc.suggestions[0]?.candidate_mocs);
 
-		const result = selectCandidateMoc(model, "S01", "Atlas/B.md");
+		const result = toggleCandidateMoc(model, "S01", "Atlas/B.md");
 
 		const candidates = findSuggestion(result, "S01")?.candidate_mocs ?? [];
-		expect(candidates.find((c) => c.path === "Atlas/A.md")?.selected).toBe(false);
+		// A stays selected (independent), B flips on, C stays off.
+		expect(candidates.find((c) => c.path === "Atlas/A.md")?.selected).toBe(true);
 		expect(candidates.find((c) => c.path === "Atlas/B.md")?.selected).toBe(true);
 		expect(candidates.find((c) => c.path === "Atlas/C.md")?.selected).toBe(false);
 		expect(result.dirty).toBe(true);
 	});
 
-	it("is a no-op (unchanged, dirty false) when re-selecting the already-sole-selected candidate", () => {
+	it("unchecks (deselects) an already-selected candidate", () => {
 		const model = getMockModel({
 			doc: getMockDoc({
 				suggestions: [
@@ -134,10 +135,12 @@ describe("selectCandidateMoc (op 1 re-point)", () => {
 			}),
 		});
 
-		const result = selectCandidateMoc(model, "S01", "Atlas/A.md");
+		const result = toggleCandidateMoc(model, "S01", "Atlas/A.md");
 
-		expect(result).toBe(model);
-		expect(result.dirty).toBe(false);
+		const candidates = findSuggestion(result, "S01")?.candidate_mocs ?? [];
+		expect(candidates.find((c) => c.path === "Atlas/A.md")?.selected).toBe(false);
+		expect(candidates.find((c) => c.path === "Atlas/B.md")?.selected).toBe(false);
+		expect(result.dirty).toBe(true);
 	});
 
 	it("does not mutate the original model's candidate array", () => {
@@ -156,7 +159,7 @@ describe("selectCandidateMoc (op 1 re-point)", () => {
 		});
 		const originalCandidates = findSuggestion(original, "S01")?.candidate_mocs;
 
-		selectCandidateMoc(original, "S01", "Atlas/B.md");
+		toggleCandidateMoc(original, "S01", "Atlas/B.md");
 
 		expect(findSuggestion(original, "S01")?.candidate_mocs).toBe(originalCandidates);
 		expect(findSuggestion(original, "S01")?.candidate_mocs[0]?.selected).toBe(true);
@@ -164,9 +167,8 @@ describe("selectCandidateMoc (op 1 re-point)", () => {
 	});
 
 	it("rejects (returns the model unchanged) when the suggestion is suppressed", () => {
-		// SDD §6: suppressed notes expose no MOC UI, so re-point is not a
-		// reachable action for them — the transform must refuse rather than
-		// silently apply it if a caller reaches it anyway.
+		// SDD §6: suppressed notes expose no MOC UI, so this is not a reachable
+		// action for them — the transform must refuse rather than silently apply.
 		const model = getMockModel({
 			doc: getMockDoc({
 				suggestions: [
@@ -179,7 +181,25 @@ describe("selectCandidateMoc (op 1 re-point)", () => {
 			}),
 		});
 
-		const result = selectCandidateMoc(model, "S01", "Atlas/A.md");
+		const result = toggleCandidateMoc(model, "S01", "Atlas/A.md");
+
+		expect(result).toBe(model);
+		expect(result.dirty).toBe(false);
+	});
+
+	it("rejects (returns the model unchanged) for an unknown candidate path", () => {
+		const model = getMockModel({
+			doc: getMockDoc({
+				suggestions: [
+					getMockSuggestion({
+						id: "S01",
+						candidate_mocs: [getMockCandidateMoc({ path: "Atlas/A.md", selected: false })],
+					}),
+				],
+			}),
+		});
+
+		const result = toggleCandidateMoc(model, "S01", "Atlas/UNKNOWN.md");
 
 		expect(result).toBe(model);
 		expect(result.dirty).toBe(false);
@@ -188,7 +208,7 @@ describe("selectCandidateMoc (op 1 re-point)", () => {
 	it("rejects (returns the model unchanged) for an unknown suggestionId", () => {
 		const model = getMockModel();
 
-		const result = selectCandidateMoc(model, "S99", "Atlas/A.md");
+		const result = toggleCandidateMoc(model, "S99", "Atlas/A.md");
 
 		expect(result).toBe(model);
 		expect(result.dirty).toBe(false);
@@ -423,7 +443,7 @@ describe("immutability across all transforms", () => {
 
 		setTitle(model, "S01", "Changed");
 		setDecision(model, "S01", "approve");
-		selectCandidateMoc(model, "S01", "Atlas/A.md");
+		toggleCandidateMoc(model, "S01", "Atlas/A.md");
 		addMoc(model, "S01", "Atlas/New.md");
 
 		expect(model.doc).toBe(originalDoc);

@@ -28,7 +28,7 @@ import { ObsidianSuggestionsDoc } from "../../src/suggestions/ObsidianSuggestion
 import { SuggestionsStore } from "../../src/suggestions/store.js";
 import { setDailyLogAccepted, setDailyLogContent } from "../../src/suggestions/transforms/daily.js";
 import { renameProposedMoc } from "../../src/suggestions/transforms/proposedMoc.js";
-import { selectCandidateMoc, setDecision } from "../../src/suggestions/transforms/suggestion.js";
+import { setDecision, toggleCandidateMoc } from "../../src/suggestions/transforms/suggestion.js";
 import { setTagGroupApproved } from "../../src/suggestions/transforms/tagHandler.js";
 import { validate } from "../../src/schema/suggestions-validator.js";
 import type {
@@ -110,7 +110,7 @@ describe("Suggestions Editor end-to-end — one real edit per tab through the re
 
 		// --- Suggestions tab: select a candidate MOC + flip a decision (S07 is
 		// the one worthy, non-suppressed suggestion in the fixture). ---
-		store.apply((model) => selectCandidateMoc(model, "S07", MOC_PATH));
+		store.apply((model) => toggleCandidateMoc(model, "S07", MOC_PATH));
 		store.apply((model) => setDecision(model, "S07", "skip"));
 
 		// --- (spot pick) anchor a selected candidate — a real AnchorWire built

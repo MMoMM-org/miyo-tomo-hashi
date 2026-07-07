@@ -72,31 +72,29 @@ export function setProposedMocDecision(
 }
 
 /**
- * Union two member_ids lists by id, deduping. `base`'s members come first
- * (order preserved), followed by any `incoming` ids not already present —
- * this is the shared merge kernel for both `mergeProposedMocs` and the
- * same-name collapse. Because the result starts as a copy of `base` and
- * only ever appends ids from `incoming` (never removes any), the union is
- * structurally guaranteed to be a superset of both inputs — orphaning a
- * member id here is not a runtime risk to guard against, it's ruled out by
- * construction. The "never orphan an id" intent is proven by the
- * `mergeProposedMocs` test that asserts every pre-merge member id from both
- * source and target survives into the merged result.
+ * Union two string lists, deduping. `base`'s entries come first (order
+ * preserved), followed by any `incoming` entries not already present. Used by
+ * `mergeProposedMocs` for both `member_ids` and `tags`. Because the result
+ * starts as a copy of `base` and only ever appends from `incoming` (never
+ * removes any), it is structurally a superset of both inputs — orphaning an
+ * entry is ruled out by construction, and the `mergeProposedMocs` test asserts
+ * every pre-merge member id from both source and target survives the merge.
  */
-function unionMemberIds(base: readonly string[], incoming: readonly string[]): readonly string[] {
+function unionStrings(base: readonly string[], incoming: readonly string[]): readonly string[] {
 	const merged = [...base];
-	for (const id of incoming) {
-		if (!merged.includes(id)) {
-			merged.push(id);
+	for (const value of incoming) {
+		if (!merged.includes(value)) {
+			merged.push(value);
 		}
 	}
 	return merged;
 }
 
 /**
- * Merge `sourceId` into `targetId`: union member_ids by id (deduped, target's
- * members first), then drop the source node. Rejects a self-merge or either
- * id being unknown — unchanged model, dirty false.
+ * Merge `sourceId` into `targetId`: union `member_ids` and `tags` (deduped,
+ * target's first), then drop the source node. Rejects a self-merge or either
+ * id being unknown — unchanged model, dirty false. Tags stay absent when
+ * neither side had any (an empty union does not fabricate a `tags: []`).
  */
 export function mergeProposedMocs(model: EditModel, sourceId: string, targetId: string): EditModel {
 	if (sourceId === targetId) {
@@ -108,28 +106,20 @@ export function mergeProposedMocs(model: EditModel, sourceId: string, targetId: 
 		return model;
 	}
 
-	const mergedMemberIds = unionMemberIds(target.member_ids, source.member_ids);
+	const mergedMemberIds = unionStrings(target.member_ids, source.member_ids);
+	const mergedTags = unionStrings(target.tags ?? [], source.tags ?? []);
 
 	const proposedMocs = model.doc.proposed_mocs
 		.filter((moc) => moc.id !== sourceId)
-		.map((moc) => (moc.id === targetId ? { ...moc, member_ids: mergedMemberIds } : moc));
+		.map((moc) =>
+			moc.id === targetId
+				? {
+						...moc,
+						member_ids: mergedMemberIds,
+						tags: mergedTags.length > 0 ? mergedTags : moc.tags,
+					}
+				: moc,
+		);
 
 	return { doc: { ...model.doc, proposed_mocs: proposedMocs }, dirty: true };
-}
-
-/**
- * "Merge into…" same-name collapse: find another proposed MOC that shares
- * `mocId`'s `name` and merge them. Rejects when `mocId` is unknown or no
- * other node shares its name — unchanged model, dirty false.
- */
-export function mergeSameNameProposedMocs(model: EditModel, mocId: string): EditModel {
-	const moc = findProposedMoc(model, mocId);
-	if (moc === undefined) {
-		return model;
-	}
-	const duplicate = model.doc.proposed_mocs.find((other) => other.id !== mocId && other.name === moc.name);
-	if (duplicate === undefined) {
-		return model;
-	}
-	return mergeProposedMocs(model, duplicate.id, mocId);
 }

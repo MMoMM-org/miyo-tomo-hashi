@@ -15,10 +15,30 @@ import type { App } from "obsidian";
 
 import type { EditModel } from "../../types/suggestions.js";
 
+/**
+ * Optional user-configured scopes narrowing the Suggestions Editor's fuzzy
+ * pickers (owner pre-live refinement). Empty string / empty array on a field
+ * means "no limit" — the picker keeps its default behaviour. Sourced from
+ * `PluginSettings.suggestions*` via the view's `getPickerScopes` dep.
+ */
+export interface PickerScopes {
+	/** Single folder the template picker is limited to ("" = no limit). */
+	readonly templateFolder: string;
+	/** Folders the location picker is limited to ([] = no limit). */
+	readonly locationFolders: readonly string[];
+	/** Tag prefixes the tag picker is limited to ([] = no limit). */
+	readonly tagFilters: readonly string[];
+}
+
 /** Per-render context handed to a tab's `render()`. */
 export interface TabContext {
 	/** For pickers — `SuggestModal`/`FuzzySuggestModal` instances need an App. */
 	readonly app: App;
+	/**
+	 * User-configured picker scopes (Template / Location / Tag). Absent in
+	 * tests and older wiring — pickers treat an absent scope as "no limit".
+	 */
+	readonly pickerScopes?: PickerScopes;
 	/**
 	 * Dispatches a domain transform through the view's `SuggestionsStore`.
 	 * A transform that returns the SAME `EditModel` reference is a no-op

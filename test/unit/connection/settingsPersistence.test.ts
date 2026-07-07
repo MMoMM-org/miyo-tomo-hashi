@@ -71,7 +71,7 @@ describe("settingsPersistence", () => {
 
 	// --- v1 → v2 migration (T4.1 — IDE settings fields) ---
 
-	it("loadSettings migrates a v1 blob: sets settings_version to 2 and adds IDE fields at defaults", async () => {
+	it("loadSettings migrates a v1 blob: bumps settings_version to current and adds IDE + suggestions fields at defaults", async () => {
 		// v1 blob: explicitly carries settings_version 1, no IDE fields
 		const v1Blob: Partial<PluginSettings> = {
 			settings_version: 1,
@@ -87,13 +87,18 @@ describe("settingsPersistence", () => {
 		vi.mocked(plugin.loadData).mockResolvedValue(v1Blob);
 		const result = await loadSettings(plugin);
 
-		// Version must be bumped to 2
-		expect(result.settings_version).toBe(2);
+		// Version must be bumped to the current schema version (3)
+		expect(result.settings_version).toBe(3);
 
 		// IDE fields defaulted (absent in v1 blob)
 		expect(result.ideBridgeEnabled).toBe(false);
 		expect(result.ideBridgePort).toBe(23027);
 		expect(result.ideBridgeAuthToken).toBe("");
+
+		// suggestions-editor picker scopes defaulted (absent in v1 blob)
+		expect(result.suggestionsTemplateFolder).toBe("");
+		expect(result.suggestionsLocationFolders).toEqual([]);
+		expect(result.suggestionsTagFilters).toEqual([]);
 
 		// All prior fields preserved as stored (not overwritten by defaults)
 		expect(result.chosenInstanceName).toBe("my-tomo");
@@ -117,11 +122,11 @@ describe("settingsPersistence", () => {
 		vi.mocked(plugin.loadData).mockResolvedValue(blobWithToken);
 		const result = await loadSettings(plugin);
 
-		expect(result.settings_version).toBe(2);
+		expect(result.settings_version).toBe(3);
 		expect(result.ideBridgeAuthToken).toBe("hashi_existing-token");
 	});
 
-	it("loadSettings round-trips a v2 blob unchanged", async () => {
+	it("loadSettings migrates a v2 blob to the current version, preserving its fields", async () => {
 		const v2Blob: PluginSettings = {
 			...DEFAULT_SETTINGS,
 			settings_version: 2,
@@ -133,14 +138,16 @@ describe("settingsPersistence", () => {
 		vi.mocked(plugin.loadData).mockResolvedValue(v2Blob);
 		const result = await loadSettings(plugin);
 
-		expect(result).toEqual(v2Blob);
+		// Only the version bumps (v2→v3); the suggestions fields were already
+		// present here via the DEFAULT_SETTINGS spread, so nothing else changes.
+		expect(result).toEqual({ ...v2Blob, settings_version: 3 });
 	});
 
-	it("loadSettings treats null payload as v2 defaults (no IDE fields in stored blob)", async () => {
+	it("loadSettings treats null payload as current-version defaults", async () => {
 		vi.mocked(plugin.loadData).mockResolvedValue(null);
 		const result = await loadSettings(plugin);
 
-		expect(result.settings_version).toBe(2);
+		expect(result.settings_version).toBe(3);
 		expect(result.ideBridgeEnabled).toBe(false);
 		expect(result.ideBridgePort).toBe(23027);
 		expect(result.ideBridgeAuthToken).toBe("");

@@ -206,9 +206,9 @@ describe("SuggestionsEditorView", () => {
 			await view.onOpen();
 
 			expect(tabButtonTexts(view)).toEqual([
+				"Daily · 2",
 				"Suggestions · 7",
 				"Proposed MOCs · 0",
-				"Daily · 2",
 				"Tag-Handler · 1",
 			]);
 		});
@@ -223,18 +223,18 @@ describe("SuggestionsEditorView", () => {
 			expect(loadSpy).toHaveBeenCalledWith(DOC_PATH);
 		});
 
-		it("renders the first tab active by default with its (non-empty) content", async () => {
+		it("renders the first tab (Daily) active by default with its (non-empty) content", async () => {
 			const view = makeView(new FakeSuggestionsDoc());
 			await view.onOpen();
 
-			const suggestionsBtn = findTabButton(view, "Suggestions");
-			expect(suggestionsBtn.classList.contains("is-active")).toBe(true);
+			const dailyBtn = findTabButton(view, "Daily");
+			expect(dailyBtn.classList.contains("is-active")).toBe(true);
 			// count lives on the subtab button
-			expect(suggestionsBtn.textContent).toContain("7");
+			expect(dailyBtn.textContent).toContain("2");
 
-			// the real SuggestionsTab renders one card per suggestion
+			// the real DailyTab renders one card per date
 			const content = body(view);
-			expect(content?.querySelector(".hashi-se-card")).not.toBeNull();
+			expect(content?.querySelector(".hashi-se-card.hashi-se-daily")).not.toBeNull();
 		});
 
 		it("renders the leaf-head title and meta from the loaded doc", async () => {
@@ -281,9 +281,9 @@ describe("SuggestionsEditorView", () => {
 			const view = makeView(new FakeSuggestionsDoc());
 			await view.onOpen();
 
-			const suggestionsBtn = findTabButton(view, "Suggestions");
+			const activeBtn = findTabButton(view, "Daily");
 			const before = body(view)?.innerHTML;
-			suggestionsBtn.click();
+			activeBtn.click();
 
 			expect(body(view)?.innerHTML).toBe(before);
 		});
@@ -362,9 +362,9 @@ describe("SuggestionsEditorView", () => {
 
 			expect(loadSpy).toHaveBeenCalledWith(DOC_PATH);
 			expect(tabButtonTexts(view)).toEqual([
+				"Daily · 2",
 				"Suggestions · 7",
 				"Proposed MOCs · 0",
-				"Daily · 2",
 				"Tag-Handler · 1",
 			]);
 		});

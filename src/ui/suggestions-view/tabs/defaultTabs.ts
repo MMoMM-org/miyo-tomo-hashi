@@ -1,8 +1,9 @@
 /**
- * The Suggestions Editor's default tab set, in SDD §3 table order:
- * Suggestions, Proposed MOCs, Daily, Tag-Handler. Each task T3.2/T3.5/T3.6/
- * T3.7 replaces its own stub file in place — this list doesn't change shape,
- * only which class each entry points at.
+ * The Suggestions Editor's default tab set. Order (owner pre-live refinement):
+ * **Daily, Suggestions, Proposed MOCs, Tag-Handler** — Daily leads because it
+ * is the most-reviewed surface in a live run, and the view activates the first
+ * tab by default (`SuggestionsEditorView` uses `tabs[0]`), so Daily also opens
+ * active.
  */
 
 import type { EditorTab } from "../tabContract.js";
@@ -13,8 +14,8 @@ import { SuggestionsTab } from "./SuggestionsTab.js";
 import { TagHandlerTab } from "./TagHandlerTab.js";
 
 export const DEFAULT_TABS: readonly EditorTab[] = [
+	new DailyTab(),
 	new SuggestionsTab(),
 	new ProposedMocsTab(),
-	new DailyTab(),
 	new TagHandlerTab(),
 ];

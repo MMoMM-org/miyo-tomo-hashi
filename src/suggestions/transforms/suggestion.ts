@@ -10,10 +10,12 @@
  * equal one) on a rejection or no-op, so callers can cheaply detect "nothing
  * changed" with `===` and `dirty` is only ever set on a real change.
  *
- * Single-select re-point (SDD §6): `candidate_mocs[].selected` models a
- * single active MOC per suggestion — `selectCandidateMoc` clears every other
- * candidate's selection when it sets the named one, matching the "re-point"
- * framing (one link target, not a multi-select) rather than a toggle.
+ * Multi-select links (owner pre-live refinement): `candidate_mocs[].selected`
+ * is an INDEPENDENT per-candidate checkbox — `toggleCandidateMoc` flips only
+ * the named candidate, leaving the others untouched. A note may therefore
+ * link into several MOCs, Tomo's auto-approved candidates arrive pre-selected,
+ * and an approved link can be cleared by toggling it off (the earlier
+ * single-select re-point could neither multi-link nor deselect).
  */
 
 import type {
@@ -51,42 +53,34 @@ function updateSuggestion(
 // ---------------------------------------------------------------------------
 
 /**
- * Selects `mocPath` as the suggestion's single active candidate MOC,
- * clearing every other candidate's selection (op 1 re-point). Rejects
- * (returns the model unchanged) when the suggestion is suppressed —
- * suppressed notes render no MOC UI (SDD §6), so this action is unreachable
- * for them and must not silently apply.
+ * Toggles `mocPath`'s `selected` flag on the suggestion — the "Link to a MOC"
+ * checkbox is an independent multi-select: checking marks the candidate
+ * linked, unchecking clears it, and no OTHER candidate is touched. Rejects
+ * (returns the model unchanged) when the suggestion is suppressed — suppressed
+ * notes render no MOC UI (SDD §6), so this action is unreachable for them and
+ * must not silently apply — or when `mocPath` names no candidate.
  */
-export function selectCandidateMoc(
+export function toggleCandidateMoc(
 	model: EditModel,
 	suggestionId: string,
 	mocPath: string,
 ): EditModel {
 	return updateSuggestion(model, suggestionId, (suggestion) => {
 		if (suggestion.suppressed) return null;
-		// No-op guard: mirrors the equality-gate pattern on every sibling
-		// setter below. `mocPath` is already the sole selection when every
-		// candidate's current `selected` already matches what the map below
-		// would set it to — i.e. re-selecting the already-sole-selected
-		// candidate must not spuriously flip `dirty` (dirty gates save).
-		const alreadySole = suggestion.candidate_mocs.every(
-			(c) => c.selected === (c.path === mocPath),
+		const target = suggestion.candidate_mocs.find((c) => c.path === mocPath);
+		if (target === undefined) return null;
+		const candidate_mocs = suggestion.candidate_mocs.map((c) =>
+			c.path === mocPath ? { ...c, selected: !c.selected } : c,
 		);
-		if (alreadySole) return null;
-		const candidate_mocs = suggestion.candidate_mocs.map((c) => ({
-			...c,
-			selected: c.path === mocPath,
-		}));
 		return { ...suggestion, candidate_mocs };
 	});
 }
 
 /**
  * Appends a new user-authored candidate MOC (op 1 ＋Add MOC), selected by
- * default, without altering any existing candidate's selection state — kept
- * additive per the plan (the picker adds a new option; `selectCandidateMoc`
- * is the single-select re-point). Rejects on a suppressed suggestion for the
- * same reason as `selectCandidateMoc`.
+ * default, without altering any existing candidate's selection state (each
+ * link is independent — see `toggleCandidateMoc`). Rejects on a suppressed
+ * suggestion for the same reason as `toggleCandidateMoc`.
  */
 export function addMoc(model: EditModel, suggestionId: string, path: string): EditModel {
 	return updateSuggestion(model, suggestionId, (suggestion) => {

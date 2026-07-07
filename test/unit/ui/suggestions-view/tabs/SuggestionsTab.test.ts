@@ -31,7 +31,7 @@
  */
 
 import "obsidian";
-import { App, TFile } from "obsidian";
+import { App, setIcon, TFile } from "obsidian";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FakeSuggestionsDoc } from "../../../../__mocks__/FakeSuggestionsDoc";
@@ -250,7 +250,7 @@ describe("SuggestionsTab", () => {
 			const miniPicks = card.querySelectorAll(".hashi-se-mini-pick");
 			expect(miniPicks[1]?.textContent).toBe("Atlas/202 Notes/");
 
-			const tags = Array.from(card.querySelectorAll(".hashi-se-tag:not(.hashi-se-add)")).map(
+			const tags = Array.from(card.querySelectorAll(".hashi-se-tag-text")).map(
 				(el) => el.textContent,
 			);
 			expect(tags).toEqual(["topic/knowledge/frameworks"]);
@@ -404,7 +404,7 @@ describe("SuggestionsTab", () => {
 			expect(next.dirty).toBe(false);
 		});
 
-		it("selecting a candidate MOC dispatches selectCandidateMoc as a single re-point (click)", async () => {
+		it("checking a candidate MOC toggles it on (click), leaving the other candidates untouched", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
 			const container = renderTab(model, ctx);
@@ -419,6 +419,8 @@ describe("SuggestionsTab", () => {
 
 			const next = applyCalls[0]!(model);
 			const nextSuggestion = next.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+			// Independent multi-select: only the clicked candidate flips; the
+			// others keep their (unselected) state — no re-point clearing.
 			expect(nextSuggestion.candidate_mocs.map((c) => [c.path, c.selected])).toEqual([
 				[suggestion.candidate_mocs[0]!.path, false],
 				[secondCandidate.path, true],
@@ -426,7 +428,47 @@ describe("SuggestionsTab", () => {
 			]);
 		});
 
-		it("selecting a candidate MOC via keyboard Enter dispatches selectCandidateMoc", async () => {
+		it("clicking an already-selected candidate toggles it OFF (deselect)", async () => {
+			const base = await loadModel();
+			const suggestion = base.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+			const firstPath = suggestion.candidate_mocs[0]!.path;
+			// Render against a model where the first candidate is already selected.
+			const model = withCandidateSelected(base, WORTHY_ID, firstPath);
+			const { ctx, applyCalls } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, WORTHY_ID);
+
+			const row = card.querySelector(`.hashi-se-cand[data-moc-path="${firstPath}"]`)!;
+			row.querySelector<HTMLElement>(".hashi-se-check")!.click();
+
+			const next = applyCalls[0]!(model);
+			const nextSuggestion = next.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+			expect(nextSuggestion.candidate_mocs.find((c) => c.path === firstPath)?.selected).toBe(false);
+			expect(next.dirty).toBe(true);
+		});
+
+		it("renders the check glyph ONLY on selected candidates (empty box otherwise)", async () => {
+			const base = await loadModel();
+			const suggestion = base.doc.suggestions.find((s) => s.id === WORTHY_ID)!;
+			const selectedPath = suggestion.candidate_mocs[0]!.path;
+			const model = withCandidateSelected(base, WORTHY_ID, selectedPath);
+			const { ctx } = makeCtx();
+
+			// setIcon draws the check glyph. It must fire once — for the single
+			// selected candidate — and not for the two unselected ones (which
+			// render as empty boxes). The obsidian mock's setIcon is a no-op, so
+			// we assert on the call rather than the (absent) rendered SVG.
+			vi.mocked(setIcon).mockClear();
+			const container = renderTab(model, ctx);
+
+			expect(vi.mocked(setIcon)).toHaveBeenCalledTimes(1);
+			const selectedCheck = container.querySelector(
+				`.hashi-se-cand[data-moc-path="${selectedPath}"] .hashi-se-check`,
+			);
+			expect(vi.mocked(setIcon).mock.calls[0]?.[0]).toBe(selectedCheck);
+		});
+
+		it("checking a candidate MOC via keyboard Enter toggles it on", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
 			const container = renderTab(model, ctx);
@@ -446,7 +488,7 @@ describe("SuggestionsTab", () => {
 			);
 		});
 
-		it("selecting a candidate MOC via keyboard Space dispatches selectCandidateMoc and prevents the page scroll", async () => {
+		it("checking a candidate MOC via keyboard Space toggles it on and prevents the page scroll", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
 			const container = renderTab(model, ctx);

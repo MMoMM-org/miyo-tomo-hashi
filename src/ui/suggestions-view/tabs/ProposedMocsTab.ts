@@ -6,15 +6,17 @@
  * that opens `ParentPicker`, an approve/skip segmented decision control,
  * member chips (rendered by the referenced suggestion's TITLE — S## id
  * shown on hover, falling back to the raw id when no suggestion matches), a
- * "⇄ Merge into…" affordance for same-name siblings, a tag list with a
- * `TagPicker` add affordance, the read-only reason text, and a merge hint
- * when another proposal shares this one's name.
+ * "⇄ Merge into…" affordance that folds this proposal into any OTHER proposal
+ * (via `MergeTargetPicker` → `mergeProposedMocs`), a tag list whose chips are
+ * individually removable plus a `TagPicker` add affordance, the read-only
+ * reason text, and an informational merge hint when another proposal shares
+ * this one's name.
  *
  * Tag edits have no dedicated Phase-1 transform (`transforms/proposedMoc.ts`
- * only covers rename/reparent/decision/merge) — `addProposedMocTag` below is
- * a small immutable helper local to this file, mirroring that module's
- * find-by-id / no-op-when-unchanged / new-`EditModel` convention rather than
- * editing the shared transforms directory.
+ * only covers rename/reparent/decision/merge) — `addProposedMocTag` /
+ * `removeProposedMocTag` below are small immutable helpers local to this file,
+ * mirroring that module's find-by-id / no-op-when-unchanged / new-`EditModel`
+ * convention rather than editing the shared transforms directory.
  */
 
 import type {
@@ -22,11 +24,12 @@ import type {
 	ProposedMocWire,
 } from "../../../types/suggestions.js";
 import {
-	mergeSameNameProposedMocs,
+	mergeProposedMocs,
 	renameProposedMoc,
 	reparentProposedMoc,
 	setProposedMocDecision,
 } from "../../../suggestions/transforms/proposedMoc.js";
+import { MergeTargetPicker } from "../pickers/MergeTargetPicker.js";
 import { ParentPicker } from "../pickers/ParentPicker.js";
 import { TagPicker } from "../pickers/TagPicker.js";
 import type { EditorTab, TabContext } from "../tabContract.js";
@@ -45,6 +48,25 @@ function addProposedMocTag(model: EditModel, mocId: string, tag: string): EditMo
 	if (existingTags.includes(tag)) return model;
 
 	const updated: ProposedMocWire = { ...moc, tags: [...existingTags, tag] };
+	const proposedMocs = model.doc.proposed_mocs.map((candidate) =>
+		candidate.id === mocId ? updated : candidate,
+	);
+	return { doc: { ...model.doc, proposed_mocs: proposedMocs }, dirty: true };
+}
+
+/**
+ * Removes `tag` from a proposed MOC's `tags` list. No-op (same model
+ * reference, `dirty` untouched) when the id is unknown or the tag is absent —
+ * same convention as `addProposedMocTag`.
+ */
+function removeProposedMocTag(model: EditModel, mocId: string, tag: string): EditModel {
+	const moc = model.doc.proposed_mocs.find((candidate) => candidate.id === mocId);
+	if (moc === undefined) return model;
+
+	const existingTags = moc.tags ?? [];
+	if (!existingTags.includes(tag)) return model;
+
+	const updated: ProposedMocWire = { ...moc, tags: existingTags.filter((t) => t !== tag) };
 	const proposedMocs = model.doc.proposed_mocs.map((candidate) =>
 		candidate.id === mocId ? updated : candidate,
 	);
@@ -184,7 +206,10 @@ export class ProposedMocsTab implements EditorTab {
 
 		row.createDiv({ cls: "hashi-se-spacer" });
 
-		if (!hasSameNameSibling(model, moc)) return;
+		// Merge into any OTHER proposal (owner refinement — no longer gated on a
+		// same-name sibling). Hidden only when this is the sole proposal.
+		const others = model.doc.proposed_mocs.filter((other) => other.id !== moc.id);
+		if (others.length === 0) return;
 
 		const mergeButton = row.createEl("button", {
 			cls: "hashi-se-link-btn",
@@ -192,7 +217,13 @@ export class ProposedMocsTab implements EditorTab {
 			attr: { type: "button" },
 		});
 		mergeButton.addEventListener("click", () => {
-			ctx.apply((m) => mergeSameNameProposedMocs(m, moc.id));
+			new MergeTargetPicker(
+				ctx.app,
+				others.map((other) => ({ id: other.id, name: other.name })),
+				(targetId) => {
+					ctx.apply((m) => mergeProposedMocs(m, moc.id, targetId));
+				},
+			).open();
 		});
 	}
 
@@ -202,7 +233,7 @@ export class ProposedMocsTab implements EditorTab {
 		const row = card.createDiv({ cls: "hashi-se-row2" });
 		row.createSpan({ cls: "hashi-se-tags-lbl", text: "Tags" });
 		for (const tag of moc.tags ?? []) {
-			row.createSpan({ cls: "hashi-se-tag", text: tag });
+			this.renderTagChip(row, moc, tag, ctx);
 		}
 		const addTagButton = row.createEl("button", {
 			cls: ["hashi-se-tag", "hashi-se-add"],
@@ -210,9 +241,32 @@ export class ProposedMocsTab implements EditorTab {
 			attr: { type: "button" },
 		});
 		addTagButton.addEventListener("click", () => {
-			new TagPicker(ctx.app, (tag) => {
-				ctx.apply((m) => addProposedMocTag(m, moc.id, tag));
-			}).open();
+			new TagPicker(
+				ctx.app,
+				(tag) => {
+					ctx.apply((m) => addProposedMocTag(m, moc.id, tag));
+				},
+				ctx.pickerScopes?.tagFilters,
+			).open();
+		});
+	}
+
+	/** A tag chip with an `×` remove control (edit = remove + re-add via ＋ tag). */
+	private renderTagChip(
+		row: HTMLElement,
+		moc: ProposedMocWire,
+		tag: string,
+		ctx: TabContext,
+	): void {
+		const chip = row.createSpan({ cls: "hashi-se-tag" });
+		chip.createSpan({ cls: "hashi-se-tag-text", text: tag });
+		const remove = chip.createEl("button", {
+			cls: "hashi-se-tag-x",
+			text: "×",
+			attr: { type: "button", "aria-label": `Remove tag ${tag}` },
+		});
+		remove.addEventListener("click", () => {
+			ctx.apply((m) => removeProposedMocTag(m, moc.id, tag));
 		});
 	}
 

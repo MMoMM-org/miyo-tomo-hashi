@@ -93,7 +93,7 @@ import type { SuggestionsDoc } from "../../vault/SuggestionsDoc.js";
 import { ConfirmModal } from "../ConfirmModal.js";
 
 import { VIEW_TYPE_SUGGESTIONS_EDITOR } from "./index.js";
-import type { EditorTab, TabContext } from "./tabContract.js";
+import type { EditorTab, PickerScopes, TabContext } from "./tabContract.js";
 import { DEFAULT_TABS } from "./tabs/defaultTabs.js";
 
 export interface SuggestionsEditorViewDeps {
@@ -107,6 +107,13 @@ export interface SuggestionsEditorViewDeps {
 	readonly docPath?: string;
 	/** Test seam — defaults to `DEFAULT_TABS`; production never overrides it. */
 	readonly tabs?: readonly EditorTab[];
+	/**
+	 * Supplies the current picker scopes (Template/Location/Tag limits) at
+	 * render time, read live from plugin settings so a settings change takes
+	 * effect on the next tab render without reconstructing the view. Absent in
+	 * tests → pickers run unscoped.
+	 */
+	readonly getPickerScopes?: () => PickerScopes;
 }
 
 /** Narrow, defensive read of `state.docPath` — never throws on a malformed state. */
@@ -413,6 +420,7 @@ export class SuggestionsEditorView extends ItemView {
 
 		const ctx: TabContext = {
 			app: this.app,
+			pickerScopes: this.deps.getPickerScopes?.(),
 			apply: (transform) => {
 				this.store?.apply(transform);
 			},
