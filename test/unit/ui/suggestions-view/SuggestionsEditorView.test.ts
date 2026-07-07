@@ -67,6 +67,14 @@ async function flushAsyncHandler(): Promise<void> {
 	await Promise.resolve();
 	await Promise.resolve();
 	await Promise.resolve();
+	// A real macrotask boundary, not just microtasks: Node only fires
+	// `process.on("unhandledRejection", ...)` for an unhandled promise
+	// AFTER the current microtask queue is fully drained. Tests that assert
+	// "this did not throw" via a process-level listener (see the Revert
+	// race test below) need to wait past that boundary, not just a few
+	// `Promise.resolve()` ticks, or the assertion can run before Node has
+	// had a chance to report the rejection at all.
+	await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 function makeView(adapter: SuggestionsDoc): SuggestionsEditorView {
@@ -600,16 +608,27 @@ describe("SuggestionsEditorView", () => {
 			await Promise.resolve();
 			expect(adapter.save).toHaveBeenCalledTimes(1);
 
+			// While the save is in flight, BOTH Save and Revert must be
+			// disabled — the `this.saving` UI guard closing the double-click/
+			// Revert-during-save window (in addition to the reference-identity
+			// guard in handleSave() that protects the case this test exercises).
+			expect(findActionButton(view, "Save").disabled).toBe(true);
+			expect(findActionButton(view, "Revert").disabled).toBe(true);
+
 			// Model B lands WHILE the save above is still in flight — a second,
-			// independent edit the in-flight save knows nothing about.
+			// independent edit the in-flight save knows nothing about. (The
+			// body's own edit controls are never gated by `saving` — only the
+			// leaf-head Save/Revert actions are.)
 			clickMarkDirty();
 
 			// Now let the stale save resolve.
 			resolveSave();
 			await flushAsyncHandler();
 
-			// Model B's edits were never written — they must stay dirty, not
-			// get silently cleared just because SOME save resolved.
+			// The in-flight window is over — Revert returns to its normal
+			// (enabled) state, and Save reflects model B's REAL dirty state
+			// (still dirty, since B's edits were never written).
+			expect(findActionButton(view, "Revert").disabled).toBe(false);
 			expect(dirtyBadge(view)).not.toBeNull();
 			expect(dirtyBadge(view)?.textContent).toContain("Edited");
 			expect(findActionButton(view, "Save").disabled).toBe(false);
@@ -652,6 +671,18 @@ describe("SuggestionsEditorView", () => {
 			await Promise.resolve();
 			expect(adapter.save).toHaveBeenCalledTimes(1);
 
+			// Capture unhandled rejections directly (rather than relying on
+			// vitest's global unhandled-rejection -> failed-test-run reporting)
+			// so the "does not throw" claim is an explicit, local assertion.
+			// `handleSave()` runs from a fire-and-forget `void` call site with
+			// no `.catch`, so a thrown error inside it surfaces here, on the
+			// Node process, not as a rejection any test-local `await` observes.
+			const unhandledRejections: unknown[] = [];
+			const onUnhandledRejection = (reason: unknown): void => {
+				unhandledRejections.push(reason);
+			};
+			process.on("unhandledRejection", onUnhandledRejection);
+
 			// Retarget the still-open leaf to a different doc WHILE the save
 			// above is still pending — this is what Revert's click handler
 			// does internally (loadAndRender via setState). loadAndRender nulls
@@ -659,24 +690,31 @@ describe("SuggestionsEditorView", () => {
 			// the time this call returns, `this.store` is already null and
 			// stays null until `pendingRetargetLoad` resolves below.
 			const OTHER_PATH = "100 Inbox/2026-07-06_0949_suggestions.json";
-			const setStatePromise = view.setState(
-				{ docPath: OTHER_PATH },
-				{ history: false },
-			);
-			expect(adapter.load).toHaveBeenCalledTimes(2);
 
-			// Resolve the STALE save now, while `this.store` is still null —
-			// this is exactly the window in which the unguarded pre-fix code
-			// threw "Cannot read properties of null (reading 'apply')" as an
-			// unhandled rejection from the fire-and-forget `void
-			// this.handleSave()` call site.
-			resolveSave();
-			await flushAsyncHandler();
+			try {
+				const setStatePromise = view.setState(
+					{ docPath: OTHER_PATH },
+					{ history: false },
+				);
+				expect(adapter.load).toHaveBeenCalledTimes(2);
 
-			// Only now does the retarget's own load resolve, completing Revert.
-			resolveRetargetLoad({ doc: DEFAULT_SEED, dirty: false });
-			await expect(setStatePromise).resolves.toBeUndefined();
-			await flushAsyncHandler();
+				// Resolve the STALE save now, while `this.store` is still null —
+				// this is exactly the window in which the unguarded pre-fix code
+				// threw "Cannot read properties of null (reading 'apply')" as an
+				// unhandled rejection from the fire-and-forget `void
+				// this.handleSave()` call site.
+				resolveSave();
+				await flushAsyncHandler();
+
+				// Only now does the retarget's own load resolve, completing Revert.
+				resolveRetargetLoad({ doc: DEFAULT_SEED, dirty: false });
+				await expect(setStatePromise).resolves.toBeUndefined();
+				await flushAsyncHandler();
+			} finally {
+				process.off("unhandledRejection", onUnhandledRejection);
+			}
+
+			expect(unhandledRejections).toHaveLength(0);
 
 			expect(adapter.load).toHaveBeenLastCalledWith(OTHER_PATH);
 			// The retargeted doc loaded clean — the stale save's dirty-clear
