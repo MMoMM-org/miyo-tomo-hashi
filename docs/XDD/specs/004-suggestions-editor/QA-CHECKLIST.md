@@ -46,7 +46,9 @@ Worthy note (e.g. **S07**, not suppressed):
 - [ ] **Decision** is an Approve/Skip **segmented control** with the *current* state highlighted (green = Approve) — confirm S07 reads as **approved** on open (matches its markdown), and toggling flips it.
 
 Suppressed note (e.g. **S01 / S05**, worthiness < 0.5):
-- [ ] Card shows the **note title** (`Note (S01) · not promoted`), a **worthiness badge**, a skip note, and a single **Force Atomic Note** control — so you can tell *which* note it is.
+- [ ] Card leads with the **origin note name** as a **clickable link** (e.g. `call-vendor · not promoted`) — clicking it opens that source note, so you can tell *which* note it is and jump to it.
+- [ ] Below the link is the editable **atomic title** (Tomo's proposed note name, used if you Force Atomic), a **worthiness badge**, the skip hint, and a single **Force Atomic Note** control.
+- [ ] The **skip hint** is conditional: a note that *has* a daily-log entry (e.g. **S01 / call-vendor**) reads "… Daily Log suggested. Check Force Atomic to create a note."; a note with *no* daily-log entry (e.g. **S02 / deliberate-practice**) reads "… Force creation if necessary."
 - [ ] There is **NO** MOC UI on suppressed cards (Tomo emits no candidates for them).
 
 ## SpotPicker — op 2 (PRD F3)
@@ -72,6 +74,7 @@ Pick **Set spot…** on a candidate MOC that is an **existing vault note** with 
 - [ ] Each date is a **clickable** control (always — even when the note doesn't exist); since the test-vault daily notes don't exist, each also shows a **"⚠ note doesn't exist — click to create"** pill.
 - [ ] Clicking the date (or the pill) opens the daily note; Obsidian creates it on open — **Hashi never creates it**.
 - [ ] Every daily checkbox (Accept, Force Atomic Note, tracker/link Accept) has a **visible text label**.
+- [ ] Per log entry: the meta line's **source note** (`… · from <note>`) is a **clickable link** that opens the origin note.
 - [ ] Per log entry: edit **content**; change **position** (at_time / after_last_line / before_first_line).
 - [ ] The **time** field is shown/enabled **only** when position = `at_time`, hidden/disabled otherwise.
 - [ ] **Accept** and **Force Atomic** toggles work. (Force-Atomic on a shared stem, e.g. `call-vendor`, should stay consistent with the same note's Suggestions-tab Force-Atomic — toggling one flips the other.)

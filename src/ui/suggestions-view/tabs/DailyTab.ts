@@ -35,6 +35,10 @@
  *     force-atomic, log-link accept) is now wrapped in a `hashi-se-cbx` /
  *     `hashi-se-ctl` `<label>` with visible text — previously these
  *     rendered as bare `<input type=checkbox>` with no label at all.
+ *  4. The log entry's meta line renders its `source_stem` as a clickable
+ *     `.hashi-se-wlink` (via `renderNoteLink`) so the user can open the
+ *     origin note — the approved mockup had this and the first rebuild
+ *     dropped it to plain text (owner QA finding).
  *
  * Daily-note existence check / open (v1 simplification): the wire only
  * gives us a bare date stem (e.g. "2026-07-06"), not a resolved vault path —
@@ -70,6 +74,7 @@ import type {
 	DailyUpdateWire,
 	EditModel,
 } from "../../../types/suggestions.js";
+import { openNoteByStem, renderNoteLink } from "../openNote.js";
 import type { EditorTab, TabContext } from "../tabContract.js";
 
 type DailyLogPosition = DailyLogEntryWire["position"];
@@ -108,9 +113,11 @@ function findDailyNoteFile(app: App, date: string): TFile | null {
  * Opens (or, per Obsidian's own resolution behavior, creates) the daily
  * note for `date`. Hashi never calls `vault.create` itself — this is the
  * only vault-touching operation the date control and warn pill trigger.
+ * Delegates to the shared `openNoteByStem` so the date control and the
+ * per-entry source links open notes the same way.
  */
 function openDailyNote(app: App, date: string): void {
-	void app.workspace.openLinkText(date, "", false);
+	openNoteByStem(app, date);
 }
 
 export class DailyTab implements EditorTab {
@@ -211,10 +218,9 @@ export class DailyTab implements EditorTab {
 			ctx.apply((model) => setDailyLogContent(model, date, index, value));
 		});
 
-		row.createDiv({
-			cls: "hashi-se-le-meta",
-			text: `${entry.reason} · from ${entry.source_stem}`,
-		});
+		const meta = row.createDiv({ cls: "hashi-se-le-meta" });
+		meta.createSpan({ text: `${entry.reason} · from ` });
+		renderNoteLink(meta, ctx.app, entry.source_stem);
 
 		const controls = row.createDiv({ cls: "hashi-se-le-controls" });
 		this.renderPositionAndTime(controls, date, index, entry, ctx);

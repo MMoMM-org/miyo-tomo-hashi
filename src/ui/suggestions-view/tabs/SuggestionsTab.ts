@@ -11,19 +11,24 @@
  *   (`TemplatePicker`), location (`LocationPicker`), keep-source, tags (list
  *   + `TagPicker` add), candidate MOCs (single-select re-point + per-
  *   candidate `SpotPicker` + `＋ Add MOC` via `MocPicker`).
- * - **suppressed** (`suppressed:true`) — the title (editable — see bug fix
- *   below), a worthiness badge, a short "why skipped" hint, and the single
- *   Force-Atomic control (`setForceAtomicFromSuggestion`, which keeps the
- *   daily-log mirror in sync by stem — SDD §6 "Force-Atomic is one decision
- *   per source"). Tomo emits an empty `candidate_mocs` for suppressed
- *   suggestions, so there is no MOC UI to render here.
+ * - **suppressed** (`suppressed:true`) — a clickable link to the origin note
+ *   (its `stem`, via `renderNoteLink`) so the user can tell WHICH note the
+ *   card is about and open it; the editable atomic-title input; a worthiness
+ *   badge; a "why skipped" hint that branches on whether a daily-log entry
+ *   exists for the stem (`suppressedHint` / `collectDailyLogStems`); and the
+ *   single Force-Atomic control (`setForceAtomicFromSuggestion`, which keeps
+ *   the daily-log mirror in sync by stem — SDD §6 "Force-Atomic is one
+ *   decision per source"). Tomo emits an empty `candidate_mocs` for
+ *   suppressed suggestions, so there is no MOC UI to render here.
  *
- * Two confirmed bugs fixed against the prior implementation:
+ * Confirmed bugs fixed against the prior implementation:
  *   1. Suppressed cards previously showed no title, only a worthiness
  *      percentage — the user couldn't tell WHICH note a suppressed card was
- *      about. Fixed: the suppressed card now renders the same editable
- *      `hashi-se-inp hashi-se-name` title field as the worthy card (labeled
- *      "Note ({id}) · not promoted"), wired to `setTitle`.
+ *      about. Fixed: the card now leads with the origin note as an openable
+ *      link (owner follow-up: the opaque "Note (S01)" gave no way to reach
+ *      the note) and keeps the editable atomic-title input (wired to
+ *      `setTitle`) below it. The skip hint is now conditional on whether a
+ *      daily-log entry was proposed for the stem.
  *   2. The prior single-button decision toggle didn't show which state was
  *      current. Fixed: `hashi-se-decision` is now a two-button segmented
  *      control (Approve / Skip), and whichever button matches
@@ -66,6 +71,7 @@ import type {
 	EditModel,
 	SuggestionWire,
 } from "../../../types/suggestions.js";
+import { renderNoteLink } from "../openNote.js";
 import { LocationPicker } from "../pickers/LocationPicker.js";
 import { MocPicker } from "../pickers/MocPicker.js";
 import { SpotPicker } from "../pickers/SpotPicker.js";
@@ -154,6 +160,40 @@ async function readMocContent(app: App, path: string): Promise<string> {
 	}
 }
 
+/**
+ * Collects the `source_stem` of every daily LOG ENTRY in the document. A
+ * suppressed suggestion whose `stem` is in this set already has an inline
+ * daily-log entry proposed for it (linked by stem — the same key
+ * `forceAtomicSync` uses), which changes the "why skipped" hint on its card:
+ * "Daily Log suggested — check Force Atomic to create a note" vs. the
+ * no-daily-entry "Force creation if necessary". Log LINKS are excluded — they
+ * point at an atomic note (`target_stem`), they are not an alternative
+ * destination for the source's content.
+ */
+function collectDailyLogStems(model: EditModel): ReadonlySet<string> {
+	const stems = new Set<string>();
+	for (const daily of model.doc.daily_updates) {
+		for (const entry of daily.log_entries) {
+			stems.add(entry.source_stem);
+		}
+	}
+	return stems;
+}
+
+/**
+ * The "why skipped" hint on a suppressed card, branched on whether Tomo also
+ * proposed a daily-log entry for this source (`hasDailyLog`). Wording per the
+ * owner: when a daily entry exists, point the user at Force Atomic as the way
+ * to promote it anyway; when none exists, there is no daily destination — the
+ * note simply stays in the inbox unless forced.
+ */
+function suppressedHint(hasDailyLog: boolean): string {
+	const lead = "Below the 0.5 threshold — kept in inbox, not made an atomic note.";
+	return hasDailyLog
+		? `${lead} Daily Log suggested. Check Force Atomic to create a note.`
+		: `${lead} Force creation if necessary.`;
+}
+
 export class SuggestionsTab implements EditorTab {
 	readonly id = "suggestions";
 	readonly label = "Suggestions";
@@ -163,12 +203,18 @@ export class SuggestionsTab implements EditorTab {
 	}
 
 	render(container: HTMLElement, model: EditModel, ctx: TabContext): void {
+		const dailyLogStems = collectDailyLogStems(model);
 		for (const suggestion of model.doc.suggestions) {
-			this.renderCard(container, suggestion, ctx);
+			this.renderCard(container, suggestion, dailyLogStems, ctx);
 		}
 	}
 
-	private renderCard(container: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+	private renderCard(
+		container: HTMLElement,
+		suggestion: SuggestionWire,
+		dailyLogStems: ReadonlySet<string>,
+		ctx: TabContext,
+	): void {
 		const card = container.createDiv({
 			cls: suggestion.suppressed ? ["hashi-se-card", "hashi-se-suppressed"] : ["hashi-se-card"],
 			attr: { "data-suggestion-id": suggestion.id },
@@ -176,7 +222,7 @@ export class SuggestionsTab implements EditorTab {
 		const top = card.createDiv({ cls: "hashi-se-card-top" });
 
 		if (suggestion.suppressed) {
-			this.renderSuppressed(top, suggestion, ctx);
+			this.renderSuppressed(top, suggestion, dailyLogStems, ctx);
 			return;
 		}
 		this.renderWorthy(top, suggestion, ctx);
@@ -454,27 +500,42 @@ export class SuggestionsTab implements EditorTab {
 		});
 	}
 
-	// -- suppressed: worthiness + hint + Force-Atomic, PLUS the title (bug fix 1) --
+	// -- suppressed: worthiness + hint + Force-Atomic, PLUS the openable source note --
 
-	private renderSuppressed(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
+	private renderSuppressed(
+		top: HTMLElement,
+		suggestion: SuggestionWire,
+		dailyLogStems: ReadonlySet<string>,
+		ctx: TabContext,
+	): void {
 		this.renderSuppressedRow1(top, suggestion, ctx);
 		top.createDiv({
 			cls: "hashi-se-suppressed-note",
-			text:
-				"Below the 0.5 threshold — kept in inbox, not made an atomic note. Its content typically goes to the daily log instead.",
+			text: suppressedHint(dailyLogStems.has(suggestion.stem)),
 		});
 		this.renderForceAtomic(top, suggestion, ctx);
 	}
 
-	/** Bug fix 1 — the suppressed card now shows an editable title, same as the worthy card. */
+	/**
+	 * The suppressed card's identity row. The source note is rendered as a
+	 * clickable link (its `stem`) so the user can tell WHICH note the card is
+	 * about and open it directly — a suggestion the owner made after the first
+	 * pass, where the opaque "Note (S01)" gave no way to reach the note. The
+	 * editable atomic-title input is kept below it (it only matters once Force
+	 * Atomic promotes the note, but that IS the note's future filename source).
+	 */
 	private renderSuppressedRow1(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
 		const row = top.createDiv({ cls: "hashi-se-row1" });
 
 		const titleField = row.createDiv({ cls: ["hashi-se-field", "hashi-se-spacer"] });
-		titleField.createEl("label", { text: `Note (${suggestion.id}) · not promoted` });
+		const idLine = titleField.createDiv({ cls: "hashi-se-suppressed-id" });
+		renderNoteLink(idLine, ctx.app, suggestion.stem);
+		idLine.createSpan({ cls: "hashi-se-muted", text: " · not promoted" });
+
+		titleField.createEl("label", { text: "Atomic title" });
 		const input = titleField.createEl("input", {
 			cls: ["hashi-se-inp", "hashi-se-name"],
-			attr: { type: "text", value: suggestion.title },
+			attr: { type: "text", value: suggestion.title, "aria-label": "Atomic note title" },
 		});
 		input.addEventListener("change", () => {
 			const title = input.value;

@@ -274,6 +274,26 @@ describe("DailyTab", () => {
 			const meta = container.querySelector(".hashi-se-le-meta");
 			expect(meta?.textContent).toBe("short call log · from call-mueller");
 		});
+
+		it("renders the source_stem as a clickable link that opens the origin note", () => {
+			const model = getMockModel([
+				getMockDailyUpdate({
+					log_entries: [getMockLogEntry({ reason: "short call log", source_stem: "call-mueller" })],
+				}),
+			]);
+			const app = new App();
+			const openLinkText = vi.spyOn(app.workspace, "openLinkText");
+			const ctx = makeCtx(app);
+			const container = document.createElement("div");
+
+			new DailyTab().render(container, model, ctx);
+
+			const link = container.querySelector<HTMLElement>(".hashi-se-le-meta .hashi-se-wlink");
+			expect(link?.textContent).toBe("call-mueller");
+			link!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+			expect(openLinkText).toHaveBeenCalledWith("call-mueller", "", false);
+		});
 	});
 
 	describe("log entry — position + time", () => {

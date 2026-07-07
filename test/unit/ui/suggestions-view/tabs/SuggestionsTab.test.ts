@@ -699,8 +699,8 @@ describe("SuggestionsTab", () => {
 		});
 	});
 
-	describe("suppressed card (S01) — bug fix 1: title is now visible", () => {
-		it("renders the editable title, worthiness, hint, and Force-Atomic — no MOC UI, no decision/template/tags", async () => {
+	describe("suppressed card (S01) — the origin note is openable, atomic title editable", () => {
+		it("renders the openable origin-note link, editable title, worthiness, hint, and Force-Atomic — no MOC UI, no decision/template/tags", async () => {
 			const model = await loadModel();
 			const { ctx } = makeCtx();
 			const container = renderTab(model, ctx);
@@ -708,12 +708,19 @@ describe("SuggestionsTab", () => {
 
 			expect(card.classList.contains("hashi-se-suppressed")).toBe(true);
 
-			// Bug fix 1: the suppressed card must show WHICH note it is.
+			// The card must show WHICH note it is — the origin note name as an
+			// openable link (owner follow-up: the opaque "Note (S01)" gave no
+			// way to reach the note).
+			const idLine = card.querySelector(".hashi-se-suppressed-id");
+			expect(idLine).not.toBeNull();
+			const link = idLine?.querySelector<HTMLElement>(".hashi-se-wlink");
+			expect(link?.textContent).toBe("call-vendor"); // S01's origin stem
+			expect(idLine?.textContent).toBe("call-vendor · not promoted");
+
+			// The editable atomic-title input is kept below the link.
 			const title = card.querySelector<HTMLInputElement>(".hashi-se-inp.hashi-se-name");
 			expect(title).not.toBeNull();
 			expect(title?.value).toBe("Vendor call — review quote, send references");
-			const label = card.querySelector("label");
-			expect(label?.textContent).toBe(`Note (${SUPPRESSED_ID}) · not promoted`);
 
 			const worthiness = card.querySelector(".hashi-se-worthiness");
 			expect(worthiness?.classList.contains("hashi-se-low")).toBe(true);
@@ -733,6 +740,32 @@ describe("SuggestionsTab", () => {
 			]) {
 				expect(card.querySelector(selector)).toBeNull();
 			}
+		});
+
+		it("clicking the origin-note link opens it via workspace.openLinkText", async () => {
+			const model = await loadModel();
+			const { ctx } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, SUPPRESSED_ID);
+
+			const link = card.querySelector<HTMLElement>(".hashi-se-suppressed-id .hashi-se-wlink")!;
+			link.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+			expect(ctx.app.workspace.openLinkText).toHaveBeenCalledWith("call-vendor", "", false);
+			// Opening a suppressed card's link must not dispatch an edit.
+			expect(ctx.apply).not.toHaveBeenCalled();
+		});
+
+		it("shows the daily-log skip hint when the stem has a daily-log entry (S01 → call-vendor)", async () => {
+			const model = await loadModel();
+			const { ctx } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, SUPPRESSED_ID);
+
+			expect(card.querySelector(".hashi-se-suppressed-note")?.textContent).toBe(
+				"Below the 0.5 threshold — kept in inbox, not made an atomic note. " +
+					"Daily Log suggested. Check Force Atomic to create a note.",
+			);
 		});
 
 		it("editing the suppressed title dispatches setTitle (the bug-1 regression)", async () => {
@@ -779,19 +812,29 @@ describe("SuggestionsTab", () => {
 		});
 	});
 
-	describe("suppressed card (S05) — a second suppressed note, distinguishable by title", () => {
-		it("renders its own title, distinct from S01's", async () => {
+	describe("suppressed card (S05) — a second suppressed note, distinguishable by its origin", () => {
+		it("renders its own origin link + title, distinct from S01's, and the no-daily-log skip hint", async () => {
 			const model = await loadModel();
 			const { ctx } = makeCtx();
 			const container = renderTab(model, ctx);
 			const card = cardFor(container, "S05");
 
+			// S05's origin stem is quick-thought — distinct from S01's call-vendor.
+			expect(card.querySelector(".hashi-se-suppressed-id .hashi-se-wlink")?.textContent).toBe(
+				"quick-thought",
+			);
 			const title = card.querySelector<HTMLInputElement>(".hashi-se-inp.hashi-se-name");
 			expect(title?.value).toBe("Replace the hallway light bulb");
 
 			const worthiness = card.querySelector(".hashi-se-worthiness");
 			expect(worthiness?.querySelector(".hashi-se-wv")?.textContent).toBe("20%");
 			expect(worthiness?.classList.contains("hashi-se-low")).toBe(true);
+
+			// quick-thought has NO daily-log entry → the "force creation" hint.
+			expect(card.querySelector(".hashi-se-suppressed-note")?.textContent).toBe(
+				"Below the 0.5 threshold — kept in inbox, not made an atomic note. " +
+					"Force creation if necessary.",
+			);
 		});
 	});
 });
