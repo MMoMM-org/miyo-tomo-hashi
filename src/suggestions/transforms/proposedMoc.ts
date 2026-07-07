@@ -91,10 +91,26 @@ function unionStrings(base: readonly string[], incoming: readonly string[]): rea
 }
 
 /**
+ * Retarget the leading "N note[s]" member count in a Tomo reason string to
+ * `count` (fixing pluralization). Tomo emits reasons like "1 note share topic
+ * X and have no dedicated MOC."; after a merge grows the member list, that
+ * count is stale, so the merged card shows the wrong number. Only the leading
+ * count token is rewritten — if the reason doesn't start with `<digits> note`
+ * (absent, or a non-standard/localized wording) it is returned unchanged, so
+ * Hashi never mangles the rest of Tomo's copy.
+ */
+function retargetReasonCount(reason: string | undefined, count: number): string | undefined {
+	if (reason === undefined) return reason;
+	const noun = count === 1 ? "note" : "notes";
+	return reason.replace(/^\d+\s+notes?/i, `${count} ${noun}`);
+}
+
+/**
  * Merge `sourceId` into `targetId`: union `member_ids` and `tags` (deduped,
- * target's first), then drop the source node. Rejects a self-merge or either
- * id being unknown — unchanged model, dirty false. Tags stay absent when
- * neither side had any (an empty union does not fabricate a `tags: []`).
+ * target's first), retarget the target's reason count to the merged member
+ * count, then drop the source node. Rejects a self-merge or either id being
+ * unknown — unchanged model, dirty false. Tags stay absent when neither side
+ * had any (an empty union does not fabricate a `tags: []`).
  */
 export function mergeProposedMocs(model: EditModel, sourceId: string, targetId: string): EditModel {
 	if (sourceId === targetId) {
@@ -117,6 +133,7 @@ export function mergeProposedMocs(model: EditModel, sourceId: string, targetId: 
 						...moc,
 						member_ids: mergedMemberIds,
 						tags: mergedTags.length > 0 ? mergedTags : moc.tags,
+						reason: retargetReasonCount(moc.reason, mergedMemberIds.length),
 					}
 				: moc,
 		);

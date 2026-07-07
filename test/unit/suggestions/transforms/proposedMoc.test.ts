@@ -309,3 +309,42 @@ describe("mergeProposedMocs — tag union", () => {
 		expect(result.doc.proposed_mocs.find((m) => m.id === "M02")?.tags).toBeUndefined();
 	});
 });
+
+describe("mergeProposedMocs — reason count retarget", () => {
+	it("updates the target reason's leading '1 note' to the merged member count, pluralized", () => {
+		const model = getMockModel([
+			getMockProposedMoc({
+				id: "M01",
+				name: "Cooking",
+				member_ids: ["S01"],
+				reason: "1 note share topic Cooking and have no dedicated MOC.",
+			}),
+			getMockProposedMoc({ id: "M02", name: "AI", member_ids: ["S02"] }),
+		]);
+
+		// M02 merges INTO M01 → M01 now has 2 members.
+		const result = mergeProposedMocs(model, "M02", "M01");
+
+		expect(result.doc.proposed_mocs.find((m) => m.id === "M01")?.reason).toBe(
+			"2 notes share topic Cooking and have no dedicated MOC.",
+		);
+	});
+
+	it("leaves a reason with no leading count unchanged (Hashi never rewrites the rest of Tomo's copy)", () => {
+		const model = getMockModel([
+			getMockProposedMoc({
+				id: "M01",
+				name: "X",
+				member_ids: ["S01"],
+				reason: "Groups related captures.",
+			}),
+			getMockProposedMoc({ id: "M02", name: "Y", member_ids: ["S02"] }),
+		]);
+
+		const result = mergeProposedMocs(model, "M02", "M01");
+
+		expect(result.doc.proposed_mocs.find((m) => m.id === "M01")?.reason).toBe(
+			"Groups related captures.",
+		);
+	});
+});
