@@ -94,6 +94,7 @@ Cut down on the busywork — with the peace of mind that Hashi does only what yo
 | [Session View](docs/session-view.md) | Tomo users | Chat tab, terminal, zoom, file-prefill — branch A |
 | [Chat](docs/chat.md) | Tomo users | Picker, reconnect schedule, status bar 友 — branch A |
 | [Context](docs/context.md) | Tomo users | Enable + Tomo wiring, auth token, connection troubleshooting — branch B |
+| [Suggestions Editor](docs/suggestions-editor.md) | Tomo users | Tabbed review of `_suggestions.json`, worthy/suppressed cards, MOC placement, Save = approve — branch C |
 | [Instruction Executor](docs/instruction-executor.md) | Tomo users | Modal stages, modes, partial-resume, status bar 橋 — branch C |
 | [Action Reference](docs/action-reference.md) | Tomo users | All 11 action kinds with idempotency rules — branch C |
 | [Hooks](docs/hooks.md) | Power users | `.cjs` hook authoring, policy, disclosure modal — branch C |
