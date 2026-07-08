@@ -500,14 +500,17 @@ describe("SuggestionsTab", () => {
 			// selected candidate — and not for the two unselected ones (which
 			// render as empty boxes). The obsidian mock's setIcon is a no-op, so
 			// we assert on the call rather than the (absent) rendered SVG.
+			// Filter to the "check" glyph specifically: suppressed cards also call
+			// setIcon for their daily-log indicator, which is not what this tests.
 			vi.mocked(setIcon).mockClear();
 			const container = renderTab(model, ctx);
 
-			expect(vi.mocked(setIcon)).toHaveBeenCalledTimes(1);
+			const checkCalls = vi.mocked(setIcon).mock.calls.filter(([, name]) => name === "check");
+			expect(checkCalls).toHaveLength(1);
 			const selectedCheck = container.querySelector(
 				`.hashi-se-cand[data-moc-path="${selectedPath}"] .hashi-se-check`,
 			);
-			expect(vi.mocked(setIcon).mock.calls[0]?.[0]).toBe(selectedCheck);
+			expect(checkCalls[0]?.[0]).toBe(selectedCheck);
 		});
 
 		it("checking a candidate MOC via keyboard Enter toggles it on", async () => {
@@ -905,6 +908,40 @@ describe("SuggestionsTab", () => {
 			);
 		});
 
+		function setDailyAccepted(model: EditModel, stem: string, accepted: boolean): EditModel {
+			return {
+				...model,
+				doc: {
+					...model.doc,
+					daily_updates: model.doc.daily_updates.map((d) => ({
+						...d,
+						log_entries: d.log_entries.map((e) =>
+							e.source_stem === stem ? { ...e, accepted } : e,
+						),
+					})),
+				},
+			};
+		}
+
+		it("renders a MUTED daily-log icon when the entry exists but is not accepted (fixture default)", async () => {
+			const model = await loadModel(); // call-vendor's log entry is accepted:false in the fixture
+			const { ctx } = makeCtx();
+			const card = cardFor(renderTab(model, ctx), SUPPRESSED_ID);
+
+			const icon = card.querySelector(".hashi-se-suppressed-note .hashi-se-daily-icon");
+			expect(icon).not.toBeNull();
+			expect(icon?.classList.contains("is-active")).toBe(false);
+		});
+
+		it("HIGHLIGHTS the daily-log icon (is-active) once the daily-log entry is accepted", async () => {
+			const model = setDailyAccepted(await loadModel(), "call-vendor", true);
+			const { ctx } = makeCtx();
+			const card = cardFor(renderTab(model, ctx), SUPPRESSED_ID);
+
+			const icon = card.querySelector(".hashi-se-suppressed-note .hashi-se-daily-icon");
+			expect(icon?.classList.contains("is-active")).toBe(true);
+		});
+
 		it("editing the suppressed title dispatches setTitle (the bug-1 regression)", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
@@ -972,6 +1009,8 @@ describe("SuggestionsTab", () => {
 				"Below the 0.5 threshold — kept in inbox, not made an atomic note. " +
 					"Force creation if necessary.",
 			);
+			// …and no daily-log indicator icon at all.
+			expect(card.querySelector(".hashi-se-suppressed-note .hashi-se-daily-icon")).toBeNull();
 		});
 	});
 });

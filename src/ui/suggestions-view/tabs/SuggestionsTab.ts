@@ -161,20 +161,24 @@ async function readMocContent(app: App, path: string): Promise<string> {
 }
 
 /**
- * Collects the `source_stem` of every daily LOG ENTRY in the document. A
- * suppressed suggestion whose `stem` is in this set already has an inline
- * daily-log entry proposed for it (linked by stem — the same key
- * `forceAtomicSync` uses), which changes the "why skipped" hint on its card:
- * "Daily Log suggested — check Force Atomic to create a note" vs. the
- * no-daily-entry "Force creation if necessary". Log LINKS are excluded — they
- * point at an atomic note (`target_stem`), they are not an alternative
- * destination for the source's content.
+ * Maps the `source_stem` of every daily LOG ENTRY to whether that stem's log
+ * entry is currently accepted (activated). A suppressed suggestion whose
+ * `stem` is a key already has an inline daily-log entry proposed for it
+ * (linked by stem — the same key `forceAtomicSync` uses), which changes the
+ * "why skipped" hint on its card: "Daily Log suggested — check Force Atomic to
+ * create a note" vs. the no-daily-entry "Force creation if necessary". The
+ * boolean value drives the card's daily-log indicator icon (accent when the
+ * entry is accepted, muted when not) — a stem is treated as active if ANY of
+ * its log entries is accepted. Log LINKS are excluded — they point at an
+ * atomic note (`target_stem`), they are not an alternative destination for the
+ * source's content.
  */
-function collectDailyLogStems(model: EditModel): ReadonlySet<string> {
-	const stems = new Set<string>();
+function collectDailyLogStems(model: EditModel): ReadonlyMap<string, boolean> {
+	const stems = new Map<string, boolean>();
 	for (const daily of model.doc.daily_updates) {
 		for (const entry of daily.log_entries) {
-			stems.add(entry.source_stem);
+			const accepted = (stems.get(entry.source_stem) ?? false) || entry.accepted;
+			stems.set(entry.source_stem, accepted);
 		}
 	}
 	return stems;
@@ -233,7 +237,7 @@ export class SuggestionsTab implements EditorTab {
 	private renderCard(
 		container: HTMLElement,
 		suggestion: SuggestionWire,
-		dailyLogStems: ReadonlySet<string>,
+		dailyLogStems: ReadonlyMap<string, boolean>,
 		proposedByMember: ReadonlyMap<string, readonly string[]>,
 		ctx: TabContext,
 	): void {
@@ -602,15 +606,45 @@ export class SuggestionsTab implements EditorTab {
 	private renderSuppressed(
 		top: HTMLElement,
 		suggestion: SuggestionWire,
-		dailyLogStems: ReadonlySet<string>,
+		dailyLogStems: ReadonlyMap<string, boolean>,
 		ctx: TabContext,
 	): void {
 		this.renderSuppressedRow1(top, suggestion, ctx);
-		top.createDiv({
-			cls: "hashi-se-suppressed-note",
-			text: suppressedHint(dailyLogStems.has(suggestion.stem)),
-		});
+		this.renderSuppressedHint(top, suggestion, dailyLogStems);
 		this.renderForceAtomic(top, suggestion, ctx);
+	}
+
+	/**
+	 * The "why skipped" hint plus a daily-log indicator. When Tomo also
+	 * proposed a daily-log entry for this source (`stem` is a key in
+	 * `dailyLogStems`), a calendar icon leads the hint: accent-coloured when
+	 * that entry is currently accepted (activated), muted/faint when it is not
+	 * — a live at-a-glance cue for whether the source has an active daily-log
+	 * destination, without switching to the Daily tab. No icon when no daily
+	 * entry exists.
+	 */
+	private renderSuppressedHint(
+		top: HTMLElement,
+		suggestion: SuggestionWire,
+		dailyLogStems: ReadonlyMap<string, boolean>,
+	): void {
+		const note = top.createDiv({ cls: "hashi-se-suppressed-note" });
+		const dailyAccepted = dailyLogStems.get(suggestion.stem);
+		const hasDailyLog = dailyAccepted !== undefined;
+		if (hasDailyLog) {
+			const icon = note.createSpan({
+				cls: dailyAccepted
+					? ["hashi-se-daily-icon", "is-active"]
+					: ["hashi-se-daily-icon"],
+				attr: {
+					"aria-label": dailyAccepted
+						? "Daily log entry is active for this note"
+						: "Daily log entry not activated for this note",
+				},
+			});
+			setIcon(icon, "calendar-days");
+		}
+		note.createSpan({ text: suppressedHint(hasDailyLog) });
 	}
 
 	/**
