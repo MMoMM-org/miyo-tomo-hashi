@@ -227,6 +227,48 @@ describe("SuggestionsTab", () => {
 		});
 	});
 
+	describe("summary gist line (wire `summary`)", () => {
+		function withSummary(model: EditModel, id: string, summary: string | null): EditModel {
+			return {
+				...model,
+				doc: {
+					...model.doc,
+					suggestions: model.doc.suggestions.map((s) =>
+						s.id === id ? { ...s, summary } : s,
+					),
+				},
+			};
+		}
+
+		it("renders the summary at the top of the card when present", async () => {
+			const model = withSummary(await loadModel(), WORTHY_ID, "A one-sentence gist.");
+			const { ctx } = makeCtx();
+			const card = cardFor(renderTab(model, ctx), WORTHY_ID);
+			expect(card.querySelector(".hashi-se-summary")?.textContent).toBe("A one-sentence gist.");
+		});
+
+		it("renders the summary on a suppressed card too", async () => {
+			const model = withSummary(await loadModel(), SUPPRESSED_ID, "Gist of a light block.");
+			const { ctx } = makeCtx();
+			const card = cardFor(renderTab(model, ctx), SUPPRESSED_ID);
+			expect(card.querySelector(".hashi-se-summary")?.textContent).toBe("Gist of a light block.");
+		});
+
+		it("omits the summary line for null (legacy runs)", async () => {
+			const model = withSummary(await loadModel(), WORTHY_ID, null);
+			const { ctx } = makeCtx();
+			const card = cardFor(renderTab(model, ctx), WORTHY_ID);
+			expect(card.querySelector(".hashi-se-summary")).toBeNull();
+		});
+
+		it("omits the summary line for a blank string", async () => {
+			const model = withSummary(await loadModel(), WORTHY_ID, "   ");
+			const { ctx } = makeCtx();
+			const card = cardFor(renderTab(model, ctx), WORTHY_ID);
+			expect(card.querySelector(".hashi-se-summary")).toBeNull();
+		});
+	});
+
 	describe("worthy card (S07)", () => {
 		it("renders title/decision/template/location/keep-source/tags/candidate-MOCs/+Add MOC", async () => {
 			const model = await loadModel();

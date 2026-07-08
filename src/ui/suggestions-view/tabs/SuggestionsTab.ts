@@ -243,6 +243,11 @@ export class SuggestionsTab implements EditorTab {
 		});
 		const top = card.createDiv({ cls: "hashi-se-card-top" });
 
+		// Analyst-authored one-sentence gist (wire `summary`, spec-027) — a
+		// display-only line that tells the user what the note is about without
+		// opening it. Absent/null on legacy (pre-summary) runs, so guard it.
+		this.renderSummary(top, suggestion);
+
 		if (suggestion.suppressed) {
 			this.renderSuppressed(top, suggestion, dailyLogStems, ctx);
 		} else {
@@ -266,6 +271,17 @@ export class SuggestionsTab implements EditorTab {
 			cls: "hashi-se-xref",
 			text: `↳ also proposed as ${noun}: ${mocNames.join(", ")} — see the Proposed MOCs tab`,
 		});
+	}
+
+	/**
+	 * Renders the read-only summary gist line (wire `summary`). Rendered for
+	 * both worthy and suppressed cards; skipped entirely when the field is
+	 * absent, null, or blank so legacy runs render exactly as before.
+	 */
+	private renderSummary(top: HTMLElement, suggestion: SuggestionWire): void {
+		const summary = suggestion.summary?.trim();
+		if (summary === undefined || summary === "") return;
+		top.createDiv({ cls: "hashi-se-summary", text: summary });
 	}
 
 	// -- worthy: full note-editable surface --------------------------------

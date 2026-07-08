@@ -132,6 +132,7 @@ interface EditModel {
 interface Suggestion {
   id:string; stem:string;                              // read-only
   audioPeer?:string|null; suppressed:boolean; worthiness?:number|null; // read-only; audioPeer/worthiness OPTIONAL in wire
+  summary?:string|null;                                // read-only display gist (spec-027); OPTIONAL — null/absent on legacy runs
   title:string;                                        // EDITABLE (stem derives, Tomo)
   template:string; location:string;                    // EDITABLE (pickers)
   tags:string[];                                       // EDITABLE (fuzzy)

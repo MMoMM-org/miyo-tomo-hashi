@@ -61,6 +61,12 @@ export interface SuggestionWire {
 	readonly stem: string;
 	/** Editable — the note name; the filename derives from it. */
 	readonly title: string;
+	/**
+	 * Read-only — one-sentence gist of the note's content (analyst-authored,
+	 * display only). Lets the editor show what the note is about without
+	 * opening it. Null/absent on legacy items (pre-summary runs).
+	 */
+	readonly summary?: string | null;
 	/** Editable — template wikilink target. */
 	readonly template: string;
 	/** Editable — destination folder. */

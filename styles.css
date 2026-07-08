@@ -588,6 +588,14 @@
 .hashi-se-card-top {
 	padding: 12px 13px 14px;
 }
+/* Read-only analyst gist (wire `summary`) — leads the card so the reader
+   knows what the note is about before touching its editable fields. */
+.hashi-se-summary {
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--se-text-muted);
+	margin-bottom: 12px;
+}
 .hashi-se-row1 {
 	display: flex;
 	align-items: center;
