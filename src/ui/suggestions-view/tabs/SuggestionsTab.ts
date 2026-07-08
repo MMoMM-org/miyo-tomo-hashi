@@ -194,6 +194,26 @@ function suppressedHint(hasDailyLog: boolean): string {
 		: `${lead} Force creation if necessary.`;
 }
 
+/**
+ * Builds a `suggestion id → proposed-MOC name[]` index from `proposed_mocs`
+ * membership (`member_ids`). Lets a Suggestions card show which proposed MOC
+ * a note will be added to (the markdown surfaces this, the card didn't).
+ * Derived fresh each render, so a proposed-MOC rename or merge — which moves
+ * the member id to the target proposal — is reflected without any extra
+ * bookkeeping.
+ */
+function collectProposedMocMembership(model: EditModel): ReadonlyMap<string, readonly string[]> {
+	const byMember = new Map<string, string[]>();
+	for (const moc of model.doc.proposed_mocs) {
+		for (const memberId of moc.member_ids) {
+			const names = byMember.get(memberId) ?? [];
+			names.push(moc.name);
+			byMember.set(memberId, names);
+		}
+	}
+	return byMember;
+}
+
 export class SuggestionsTab implements EditorTab {
 	readonly id = "suggestions";
 	readonly label = "Suggestions";
@@ -204,8 +224,9 @@ export class SuggestionsTab implements EditorTab {
 
 	render(container: HTMLElement, model: EditModel, ctx: TabContext): void {
 		const dailyLogStems = collectDailyLogStems(model);
+		const proposedByMember = collectProposedMocMembership(model);
 		for (const suggestion of model.doc.suggestions) {
-			this.renderCard(container, suggestion, dailyLogStems, ctx);
+			this.renderCard(container, suggestion, dailyLogStems, proposedByMember, ctx);
 		}
 	}
 
@@ -213,6 +234,7 @@ export class SuggestionsTab implements EditorTab {
 		container: HTMLElement,
 		suggestion: SuggestionWire,
 		dailyLogStems: ReadonlySet<string>,
+		proposedByMember: ReadonlyMap<string, readonly string[]>,
 		ctx: TabContext,
 	): void {
 		const card = container.createDiv({
@@ -223,9 +245,27 @@ export class SuggestionsTab implements EditorTab {
 
 		if (suggestion.suppressed) {
 			this.renderSuppressed(top, suggestion, dailyLogStems, ctx);
-			return;
+		} else {
+			this.renderWorthy(top, suggestion, ctx);
 		}
-		this.renderWorthy(top, suggestion, ctx);
+		// Cross-reference to any proposed MOC this note is a member of — derived
+		// live from proposed_mocs so a merge (which moves the member to the
+		// target proposal) is reflected here on the next render.
+		this.renderProposedXref(top, proposedByMember.get(suggestion.id));
+	}
+
+	/**
+	 * Renders the "↳ also proposed as a new MOC" cross-reference (mockup's
+	 * `.xref`) when this note is a member of one or more proposed MOCs. Names
+	 * are the proposed MOCs' current names, so a rename/merge shows through.
+	 */
+	private renderProposedXref(top: HTMLElement, mocNames: readonly string[] | undefined): void {
+		if (mocNames === undefined || mocNames.length === 0) return;
+		const noun = mocNames.length === 1 ? "a new MOC" : "new MOCs";
+		top.createDiv({
+			cls: "hashi-se-xref",
+			text: `↳ also proposed as ${noun}: ${mocNames.join(", ")} — see the Proposed MOCs tab`,
+		});
 	}
 
 	// -- worthy: full note-editable surface --------------------------------

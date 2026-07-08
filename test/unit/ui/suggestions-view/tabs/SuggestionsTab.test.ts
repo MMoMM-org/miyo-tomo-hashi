@@ -741,6 +741,59 @@ describe("SuggestionsTab", () => {
 		});
 	});
 
+	describe("proposed-MOC cross-reference (mockup .xref)", () => {
+		function withProposedMoc(base: EditModel, name: string, memberIds: string[]): EditModel {
+			return {
+				...base,
+				doc: {
+					...base.doc,
+					proposed_mocs: [
+						{
+							id: "M01",
+							topic: "AI",
+							name,
+							parent: "",
+							member_ids: memberIds,
+							decision: "skip",
+						},
+					],
+				},
+			};
+		}
+
+		it("shows the proposed MOC a note will be added to, by name", async () => {
+			const model = withProposedMoc(await loadModel(), "AI (MOC)", [WORTHY_ID]);
+			const { ctx } = makeCtx();
+			const container = renderTab(model, ctx);
+
+			const xref = cardFor(container, WORTHY_ID).querySelector(".hashi-se-xref");
+			expect(xref?.textContent).toBe(
+				"↳ also proposed as a new MOC: AI (MOC) — see the Proposed MOCs tab",
+			);
+		});
+
+		it("uses the CURRENT proposed-MOC name (so a rename/merge shows through)", async () => {
+			// Simulate a post-merge state: the member now lives under the renamed
+			// target proposal — the card must reflect the new name, not a stale id.
+			const model = withProposedMoc(await loadModel(), "Merged Topics (MOC)", [WORTHY_ID]);
+			const { ctx } = makeCtx();
+			const container = renderTab(model, ctx);
+
+			expect(cardFor(container, WORTHY_ID).querySelector(".hashi-se-xref")?.textContent).toContain(
+				"Merged Topics (MOC)",
+			);
+		});
+
+		it("renders no cross-reference when the note is not a member of any proposed MOC", async () => {
+			// The 1115 fixture has proposed_mocs: [] — no card should show an xref.
+			const model = await loadModel();
+			const { ctx } = makeCtx();
+			const container = renderTab(model, ctx);
+
+			expect(container.querySelector(".hashi-se-xref")).toBeNull();
+		});
+	});
+
 	describe("suppressed card (S01) — the origin note is openable, atomic title editable", () => {
 		it("renders the openable origin-note link, editable title, worthiness, hint, and Force-Atomic — no MOC UI, no decision/template/tags", async () => {
 			const model = await loadModel();
