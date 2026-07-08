@@ -372,6 +372,10 @@ describe("registerExecutorCommands (002)", () => {
 	let executor: ExecutorOnly;
 	let vault: ExistsVault;
 	let settings: PluginSettings;
+	let listInstructionsDocs: Mock<() => string[]>;
+	let pickInstructionsDoc: Mock<
+		(docs: string[], onPick: (invocation: Invocation) => void) => void
+	>;
 	let deps: ExecutorCommandDeps;
 
 	beforeEach(() => {
@@ -381,10 +385,14 @@ describe("registerExecutorCommands (002)", () => {
 		executor = { execute: vi.fn(async () => ({})) };
 		vault = { exists: vi.fn(async () => false) };
 		settings = { ...DEFAULT_SETTINGS, tomoInboxFolder: "inbox" };
+		listInstructionsDocs = vi.fn<() => string[]>(() => []);
+		pickInstructionsDoc = vi.fn();
 		deps = {
 			executor: executor as unknown as ExecutorCommandDeps["executor"],
 			vault: vault as unknown as ExecutorCommandDeps["vault"],
 			settings,
+			listInstructionsDocs,
+			pickInstructionsDoc,
 		};
 	});
 
@@ -440,55 +448,98 @@ describe("registerExecutorCommands (002)", () => {
 			});
 		});
 
-		it("active .md whose sibling .json does NOT exist → batch invocation", async () => {
+		async function runCommand(): Promise<void> {
+			registerExecutorCommands(plugin, deps);
+			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
+			cmd?.callback?.();
+			await Promise.resolve();
+			await Promise.resolve();
+		}
+
+		it("active _suggestions.json (the misroute bug) → offers the picker, does NOT execute it", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
+				() => fakeTFile("inbox/2026-07-08_1307_suggestions-fan.json"),
+			);
+			vault.exists = vi.fn(async () => true); // the suggestions json exists…
+			listInstructionsDocs.mockReturnValue(["inbox/a_instructions.json"]);
+
+			await runCommand();
+
+			// …but it is NOT fed to the executor (would fail instructions-schema validation).
+			expect(executor.execute).not.toHaveBeenCalled();
+			expect(pickInstructionsDoc).toHaveBeenCalledTimes(1);
+			expect(pickInstructionsDoc.mock.calls[0]?.[0]).toEqual(["inbox/a_instructions.json"]);
+		});
+
+		it("active .md whose sibling is not an _instructions.json → offers the picker", async () => {
 			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
 				() => fakeTFile("notes/random.md"),
 			);
 			vault.exists = vi.fn(async () => false);
+			listInstructionsDocs.mockReturnValue(["inbox/a_instructions.json"]);
 
-			registerExecutorCommands(plugin, deps);
-			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
-			cmd?.callback?.();
-			await Promise.resolve();
-			await Promise.resolve();
+			await runCommand();
 
-			expect(executor.execute).toHaveBeenCalledWith({ kind: "batch" });
+			expect(executor.execute).not.toHaveBeenCalled();
+			expect(pickInstructionsDoc).toHaveBeenCalledTimes(1);
 		});
 
-		it("active non-md, non-json file → batch invocation", async () => {
+		it("active non-md, non-json file → offers the picker", async () => {
 			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
 				() => fakeTFile("attachments/diagram.png"),
 			);
+			listInstructionsDocs.mockReturnValue(["inbox/a_instructions.json"]);
 
-			registerExecutorCommands(plugin, deps);
-			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
-			cmd?.callback?.();
-			await Promise.resolve();
-			await Promise.resolve();
+			await runCommand();
 
-			expect(executor.execute).toHaveBeenCalledWith({ kind: "batch" });
+			expect(pickInstructionsDoc).toHaveBeenCalledTimes(1);
 		});
 
-		it("no active file → batch invocation", async () => {
-			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
-				() => null,
-			);
+		it("no active file → offers the picker", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(() => null);
+			listInstructionsDocs.mockReturnValue(["inbox/a_instructions.json"]);
 
-			registerExecutorCommands(plugin, deps);
-			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
-			cmd?.callback?.();
-			await Promise.resolve();
-			await Promise.resolve();
+			await runCommand();
 
+			expect(pickInstructionsDoc).toHaveBeenCalledTimes(1);
+		});
+
+		it("picking the batch entry runs batch; picking a doc runs that single-file", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(() => null);
+			listInstructionsDocs.mockReturnValue(["inbox/a_instructions.json"]);
+
+			await runCommand();
+
+			const onPick = pickInstructionsDoc.mock.calls[0]?.[1];
+			expect(onPick).toBeDefined();
+			onPick?.({ kind: "batch" });
 			expect(executor.execute).toHaveBeenCalledWith({ kind: "batch" });
+			onPick?.({ kind: "single-file", sourcePath: "inbox/a_instructions.json" });
+			expect(executor.execute).toHaveBeenCalledWith({
+				kind: "single-file",
+				sourcePath: "inbox/a_instructions.json",
+			});
+		});
+
+		it("no instruction docs in the inbox → Notice, no picker, no execute", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(() => null);
+			listInstructionsDocs.mockReturnValue([]);
+
+			await runCommand();
+
+			expect(pickInstructionsDoc).not.toHaveBeenCalled();
+			expect(executor.execute).not.toHaveBeenCalled();
 		});
 	});
 
 	describe("single-run lock NOT bypassed by command", () => {
 		it("two rapid invocations BOTH dispatch to executor.execute (lock lives in executor)", async () => {
+			// Active instructions doc → the command dispatches straight to the
+			// executor (no picker), so each click is one execute() call.
 			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
-				() => null,
+				() => fakeTFile("inbox/run_instructions.json"),
 			);
+			vault.exists = vi.fn(async () => true);
 
 			registerExecutorCommands(plugin, deps);
 			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);

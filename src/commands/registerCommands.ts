@@ -161,6 +161,23 @@ export interface ExecutorCommandDeps {
 	 * gating before invocation) have the surface ready.
 	 */
 	readonly settings: PluginSettings;
+	/**
+	 * Every `*_instructions.json` in the inbox (sorted). Used when the active
+	 * file is NOT itself an instructions doc — the command then offers a picker
+	 * (batch entry + one per doc) instead of misrouting the active file (e.g. a
+	 * `_suggestions.json`) into the executor, which would fail schema validation.
+	 */
+	readonly listInstructionsDocs: () => string[];
+	/**
+	 * Opens a fuzzy picker over the inbox's instruction docs — a "run whole
+	 * inbox" batch entry plus one entry per doc — invoking `onPick` with the
+	 * chosen `Invocation`. Injected (rather than importing the Obsidian picker
+	 * here) so this module stays testable without a real `FuzzySuggestModal`.
+	 */
+	readonly pickInstructionsDoc: (
+		docs: string[],
+		onPick: (invocation: Invocation) => void,
+	) => void;
 }
 
 /**
@@ -181,49 +198,69 @@ export function registerExecutorCommands(
 	});
 }
 
+const NO_INSTRUCTIONS_DOC_NOTICE =
+	"No instruction documents (_instructions.json) found in the Tomo inbox.";
+
 async function dispatchActiveInvocation(
 	plugin: Plugin,
 	deps: ExecutorCommandDeps,
 ): Promise<void> {
 	const activePath = plugin.app.workspace.getActiveFile()?.path ?? null;
 	const invocation = await resolveActiveInvocation(deps.vault, activePath);
-	void deps.executor.execute(invocation);
+	if (invocation !== null) {
+		void deps.executor.execute(invocation);
+		return;
+	}
+	// The active file is NOT an instructions doc (a suggestions doc, a plain
+	// note, or nothing) — rather than misroute it into the executor (a
+	// `_suggestions.json` would fail instructions-schema validation), offer a
+	// picker over the inbox's instruction docs, with a "run whole inbox" batch
+	// entry. Empty inbox ⇒ Notice.
+	const docs = deps.listInstructionsDocs();
+	if (docs.length === 0) {
+		new Notice(NO_INSTRUCTIONS_DOC_NOTICE);
+		return;
+	}
+	deps.pickInstructionsDoc(docs, (invocationFromPicker) => {
+		void deps.executor.execute(invocationFromPicker);
+	});
 }
 
 /**
- * Map an active-file path to the right `Invocation` shape per PRD F1:
+ * Map an active-file path to a single-file `Invocation` when — and only when —
+ * it is a genuine instructions doc:
  *
- *   - Active path is `<stem>_instructions.json` (or any `.json` that exists)
+ *   - Active path is `<stem>_instructions.json` (and it exists)
  *     → `{ kind: "single-file", sourcePath: <that path> }`.
- *   - Active path is `<stem>.md` AND the sibling `<stem>.json` exists
+ *   - Active path is `<stem>_instructions.md` AND the sibling
+ *     `<stem>_instructions.json` exists
  *     → `{ kind: "single-file", sourcePath: <sibling .json> }`.
- *   - Anything else (regular note, non-peer .md, .png, no active file)
- *     → `{ kind: "batch" }`.
+ *   - Anything else (a `_suggestions.json`, a plain note, non-peer `.md`,
+ *     `.png`, no active file) → `null`; the caller offers the instructions
+ *     picker (batch entry + one per doc) instead.
  *
- * The single-vs-batch decision is the only routing logic; whether the
- * resolved batch is empty or the inbox folder is missing is the executor's
- * concern (PRD F1 — Notice "Tomo inbox is empty …" / "… not configured").
+ * The `_instructions.json` suffix guard is the fix for the misroute bug: a
+ * `_suggestions.json` is a valid `.json` but NOT an instructions source, and
+ * feeding it to the executor fails schema validation ("must have required
+ * property 'type'").
  */
 export async function resolveActiveInvocation(
 	vault: Pick<VaultFS, "exists">,
 	activePath: string | null,
-): Promise<Invocation> {
-	if (activePath === null) {
-		return { kind: "batch" };
-	}
-	if (activePath.endsWith(".json")) {
-		if (await vault.exists(activePath)) {
-			return { kind: "single-file", sourcePath: activePath };
-		}
-		return { kind: "batch" };
+): Promise<Invocation | null> {
+	if (activePath === null) return null;
+	if (activePath.endsWith("_instructions.json")) {
+		return (await vault.exists(activePath))
+			? { kind: "single-file", sourcePath: activePath }
+			: null;
 	}
 	if (activePath.endsWith(".md")) {
 		const sibling = activePath.slice(0, -3) + ".json";
-		if (await vault.exists(sibling)) {
+		if (sibling.endsWith("_instructions.json") && (await vault.exists(sibling))) {
 			return { kind: "single-file", sourcePath: sibling };
 		}
 	}
-	return { kind: "batch" };
+	return null;
 }
 
 // ---------------------------------------------------------------------------

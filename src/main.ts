@@ -96,6 +96,7 @@ import { loadSettings, saveSettings } from "./connection/settingsPersistence";
 import { IdeBridge } from "./ide-bridge/IdeBridge";
 import { executionStore } from "./executor/executionStore";
 import { InstructionExecutor } from "./executor/InstructionExecutor";
+import type { Invocation } from "./executor/InstructionExecutor";
 import { FsHookLoader } from "./hooks/FsHookLoader";
 import { HookDisclosureModal } from "./hooks/HookDisclosureModal";
 import { HookRunner, type RequireFn } from "./hooks/HookRunner";
@@ -118,6 +119,7 @@ import {
 	VIEW_TYPE_SUGGESTIONS_EDITOR,
 } from "./ui/suggestions-view/index";
 import { ExecutionModal } from "./ui/ExecutionModal";
+import { InstructionsDocPicker } from "./ui/InstructionsDocPicker";
 import { mountStatusBar } from "./ui/statusBar";
 import { ObsidianVaultFS } from "./vault/ObsidianVaultFS";
 
@@ -535,6 +537,24 @@ export default class TomoHashiPlugin extends Plugin {
 			vault,
 			get settings(): PluginSettings {
 				return getSettings();
+			},
+			// Inbox-scoped so the picker's list matches what the "run whole inbox"
+			// batch entry would execute (resolveBatch is inbox-folder-scoped too).
+			listInstructionsDocs: (): string[] => {
+				const folder = this.settings.tomoInboxFolder;
+				if (folder === "") return [];
+				const prefix = folder.endsWith("/") ? folder : `${folder}/`;
+				return this.app.vault
+					.getFiles()
+					.map((file) => file.path)
+					.filter((path) => path.startsWith(prefix) && path.endsWith("_instructions.json"))
+					.sort();
+			},
+			pickInstructionsDoc: (
+				docs: string[],
+				onPick: (invocation: Invocation) => void,
+			): void => {
+				new InstructionsDocPicker(this.app, docs, onPick).open();
 			},
 		} as const;
 		registerExecutorCommands(this, executorCmdDeps);

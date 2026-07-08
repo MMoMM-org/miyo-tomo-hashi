@@ -14,7 +14,7 @@ Three entry points; the right one depends on what's active in Obsidian:
 | Entry point | Behaviour |
 |---|---|
 | **Command palette → "Execute instructions document"** with an `_instructions.json` (or its `.md` peer) open | Single-file run against that set |
-| **Command palette → "Execute instructions document"** with no relevant file active | **Batch** — runs every `*_instructions.json` in your configured inbox folder, in lexicographic order |
+| **Command palette → "Execute instructions document"** with no relevant file active (or a suggestions doc / plain note active) | Opens a **picker** over your inbox's `*_instructions.json` — a "run the whole inbox (batch)" entry (runs every doc in lexicographic order) plus one entry per doc. Empty inbox shows a Notice |
 | **Right-click a `.md` peer → "Execute instructions…"** | Same as palette + active peer |
 
 > Screenshot — file-menu open on a peer `.md` file, "Execute instructions…" entry highlighted.
