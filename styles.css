@@ -801,6 +801,23 @@
 	border-color: color-mix(in srgb, var(--se-amber) 40%, var(--se-border));
 	border-style: dashed;
 }
+/* SpotPicker rows — a FuzzySuggestModal, rendered OUTSIDE `.hashi-se-view`, so
+   it must use Obsidian's own theme vars (no `--se-*`). Without this the label
+   and the placement badge ran together ("Your way aroundafter"). */
+.hashi-spot-picker-item {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+}
+.hashi-spot-picker-placement {
+	flex-shrink: 0;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
 .hashi-se-add-moc {
 	display: flex;
 	align-items: center;
