@@ -708,8 +708,24 @@ describe("resolveSuggestionsDocPath", () => {
 		).toBe("100 Inbox/2026-07-06_1115_suggestions.json");
 	});
 
+	it("recognises the Force-Atomic Resolve fan variant (_suggestions-fan.json → itself)", () => {
+		expect(
+			resolveSuggestionsDocPath("100 Inbox/2026-07-08_1307_suggestions-fan.json"),
+		).toBe("100 Inbox/2026-07-08_1307_suggestions-fan.json");
+	});
+
+	it("derives the fan .json sibling from its .md (_suggestions-fan.md → _suggestions-fan.json)", () => {
+		expect(
+			resolveSuggestionsDocPath("100 Inbox/2026-07-08_1307_suggestions-fan.md"),
+		).toBe("100 Inbox/2026-07-08_1307_suggestions-fan.json");
+	});
+
 	it("returns null for an unrelated note", () => {
 		expect(resolveSuggestionsDocPath("notes/random.md")).toBeNull();
+	});
+
+	it("returns null for an unrelated -fan-suffixed note that is not a suggestions doc", () => {
+		expect(resolveSuggestionsDocPath("notes/ceiling-fan.md")).toBeNull();
 	});
 
 	it("returns null when there is no active file", () => {

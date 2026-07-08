@@ -390,10 +390,19 @@ async function dispatchOpenSuggestionsEditor(
 	});
 }
 
+// Tomo emits two suggestion review surfaces that share the SAME wire schema
+// (spec-004 SDD; tomo inbox-triage.py `_get_doc_type`): the primary
+// `_suggestions.json` (tomo.doc_type=suggestions) and the Force-Atomic Resolve
+// `_suggestions-fan.json` (tomo.doc_type=suggestions-fan). Both open in the
+// same editor; Tomo distinguishes them by frontmatter doc_type, Hashi
+// discovers either by filename suffix.
+export const SUGGESTIONS_JSON_RE = /_suggestions(-fan)?\.json$/;
+const SUGGESTIONS_MD_RE = /_suggestions(-fan)?\.md$/;
+
 /**
- * Map the active file path to the `_suggestions.json` doc to open:
- *   - `<stem>_suggestions.json` → itself.
- *   - `<stem>_suggestions.md` → the `.json` sibling.
+ * Map the active file path to the `_suggestions*.json` doc to open:
+ *   - `<stem>_suggestions.json` / `<stem>_suggestions-fan.json` → itself.
+ *   - `<stem>_suggestions.md` / `<stem>_suggestions-fan.md` → the `.json` sibling.
  *   - anything else (no active file, unrelated note) → null; the caller
  *     shows a Notice rather than opening anything.
  */
@@ -401,8 +410,8 @@ export function resolveSuggestionsDocPath(
 	activePath: string | null,
 ): string | null {
 	if (activePath === null) return null;
-	if (activePath.endsWith("_suggestions.json")) return activePath;
-	if (activePath.endsWith("_suggestions.md")) {
+	if (SUGGESTIONS_JSON_RE.test(activePath)) return activePath;
+	if (SUGGESTIONS_MD_RE.test(activePath)) {
 		return activePath.slice(0, -".md".length) + ".json";
 	}
 	return null;

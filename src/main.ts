@@ -88,6 +88,7 @@ import {
 	registerExecutorCommands,
 	registerIdeBridgeCommand,
 	registerSuggestionsEditorCommand,
+	SUGGESTIONS_JSON_RE,
 } from "./commands/registerCommands";
 import { registerFileMenu, registerExecutorFileMenu } from "./commands/fileMenu";
 import { TomoConnection } from "./connection/TomoConnection";
@@ -568,7 +569,7 @@ export default class TomoHashiPlugin extends Plugin {
 				this.app.vault
 					.getFiles()
 					.map((file) => file.path)
-					.filter((path) => path.endsWith("_suggestions.json"))
+					.filter((path) => SUGGESTIONS_JSON_RE.test(path))
 					.sort(),
 			pickSuggestionsDoc: (docs, onPick) =>
 				new SuggestionsDocPicker(this.app, docs, onPick).open(),
