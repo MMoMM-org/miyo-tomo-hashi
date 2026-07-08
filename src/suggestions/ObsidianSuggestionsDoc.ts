@@ -82,13 +82,22 @@ export class ObsidianSuggestionsDoc implements SuggestionsDoc {
 			throw err;
 		}
 
-		// The courtesy `.md` re-render is disposable — Tomo's build_from_wire
-		// overwrites it on the next /inbox run regardless. Once the JSON write
-		// above has succeeded the edits are durable, so a failure here must
-		// NOT be reported (or behave) like a data-loss failure: save() still
-		// resolves successfully so the caller can clear `dirty`.
+		// The `.md` re-render carries the two things Tomo actually reads off the
+		// markdown (tomo→hashi handoff 2026-07-08): its frontmatter (discovery
+		// `byFrontmatter tomo.state=pending-approval`) and the `- [x] Approved`
+		// Pass-2 gate. Everything else in the body is Hashi's own view — Tomo
+		// never parses it once the JSON was edited (stale emit_digest ⇒
+		// build_from_wire, JSON-only). We PRESERVE the existing frontmatter
+		// verbatim rather than regenerate it (Hashi can't reconstruct
+		// tomo_version/updated_at or foreign linter lines), and write the gate
+		// checked because Save is the whole-run approve. This half is
+		// non-load-bearing: the JSON above is already durable, so a failure here
+		// must NOT read (or behave) like data loss — save() still resolves so
+		// the caller can clear `dirty`.
 		try {
-			await this.writeFile(courtesyMdPath(docPath), renderCourtesyMarkdown(model));
+			const mdPath = courtesyMdPath(docPath);
+			const existingMd = (await this.vault.exists(mdPath)) ? await this.vault.read(mdPath) : null;
+			await this.writeFile(mdPath, composeCourtesyMarkdown(existingMd, model));
 		} catch (err) {
 			const reason = err instanceof Error ? err.message : String(err);
 			this.notify(
@@ -147,18 +156,41 @@ function courtesyMdPath(docPath: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Courtesy markdown — a deliberately minimal, deterministic summary of the
-// EDITED state. NOT an attempt to reproduce Tomo's `_suggestions.md` format:
-// Tomo's `build_from_wire` overwrites this file on the next `/inbox` run
-// regardless (JSON is authoritative — Pass 2 is JSON-only). This exact
-// format is a design choice open to review, not a wire contract.
+// Courtesy markdown — the sibling `.md` write-back. Two parts are a CONTRACT
+// with Tomo (tomo→hashi handoff 2026-07-08), the rest is a disposable Hashi
+// view:
+//   1. The YAML frontmatter, PRESERVED VERBATIM from Tomo's emission — Tomo
+//      discovers the doc `byFrontmatter tomo.state=pending-approval`, so the
+//      `tomo:` block (state + run_id) must never be stripped or rewritten.
+//      Hashi can't faithfully regenerate it (no tomo_version/updated_at, plus
+//      foreign linter lines), so it carries the original block through.
+//   2. A body-level `- [x] Approved` line — Tomo's Pass-2 gate (regex
+//      `^- [x] Approved`). Save is the whole-run approve, so it is always
+//      written checked; the text after "Approved" is irrelevant to Tomo.
+// Everything below is Hashi's own summary and is never parsed by Tomo (edited
+// JSON ⇒ stale emit_digest ⇒ build_from_wire, JSON-only). Its exact format is
+// a design choice open to review, not a wire contract.
 // ---------------------------------------------------------------------------
 
-/** Pure, deterministic — same EditModel in, same markdown string out. */
-export function renderCourtesyMarkdown(model: EditModel): string {
+/**
+ * Compose the sibling `.md`. `existing` is the current file content (or null
+ * when none exists) — its frontmatter is preserved verbatim; only when there
+ * is none does Hashi reconstruct a minimal discovery-capable block. Pure and
+ * deterministic for a given (existing, model) pair.
+ */
+export function composeCourtesyMarkdown(existing: string | null, model: EditModel): string {
 	const { doc } = model;
+	const frontmatter =
+		(existing === null ? null : extractFrontmatter(existing)) ?? reconstructFrontmatter(doc);
 	return [
-		renderHeader(doc),
+		frontmatter,
+		"",
+		`# Inbox Suggestions — ${doc.run_id}`,
+		"",
+		"- [x] Approved",
+		"",
+		"_Edited in Hashi — the sibling `.json` is authoritative; run `/inbox` for Pass 2 to apply these edits._",
+		"",
 		renderSummary(doc),
 		renderSuggestionsSection(doc.suggestions),
 		renderProposedMocsSection(doc.proposed_mocs),
@@ -167,12 +199,38 @@ export function renderCourtesyMarkdown(model: EditModel): string {
 	].join("\n");
 }
 
-function renderHeader(doc: SuggestionsWire): string {
+/**
+ * The leading YAML frontmatter block (both `---` fences included), or null
+ * when the content does not open with one. Returned verbatim minus trailing
+ * whitespace so `composeCourtesyMarkdown` controls the spacing after it —
+ * every inner line, including fields other plugins added, rides through
+ * untouched.
+ */
+export function extractFrontmatter(md: string): string | null {
+	const match = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(md);
+	return match === null ? null : match[0].replace(/\s+$/, "");
+}
+
+/**
+ * A minimal frontmatter carrying just what Tomo's discovery needs
+ * (`tomo.state=pending-approval` + `run_id`), reconstructed from the wire
+ * when the existing `.md` has none. This is a defensive fallback — the normal
+ * path preserves Tomo's original block. Timestamps are quoted to avoid YAML
+ * coercing them to date types.
+ */
+function reconstructFrontmatter(doc: SuggestionsWire): string {
 	return [
-		`# Suggestions — ${doc.run_id}`,
-		"",
-		"_Edited in Hashi — the sibling `.json` is authoritative; run `/inbox` for Pass 2 to apply these edits._",
-		"",
+		"---",
+		"type: tomo-suggestions",
+		`generated: '${doc.generated}'`,
+		`profile: ${doc.profile}`,
+		`source_items: ${doc.source_items}`,
+		`run_id: '${doc.run_id}'`,
+		"tomo:",
+		"  doc_type: suggestions",
+		"  state: pending-approval",
+		`  run_id: '${doc.run_id}'`,
+		"---",
 	].join("\n");
 }
 

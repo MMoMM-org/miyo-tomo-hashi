@@ -12,8 +12,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+	composeCourtesyMarkdown,
+	extractFrontmatter,
 	ObsidianSuggestionsDoc,
-	renderCourtesyMarkdown,
 } from "../../../src/suggestions/ObsidianSuggestionsDoc.js";
 import type { EditModel, SuggestionsWire } from "../../../src/types/suggestions.js";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
@@ -22,6 +23,28 @@ import rawFixture from "../../fixtures/suggestions/1115.json";
 
 const DOC_PATH = "100 Inbox/2026-07-06_1115_suggestions.json";
 const MD_PATH = "100 Inbox/2026-07-06_1115_suggestions.md";
+
+// A realistic Tomo `_suggestions.md` (frontmatter with the discovery-critical
+// `tomo:` block + the unchecked Pass-2 gate + a foreign linter `Updated:` line
+// inside the frontmatter). Modelled on a real emission (tomo→hashi handoff
+// 2026-07-08) — the write-back must preserve this block verbatim.
+const TOMO_FRONTMATTER = [
+	"---",
+	"type: tomo-suggestions",
+	"generated: 2026-07-07T15:59:32Z",
+	"tomo_version: 0.1.0",
+	"profile: miyo",
+	"source_items: 34",
+	"run_id: 2026-07-07T15-25-12Z-d54055",
+	"tomo:",
+	"  doc_type: suggestions",
+	"  state: pending-approval",
+	"  run_id: 2026-07-07T15-25-12Z-d54055",
+	"  updated_at: 2026-07-07T15:59:37Z",
+	"Updated: 2026-07-07 18:02",
+	"---",
+].join("\n");
+const TOMO_MD = `${TOMO_FRONTMATTER}\n\n# Inbox Suggestions — 2026-07-07\n\n- [ ] Approved\n\n(Tomo's own body view)\n`;
 
 /** A VaultFS whose process() rejects for one specific path — used to drive the save() failure path. */
 function withFailingWrite(base: VaultFS, failPath: string): VaultFS {
@@ -119,7 +142,8 @@ describe("ObsidianSuggestionsDoc.save()", () => {
 		await adapter.save(edited);
 
 		expect(await vault.exists(MD_PATH)).toBe(true);
-		expect(await vault.read(MD_PATH)).toBe(renderCourtesyMarkdown(edited));
+		// No prior .md → reconstruct-frontmatter path.
+		expect(await vault.read(MD_PATH)).toBe(composeCourtesyMarkdown(null, edited));
 	});
 
 	it("re-renders the courtesy .md sibling on a dirty save", async () => {
@@ -132,7 +156,47 @@ describe("ObsidianSuggestionsDoc.save()", () => {
 
 		const md = await vault.read(MD_PATH);
 		expect(md).not.toBe("stale courtesy markdown from a prior Tomo run\n");
-		expect(md).toBe(renderCourtesyMarkdown(edited));
+		expect(md).toBe(composeCourtesyMarkdown("stale courtesy markdown from a prior Tomo run\n", edited));
+	});
+
+	it("preserves Tomo's frontmatter verbatim and writes the Pass-2 gate checked", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(DOC_PATH, JSON.stringify(rawFixture, null, 2) + "\n");
+		await vault.create(MD_PATH, TOMO_MD);
+		const adapter = new ObsidianSuggestionsDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+		const edited: EditModel = { doc: { ...model.doc, run_id: "edited" }, dirty: true };
+
+		await adapter.save(edited);
+
+		const md = await vault.read(MD_PATH);
+		// Frontmatter block carried through byte-for-byte — including the
+		// discovery-critical tomo: state and the foreign linter line.
+		expect(md.startsWith(TOMO_FRONTMATTER)).toBe(true);
+		expect(md).toContain("state: pending-approval");
+		expect(md).toContain("Updated: 2026-07-07 18:02");
+		expect(md).toContain("updated_at: 2026-07-07T15:59:37Z");
+		// The Pass-2 gate is present and CHECKED (Save == whole-run approve).
+		expect(md).toMatch(/^- \[x\] Approved$/m);
+		expect(md).not.toMatch(/^- \[ \] Approved$/m);
+		// Exactly one frontmatter block — no reconstructed block prepended.
+		expect((md.match(/^---$/gm) ?? []).length).toBe(2);
+	});
+
+	it("does not mutate the tomo: state on save (discovery must keep working)", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(DOC_PATH, JSON.stringify(rawFixture, null, 2) + "\n");
+		await vault.create(MD_PATH, TOMO_MD);
+		const adapter = new ObsidianSuggestionsDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		await adapter.save({ doc: model.doc, dirty: true });
+		// Save again over the now-Hashi-written .md — frontmatter must still survive.
+		await adapter.save({ doc: model.doc, dirty: true });
+
+		const md = await vault.read(MD_PATH);
+		expect((md.match(/state: pending-approval/g) ?? []).length).toBe(1);
+		expect(md.startsWith(TOMO_FRONTMATTER)).toBe(true);
 	});
 
 	it("on JSON write failure: hard-fails — notifies, keeps the model unchanged, and rethrows to the caller", async () => {
@@ -234,7 +298,7 @@ describe("ObsidianSuggestionsDoc.save()", () => {
 	});
 });
 
-describe("renderCourtesyMarkdown()", () => {
+describe("composeCourtesyMarkdown()", () => {
 	function makeModel(overrides?: Partial<SuggestionsWire>): EditModel {
 		return { doc: { ...(rawFixture as SuggestionsWire), ...overrides }, dirty: true };
 	}
@@ -242,12 +306,14 @@ describe("renderCourtesyMarkdown()", () => {
 	it("is a pure function producing a deterministic, clearly-Hashi-generated summary", () => {
 		const model = makeModel();
 
-		const md = renderCourtesyMarkdown(model);
+		const md = composeCourtesyMarkdown(TOMO_MD, model);
 
-		expect(md).toBe(renderCourtesyMarkdown(model)); // deterministic — same input, same output
+		expect(md).toBe(composeCourtesyMarkdown(TOMO_MD, model)); // deterministic — same input, same output
 		expect(md).toContain("Edited in Hashi");
 		expect(md).toContain("/inbox");
 		expect(md).toContain(rawFixture.run_id);
+		// the Pass-2 gate is written checked
+		expect(md).toMatch(/^- \[x\] Approved$/m);
 		// per-suggestion one-liner: id · title · decision
 		expect(md).toContain("S07");
 		expect(md).toContain("The Zettelkasten Method");
@@ -261,11 +327,36 @@ describe("renderCourtesyMarkdown()", () => {
 		expect(md).toContain("approved: true");
 	});
 
+	it("reconstructs a discovery-capable frontmatter when the existing .md has none", () => {
+		const md = composeCourtesyMarkdown(null, makeModel());
+
+		expect(md.startsWith("---\ntype: tomo-suggestions")).toBe(true);
+		expect(md).toContain("  state: pending-approval");
+		expect(md).toContain(`  run_id: '${rawFixture.run_id}'`);
+		expect(md).toMatch(/^- \[x\] Approved$/m);
+	});
+
 	it("renders '(none)' placeholders for empty sections rather than omitting them", () => {
 		const model = makeModel({ suggestions: [], proposed_mocs: [], daily_updates: [], tag_handler_groups: [] });
 
-		const md = renderCourtesyMarkdown(model);
+		const md = composeCourtesyMarkdown(TOMO_MD, model);
 
 		expect(md).toMatch(/\(none\)/);
+	});
+});
+
+describe("extractFrontmatter()", () => {
+	it("returns the frontmatter block (both fences) minus trailing whitespace", () => {
+		expect(extractFrontmatter(TOMO_MD)).toBe(TOMO_FRONTMATTER);
+	});
+
+	it("returns null when the content does not open with a frontmatter block", () => {
+		expect(extractFrontmatter("# just a heading\n\nbody\n")).toBeNull();
+		expect(extractFrontmatter("\n---\ntype: x\n---\n")).toBeNull(); // must be at the very start
+	});
+
+	it("handles CRLF line endings", () => {
+		const crlf = "---\r\ntype: x\r\nstate: pending-approval\r\n---\r\nbody\r\n";
+		expect(extractFrontmatter(crlf)).toBe("---\r\ntype: x\r\nstate: pending-approval\r\n---");
 	});
 });
