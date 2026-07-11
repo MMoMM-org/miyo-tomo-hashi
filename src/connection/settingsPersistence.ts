@@ -33,13 +33,16 @@ export async function loadSettings(
 	plugin: PluginDataHost,
 ): Promise<PluginSettings> {
 	const stored = (await plugin.loadData()) as Partial<PluginSettings> | null;
-	// v1 → v2 migration (T4.1): stored v1 blobs carry settings_version: 1
-	// explicitly, so a bare spread would keep version at 1. Force it to 2 and
-	// ensure the 3 new IDE fields are present at their defaults when absent.
-	// All other stored fields are preserved via the spread below.
+	// Forward migration to the CURRENT schema version: an older stored blob
+	// carries a lower (or absent → treated as v1) settings_version, so a bare
+	// spread would keep it stale. Bump it to the current version and let the
+	// DEFAULT_SETTINGS merge below fill any fields the older shape lacked at
+	// their defaults (v1→v2 added the IDE fields; v2→v3 the suggestions-editor
+	// picker scopes). All other stored fields are preserved by the spread.
+	const currentVersion = DEFAULT_SETTINGS.settings_version ?? 1;
 	const patched: Partial<PluginSettings> =
-		(stored?.settings_version ?? 1) < 2
-			? { ...stored, settings_version: 2 }
+		(stored?.settings_version ?? 1) < currentVersion
+			? { ...stored, settings_version: currentVersion }
 			: (stored ?? {});
 	return { ...DEFAULT_SETTINGS, ...patched };
 }

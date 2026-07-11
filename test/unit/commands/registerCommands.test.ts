@@ -372,6 +372,10 @@ describe("registerExecutorCommands (002)", () => {
 	let executor: ExecutorOnly;
 	let vault: ExistsVault;
 	let settings: PluginSettings;
+	let listInstructionsDocs: Mock<() => string[]>;
+	let pickInstructionsDoc: Mock<
+		(docs: string[], onPick: (invocation: Invocation) => void) => void
+	>;
 	let deps: ExecutorCommandDeps;
 
 	beforeEach(() => {
@@ -381,10 +385,14 @@ describe("registerExecutorCommands (002)", () => {
 		executor = { execute: vi.fn(async () => ({})) };
 		vault = { exists: vi.fn(async () => false) };
 		settings = { ...DEFAULT_SETTINGS, tomoInboxFolder: "inbox" };
+		listInstructionsDocs = vi.fn<() => string[]>(() => []);
+		pickInstructionsDoc = vi.fn();
 		deps = {
 			executor: executor as unknown as ExecutorCommandDeps["executor"],
 			vault: vault as unknown as ExecutorCommandDeps["vault"],
 			settings,
+			listInstructionsDocs,
+			pickInstructionsDoc,
 		};
 	});
 
@@ -440,55 +448,98 @@ describe("registerExecutorCommands (002)", () => {
 			});
 		});
 
-		it("active .md whose sibling .json does NOT exist → batch invocation", async () => {
+		async function runCommand(): Promise<void> {
+			registerExecutorCommands(plugin, deps);
+			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
+			cmd?.callback?.();
+			await Promise.resolve();
+			await Promise.resolve();
+		}
+
+		it("active _suggestions.json (the misroute bug) → offers the picker, does NOT execute it", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
+				() => fakeTFile("inbox/2026-07-08_1307_suggestions-fan.json"),
+			);
+			vault.exists = vi.fn(async () => true); // the suggestions json exists…
+			listInstructionsDocs.mockReturnValue(["inbox/a_instructions.json"]);
+
+			await runCommand();
+
+			// …but it is NOT fed to the executor (would fail instructions-schema validation).
+			expect(executor.execute).not.toHaveBeenCalled();
+			expect(pickInstructionsDoc).toHaveBeenCalledTimes(1);
+			expect(pickInstructionsDoc.mock.calls[0]?.[0]).toEqual(["inbox/a_instructions.json"]);
+		});
+
+		it("active .md whose sibling is not an _instructions.json → offers the picker", async () => {
 			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
 				() => fakeTFile("notes/random.md"),
 			);
 			vault.exists = vi.fn(async () => false);
+			listInstructionsDocs.mockReturnValue(["inbox/a_instructions.json"]);
 
-			registerExecutorCommands(plugin, deps);
-			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
-			cmd?.callback?.();
-			await Promise.resolve();
-			await Promise.resolve();
+			await runCommand();
 
-			expect(executor.execute).toHaveBeenCalledWith({ kind: "batch" });
+			expect(executor.execute).not.toHaveBeenCalled();
+			expect(pickInstructionsDoc).toHaveBeenCalledTimes(1);
 		});
 
-		it("active non-md, non-json file → batch invocation", async () => {
+		it("active non-md, non-json file → offers the picker", async () => {
 			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
 				() => fakeTFile("attachments/diagram.png"),
 			);
+			listInstructionsDocs.mockReturnValue(["inbox/a_instructions.json"]);
 
-			registerExecutorCommands(plugin, deps);
-			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
-			cmd?.callback?.();
-			await Promise.resolve();
-			await Promise.resolve();
+			await runCommand();
 
-			expect(executor.execute).toHaveBeenCalledWith({ kind: "batch" });
+			expect(pickInstructionsDoc).toHaveBeenCalledTimes(1);
 		});
 
-		it("no active file → batch invocation", async () => {
-			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
-				() => null,
-			);
+		it("no active file → offers the picker", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(() => null);
+			listInstructionsDocs.mockReturnValue(["inbox/a_instructions.json"]);
 
-			registerExecutorCommands(plugin, deps);
-			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
-			cmd?.callback?.();
-			await Promise.resolve();
-			await Promise.resolve();
+			await runCommand();
 
+			expect(pickInstructionsDoc).toHaveBeenCalledTimes(1);
+		});
+
+		it("picking the batch entry runs batch; picking a doc runs that single-file", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(() => null);
+			listInstructionsDocs.mockReturnValue(["inbox/a_instructions.json"]);
+
+			await runCommand();
+
+			const onPick = pickInstructionsDoc.mock.calls[0]?.[1];
+			expect(onPick).toBeDefined();
+			onPick?.({ kind: "batch" });
 			expect(executor.execute).toHaveBeenCalledWith({ kind: "batch" });
+			onPick?.({ kind: "single-file", sourcePath: "inbox/a_instructions.json" });
+			expect(executor.execute).toHaveBeenCalledWith({
+				kind: "single-file",
+				sourcePath: "inbox/a_instructions.json",
+			});
+		});
+
+		it("no instruction docs in the inbox → Notice, no picker, no execute", async () => {
+			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(() => null);
+			listInstructionsDocs.mockReturnValue([]);
+
+			await runCommand();
+
+			expect(pickInstructionsDoc).not.toHaveBeenCalled();
+			expect(executor.execute).not.toHaveBeenCalled();
 		});
 	});
 
 	describe("single-run lock NOT bypassed by command", () => {
 		it("two rapid invocations BOTH dispatch to executor.execute (lock lives in executor)", async () => {
+			// Active instructions doc → the command dispatches straight to the
+			// executor (no picker), so each click is one execute() call.
 			pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(
-				() => null,
+				() => fakeTFile("inbox/run_instructions.json"),
 			);
+			vault.exists = vi.fn(async () => true);
 
 			registerExecutorCommands(plugin, deps);
 			const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
@@ -676,5 +727,192 @@ describe("registerExecutorFileMenu (002)", () => {
 			kind: "single-file",
 			sourcePath: "inbox/foo_instructions.json",
 		});
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 004 spec — Suggestions Editor open command (T4.1)
+// ---------------------------------------------------------------------------
+//
+// Spec refs: spec-004 SDD §3 (ADR-S1); PRD F1; plan/phase-4.md T4.1.
+
+import {
+	registerSuggestionsEditorCommand,
+	resolveSuggestionsDocPath,
+	type SuggestionsEditorCommandDeps,
+} from "../../../src/commands/registerCommands";
+
+const OPEN_SUGGESTIONS_EDITOR_ID = "open-suggestions-editor";
+const NO_SUGGESTIONS_DOC_NOTICE =
+	"Open a Tomo _suggestions.json (or its .md) first";
+
+describe("resolveSuggestionsDocPath", () => {
+	it("returns the path itself when it ends with _suggestions.json", () => {
+		expect(
+			resolveSuggestionsDocPath("100 Inbox/2026-07-06_1115_suggestions.json"),
+		).toBe("100 Inbox/2026-07-06_1115_suggestions.json");
+	});
+
+	it("derives the .json sibling when the path ends with _suggestions.md", () => {
+		expect(
+			resolveSuggestionsDocPath("100 Inbox/2026-07-06_1115_suggestions.md"),
+		).toBe("100 Inbox/2026-07-06_1115_suggestions.json");
+	});
+
+	it("recognises the Force-Atomic Resolve fan variant (_suggestions-fan.json → itself)", () => {
+		expect(
+			resolveSuggestionsDocPath("100 Inbox/2026-07-08_1307_suggestions-fan.json"),
+		).toBe("100 Inbox/2026-07-08_1307_suggestions-fan.json");
+	});
+
+	it("derives the fan .json sibling from its .md (_suggestions-fan.md → _suggestions-fan.json)", () => {
+		expect(
+			resolveSuggestionsDocPath("100 Inbox/2026-07-08_1307_suggestions-fan.md"),
+		).toBe("100 Inbox/2026-07-08_1307_suggestions-fan.json");
+	});
+
+	it("returns null for an unrelated note", () => {
+		expect(resolveSuggestionsDocPath("notes/random.md")).toBeNull();
+	});
+
+	it("returns null for an unrelated -fan-suffixed note that is not a suggestions doc", () => {
+		expect(resolveSuggestionsDocPath("notes/ceiling-fan.md")).toBeNull();
+	});
+
+	it("returns null when there is no active file", () => {
+		expect(resolveSuggestionsDocPath(null)).toBeNull();
+	});
+});
+
+describe("registerSuggestionsEditorCommand", () => {
+	let pluginMock: PluginMock;
+	let plugin: Plugin;
+	let getActiveFilePath: Mock<() => string | null>;
+	let listSuggestionsDocs: Mock<() => string[]>;
+	let pickSuggestionsDoc: Mock<(docs: string[], onPick: (docPath: string) => void) => void>;
+	let openSuggestionsEditorSpy: Mock<(docPath: string) => Promise<void>>;
+	let deps: SuggestionsEditorCommandDeps;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		pluginMock = new PluginMock();
+		plugin = asPlugin(pluginMock);
+		getActiveFilePath = vi.fn<() => string | null>(() => null);
+		// Default: no runs in the vault → the no-active-doc path falls back to
+		// the Notice, matching the pre-picker tests below.
+		listSuggestionsDocs = vi.fn<() => string[]>(() => []);
+		pickSuggestionsDoc = vi.fn<(docs: string[], onPick: (docPath: string) => void) => void>(
+			() => {},
+		);
+		openSuggestionsEditorSpy = vi.fn<(docPath: string) => Promise<void>>(
+			async () => {},
+		);
+		deps = {
+			getActiveFilePath,
+			listSuggestionsDocs,
+			pickSuggestionsDoc,
+			openSuggestionsEditor: openSuggestionsEditorSpy,
+		};
+	});
+
+	it("registers the 'Open suggestions editor' command", () => {
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmds = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID);
+		expect(cmds).toHaveLength(1);
+		expect(cmds[0]?.name).toBe("Open suggestions editor");
+	});
+
+	it("active _suggestions.json → opens the editor with that path", async () => {
+		getActiveFilePath.mockReturnValue(
+			"100 Inbox/2026-07-06_1115_suggestions.json",
+		);
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openSuggestionsEditorSpy).toHaveBeenCalledWith(
+			"100 Inbox/2026-07-06_1115_suggestions.json",
+		);
+		expect(vi.mocked(Notice)).not.toHaveBeenCalled();
+	});
+
+	it("active _suggestions.md → opens the editor with the .json sibling", async () => {
+		getActiveFilePath.mockReturnValue(
+			"100 Inbox/2026-07-06_1115_suggestions.md",
+		);
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openSuggestionsEditorSpy).toHaveBeenCalledWith(
+			"100 Inbox/2026-07-06_1115_suggestions.json",
+		);
+	});
+
+	it("active file unrelated to suggestions → shows a Notice and does NOT open", async () => {
+		getActiveFilePath.mockReturnValue("notes/random.md");
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+
+		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
+		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_SUGGESTIONS_DOC_NOTICE);
+	});
+
+	it("no active file → shows a Notice and does NOT open", async () => {
+		getActiveFilePath.mockReturnValue(null);
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+
+		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
+		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_SUGGESTIONS_DOC_NOTICE);
+	});
+
+	it("no active doc but runs exist → opens the doc picker instead of a Notice", async () => {
+		getActiveFilePath.mockReturnValue("notes/random.md");
+		listSuggestionsDocs.mockReturnValue([
+			"100 Inbox/a_suggestions.json",
+			"100 Inbox/b_suggestions.json",
+		]);
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+
+		expect(pickSuggestionsDoc).toHaveBeenCalledWith(
+			["100 Inbox/a_suggestions.json", "100 Inbox/b_suggestions.json"],
+			expect.any(Function),
+		);
+		expect(vi.mocked(Notice)).not.toHaveBeenCalled();
+		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
+	});
+
+	it("choosing a doc in the picker opens the editor for that path", async () => {
+		getActiveFilePath.mockReturnValue(null);
+		listSuggestionsDocs.mockReturnValue(["100 Inbox/a_suggestions.json"]);
+		pickSuggestionsDoc.mockImplementation((docs, onPick) => {
+			onPick(docs[0]!);
+		});
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openSuggestionsEditorSpy).toHaveBeenCalledWith("100 Inbox/a_suggestions.json");
 	});
 });

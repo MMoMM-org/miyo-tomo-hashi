@@ -283,13 +283,15 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 			const ids = vi
 				.mocked(plugin.addCommand)
 				.mock.calls.map((call) => (call[0] as { id: string }).id);
-			// 001 + 002 are unchanged; 003 adds the IDE-bridge toggle.
+			// 001 + 002 are unchanged; 003 adds the IDE-bridge toggle; 004 adds
+			// the Suggestions Editor open command.
 			expect(new Set(ids)).toEqual(
 				new Set([
 					"reconnect-to-tomo",
 					"show-chat-window",
 					"execute-instructions-document",
 					"toggle-ide-bridge",
+					"open-suggestions-editor",
 				]),
 			);
 		});

@@ -58,6 +58,9 @@ const defaultSettings: PluginSettings = {
 	ideBridgeEnabled: false,
 	ideBridgePort: 23027,
 	ideBridgeAuthToken: "",
+	suggestionsTemplateFolder: "",
+	suggestionsLocationFolders: [],
+	suggestionsTagFilters: [],
 };
 
 function makeSettings(overrides?: Partial<PluginSettings>): PluginSettings {

@@ -21,6 +21,7 @@
 | 001 | [Session View](specs/001-session-view/) | 9 Must · 2 Should · 0 Could | Done | Implemented & released (v0.7.1) |
 | 002 | [Instruction Executor](specs/002-instruction-executor/) | 11 Must · 0 Should · 0 Could | Done | Implemented & released (v0.7.1) |
 | 003 | [IDE Bridge (Tomo context)](specs/003-ide-bridge/) | 9 Must · 4 Should · 2 Could | Done | Implemented & released (v0.7.1) |
+| 004 | [Suggestions Editor](specs/004-suggestions-editor/) | TBD (PRD deferred) | Design sketch | **Blocked on Tomo** `suggestions.json` schema + change-signal (ADR-026) |
 
 > MoSCoW totals count scoped feature blocks (Fx), not acceptance criteria. 002 is all-Must by
 > design (a deterministic executor has no optional surface); 001 carries 2 Should (file `@`-prefill,

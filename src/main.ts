@@ -20,10 +20,14 @@
  *      auto-run mode — silent mode never opens the modal per PRD F11)
  *  13. Executor command + file-menu entry (T6.1)
  *
+ * 004 surface (T4.1) wired AFTER 002:
+ *  14. SuggestionsEditorView registration + "Open suggestions editor" command
+ *
  * Spec refs: spec 001-session-view phase-5 T5.3; spec 002-instruction-executor
- *   phase-6 T6.2; PRD all features wired; SDD "Building Block View /
- *   Components", ADR-6 (chat view singleton), ADR-10 (plugin unload best-
- *   effort).
+ *   phase-6 T6.2; spec 004-suggestions-editor phase-4 T4.1; PRD all features
+ *   wired; SDD "Building Block View / Components", ADR-6 (chat view
+ *   singleton), ADR-10 (plugin unload best-effort), ADR-S1 (Suggestions
+ *   Editor leaf ItemView, one active doc).
  *
  * --- Decisions ---
  *
@@ -83,6 +87,8 @@ import {
 	registerCommands,
 	registerExecutorCommands,
 	registerIdeBridgeCommand,
+	registerSuggestionsEditorCommand,
+	SUGGESTIONS_JSON_RE,
 } from "./commands/registerCommands";
 import { registerFileMenu, registerExecutorFileMenu } from "./commands/fileMenu";
 import { TomoConnection } from "./connection/TomoConnection";
@@ -90,12 +96,14 @@ import { loadSettings, saveSettings } from "./connection/settingsPersistence";
 import { IdeBridge } from "./ide-bridge/IdeBridge";
 import { executionStore } from "./executor/executionStore";
 import { InstructionExecutor } from "./executor/InstructionExecutor";
+import type { Invocation } from "./executor/InstructionExecutor";
 import { FsHookLoader } from "./hooks/FsHookLoader";
 import { HookDisclosureModal } from "./hooks/HookDisclosureModal";
 import { HookRunner, type RequireFn } from "./hooks/HookRunner";
 import type { HookLogger } from "./hooks/HookContext";
 import { validate } from "./schema/validator";
 import { SettingsTab } from "./settings/SettingsTab";
+import { ObsidianSuggestionsDoc } from "./suggestions/ObsidianSuggestionsDoc";
 import {
 	DEFAULT_SETTINGS,
 	type PluginSettings,
@@ -104,7 +112,14 @@ import {
 import { TomoChatView, VIEW_TYPE_TOMO_CHAT } from "./ui/chat-view/index";
 import { showChatWindow } from "./ui/chat-view/showChatWindow";
 import { StatusBarIcon, copyAuthToken } from "./ui/status-bar/StatusBarIcon";
+import {
+	openSuggestionsEditor,
+	SuggestionsDocPicker,
+	SuggestionsEditorView,
+	VIEW_TYPE_SUGGESTIONS_EDITOR,
+} from "./ui/suggestions-view/index";
 import { ExecutionModal } from "./ui/ExecutionModal";
+import { InstructionsDocPicker } from "./ui/InstructionsDocPicker";
 import { mountStatusBar } from "./ui/statusBar";
 import { ObsidianVaultFS } from "./vault/ObsidianVaultFS";
 
@@ -523,9 +538,64 @@ export default class TomoHashiPlugin extends Plugin {
 			get settings(): PluginSettings {
 				return getSettings();
 			},
+			// Inbox-scoped so the picker's list matches what the "run whole inbox"
+			// batch entry would execute (resolveBatch is inbox-folder-scoped too).
+			listInstructionsDocs: (): string[] => {
+				const folder = this.settings.tomoInboxFolder;
+				if (folder === "") return [];
+				const prefix = folder.endsWith("/") ? folder : `${folder}/`;
+				return this.app.vault
+					.getFiles()
+					.map((file) => file.path)
+					.filter((path) => path.startsWith(prefix) && path.endsWith("_instructions.json"))
+					.sort();
+			},
+			pickInstructionsDoc: (
+				docs: string[],
+				onPick: (invocation: Invocation) => void,
+			): void => {
+				new InstructionsDocPicker(this.app, docs, onPick).open();
+			},
 		} as const;
 		registerExecutorCommands(this, executorCmdDeps);
 		registerExecutorFileMenu(this, executorCmdDeps);
+
+		// =========================================================================
+		// 004 wiring (T4.1) — Suggestions Editor
+		// =========================================================================
+
+		// 14. SuggestionsEditorView registration + open command. Reuses the
+		//     `vault` constructed above (7.) — `ObsidianSuggestionsDoc` is the ONE
+		//     wire-aware adapter (SDD ADR-S5); main.ts never touches
+		//     `_suggestions.json` directly. A fresh adapter per leaf-open is
+		//     correct: the adapter tracks its own `docPath` internally (SDD §9),
+		//     so one instance per leaf keeps each leaf's "one active doc"
+		//     independent of any other open Suggestions Editor leaf.
+		this.registerView(
+			VIEW_TYPE_SUGGESTIONS_EDITOR,
+			(leaf: WorkspaceLeaf) =>
+				new SuggestionsEditorView(leaf, {
+					adapter: new ObsidianSuggestionsDoc(vault),
+					getPickerScopes: () => ({
+						templateFolder: this.settings.suggestionsTemplateFolder,
+						locationFolders: this.settings.suggestionsLocationFolders,
+						tagFilters: this.settings.suggestionsTagFilters,
+					}),
+				}),
+		);
+		registerSuggestionsEditorCommand(this, {
+			getActiveFilePath: () => this.app.workspace.getActiveFile()?.path ?? null,
+			listSuggestionsDocs: () =>
+				this.app.vault
+					.getFiles()
+					.map((file) => file.path)
+					.filter((path) => SUGGESTIONS_JSON_RE.test(path))
+					.sort(),
+			pickSuggestionsDoc: (docs, onPick) =>
+				new SuggestionsDocPicker(this.app, docs, onPick).open(),
+			openSuggestionsEditor: (docPath: string) =>
+				openSuggestionsEditor(this.app, docPath),
+		});
 	}
 
 	override onunload(): void {

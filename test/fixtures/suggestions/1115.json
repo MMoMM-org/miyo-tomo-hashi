@@ -1,0 +1,205 @@
+{
+  "schema_version": "1",
+  "generated": "2026-07-06T11:15:02Z",
+  "run_id": "2026-07-06T11-07-59Z-948750",
+  "profile": "miyo",
+  "source_items": 8,
+  "suggestions": [
+    {
+      "id": "S01",
+      "stem": "call-vendor",
+      "title": "Vendor call — review quote, send references",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [
+        "topic/people"
+      ],
+      "audio_peer": null,
+      "decision": "skip",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": true,
+      "worthiness": 0.2,
+      "candidate_mocs": []
+    },
+    {
+      "id": "S02",
+      "stem": "deliberate-practice",
+      "title": "Deliberate Practice — Ericsson's Method for Expert Skill Development",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [
+        "topic/growth/self",
+        "topic/mind/concepts"
+      ],
+      "audio_peer": null,
+      "decision": "skip",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": true,
+      "worthiness": 0.4,
+      "candidate_mocs": []
+    },
+    {
+      "id": "S03",
+      "stem": "idea-capture",
+      "title": "PKM-Systeme scheitern an Wiedervorlage, nicht an Struktur",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [
+        "topic/knowledge/lyt"
+      ],
+      "audio_peer": null,
+      "decision": "skip",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": true,
+      "worthiness": 0.4,
+      "candidate_mocs": []
+    },
+    {
+      "id": "S04",
+      "stem": "interleaving",
+      "title": "Interleaving Outperforms Blocked Practice for Retention and Transfer",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [
+        "topic/mind/concepts"
+      ],
+      "audio_peer": null,
+      "decision": "skip",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": true,
+      "worthiness": 0.4,
+      "candidate_mocs": []
+    },
+    {
+      "id": "S05",
+      "stem": "quick-thought",
+      "title": "Replace the hallway light bulb",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [
+        "topic/personal"
+      ],
+      "audio_peer": null,
+      "decision": "skip",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": true,
+      "worthiness": 0.2,
+      "candidate_mocs": []
+    },
+    {
+      "id": "S06",
+      "stem": "spaced-repetition",
+      "title": "Spaced Repetition — How Effortful Retrieval Drives Learning",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [
+        "topic/knowledge/memory"
+      ],
+      "audio_peer": null,
+      "decision": "skip",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": true,
+      "worthiness": 0.4,
+      "candidate_mocs": []
+    },
+    {
+      "id": "S07",
+      "stem": "zettelkasten-method",
+      "title": "The Zettelkasten Method — Atomic Notes and Link-Based Thinking",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [
+        "topic/knowledge/frameworks"
+      ],
+      "audio_peer": null,
+      "decision": "approve",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": false,
+      "worthiness": 0.7,
+      "candidate_mocs": [
+        {
+          "path": "Atlas/200 Maps/Type of Notes (MOC).md",
+          "selected": false,
+          "anchor": null,
+          "source": "tomo"
+        },
+        {
+          "path": "Atlas/200 Maps/Linking Your Thinking (MOC).md",
+          "selected": false,
+          "anchor": null,
+          "source": "tomo"
+        },
+        {
+          "path": "Atlas/200 Maps/Frameworks (MOC).md",
+          "selected": false,
+          "anchor": null,
+          "source": "tomo"
+        }
+      ]
+    }
+  ],
+  "proposed_mocs": [],
+  "daily_updates": [
+    {
+      "date": "2026-07-05",
+      "trackers": [],
+      "log_entries": [
+        {
+          "time": null,
+          "position": "after_last_line",
+          "content": "Vendor call: quote under review until Friday, send references.",
+          "reason": "Short call log (195 chars), not atomic-worthy → inline daily log for 2026-07-05",
+          "source_stem": "call-vendor",
+          "accepted": false,
+          "force_atomic_note": false
+        }
+      ],
+      "log_links": []
+    },
+    {
+      "date": "2026-07-06",
+      "trackers": [],
+      "log_entries": [
+        {
+          "time": null,
+          "position": "after_last_line",
+          "content": "Workout, 45 minutes (squats, bench press, rows), then 10 minutes stretching.",
+          "reason": "Short gym log (~20 words), not atomic-worthy → inline daily log entry",
+          "source_stem": "workout-log",
+          "accepted": false,
+          "force_atomic_note": false
+        }
+      ],
+      "log_links": []
+    }
+  ],
+  "tag_handler_groups": [
+    {
+      "group_id": "th-sample-project-log-md",
+      "approved": true,
+      "keep_source": false,
+      "handler": "sample-handler",
+      "target_path": "Efforts/Project Log.md",
+      "marker": "## Captures",
+      "source_paths": [
+        "100 Inbox/202606291658_sample-capture.md"
+      ],
+      "preview": "| 2026-06-29 | feature | Sample capture entry for the project log |"
+    }
+  ],
+  "emit_digest": "sha256:3d529ddda3f54df9b785c1e04e360c1d444fb73213543291bbbc5a75eda8017b"
+}

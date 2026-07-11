@@ -161,6 +161,23 @@ export interface ExecutorCommandDeps {
 	 * gating before invocation) have the surface ready.
 	 */
 	readonly settings: PluginSettings;
+	/**
+	 * Every `*_instructions.json` in the inbox (sorted). Used when the active
+	 * file is NOT itself an instructions doc — the command then offers a picker
+	 * (batch entry + one per doc) instead of misrouting the active file (e.g. a
+	 * `_suggestions.json`) into the executor, which would fail schema validation.
+	 */
+	readonly listInstructionsDocs: () => string[];
+	/**
+	 * Opens a fuzzy picker over the inbox's instruction docs — a "run whole
+	 * inbox" batch entry plus one entry per doc — invoking `onPick` with the
+	 * chosen `Invocation`. Injected (rather than importing the Obsidian picker
+	 * here) so this module stays testable without a real `FuzzySuggestModal`.
+	 */
+	readonly pickInstructionsDoc: (
+		docs: string[],
+		onPick: (invocation: Invocation) => void,
+	) => void;
 }
 
 /**
@@ -181,49 +198,69 @@ export function registerExecutorCommands(
 	});
 }
 
+const NO_INSTRUCTIONS_DOC_NOTICE =
+	"No instruction documents (_instructions.json) found in the Tomo inbox.";
+
 async function dispatchActiveInvocation(
 	plugin: Plugin,
 	deps: ExecutorCommandDeps,
 ): Promise<void> {
 	const activePath = plugin.app.workspace.getActiveFile()?.path ?? null;
 	const invocation = await resolveActiveInvocation(deps.vault, activePath);
-	void deps.executor.execute(invocation);
+	if (invocation !== null) {
+		void deps.executor.execute(invocation);
+		return;
+	}
+	// The active file is NOT an instructions doc (a suggestions doc, a plain
+	// note, or nothing) — rather than misroute it into the executor (a
+	// `_suggestions.json` would fail instructions-schema validation), offer a
+	// picker over the inbox's instruction docs, with a "run whole inbox" batch
+	// entry. Empty inbox ⇒ Notice.
+	const docs = deps.listInstructionsDocs();
+	if (docs.length === 0) {
+		new Notice(NO_INSTRUCTIONS_DOC_NOTICE);
+		return;
+	}
+	deps.pickInstructionsDoc(docs, (invocationFromPicker) => {
+		void deps.executor.execute(invocationFromPicker);
+	});
 }
 
 /**
- * Map an active-file path to the right `Invocation` shape per PRD F1:
+ * Map an active-file path to a single-file `Invocation` when — and only when —
+ * it is a genuine instructions doc:
  *
- *   - Active path is `<stem>_instructions.json` (or any `.json` that exists)
+ *   - Active path is `<stem>_instructions.json` (and it exists)
  *     → `{ kind: "single-file", sourcePath: <that path> }`.
- *   - Active path is `<stem>.md` AND the sibling `<stem>.json` exists
+ *   - Active path is `<stem>_instructions.md` AND the sibling
+ *     `<stem>_instructions.json` exists
  *     → `{ kind: "single-file", sourcePath: <sibling .json> }`.
- *   - Anything else (regular note, non-peer .md, .png, no active file)
- *     → `{ kind: "batch" }`.
+ *   - Anything else (a `_suggestions.json`, a plain note, non-peer `.md`,
+ *     `.png`, no active file) → `null`; the caller offers the instructions
+ *     picker (batch entry + one per doc) instead.
  *
- * The single-vs-batch decision is the only routing logic; whether the
- * resolved batch is empty or the inbox folder is missing is the executor's
- * concern (PRD F1 — Notice "Tomo inbox is empty …" / "… not configured").
+ * The `_instructions.json` suffix guard is the fix for the misroute bug: a
+ * `_suggestions.json` is a valid `.json` but NOT an instructions source, and
+ * feeding it to the executor fails schema validation ("must have required
+ * property 'type'").
  */
 export async function resolveActiveInvocation(
 	vault: Pick<VaultFS, "exists">,
 	activePath: string | null,
-): Promise<Invocation> {
-	if (activePath === null) {
-		return { kind: "batch" };
-	}
-	if (activePath.endsWith(".json")) {
-		if (await vault.exists(activePath)) {
-			return { kind: "single-file", sourcePath: activePath };
-		}
-		return { kind: "batch" };
+): Promise<Invocation | null> {
+	if (activePath === null) return null;
+	if (activePath.endsWith("_instructions.json")) {
+		return (await vault.exists(activePath))
+			? { kind: "single-file", sourcePath: activePath }
+			: null;
 	}
 	if (activePath.endsWith(".md")) {
 		const sibling = activePath.slice(0, -3) + ".json";
-		if (await vault.exists(sibling)) {
+		if (sibling.endsWith("_instructions.json") && (await vault.exists(sibling))) {
 			return { kind: "single-file", sourcePath: sibling };
 		}
 	}
-	return { kind: "batch" };
+	return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -305,4 +342,114 @@ async function toggleIdeBridge(deps: IdeBridgeCommandDeps): Promise<void> {
 			? state.port
 			: deps.getPort();
 	new Notice(`IDE Bridge started on :${port}`);
+}
+
+// ---------------------------------------------------------------------------
+// 004 spec — Suggestions Editor open command (T4.1)
+// ---------------------------------------------------------------------------
+//
+// Spec refs: spec-004 SDD §3 (ADR-S1); PRD F1; plan/phase-4.md T4.1.
+//
+// Decisions:
+//
+// 1. Doc-path resolution only looks at the ACTIVE file — the command opens
+//    the run for whatever `_suggestions.json`/`.md` pair the user is
+//    currently looking at, not a picker over every run in the vault.
+// 2. `resolveSuggestionsDocPath` is exported (pure, no Obsidian dependency)
+//    so its mapping rules can be asserted directly, same as
+//    `resolveActiveInvocation` above.
+// 3. `deps.openSuggestionsEditor` is injected rather than importing
+//    `ui/suggestions-view/openSuggestionsEditor.ts` directly — keeps this
+//    module's only Obsidian-side dependency the `Notice`/`Plugin` surface
+//    already imported above, and lets tests substitute a spy without
+//    touching real workspace leaves.
+
+const OPEN_SUGGESTIONS_EDITOR_ID = "open-suggestions-editor";
+const OPEN_SUGGESTIONS_EDITOR_LABEL = "Open suggestions editor";
+const NO_SUGGESTIONS_DOC_NOTICE =
+	"Open a Tomo _suggestions.json (or its .md) first";
+
+export interface SuggestionsEditorCommandDeps {
+	/** Vault-relative path of the active file, or null if none is open. */
+	readonly getActiveFilePath: () => string | null;
+	/**
+	 * Every `*_suggestions.json` run in the vault (sorted). Used only when the
+	 * active file is not itself a suggestions doc — the command then offers a
+	 * picker instead of failing with a Notice.
+	 */
+	readonly listSuggestionsDocs: () => string[];
+	/**
+	 * Opens a fuzzy picker over `docs`, invoking `onPick` with the chosen path.
+	 * Injected (rather than importing the Obsidian picker here) so this module
+	 * stays testable without a real `FuzzySuggestModal`.
+	 */
+	readonly pickSuggestionsDoc: (docs: string[], onPick: (docPath: string) => void) => void;
+	/** Opens (or retargets/reveals) the Suggestions Editor leaf for docPath. */
+	readonly openSuggestionsEditor: (docPath: string) => Promise<void>;
+}
+
+/**
+ * Register the 004 "Open suggestions editor" palette command. Called
+ * separately from the 001/002/003 registrars so 004 wiring stays decoupled —
+ * main.ts calls it after constructing the vault-backed `openSuggestionsEditor`.
+ */
+export function registerSuggestionsEditorCommand(
+	plugin: Plugin,
+	deps: SuggestionsEditorCommandDeps,
+): void {
+	plugin.addCommand({
+		id: OPEN_SUGGESTIONS_EDITOR_ID,
+		name: OPEN_SUGGESTIONS_EDITOR_LABEL,
+		callback: () => {
+			void dispatchOpenSuggestionsEditor(deps);
+		},
+	});
+}
+
+async function dispatchOpenSuggestionsEditor(
+	deps: SuggestionsEditorCommandDeps,
+): Promise<void> {
+	const activeDocPath = resolveSuggestionsDocPath(deps.getActiveFilePath());
+	if (activeDocPath !== null) {
+		await deps.openSuggestionsEditor(activeDocPath);
+		return;
+	}
+	// No suggestions doc is active — offer a picker over every run in the
+	// vault (owner UX refinement), falling back to the Notice only when the
+	// vault has none at all.
+	const docs = deps.listSuggestionsDocs();
+	if (docs.length === 0) {
+		new Notice(NO_SUGGESTIONS_DOC_NOTICE);
+		return;
+	}
+	deps.pickSuggestionsDoc(docs, (chosen) => {
+		void deps.openSuggestionsEditor(chosen);
+	});
+}
+
+// Tomo emits two suggestion review surfaces that share the SAME wire schema
+// (spec-004 SDD; tomo inbox-triage.py `_get_doc_type`): the primary
+// `_suggestions.json` (tomo.doc_type=suggestions) and the Force-Atomic Resolve
+// `_suggestions-fan.json` (tomo.doc_type=suggestions-fan). Both open in the
+// same editor; Tomo distinguishes them by frontmatter doc_type, Hashi
+// discovers either by filename suffix.
+export const SUGGESTIONS_JSON_RE = /_suggestions(-fan)?\.json$/;
+const SUGGESTIONS_MD_RE = /_suggestions(-fan)?\.md$/;
+
+/**
+ * Map the active file path to the `_suggestions*.json` doc to open:
+ *   - `<stem>_suggestions.json` / `<stem>_suggestions-fan.json` → itself.
+ *   - `<stem>_suggestions.md` / `<stem>_suggestions-fan.md` → the `.json` sibling.
+ *   - anything else (no active file, unrelated note) → null; the caller
+ *     shows a Notice rather than opening anything.
+ */
+export function resolveSuggestionsDocPath(
+	activePath: string | null,
+): string | null {
+	if (activePath === null) return null;
+	if (SUGGESTIONS_JSON_RE.test(activePath)) return activePath;
+	if (SUGGESTIONS_MD_RE.test(activePath)) {
+		return activePath.slice(0, -".md".length) + ".json";
+	}
+	return null;
 }

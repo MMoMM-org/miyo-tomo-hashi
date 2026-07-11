@@ -1,0 +1,903 @@
+<title>Suggestions Editor — Interface Mockups</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<style>
+  /* ============================================================
+     Suggestions Editor — Hashi spec 004 interface mockups.
+     Grounded in Obsidian's own design language (workspace leaf,
+     purple accent, system UI type) so the layout can be judged
+     in situ. Three structural variants + the op-2 SpotPicker.
+     Tokens carry both Obsidian themes; the viewer's toggle wins.
+     ============================================================ */
+
+  :root {
+    /* Obsidian-light palette (neutrals biased faintly violet) */
+    --bg:            #ffffff;
+    --bg-alt:        #f5f4f8;
+    --bg-elev:       #ffffff;
+    --bg-input:      #fbfbfd;
+    --bg-hover:      #f0eef6;
+    --border:        #e4e1ec;
+    --border-strong: #cecad9;
+    --text:          #2b2a33;
+    --text-muted:    #6b6979;
+    --text-faint:    #9c99ab;
+    --accent:        #7c5cf0;
+    --accent-soft:   #ede7ff;
+    --green:         #2f9e6a;
+    --green-soft:    #e2f4ec;
+    --amber:         #b7791f;
+    --red:           #c0504e;
+    --shadow:        0 1px 2px rgba(30,25,60,.06), 0 8px 24px rgba(30,25,60,.08);
+    --shadow-modal:  0 12px 48px rgba(20,16,45,.28);
+
+    --ui:  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+    --r: 8px;
+    --r-sm: 6px;
+    --pane-radius: 10px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:            #1e1d21;
+      --bg-alt:        #191818;
+      --bg-elev:       #252429;
+      --bg-input:      #1a191d;
+      --bg-hover:      #2b2a31;
+      --border:        #34323c;
+      --border-strong: #46434f;
+      --text:          #dcdce1;
+      --text-muted:    #9a98a6;
+      --text-faint:    #6b6976;
+      --accent:        #a78bfa;
+      --accent-soft:   #2c2542;
+      --green:         #56b98a;
+      --green-soft:    #1e3830;
+      --amber:         #d9a441;
+      --red:           #d97a7a;
+      --shadow:        0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+      --shadow-modal:  0 16px 56px rgba(0,0,0,.55);
+    }
+  }
+  /* Explicit toggle overrides (win over the media query both ways) */
+  :root[data-theme="light"] {
+    --bg:#ffffff; --bg-alt:#f5f4f8; --bg-elev:#ffffff; --bg-input:#fbfbfd; --bg-hover:#f0eef6;
+    --border:#e4e1ec; --border-strong:#cecad9; --text:#2b2a33; --text-muted:#6b6979; --text-faint:#9c99ab;
+    --accent:#7c5cf0; --accent-soft:#ede7ff; --green:#2f9e6a; --green-soft:#e2f4ec; --amber:#b7791f; --red:#c0504e;
+    --shadow:0 1px 2px rgba(30,25,60,.06),0 8px 24px rgba(30,25,60,.08); --shadow-modal:0 12px 48px rgba(20,16,45,.28);
+  }
+  :root[data-theme="dark"] {
+    --bg:#1e1d21; --bg-alt:#191818; --bg-elev:#252429; --bg-input:#1a191d; --bg-hover:#2b2a31;
+    --border:#34323c; --border-strong:#46434f; --text:#dcdce1; --text-muted:#9a98a6; --text-faint:#6b6976;
+    --accent:#a78bfa; --accent-soft:#2c2542; --green:#56b98a; --green-soft:#1e3830; --amber:#d9a441; --red:#d97a7a;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35); --shadow-modal:0 16px 56px rgba(0,0,0,.55);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--ui);
+    background: var(--bg-alt);
+    color: var(--text);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 24px 80px; }
+
+  /* ---- page masthead (studio frame, not part of the app) ---- */
+  .masthead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 8px; }
+  .masthead h1 { font-size: 22px; font-weight: 650; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+  .masthead .sub { color: var(--text-muted); font-size: 14px; margin-top: 4px; max-width: 60ch; }
+  .eyebrow { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 650; margin-bottom: 6px; }
+
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .seg { display: inline-flex; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 3px; gap: 2px; }
+  .seg button {
+    font-family: inherit; font-size: 12.5px; font-weight: 550; color: var(--text-muted);
+    background: transparent; border: 0; padding: 6px 12px; border-radius: 5px; cursor: pointer; white-space: nowrap;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .seg button:not([aria-pressed="true"]):hover { color: var(--text); background: var(--bg-hover); }
+
+  .ghost-btn {
+    font-family: inherit; font-size: 12.5px; font-weight: 550; color: var(--text-muted);
+    background: var(--bg); border: 1px solid var(--border); padding: 7px 12px; border-radius: var(--r-sm); cursor: pointer;
+  }
+  .ghost-btn:hover { color: var(--text); border-color: var(--border-strong); }
+
+  .variant-caption { margin: 18px 2px 12px; font-size: 13px; color: var(--text-muted); display: flex; gap: 8px; align-items: baseline; }
+  .variant-caption b { color: var(--text); font-weight: 600; }
+
+  /* ============================================================
+     Mock Obsidian window
+     ============================================================ */
+  .obsidian {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--pane-radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .titlebar {
+    display: flex; align-items: center; gap: 12px;
+    height: 38px; padding: 0 14px;
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border);
+  }
+  .lights { display: flex; gap: 7px; }
+  .lights i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1){ background:#ec6a5e; } .lights i:nth-child(2){ background:#f3bf4f; } .lights i:nth-child(3){ background:#61c554; }
+  .tabstrip { display: flex; gap: 4px; margin-left: 4px; }
+  .tab { font-size: 12.5px; color: var(--text-muted); padding: 5px 12px; border-radius: 6px 6px 0 0; display:flex; align-items:center; gap:7px; }
+  .tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+  .tab .dot { width:6px; height:6px; border-radius:50%; background: var(--accent); }
+
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); min-height: 560px; }
+  @media (max-width: 820px){ .split { grid-template-columns: 1fr; } .source-pane { display:none; } }
+
+  /* left: the source note (faint context) */
+  .source-pane { border-right: 1px solid var(--border); background: var(--bg); padding: 20px 22px; overflow: hidden; }
+  .source-pane .fname { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); margin-bottom: 14px; }
+  .md h2 { font-size: 15px; margin: 18px 0 8px; font-weight: 650; color: var(--text); }
+  .md h2:first-child { margin-top: 0; }
+  .md p, .md li { color: var(--text-muted); font-size: 13px; margin: 4px 0; }
+  .md ul { margin: 6px 0; padding-left: 18px; }
+  .md .cb { color: var(--text-faint); }
+  .md .wl { color: var(--accent); }
+  .md .callout { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 8px 12px; margin: 10px 0; background: var(--accent-soft); }
+  .md .callout .ct { font-size: 12px; font-weight: 650; color: var(--accent); }
+
+  /* right: the editor leaf */
+  .leaf { background: var(--bg); display: flex; flex-direction: column; min-width: 0; }
+  .leaf-head {
+    display: flex; align-items: center; gap: 10px; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg);
+  }
+  .leaf-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .leaf-title .ico { width: 15px; height: 15px; color: var(--accent); flex: none; }
+  .leaf-title h3 { font-size: 13.5px; font-weight: 650; margin: 0; white-space: nowrap; }
+  .leaf-title .meta { font-family: var(--mono); font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .leaf-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+  .dirty { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--amber); }
+  .dirty i { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
+  .btn { font-family: inherit; font-size: 12.5px; font-weight: 600; border-radius: var(--r-sm); padding: 6px 13px; cursor: pointer; border: 1px solid transparent; }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.05); }
+  .btn.subtle { background: transparent; color: var(--text-muted); border-color: var(--border); }
+  .btn.subtle:hover { color: var(--text); border-color: var(--border-strong); }
+
+  .leaf-body { padding: 14px 16px 22px; overflow-y: auto; }
+
+  /* section header inside the leaf */
+  .sec-h { display: flex; align-items: center; gap: 8px; margin: 18px 2px 10px; }
+  .sec-h:first-child { margin-top: 4px; }
+  .sec-h h4 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); font-weight: 650; margin: 0; }
+  .sec-h .count { font-size: 11px; color: var(--text-faint); background: var(--bg-alt); border-radius: 20px; padding: 1px 8px; }
+  .sec-h .rule { flex: 1; height: 1px; background: var(--border); }
+
+  /* suggestion card */
+  .card { border: 1px solid var(--border); border-radius: var(--r); background: var(--bg-elev); margin-bottom: 10px; overflow: hidden; }
+  .card-top { padding: 12px 13px 14px; }
+  .card-title { font-size: 14px; font-weight: 600; color: var(--text); margin: 0; display:flex; align-items:center; gap: 8px; }
+  .id-chip { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
+  .card-sub { font-size: 11.5px; color: var(--text-faint); font-family: var(--mono); margin-top: 6px; }
+
+  /* candidate MOC row */
+  .cand { display: flex; align-items: center; gap: 11px; padding: 9px 13px; border-top: 1px solid var(--border); }
+  .cand.off { opacity: .55; }
+  .check {
+    width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border-strong); flex: none;
+    display: grid; place-items: center; cursor: pointer; background: var(--bg-input); color: transparent; transition: .12s;
+  }
+  .cand.on .check { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .check svg { width: 12px; height: 12px; }
+  .cand-main { flex: 1; min-width: 0; }
+  .cand-path { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cand-path .dir { color: var(--text-faint); }
+  .anchor-row { display: flex; align-items: center; gap: 7px; margin-top: 5px; flex-wrap: wrap; }
+  .anchor-chip {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted);
+    background: var(--bg-alt); border: 1px solid var(--border); border-radius: 20px; padding: 2px 9px 2px 8px; cursor: pointer;
+  }
+  .anchor-chip:hover { border-color: var(--accent); color: var(--text); }
+  .anchor-chip .k { color: var(--accent); font-weight: 600; }
+  .anchor-chip.empty { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, var(--border)); border-style: dashed; }
+  .anchor-chip .pencil { width: 11px; height: 11px; opacity: .6; }
+  .conf { display: flex; align-items: center; gap: 6px; flex: none; }
+  .conf .bar { width: 42px; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  .conf .bar span { display: block; height: 100%; border-radius: 3px; background: var(--green); }
+  .conf .bar.mid span { background: var(--amber); }
+  .conf .val { font-size: 10.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; width: 26px; }
+
+  /* proposed MOC card */
+  .pmoc { border: 1px solid var(--border); border-radius: var(--r); background: var(--bg-elev); margin-bottom: 10px; padding: 12px 13px; }
+  .pmoc-row1 { display: flex; align-items: center; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .field label { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); font-weight: 600; }
+  .inp {
+    font-family: inherit; font-size: 13px; color: var(--text); background: var(--bg-input);
+    border: 1px solid var(--border); border-radius: var(--r-sm); padding: 5px 9px; min-width: 0;
+  }
+  .inp:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  .inp.name { font-weight: 600; }
+  .decision { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; flex: none; }
+  .decision button { font-family: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border: 0; background: var(--bg-input); color: var(--text-muted); cursor: pointer; }
+  .decision button.approve[aria-pressed="true"] { background: var(--green); color: #fff; }
+  .decision button.skip[aria-pressed="true"] { background: var(--bg-hover); color: var(--text); }
+  .pmoc-row2 { display: flex; align-items: center; gap: 8px; margin-top: 11px; flex-wrap: wrap; }
+  .members { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .members .lbl { font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; }
+  .chip { font-family: var(--mono); font-size: 11px; background: var(--accent-soft); color: var(--accent); border-radius: 5px; padding: 1px 7px; }
+  .tag { font-size: 11px; color: var(--text-muted); background: var(--bg-alt); border: 1px solid var(--border); border-radius: 20px; padding: 1px 9px; }
+  .reason { font-size: 11.5px; color: var(--text-faint); font-style: italic; margin-top: 8px; }
+  .merge-hint { font-size: 11px; color: var(--amber); margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+
+  /* legend strip */
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 2px 0; font-size: 11.5px; color: var(--text-muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; }
+
+  /* ---- Variant B: tabs ---- */
+  .subtabs { display: flex; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--border); }
+  .subtab { font-size: 12.5px; font-weight: 600; color: var(--text-muted); background: transparent; border: 0; border-bottom: 2px solid transparent; padding: 7px 12px 10px; cursor: pointer; }
+  .subtab[aria-pressed="true"] { color: var(--text); border-bottom-color: var(--accent); }
+
+  /* ---- Variant C: master-detail ---- */
+  .md-split { display: grid; grid-template-columns: 220px minmax(0,1fr); min-height: 480px; }
+  @media (max-width: 640px){ .md-split { grid-template-columns: 1fr; } .md-detail { display:none; } }
+  .md-list { border-right: 1px solid var(--border); overflow-y: auto; padding: 8px; }
+  .md-group { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); font-weight: 650; padding: 10px 8px 5px; }
+  .md-item { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 6px; cursor: pointer; }
+  .md-item:hover { background: var(--bg-hover); }
+  .md-item.sel { background: var(--accent-soft); }
+  .md-item .st { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .st.ok { background: var(--green); } .st.warn { background: var(--amber); } .st.off { background: var(--text-faint); }
+  .md-item .nm { font-size: 12.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .md-item.sel .nm { font-weight: 600; }
+  .md-detail { padding: 18px 20px; overflow-y: auto; }
+  .md-detail .dt-title { font-size: 16px; font-weight: 650; margin: 0 0 2px; }
+  .md-detail .dt-sub { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); margin-bottom: 16px; }
+  .dt-field { margin-bottom: 16px; }
+  .dt-field > label { display:block; font-size: 10.5px; letter-spacing:.06em; text-transform: uppercase; color: var(--text-muted); font-weight: 650; margin-bottom: 7px; }
+
+  /* ============================================================
+     SpotPicker modal (op 2) — same regardless of variant
+     ============================================================ */
+  .scrim { position: fixed; inset: 0; background: rgba(15,12,28,.5); backdrop-filter: blur(2px); display: none; place-items: center; z-index: 50; padding: 20px; }
+  .scrim.open { display: grid; }
+  .modal { width: min(520px, 100%); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow-modal); overflow: hidden; }
+  .modal-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--border); }
+  .modal-head .kick { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); font-weight: 650; }
+  .modal-head h3 { font-size: 15.5px; margin: 4px 0 2px; font-weight: 650; }
+  .modal-head .tgt { font-family: var(--mono); font-size: 11.5px; color: var(--text-muted); }
+  .modal-body { padding: 14px 18px; max-height: 52vh; overflow-y: auto; }
+  .pick-label { font-size: 10.5px; letter-spacing:.06em; text-transform: uppercase; color: var(--text-faint); font-weight:650; margin: 4px 0 8px; display: flex; align-items:center; gap: 8px; }
+  .pick-label .hint { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text-faint); font-style: italic; }
+  .struct { display: flex; flex-direction: column; gap: 4px; }
+  .snode { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; cursor: pointer; background: var(--bg-elev); }
+  .snode:hover { border-color: var(--accent); }
+  .snode.sel { border-color: var(--accent); background: var(--accent-soft); }
+  .snode .type { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: 4px; padding: 1px 6px; flex: none; }
+  .snode .type.h { --c: var(--accent); }
+  .snode .label { font-size: 13px; color: var(--text); flex: 1; }
+  .snode .lvl { font-size: 10.5px; color: var(--text-faint); font-family: var(--mono); }
+  .snode.newsec { border-style: dashed; }
+  .snode.newsec .type { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--border)); }
+  .snode.newsec input { flex: 1; font-family: inherit; font-size: 13px; background: transparent; border: 0; color: var(--text); }
+  .snode.newsec input:focus { outline: none; }
+
+  .place { margin-top: 16px; }
+  .place-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; margin-top: 8px; }
+  .place-seg button { font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 7px 16px; border: 0; background: var(--bg-input); color: var(--text-muted); cursor: pointer; border-right: 1px solid var(--border); }
+  .place-seg button:last-child { border-right: 0; }
+  .place-seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .place-seg button:disabled { color: var(--text-faint); opacity: .5; cursor: not-allowed; text-decoration: line-through; }
+  .place-note { font-size: 11.5px; color: var(--text-muted); margin-top: 9px; display: flex; gap: 7px; align-items: flex-start; }
+  .place-note.warn { color: var(--amber); }
+  .modal-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 13px 18px; border-top: 1px solid var(--border); background: var(--bg-alt); }
+  .modal-foot .left { font-size: 11.5px; color: var(--text-faint); }
+
+  .note-card { border: 1px dashed var(--border-strong); border-radius: var(--r); background: var(--bg-alt); padding: 12px 14px; margin-bottom: 10px; font-size: 12.5px; color: var(--text-muted); display: flex; gap: 9px; }
+  .note-card b { color: var(--text); font-weight: 600; }
+  .note-card .ic { color: var(--amber); flex: none; }
+
+  .foot-explain { margin-top: 22px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--r); background: var(--bg); font-size: 13px; color: var(--text-muted); }
+  .foot-explain h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text); }
+  .foot-explain ul { margin: 0; padding-left: 18px; }
+  .foot-explain li { margin: 5px 0; }
+  .foot-explain code { font-family: var(--mono); font-size: 12px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; color: var(--text); }
+
+  /* ---- added affordances (owner review 2026-07-04) ---- */
+  .path-link { color: inherit; cursor: pointer; text-decoration: none; border-bottom: 1px solid transparent; }
+  .cand-path:hover .path-link { border-bottom-color: var(--accent); color: var(--accent); }
+  .path-link .ext { width: 11px; height: 11px; opacity: 0; margin-left: 3px; vertical-align: -1px; }
+  .cand-path:hover .path-link .ext { opacity: .7; }
+  .src-badge { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 3px; padding: 1px 5px; margin-left: 7px; }
+  .add-moc { display: flex; align-items: center; gap: 8px; padding: 8px 13px; border-top: 1px dashed var(--border); }
+  .add-moc button { font-family: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: transparent; border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: var(--r-sm); padding: 5px 11px; cursor: pointer; }
+  .add-moc button:hover { background: var(--accent-soft); }
+  .link-btn { font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--text-muted); background: transparent; border: 1px solid var(--border); border-radius: var(--r-sm); padding: 4px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .link-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .chip.member { cursor: help; position: relative; }
+  .tag.add { cursor: pointer; color: var(--accent); border-style: dashed; border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+  .tag.add:hover { background: var(--accent-soft); }
+  .tag.editable { cursor: pointer; }
+  .tag.editable:hover { border-color: var(--accent); }
+
+  /* generic fuzzy picker (MOC / tags) */
+  .fp-search { width: 100%; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg-input); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; margin-bottom: 6px; }
+  .fp-search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .fp-list { display: flex; flex-direction: column; gap: 2px; }
+  .fp-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text); }
+  .fp-item:hover, .fp-item.hi { background: var(--accent-soft); }
+  .fp-item .fp-path { color: var(--text-faint); font-family: var(--mono); font-size: 11px; }
+  .fp-item .fp-new { color: var(--green); font-weight: 600; }
+
+  /* ---- suppressed suggestion ---- */
+  .card.suppressed { border-left: 3px solid var(--text-faint); }
+  .worthiness { display: flex; flex-direction: column; align-items: flex-end; flex: none; }
+  .worthiness .wv { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .worthiness .wl { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); }
+  .worthiness.low .wv { color: var(--red); }
+  .worthiness.mid .wv { color: var(--amber); }
+  .suppressed-note { font-size: 12px; color: var(--text-muted); margin: 9px 0 10px; }
+  .force-atomic { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); cursor: pointer; }
+  .muted { color: var(--text-faint); font-weight: 400; }
+
+  /* ---- worthy meta row: template / location / keep-source ---- */
+  .pmoc-row2.meta { margin-top: 11px; align-items: flex-end; gap: 14px; }
+  .mini-pick { font-family: var(--mono); font-size: 12px; color: var(--text); background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 5px 9px; cursor: pointer; text-align: left; }
+  .mini-pick:hover { border-color: var(--accent); color: var(--accent); }
+  .cbx { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); cursor: pointer; }
+  .cbx input { accent-color: var(--accent); }
+  .cbx.keep { margin-bottom: 2px; }
+  .pmoc-row2.tags { margin-top: 10px; }
+  .tags-lbl { font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; }
+  .sec-label { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; padding: 10px 13px 4px; }
+  .sec-label .muted { text-transform: none; letter-spacing: 0; font-style: italic; }
+  .add-hint { font-size: 11px; color: var(--text-faint); }
+  .xref { font-size: 11.5px; color: var(--accent); padding: 8px 13px 11px; }
+
+  /* ---- daily ---- */
+  .card.daily { padding: 12px 13px 6px; }
+  .daily-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .daily-date { font-size: 14px; font-weight: 650; }
+  .warn-pill { font-size: 11px; color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 40%, var(--border)); border-radius: 20px; padding: 2px 10px; cursor: pointer; }
+  .log-entry { border-top: 1px solid var(--border); padding: 11px 0 13px; }
+  .le-text { width: 100%; font-family: var(--ui); font-size: 13px; color: var(--text); background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 7px 9px; resize: vertical; line-height: 1.45; }
+  .le-text:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .le-meta { font-size: 11.5px; color: var(--text-faint); margin: 6px 0 9px; }
+  .le-controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .ctl { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted); }
+  .le-pos, .le-time-in { font-family: inherit; font-size: 12px; color: var(--text); background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 4px 7px; }
+  .le-time-in:disabled { opacity: .4; }
+  .ext { width: 11px; height: 11px; flex: none; display: inline-block; }
+  .wlink { color: var(--accent); cursor: pointer; border-bottom: 1px solid transparent; text-decoration: none; white-space: nowrap; }
+  .wlink:hover { border-bottom-color: var(--accent); }
+  .wlink .ext { opacity: .55; margin-left: 3px; vertical-align: -1px; }
+  .chip.member { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ---- tag-handler ---- */
+  .card.tagh .th-title { font-size: 13.5px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .th-marker { font-family: var(--mono); font-size: 11.5px; color: var(--text-muted); background: var(--bg-alt); border-radius: 4px; padding: 1px 7px; }
+  .th-ctx { border: 1px dashed var(--border-strong); border-radius: var(--r-sm); padding: 9px 11px; margin-bottom: 11px; }
+  .ctx-flag { display: block; font-size: 11px; color: var(--amber); margin-bottom: 7px; }
+  .th-ctx.resolved { border-style: solid; border-color: var(--border); }
+  .ctx-note { display: block; font-size: 11px; color: var(--text-faint); margin-bottom: 7px; }
+  .ctx-note code { font-family: var(--mono); font-size: 10.5px; background: var(--bg-alt); border-radius: 3px; padding: 0 4px; color: var(--text-muted); }
+  .th-row { font-size: 12px; color: var(--text-muted); }
+  .th-row code, .th-ctx code { font-family: var(--mono); font-size: 11.5px; background: var(--bg-alt); border-radius: 3px; padding: 0 4px; color: var(--text); }
+  .th-preview { font-family: var(--mono); font-size: 11px; color: var(--text-faint); margin-top: 6px; overflow-x: auto; white-space: nowrap; }
+
+  .empty-state { padding: 40px 16px; text-align: center; color: var(--text-faint); font-size: 13px; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <div class="masthead">
+    <div>
+      <div class="eyebrow">Hashi · spec 004 · design phase</div>
+      <h1>Suggestions Editor — interface mockups</h1>
+      <p class="sub">The real <code>2026-07-06_0949</code> run (8 items) — worthy notes with MOC options, 6 suppressed (Force-Atomic only), 1 proposed MOC, daily-log entries, a tag-handler group. Four tabs; edit inline; open the anchor chip, <b>＋ Add MOC</b>, <b>Template/Location</b> and <b>＋ tag</b> pickers. Every untouched section round-trips verbatim.</p>
+    </div>
+    <div class="controls">
+      <button class="ghost-btn" id="themeToggle" title="Toggle light/dark">◐ Theme</button>
+    </div>
+  </div>
+
+  <!-- ===================== MOCK OBSIDIAN WINDOW ===================== -->
+  <div class="obsidian">
+    <div class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="tabstrip">
+        <div class="tab">2026-07-06_0949_suggestions.md</div>
+        <div class="tab active"><span class="dot"></span>Suggestions Editor</div>
+      </div>
+    </div>
+
+    <div class="split">
+      <!-- left: the flat markdown of the SAME run — the hand-edit view -->
+      <div class="source-pane">
+        <div class="fname">100 Inbox / 2026-07-06_0949_suggestions.md</div>
+        <div class="md">
+          <h2>Suggestions</h2>
+          <p><b>S05 — Interleaving</b></p>
+          <p><b>Link to MOC:</b></p>
+          <ul><li><span class="cb">☐</span> <span class="wl">[[Concepts (MOC)]]</span></li></ul>
+          <p><span class="cb">☑</span> Approve &nbsp;·&nbsp; <span class="cb">☐</span> Keep source files</p>
+          <p><b>S03 — Krafttraining</b> <span class="cb">worthiness 30%</span></p>
+          <p><span class="cb">☐</span> Force Atomic Note</p>
+          <h2>Daily Notes Updates</h2>
+          <p><span class="wl">[[2026-07-06]]</span> ⚠️ daily note doesn't exist</p>
+          <ul><li>Krafttraining, 45 Minuten…</li></ul>
+          <p><span class="cb">☐</span> Accept &nbsp;·&nbsp; <span class="cb">☐</span> Force Atomic Note</p>
+          <p style="margin-top:14px;color:var(--text-faint);font-style:italic">Flat checkboxes. No MOC re-point, no anchor/spot, no rename, no fuzzy-add. That's the gap the editor closes →</p>
+        </div>
+      </div>
+
+      <!-- right: the editor leaf -->
+      <div class="leaf">
+        <div class="leaf-head">
+          <div class="leaf-title">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 9h8M8 13h5"/></svg>
+            <div style="min-width:0">
+              <h3>Suggestions Editor</h3>
+              <div class="meta">run 2026-07-06-0949 · profile miyo · 8 items</div>
+            </div>
+          </div>
+          <div class="leaf-actions">
+            <span class="dirty" id="dirtyBadge"><i></i>Edited</span>
+            <button class="btn subtle">Revert</button>
+            <button class="btn primary">Save</button>
+          </div>
+        </div>
+
+        <!-- container swapped by JS per variant -->
+        <div id="stage"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><span class="swatch" style="background:var(--accent)"></span> editable</span>
+    <span><span class="swatch" style="background:var(--green)"></span> selected / approve</span>
+    <span><span class="swatch" style="background:var(--amber)"></span> needs a spot / attention</span>
+    <span><span class="swatch" style="background:var(--text-faint)"></span> render-only (from Tomo)</span>
+  </div>
+
+  <div class="foot-explain">
+    <h4>What the mockup encodes — real 0949 run, four tabs</h4>
+    <ul>
+      <li><b>Suggestions</b> has two card modes: <b>worthy</b> (S05/S08 — rename, template &amp; location pickers, tags, MOC link, keep-source, approve/skip) and <b>suppressed</b> (S01–04/S06/S07 — worthiness badge + a single <b>Force Atomic</b> control; that's the only real decision Tomo offers).</li>
+      <li>✅ <b>candidate_mocs</b> (was a wire bug): worthy notes now carry their MOC options — Tomo emits every candidate with <code>selected</code> mirrored and <code>anchor:null</code> until a spot is set. This is now <b>real</b>, not mocked. Plus manual <b>＋ Add MOC</b>.</li>
+      <li><b>Daily</b> tab: per-date <b>click-to-open</b> with a live "doesn't exist" pill (Hashi checks the vault — the JSON carries no exists flag); per log entry editable text, position/time, <b>Accept</b> + <b>Force Atomic</b>. Hashi never creates the daily note. Deleting a daily-only source is <b>automatic</b> via <code>accepted</code> — no separate control.</li>
+      <li>✅ <b>Tag-Handler</b> tab: approve / keep-source, now with real display context (<code>handler · target_path · marker · source_paths · preview</code>) carried read-only in the wire.</li>
+      <li><b>Own the whole document:</b> because Pass 2 is JSON-only, everything untouched (<code>daily_updates</code>, <code>tag_handler_groups</code>, <code>emit_digest</code>, all read-only fields) round-trips <b>verbatim</b> on Save. <code>emit_digest</code> is never recomputed — the mismatch is how Tomo learns the JSON was edited.</li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- ===================== SPOTPICKER MODAL ===================== -->
+<div class="scrim" id="scrim" role="dialog" aria-modal="true" aria-labelledby="spTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="kick">Choose the spot · op 2</div>
+      <h3 id="spTitle">Where in this MOC?</h3>
+      <div class="tgt">Frameworks (MOC).md</div>
+    </div>
+    <div class="modal-body">
+      <div class="pick-label">Anchor <span class="hint">— parsed from the note's real structure</span></div>
+      <div class="struct" id="struct">
+        <div class="snode" data-type="heading" data-callout="false"><span class="type h">Heading</span><span class="label">Overview</span><span class="lvl">H2</span></div>
+        <div class="snode" data-type="heading" data-callout="false"><span class="type h">Heading</span><span class="label">Core ideas</span><span class="lvl">H2</span></div>
+        <div class="snode sel" data-type="callout" data-callout="true"><span class="type">Callout</span><span class="label">[!concepts] Key concepts</span><span class="lvl">callout</span></div>
+        <div class="snode" data-type="heading" data-callout="false"><span class="type h">Heading</span><span class="label">References</span><span class="lvl">H2</span></div>
+        <div class="snode newsec" data-type="new" data-callout="false"><span class="type">New</span><input placeholder="Create a new ## section…" aria-label="New section name" /></div>
+      </div>
+
+      <div class="place">
+        <div class="pick-label">Placement</div>
+        <div class="place-seg" id="placeSeg">
+          <button data-p="before">Before</button>
+          <button data-p="inside" aria-pressed="true">Inside</button>
+          <button data-p="after">After</button>
+        </div>
+        <div class="place-note" id="placeNote">Insert as the last line inside the <b>[!concepts] Key concepts</b> callout body.</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span class="left">Tomo match · no confidence — manual pick</span>
+      <div style="display:flex; gap:8px;">
+        <button class="btn subtle" id="spCancel">Cancel</button>
+        <button class="btn primary" id="spApply">Set spot</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== FUZZY PICKER (Add MOC / tags / merge) ===================== -->
+<div class="scrim" id="fpScrim" role="dialog" aria-modal="true" aria-labelledby="fpTitle">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="kick" id="fpKick">Add MOC · op 1</div>
+      <h3 id="fpTitle">Pick a note as MOC</h3>
+      <div class="tgt" id="fpSub">any vault note — v1 does no "is it a MOC?" check</div>
+    </div>
+    <div class="modal-body">
+      <input class="fp-search" id="fpSearch" placeholder="Type to filter…" aria-label="Filter" autocomplete="off" />
+      <div class="fp-list" id="fpList"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="left" id="fpNote">metadataCache — all notes</span>
+      <button class="btn subtle" id="fpCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---- data: the real 2026-07-06_0949 run (8 items) ----
+  const T = "t_note_tomo.md", L = "Atlas/202 Notes/";
+  const suggestions = [
+    { id:"S01", title:"Anruf Mueller — Angebot bis Freitag, Referenzen nachschicken", stem:"call-mueller",
+      template:T, location:L, tags:["topic/communication","topic/people"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.3, cands:[] },
+    { id:"S02", title:"Deliberate Practice — Focused Effort at the Edge of Ability Builds Expertise", stem:"deliberate-practice",
+      template:T, location:L, tags:["topic/growth/aol/development","topic/mind/concepts"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
+    { id:"S03", title:"Krafttraining 2026-07-06 — Kniebeugen, Bankdruecken, Rudern", stem:"gym-log",
+      template:T, location:L, tags:["topic/health"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.3, cands:[] },
+    { id:"S04", title:"PKM-Systeme scheitern an fehlender Wiedervorlage, nicht an fehlender Struktur", stem:"idea-capture",
+      template:T, location:L, tags:["topic/knowledge/lyt"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
+    { id:"S05", title:"Interleaving — Why Mixed Practice Produces Better Retention", stem:"interleaving",
+      template:T, location:L, tags:["topic/mind/concepts","topic/learning"], decision:"approve", keep_source:false, force_atomic:false, suppressed:false, worthiness:0.6, proposedRef:"M01",
+      cands:[ { path:"Atlas/200 Maps/Concepts (MOC).md", src:"tomo", on:false, anchor:null, conf:null } ] },
+    { id:"S06", title:"Glühbirne im Flur wechseln", stem:"quick-thought",
+      template:T, location:L, tags:["topic/other"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.2, cands:[] },
+    { id:"S07", title:"Spaced Repetition — Effortful Retrieval is Where Learning Happens", stem:"spaced-repetition",
+      template:T, location:L, tags:["topic/mind/concepts"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
+    { id:"S08", title:"The Zettelkasten Method — Atomic Notes and Emergent Connections", stem:"zettelkasten-method",
+      template:T, location:L, tags:["topic/knowledge/frameworks"], decision:"approve", keep_source:false, force_atomic:false, suppressed:false, worthiness:0.6,
+      cands:[ { path:"Atlas/200 Maps/Frameworks (MOC).md", src:"tomo", on:false, anchor:null, conf:null },
+              { path:"Atlas/200 Maps/Type of Notes (MOC).md", src:"tomo", on:false, anchor:null, conf:null },
+              { path:"Atlas/200 Maps/Linking Your Thinking (MOC).md", src:"tomo", on:false, anchor:null, conf:null } ] },
+  ];
+  const proposed = [
+    { id:"M01", name:"Knowledge and Memory (MOC)", parent:"2000 - Knowledge Management", members:["S05"],
+      tags:["topic/mind/concepts","topic/learning"], reason:"1 note shares topic Knowledge and Memory and has no dedicated MOC.", decision:"skip" },
+  ];
+  const daily = [
+    { date:"2026-07-05", exists:false, entries:[
+      { time:null, position:"after_last_line", content:"Nachmittags mit Herrn Mueller telefoniert. Er will das Angebot bis Freitag pruefen und meldet sich. Referenzen nachschicken.", reason:"Short call note (157 chars), not atomic-worthy → inline log entry", source:"call-mueller", accepted:false, forceAtomic:false } ] },
+    { date:"2026-07-06", exists:false, entries:[
+      { time:null, position:"after_last_line", content:"Krafttraining, 45 Minuten. Kniebeugen, Bankdruecken, Rudern. Danach 10 Minuten Stretching. Energielevel danach deutlich hoeher.", reason:"Short gym log (131 chars), no atomic-worthy thread → inline log entry", source:"gym-log", accepted:false, forceAtomic:false } ] },
+  ];
+  const tagGroups = [
+    { id:"th-tsukai-efforts-tomo-dev-log-md", approved:true, keep_source:false,
+      target:"Efforts/Tomo Dev Log", marker:"## Captures", handler:"tsukai",
+      sources:["100 Inbox/202606291658_companion-p1-followon-ux-and-dataview-skill"],
+      preview:"| 2026-06-29 | feature | UX hardening + Dataview skill — 6 fixes shipped |" },
+  ];
+  // fuzzy-picker candidate lists
+  const vaultNotes = [
+    "Atlas/200 Maps/Concepts (MOC).md","Atlas/200 Maps/Frameworks (MOC).md","Atlas/200 Maps/Type of Notes (MOC).md",
+    "Atlas/200 Maps/Linking Your Thinking (MOC).md","Atlas/200 Maps/Knowledge Management (MOC).md","Atlas/202 Notes/Learning index.md",
+  ];
+  const vaultTags = ["topic/mind/concepts","topic/learning","topic/knowledge/frameworks","topic/knowledge/lyt","topic/health","topic/people","topic/communication","topic/growth/aol/development","topic/other"];
+  const templates = ["t_note_tomo.md","t_note_plain.md","t_zettel.md","t_source.md"];
+  const folders = ["Atlas/202 Notes/","Atlas/203 Fleeting/","100 Inbox/","Atlas/204 Sources/"];
+  const parentMocs = ["2000 - Knowledge Management","Atlas/200 Maps/Root (MOC)","1000 - Life Areas","3000 - Projects","Atlas/200 Maps/Learning (MOC)"];
+
+  const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5L20 6"/></svg>';
+  const PENCIL = '<svg class="pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L18 10l-4-4L4 16z"/><path d="M13 5l4 4"/></svg>';
+  const EXT = '<svg class="ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6"/><path d="M20 4l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>';
+  const titleOf = id => (suggestions.find(s=>s.id===id)||{}).title || id;
+
+  const dir = p => { const i = p.lastIndexOf("/"); return i<0 ? ["",p] : [p.slice(0,i+1), p.slice(i+1)]; };
+  const confBar = c => { const mid = c < 0.6; return `<div class="conf"><div class="bar ${mid?'mid':''}"><span style="width:${Math.round(c*100)}%"></span></div><span class="val">${c.toFixed(2)}</span></div>`; };
+  const anchorChip = a => {
+    if (!a) return `<button class="anchor-chip empty" data-spot>＋ set a spot ${PENCIL}</button>`;
+    return `<button class="anchor-chip" data-spot><span class="k">${a.type}</span>${a.value?`· ${a.value} `:''}· ${a.placement} ${PENCIL}</button>`;
+  };
+
+  function candRow(c){
+    const [d,f] = dir(c.path);
+    return `<div class="cand ${c.on?'on':'off'}">
+      <div class="check" data-toggle role="checkbox" aria-checked="${c.on}" tabindex="0">${CHECK}</div>
+      <div class="cand-main">
+        <div class="cand-path"><span class="path-link" data-open title="Open in new tab (creates if missing)">${d?`<span class="dir">${d}</span>`:''}${f}${EXT}</span>${c.src==='user'?'<span class="src-badge">added</span>':''}</div>
+        ${c.on ? `<div class="anchor-row">${anchorChip(c.anchor)}</div>` : ''}
+      </div>
+      ${c.conf!==null ? confBar(c.conf) : ''}
+    </div>`;
+  }
+  const tagRow = (tags) => `<div class="pmoc-row2 tags">
+      <span class="lbl tags-lbl">Tags</span>
+      ${tags.map(t=>`<span class="tag editable" data-edittag title="Edit tag">${t}</span>`).join("")}
+      <span class="tag add" data-addtag>＋ tag</span>
+    </div>`;
+
+  function worthyCard(s){
+    return `<div class="card">
+      <div class="card-top">
+        <div class="pmoc-row1">
+          <div class="field" style="flex:1"><label>Note (${s.id})</label><input class="inp name" value="${s.title}" aria-label="Atomic note title" /></div>
+          <div class="field"><label>Create?</label>
+            <div class="decision">
+              <button class="approve" aria-pressed="${s.decision==='approve'}">Approve</button>
+              <button class="skip" aria-pressed="${s.decision==='skip'}">Skip</button>
+            </div>
+          </div>
+        </div>
+        <div class="pmoc-row2 meta">
+          <div class="field"><label>Template</label><button class="mini-pick" data-picktpl>${s.template}</button></div>
+          <div class="field"><label>Location</label><button class="mini-pick" data-pickloc>${s.location}</button></div>
+          <label class="cbx keep"><input type="checkbox" ${s.keep_source?'checked':''} data-dirty/> Keep source file</label>
+        </div>
+        ${tagRow(s.tags)}
+      </div>
+      <div class="sec-label">Link to a MOC ${s.cands.length?'':'<span class="muted">— none proposed</span>'}</div>
+      ${s.cands.map(candRow).join("")}
+      <div class="add-moc"><button data-addmoc>＋ Add MOC…</button><span class="add-hint">Tomo's matches + any vault note</span></div>
+      ${s.proposedRef?`<div class="xref">↳ also offered as a new MOC (${s.proposedRef}) — see the Proposed MOCs tab</div>`:''}
+    </div>`;
+  }
+
+  function suppressedCard(s){
+    const low = s.worthiness < 0.3;
+    return `<div class="card suppressed">
+      <div class="card-top">
+        <div class="pmoc-row1">
+          <div class="field" style="flex:1"><label>Note (${s.id}) · not promoted</label><input class="inp name" value="${s.title}" aria-label="Atomic note title" /></div>
+          <div class="worthiness ${low?'low':'mid'}" title="atomic-worthiness"><span class="wv">${Math.round(s.worthiness*100)}%</span><span class="wl">worthiness</span></div>
+        </div>
+        <div class="suppressed-note">Below the 0.5 threshold — kept in inbox, not made an atomic note. Its content typically goes to the daily log instead.</div>
+        <label class="force-atomic"><input type="checkbox" ${s.force_atomic?'checked':''} data-dirty data-fa data-stem="${s.stem}"/> <b>Force Atomic Note</b> <span class="muted">— create a standalone note anyway</span></label>
+      </div>
+    </div>`;
+  }
+
+  function suggestionCard(s){ return s.suppressed ? suppressedCard(s) : worthyCard(s); }
+  function proposedCard(m){
+    const dup = proposed.filter(x=>x.name===m.name).length>1;
+    return `<div class="pmoc">
+      <div class="pmoc-row1">
+        <div class="field" style="flex:1"><label>Name (${m.id})</label><input class="inp name" value="${m.name}" /></div>
+        <div class="field" style="width:180px"><label>Parent</label><button class="mini-pick" data-pickparent>${m.parent}</button></div>
+        <div class="field"><label>Create?</label>
+          <div class="decision">
+            <button class="approve" aria-pressed="${m.decision==='approve'}">Approve</button>
+            <button class="skip" aria-pressed="${m.decision==='skip'}">Skip</button>
+          </div>
+        </div>
+      </div>
+      <div class="pmoc-row2">
+        <div class="members"><span class="lbl">Members</span>${m.members.map(x=>`<span class="chip member" title="${x}">${titleOf(x)}</span>`).join("")}</div>
+        <div style="flex:1"></div>
+        <button class="link-btn" data-merge>⇄ Merge into…</button>
+      </div>
+      <div class="pmoc-row2">
+        <span class="lbl" style="font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em">Tags</span>
+        ${m.tags.map(t=>`<span class="tag editable" data-edittag title="Edit tag">${t}</span>`).join("")}
+        <span class="tag add" data-addtag>＋ tag</span>
+      </div>
+      <div class="reason">${m.reason}</div>
+      ${dup?`<div class="merge-hint">◆ shares a name with another proposal → Tomo will merge them and union members</div>`:''}
+    </div>`;
+  }
+
+  // ---------- daily + tag-handler cards ----------
+  const POS = [["after_last_line","After last line"],["before_first_line","Before first line"],["at_time","At time"]];
+  function dailyCard(d){
+    return `<div class="card daily">
+      <div class="daily-head">
+        <span class="wlink daily-date" data-open>${d.date}${EXT}</span>
+        ${d.exists ? '' : `<span class="warn-pill" data-open title="Click to create the daily note">⚠ note doesn't exist — click to create</span>`}
+      </div>
+      ${d.entries.map(e=>`
+        <div class="log-entry">
+          <textarea class="le-text" data-dirty rows="2" aria-label="Log entry text">${e.content}</textarea>
+          <div class="le-meta">${e.reason} · from <span class="wlink" data-open>${e.source}${EXT}</span></div>
+          <div class="le-controls">
+            <label class="ctl"><span>Position</span>
+              <select class="le-pos" data-dirty aria-label="Log entry position">
+                ${POS.map(([v,l])=>`<option value="${v}" ${e.position===v?'selected':''}>${l}</option>`).join("")}
+              </select>
+            </label>
+            <input type="time" class="le-time-in" value="${e.time||''}" ${e.position==='at_time'?'':'disabled'} data-dirty aria-label="Time" />
+            <label class="cbx"><input type="checkbox" ${e.accepted?'checked':''} data-dirty/> Accept</label>
+            <label class="cbx"><input type="checkbox" ${e.forceAtomic?'checked':''} data-dirty data-fa data-stem="${e.source}"/> Force Atomic Note</label>
+          </div>
+        </div>`).join("")}
+    </div>`;
+  }
+  function tagCard(g){
+    return `<div class="card tagh">
+      <div class="card-top">
+        <div class="th-title"><span class="wlink" data-open>${g.target}${EXT}</span> <span class="th-marker">${g.marker}</span></div>
+        <div class="th-ctx resolved">
+          <span class="ctx-note">read-only display context — now carried in the wire (<code>handler · target_path · marker · source_paths · preview</code>)</span>
+          <div class="th-row">Handler <code>${g.handler}</code> · Sources ${g.sources.length}</div>
+          <div class="th-preview">${g.preview}</div>
+        </div>
+        <div class="pmoc-row2">
+          <div class="decision" data-approvegroup>
+            <button class="approve" aria-pressed="${g.approved}">Approve</button>
+            <button class="skip" aria-pressed="${!g.approved}">Skip</button>
+          </div>
+          <div style="flex:1"></div>
+          <label class="cbx"><input type="checkbox" ${g.keep_source?'checked':''} data-dirty/> Keep source files</label>
+        </div>
+      </div>
+    </div>`;
+  }
+  const empty = (msg) => `<div class="empty-state">${msg}</div>`;
+
+  // ---------- 4-tab renderer ----------
+  const TABS = [
+    { key:"s", label:"Suggestions",  count:()=>suggestions.length, render:()=>suggestions.map(suggestionCard).join("") },
+    { key:"m", label:"Proposed MOCs",count:()=>proposed.length,    render:()=>proposed.length?proposed.map(proposedCard).join(""):empty("No proposed MOCs in this run.") },
+    { key:"d", label:"Daily",        count:()=>daily.length,       render:()=>daily.length?daily.map(dailyCard).join(""):empty("No daily-note updates.") },
+    { key:"t", label:"Tag-Handler",  count:()=>tagGroups.length,   render:()=>tagGroups.length?tagGroups.map(tagCard).join(""):empty("No tag-handler updates.") },
+  ];
+  let tab = "s";
+
+  const stage = document.getElementById("stage");
+  function paint(){
+    const bar = `<div class="subtabs" role="group" aria-label="Section">${TABS.map(t=>
+      `<button class="subtab" data-sub="${t.key}" aria-pressed="${t.key===tab}">${t.label} · ${t.count()}</button>`).join("")}</div>`;
+    const active = TABS.find(t=>t.key===tab);
+    stage.innerHTML = bar + `<div class="leaf-body" id="subBody">${active.render()}</div>`;
+    wire();
+  }
+
+  function wire(){
+    // MOC toggles (worthy cards only)
+    stage.querySelectorAll("[data-toggle]").forEach(el=>{
+      const act = ()=>{ const row = el.closest(".cand"); const on = row.classList.toggle("on"); row.classList.toggle("off",!on); el.setAttribute("aria-checked",on);
+        let main = row.querySelector(".cand-main");
+        if(on && !main.querySelector(".anchor-row")){ main.insertAdjacentHTML("beforeend", `<div class="anchor-row">${anchorChip(null)}</div>`); rebindSpots(); }
+        if(!on){ const ar = main.querySelector(".anchor-row"); if(ar) ar.remove(); }
+        showDirty(); };
+      el.addEventListener("click", act);
+      el.addEventListener("keydown", e=>{ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); act(); } });
+    });
+    // segmented decisions (per-note + proposed + tag-handler approve/skip)
+    stage.querySelectorAll(".decision").forEach(d=>{
+      d.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
+        d.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));
+        b.setAttribute("aria-pressed","true"); showDirty();
+      }));
+    });
+    // inputs + checkboxes → dirty
+    stage.querySelectorAll("input").forEach(i=>i.addEventListener("input",showDirty));
+    stage.querySelectorAll("[data-dirty]").forEach(i=>i.addEventListener("change",showDirty));
+    // tabs → repaint the active section
+    stage.querySelectorAll(".subtab").forEach(t=>t.addEventListener("click",()=>{ tab=t.dataset.sub; paint(); }));
+    // pickers + click-to-open links
+    stage.querySelectorAll("[data-addmoc]").forEach(b=>b.addEventListener("click",()=>openFuzzy("moc")));
+    stage.querySelectorAll("[data-addtag],[data-edittag]").forEach(b=>b.addEventListener("click",()=>openFuzzy("tag")));
+    stage.querySelectorAll("[data-merge]").forEach(b=>b.addEventListener("click",()=>openFuzzy("merge")));
+    stage.querySelectorAll("[data-picktpl]").forEach(b=>b.addEventListener("click",()=>openFuzzy("tpl", b)));
+    stage.querySelectorAll("[data-pickloc]").forEach(b=>b.addEventListener("click",()=>openFuzzy("loc", b)));
+    stage.querySelectorAll("[data-pickparent]").forEach(b=>b.addEventListener("click",()=>openFuzzy("parent", b)));
+    stage.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); flashOpen(b); }));
+    // daily position → enable/disable the time input
+    stage.querySelectorAll(".le-pos").forEach(sel=>sel.addEventListener("change",()=>{
+      const t = sel.closest(".le-controls").querySelector(".le-time-in");
+      if(t) t.disabled = sel.value!=="at_time";
+      showDirty();
+    }));
+    // Force-Atomic sync: same source ⇒ one decision (suggestion ⇄ daily log entry)
+    stage.querySelectorAll("[data-fa]").forEach(cb=>cb.addEventListener("change",()=>{
+      const stem = cb.dataset.stem, val = cb.checked;
+      const s = suggestions.find(x=>x.stem===stem); if(s) s.force_atomic = val;
+      daily.forEach(d=>d.entries.forEach(e=>{ if(e.source===stem) e.forceAtomic = val; }));
+      stage.querySelectorAll(`[data-fa][data-stem="${stem}"]`).forEach(o=>{ if(o!==cb) o.checked = val; });
+      showDirty();
+    }));
+    rebindSpots();
+  }
+  function flashOpen(el){ el.style.color = "var(--accent)"; setTimeout(()=>{ el.style.color=""; }, 500); }
+  function rebindSpots(){ document.querySelectorAll("[data-spot]").forEach(b=>{ b.onclick = openSpot; }); }
+  function showDirty(){ document.getElementById("dirtyBadge").style.visibility="visible"; }
+
+  // theme toggle
+  const root = document.documentElement;
+  document.getElementById("themeToggle").addEventListener("click",()=>{
+    const cur = root.getAttribute("data-theme")
+      || (matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
+    root.setAttribute("data-theme", cur==="dark"?"light":"dark");
+  });
+
+  // ---- SpotPicker ----
+  const scrim = document.getElementById("scrim");
+  function openSpot(){ scrim.classList.add("open"); }
+  function closeSpot(){ scrim.classList.remove("open"); }
+  document.getElementById("spCancel").addEventListener("click",closeSpot);
+  document.getElementById("spApply").addEventListener("click",()=>{ closeSpot(); showDirty(); });
+  scrim.addEventListener("click",e=>{ if(e.target===scrim) closeSpot(); });
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeSpot(); document.getElementById("fpScrim").classList.remove("open"); } });
+
+  // structure node selection + placement gating (inside = callout only)
+  const placeSeg = document.getElementById("placeSeg");
+  const placeNote = document.getElementById("placeNote");
+  const insideBtn = placeSeg.querySelector('[data-p="inside"]');
+  document.querySelectorAll("#struct .snode").forEach(n=>n.addEventListener("click",e=>{
+    if (e.target.tagName==="INPUT") return;
+    document.querySelectorAll("#struct .snode").forEach(x=>x.classList.remove("sel"));
+    n.classList.add("sel");
+    const isCallout = n.dataset.callout==="true";
+    insideBtn.disabled = !isCallout;
+    if(!isCallout && insideBtn.getAttribute("aria-pressed")==="true"){
+      insideBtn.setAttribute("aria-pressed","false");
+      placeSeg.querySelector('[data-p="after"]').setAttribute("aria-pressed","true");
+      setNote("after", n);
+    }
+    if(isCallout){ setNote(currentPlace(), n); } else { setNote(currentPlace(), n); }
+  }));
+  placeSeg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
+    if(b.disabled) return;
+    placeSeg.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));
+    b.setAttribute("aria-pressed","true");
+    setNote(b.dataset.p, document.querySelector("#struct .snode.sel"));
+  }));
+  function currentPlace(){ const a=placeSeg.querySelector('[aria-pressed="true"]'); return a?a.dataset.p:"after"; }
+  function setNote(p, node){
+    const label = node? (node.querySelector(".label")?.textContent || node.querySelector("input")?.value || "the anchor") : "the anchor";
+    const isCallout = node && node.dataset.callout==="true";
+    if(p==="inside"){ placeNote.className="place-note"; placeNote.innerHTML = `Insert as the last line inside the <b>${label}</b> callout body.`; }
+    else if(p==="before"){ placeNote.className="place-note"; placeNote.innerHTML = `Insert immediately before <b>${label}</b>.`; }
+    else { placeNote.className="place-note"; placeNote.innerHTML = `Insert immediately after <b>${label}</b>${isCallout?" (after the callout closes)":""}.`; }
+    if(node && node.dataset.callout==="false" && p!=="inside"){ /* fine */ }
+  }
+
+  // ---- Fuzzy picker (Add MOC / edit tags / merge) ----
+  const fpScrim = document.getElementById("fpScrim");
+  const fpSearch = document.getElementById("fpSearch");
+  const fpList = document.getElementById("fpList");
+  let fpMode = "moc";
+  let fpTrigger = null;
+  const fpConf = {
+    moc:   { kick:"Add MOC · op 1",    title:"Pick a note as MOC", sub:'any vault note — v1 does no "is it a MOC?" check',  note:"metadataCache — all notes", src:()=>vaultNotes, paths:true,  verb:"create" },
+    tag:   { kick:"Edit tags",         title:"Add a tag",          sub:"fuzzy over existing vault tags",                    note:"metadataCache.getTags()",   src:()=>vaultTags,  paths:false, verb:"add" },
+    merge: { kick:"Merge · op 3",      title:"Merge into…",         sub:"pick another proposed MOC — members get unioned",   note:"proposed MOCs in this run", src:()=>proposed.map(p=>p.name), paths:false, verb:"" },
+    tpl:   { kick:"Template",          title:"Choose a template",   sub:"note templates in the vault",                      note:"Templates/",                src:()=>templates,  paths:false, verb:"" },
+    loc:   { kick:"Location",          title:"Choose a folder",     sub:"destination folder for the note",                  note:"vault folders",             src:()=>folders,    paths:false, verb:"create" },
+    parent:{ kick:"Parent MOC",        title:"Choose a parent",     sub:"the MOC this one nests under",                      note:"vault MOCs",                src:()=>parentMocs, paths:false, verb:"create" },
+  };
+  function openFuzzy(mode, trigger){
+    fpMode = mode; fpTrigger = trigger || null; const c = fpConf[mode];
+    document.getElementById("fpKick").textContent = c.kick;
+    document.getElementById("fpTitle").textContent = c.title;
+    document.getElementById("fpSub").textContent = c.sub;
+    document.getElementById("fpNote").textContent = c.note;
+    fpSearch.value = ""; renderFp(""); fpScrim.classList.add("open");
+    setTimeout(()=>fpSearch.focus(), 0);
+  }
+  function pickFp(value){
+    if((fpMode==="tpl"||fpMode==="loc"||fpMode==="parent") && fpTrigger) fpTrigger.textContent = value;
+    fpScrim.classList.remove("open"); showDirty();
+  }
+  function renderFp(q){
+    const c = fpConf[fpMode]; const ql = q.toLowerCase();
+    const items = c.src().filter(x=>x.toLowerCase().includes(ql));
+    let html = items.map((x,i)=>{
+      if(c.paths){ const [d,f]=dir(x); return `<div class="fp-item ${i===0?'hi':''}" data-fp="${x}">${f}<span class="fp-path">${d}</span></div>`; }
+      return `<div class="fp-item ${i===0?'hi':''}" data-fp="${x}">${x}</div>`;
+    }).join("");
+    if(q && c.verb && !items.some(x=>x.toLowerCase()===ql)){
+      html += `<div class="fp-item" data-fp="${q}"><span class="fp-new">＋ ${c.verb} “${q}”</span></div>`;
+    }
+    fpList.innerHTML = html || `<div class="fp-item" style="color:var(--text-faint)">No matches</div>`;
+    fpList.querySelectorAll("[data-fp]").forEach(el=>el.addEventListener("click",()=>pickFp(el.dataset.fp)));
+  }
+  fpSearch.addEventListener("input", e=>renderFp(e.target.value));
+  document.getElementById("fpCancel").addEventListener("click",()=>fpScrim.classList.remove("open"));
+  fpScrim.addEventListener("click", e=>{ if(e.target===fpScrim) fpScrim.classList.remove("open"); });
+
+  paint();
+</script>

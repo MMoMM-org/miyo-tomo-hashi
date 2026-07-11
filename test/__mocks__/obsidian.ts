@@ -157,6 +157,7 @@ export class App {
 		create: vi.fn(),
 		delete: vi.fn(),
 		getMarkdownFiles: vi.fn(() => []),
+		getFiles: vi.fn<() => TFile[]>(() => []),
 		adapter: { read: vi.fn(), write: vi.fn(), exists: vi.fn() },
 		process: vi.fn<(file: TFile, fn: (data: string) => string) => Promise<void>>(
 			async () => {},
@@ -318,6 +319,25 @@ export class Setting {
 			return this;
 		},
 	);
+	addTextArea = vi.fn(
+		(
+			cb: (text: {
+				inputEl: HTMLTextAreaElement;
+				setValue: ReturnType<typeof vi.fn>;
+				setPlaceholder: ReturnType<typeof vi.fn>;
+				onChange: ReturnType<typeof vi.fn>;
+			}) => void,
+		) => {
+			const component = {
+				inputEl: document.createElement("textarea"),
+				setValue: vi.fn(() => component),
+				setPlaceholder: vi.fn(() => component),
+				onChange: vi.fn(() => component),
+			};
+			cb(component);
+			return this;
+		},
+	);
 	addToggle = vi.fn(
 		(
 			cb: (toggle: {
@@ -410,6 +430,13 @@ export class WorkspaceLeaf {
 export class ItemView extends Component {
 	leaf: WorkspaceLeaf;
 	contentEl = document.createElement("div");
+	// Real Obsidian's `View` base class exposes `app`, populated by the
+	// Workspace when a leaf actually opens the view (before onOpen runs) —
+	// not passed through the constructor. Declared as definite-assignment
+	// here so views constructed directly in tests (bypassing the real
+	// leaf.setViewState flow) must assign it themselves, mirroring that
+	// real-world wiring order.
+	app!: App;
 
 	constructor(leaf: WorkspaceLeaf) {
 		super();
@@ -542,6 +569,73 @@ export abstract class AbstractInputSuggest<T> {
 	protected abstract getSuggestions(query: string): T[] | Promise<T[]>;
 	abstract renderSuggestion(value: T, el: HTMLElement): void;
 	abstract selectSuggestion(value: T, evt?: MouseEvent | KeyboardEvent): void;
+}
+
+// --- Suggest modals (command-palette-style pickers) ---
+//
+// Mirrors the surface SpotPicker (SuggestModal) and the fuzzy field pickers
+// (FuzzySuggestModal) rely on. As with AbstractInputSuggest, tests drive the
+// logic directly (call getSuggestions / getItems / getItemText / onChooseItem)
+// rather than the real popover. open()/close() invoke onOpen/onClose so
+// lifecycle spies work.
+export abstract class SuggestModal<T> {
+	app: App;
+	limit = 100;
+	inputEl = document.createElement("input");
+	resultContainerEl = document.createElement("div");
+
+	constructor(app: App) {
+		this.app = app;
+	}
+
+	setPlaceholder = vi.fn((_placeholder: string) => {});
+	setInstructions = vi.fn();
+	open = vi.fn(() => {
+		void this.onOpen();
+	});
+	close = vi.fn(() => {
+		void this.onClose();
+	});
+
+	onOpen(): void {
+		// default no-op; subclasses may override
+	}
+	onClose(): void {
+		// default no-op; subclasses may override
+	}
+
+	abstract getSuggestions(query: string): T[] | Promise<T[]>;
+	abstract renderSuggestion(value: T, el: HTMLElement): void;
+	abstract onChooseSuggestion(item: T, evt: MouseEvent | KeyboardEvent): void;
+}
+
+export interface FuzzyMatch<T> {
+	item: T;
+	match: { score: number; matches: number[][] };
+}
+
+export abstract class FuzzySuggestModal<T> extends SuggestModal<FuzzyMatch<T>> {
+	abstract getItems(): T[];
+	abstract getItemText(item: T): string;
+	abstract onChooseItem(item: T, evt: MouseEvent | KeyboardEvent): void;
+
+	getSuggestions(query: string): FuzzyMatch<T>[] {
+		const q = query.toLowerCase();
+		return this.getItems()
+			.filter((item) => this.getItemText(item).toLowerCase().includes(q))
+			.map((item) => ({ item, match: { score: 0, matches: [] } }));
+	}
+
+	renderSuggestion(match: FuzzyMatch<T>, el: HTMLElement): void {
+		el.textContent = this.getItemText(match.item);
+	}
+
+	onChooseSuggestion(
+		match: FuzzyMatch<T>,
+		evt: MouseEvent | KeyboardEvent,
+	): void {
+		this.onChooseItem(match.item, evt);
+	}
 }
 
 // --- Event ref (opaque marker) ---
