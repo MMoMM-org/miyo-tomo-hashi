@@ -1,3 +1,47 @@
+## [0.17.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.16.0...0.17.0) (2026-07-11)
+
+### Features
+
+* **spec-004:** adapt to new suggestions wire schema — per-note summary ([75b62f8](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/75b62f86394420b8ab91795698ec9cab56111131))
+* **spec-004:** add EditModel wrapping the whole wire doc (T1.1 follow-up) ([4df6efb](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/4df6efbc1fead043f063da70626e791955b8627d))
+* **spec-004:** daily edit transforms — content/position/time/accept (T1.7) ([3b36512](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/3b365126f7d092214ef7ca69674079e328c1dee1))
+* **spec-004:** Daily tab — content/position/time/accept + existence check (T3.6) ([9b33cdf](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/9b33cdf38172122db45b203c83ae962763602ce9))
+* **spec-004:** daily-log indicator icon on suppressed cards ([cad6352](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/cad6352ced68b91ccd5563214eec9a1ba4fdf250))
+* **spec-004:** discover the Force-Atomic Resolve fan doc (_suggestions-fan) ([5c18aa8](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/5c18aa8eb1f95e808ec80c6d4c63ced3dd150018))
+* **spec-004:** EditModel types + schema version gate (T1.1) ([873fccd](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/873fccd455f2271c9790d2f877a7b1e523fed240))
+* **spec-004:** force-atomic stem-sync transform (T1.4) ([f887357](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/f8873577a4ebe415d9e6433aec129adfc2f37b47))
+* **spec-004:** fuzzy field pickers — MOC/tags/template/location/parent (T3.4) ([4fdc62c](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/4fdc62c46aa139cbf38737f25d346ae5bbedd67a))
+* **spec-004:** ObsidianSuggestionsDoc load + save (T2.1/T2.2) ([6a703c9](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/6a703c93a1c0072b9b585b68a3fc0c899a105710))
+* **spec-004:** pre-live-run editor refinements (settings, UX, 5 editor fixes) ([c61e653](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/c61e653ca8710e1769109befb2da5042531e488a))
+* **spec-004:** Proposed MOCs tab — rename/parent/decision/merge + member titles (T3.5) ([56c21ff](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/56c21ff86b6c04f6756ba140714003c01b04a720))
+* **spec-004:** proposed-MOC graph ops — rename/reparent/decision/merge (T1.5) ([65e0765](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/65e07654b987c7805d74e2523239536bafcc9246))
+* **spec-004:** rebuild editor UI to the approved mockup + add Save; fix 6 bugs ([2270570](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/227057093e444e62d4af8c1750688439c607280f))
+* **spec-004:** register Suggestions Editor view + open command (T4.1) ([13299fd](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/13299fda3b8dc564f8e9c566da666ffc48b36d07))
+* **spec-004:** show proposed-MOC membership on Suggestions cards ([a0ea97d](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/a0ea97d49e7d360780fd752ca26a39ebad1a654e))
+* **spec-004:** SpotPicker (op 2) — real structure, executor-honourable placements (T3.3) ([956d808](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/956d808c0148e242a8107d05c0613de58a9a1bb1))
+* **spec-004:** suggestion field transforms — op1/op4/note fields (T1.3) ([1b5e7e8](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/1b5e7e8d2f5ce06bf6c50b54a7515347e51e925b))
+* **spec-004:** Suggestions tab — worthy vs suppressed cards (T3.2) ([de74438](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/de74438693d31cc8c8f4e45e123f3a9fbad5a345))
+* **spec-004:** SuggestionsDoc port + FakeSuggestionsDoc (T1.2) ([aa9ff6f](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/aa9ff6f4ce0231aa69c1594720038bc273e0c2f4))
+* **spec-004:** SuggestionsEditorView leaf + tab chrome + tab contract (T3.1) ([c2c615d](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/c2c615de01bffcefd4d8653fac3e9b94add0abb8))
+* **spec-004:** suggestionsStore wrapping Store<T> (T1.9) ([d31f78c](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/d31f78c84c5b864bc58ecf431763c32ef0ea42a4))
+* **spec-004:** Tag-Handler tab — read-only context + approve/keep-source (T3.7) ([31a884b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/31a884b8267bc9447ffeedae977a940b5bc201f2))
+* **spec-004:** tag-handler toggle transform (T1.8) ([eb8ad43](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/eb8ad43c0923eaeb4c832107c24755964ae597f9))
+* **spec-004:** validPlacements(anchorType) — executor-honourable placements (T1.6) ([f2c647b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/f2c647b55ccca9bdde7883de68814f5529defe4a))
+
+### Bug Fixes
+
+* **spec-002:** don't misroute non-instructions docs into the executor; offer a picker ([a1cf56c](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/a1cf56cc075f97e1016c18c59ba7ea5da7a28c48))
+* **spec-004:** adapter save robustness (T2.1/T2.2 review) ([8eb9b40](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/8eb9b4004d681fc851502fbd24eb33f024b5a44a))
+* **spec-004:** daily no-op must preserve dirty (T1.4/T1.6/T1.7 review) ([3f138ba](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/3f138ba90da2c2a044ae3e11bc31e1b6e2152500))
+* **spec-004:** no-op dirty gating for transforms (T1.3/T1.5/T1.7 review) ([3805cb3](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/3805cb393cfed8128676ae67292bee7a39b47a0a))
+* **spec-004:** preserve Tomo frontmatter + write Pass-2 gate in _suggestions.md ([3801fc3](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/3801fc360c133faef069c56bf56f70cca595d790))
+* **spec-004:** QA round 2 — openable origin links + conditional suppressed hint ([0530205](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/053020594eb79cdf216c3c73ec1de75806f55b44))
+* **spec-004:** retarget proposed-MOC reason count on merge ([2697f2b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/2697f2b738c5de5e78dc0ced776b315a3a777b00))
+* **spec-004:** Save race guard + a11y (rebuild code-quality review) ([62cf58d](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/62cf58dc2a1af6ac9a615c471a1eea81e9d74fc1))
+* **spec-004:** separate SpotPicker label from its placement badge ([cd4e7f6](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/cd4e7f6d6b2f1f78fb96c379600a002abea9e87f))
+* **spec-004:** style tracker + log-link daily rows; link the log-link target ([2931584](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/29315846d020e8914db33678f440d53d08a2e3a5))
+* **spec-004:** tab inline-helper no-op contract (T3.2/T3.5 review) ([e8ec66a](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/e8ec66ad5c7b5b2c35b5d0eba155d30480ee6d0d))
+
 ## [0.16.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.15.0...0.16.0) (2026-07-03)
 
 ### Features
