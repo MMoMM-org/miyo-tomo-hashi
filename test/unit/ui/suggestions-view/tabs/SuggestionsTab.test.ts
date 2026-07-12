@@ -300,7 +300,7 @@ describe("SuggestionsTab", () => {
 
 			const candRows = card.querySelectorAll(".hashi-se-cand");
 			expect(candRows).toHaveLength(3);
-			expect(card.querySelector(".hashi-se-add-moc button")?.textContent).toBe("＋ Add MOC…");
+			expect(card.querySelector(".hashi-se-add-moc button")?.textContent).toBe("＋ add MOC…");
 
 			expect(card.querySelector(".hashi-se-cbx input[type='checkbox']")).not.toBeNull();
 

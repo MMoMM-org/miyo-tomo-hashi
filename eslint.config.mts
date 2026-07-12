@@ -22,16 +22,27 @@ export default tseslint.config(
 	{
 		plugins: { obsidianmd },
 		rules: {
-			// obsidianmd 0.3.0's configs.recommended is a hybrid object: iterating
-			// it yields a full flat-config array (with js, tseslint, import, sdl
-			// bundled in), but its own properties are the obsidianmd/* rules. We
-			// only want the rules — extract them by filtering on the prefix.
+			// obsidianmd 0.3.0's configs.recommended is a flat-config ARRAY of
+			// blocks (js, tseslint, import, sdl, and the obsidianmd rules spread
+			// across them) — not an object keyed by rule name. Treating it as an
+			// object yielded zero rules, silently disabling the whole obsidianmd
+			// ruleset. Flatten every block's `rules` and keep only the
+			// obsidianmd/* keys, so we get the plugin's rules without adopting its
+			// bundled js/tseslint/import presets (we configure those ourselves).
 			...Object.fromEntries(
-				Object.entries(obsidianmd.configs!.recommended as Record<string, unknown>)
+				(obsidianmd.configs!.recommended as Array<{ rules?: Record<string, unknown> }>)
+					.flatMap((block) => Object.entries(block.rules ?? {}))
 					.filter(([k]) => k.startsWith("obsidianmd/")),
 			),
 			"@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
 			"@typescript-eslint/require-await": "off",
+			// Domain/proper-noun terms the sentence-case rule must leave alone:
+			// "MOC" (Map of Content) is MiYo terminology; "Bridge" is part of the
+			// "IDE Bridge" feature name whose Notice strings PRD F13 mandates
+			// verbatim (see registerCommands.ts). ignoreWords keeps the plugin's
+			// built-in acronym list (IDE, URL, …) intact, unlike overriding
+			// `acronyms`.
+			"obsidianmd/ui/sentence-case": ["error", { ignoreWords: ["MOC", "Bridge"] }],
 		},
 	},
 	{

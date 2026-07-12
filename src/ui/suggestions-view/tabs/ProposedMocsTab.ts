@@ -212,7 +212,7 @@ export class ProposedMocsTab implements EditorTab {
 
 		const mergeButton = row.createEl("button", {
 			cls: "hashi-se-link-btn",
-			text: "⇄ Merge into…",
+			text: "⇄ merge into…",
 			attr: { type: "button" },
 		});
 		mergeButton.addEventListener("click", () => {

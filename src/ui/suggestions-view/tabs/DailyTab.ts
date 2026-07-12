@@ -307,7 +307,7 @@ export class DailyTab implements EditorTab {
 		const label = controls.createEl("label", { cls: "hashi-se-cbx" });
 		const forceAtomic = label.createEl("input", { attr: { type: "checkbox" } });
 		forceAtomic.checked = entry.force_atomic_note;
-		label.createSpan({ text: "Force Atomic Note" });
+		label.createSpan({ text: "Force atomic note" });
 		forceAtomic.addEventListener("change", () => {
 			const checked = forceAtomic.checked;
 			ctx.apply((model) => setForceAtomicFromDaily(model, entry.source_stem, checked));
