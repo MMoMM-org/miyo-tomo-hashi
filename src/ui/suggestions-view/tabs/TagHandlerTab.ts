@@ -58,9 +58,9 @@ export class TagHandlerTab implements EditorTab {
 		});
 
 		const row = contextBlock.createDiv({ cls: `${NS}-th-row` });
-		row.appendChild(document.createTextNode("Handler "));
+		row.appendChild(activeDocument.createTextNode("Handler "));
 		row.createEl("code", { text: group.handler ?? "—" });
-		row.appendChild(document.createTextNode(` · Sources ${group.source_paths?.length ?? 0}`));
+		row.appendChild(activeDocument.createTextNode(` · Sources ${group.source_paths?.length ?? 0}`));
 
 		// `text:` sets textContent (see test/__mocks__/obsidian.ts) — the
 		// composed block is rendered verbatim as text, never as innerHTML.
