@@ -130,6 +130,28 @@ if (typeof globalThis !== "undefined" && typeof document !== "undefined") {
 	if (g.activeDocument === undefined) g.activeDocument = document;
 }
 
+// In real Obsidian the *global* `createDiv` helper builds a DETACHED element,
+// unlike the `parentEl.createDiv` method form (above) which appends to the
+// parent. Production code relies on the detached global to construct an element
+// fully before inserting it (e.g. build-before-insert of aria-live banners).
+if (typeof globalThis !== "undefined" && typeof document !== "undefined") {
+	// Cast via `unknown` to a narrow shape: Obsidian's own global augmentation
+	// types `createDiv` with `DomElementInfo` (text may be a DocumentFragment),
+	// which would conflict with this simpler string-only mock signature.
+	const g = globalThis as unknown as {
+		createDiv?: (info?: DomElInfo | string) => HTMLDivElement;
+	};
+	if (g.createDiv === undefined) {
+		g.createDiv = (info?: DomElInfo | string): HTMLDivElement => {
+			const normalized: DomElInfo | undefined =
+				typeof info === "string" ? { cls: info } : info;
+			const el = document.createElement("div");
+			applyDomElInfo(el, normalized);
+			return el;
+		};
+	}
+}
+
 // In real Obsidian, `activeWindow` is the Window of the currently-active
 // leaf (handles popout windows). jsdom has no equivalent — point it at
 // globalThis so production code calling `activeWindow.setTimeout` /
