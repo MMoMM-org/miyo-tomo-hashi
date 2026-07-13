@@ -1,3 +1,10 @@
+## [0.17.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.17.0...0.17.1) (2026-07-13)
+
+### Bug Fixes
+
+* **lint:** clear Obsidian scorecard failures for v0.17.0 ([d1ddd55](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/d1ddd551961bbaad182dd25ff4b3943a42270ea6))
+* **lint:** enable the obsidianmd ruleset that was silently disabled ([8f2203b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/8f2203bb53e65d770ff6a25bdebeeea641393a2b))
+
 ## [0.17.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.16.0...0.17.0) (2026-07-11)
 
 ### Features
