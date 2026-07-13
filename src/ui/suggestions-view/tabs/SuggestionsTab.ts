@@ -477,7 +477,7 @@ export class SuggestionsTab implements EditorTab {
 
 	private renderAddMoc(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
 		const wrap = top.createDiv({ cls: "hashi-se-add-moc" });
-		const button = wrap.createEl("button", { text: "＋ Add MOC…", attr: { type: "button" } });
+		const button = wrap.createEl("button", { text: "＋ add MOC…", attr: { type: "button" } });
 		button.addEventListener("click", () => {
 			new MocPicker(ctx.app, (path) => {
 				ctx.apply((model) => addMoc(model, suggestion.id, path));
@@ -686,7 +686,7 @@ export class SuggestionsTab implements EditorTab {
 		const label = top.createEl("label", { cls: "hashi-se-force-atomic" });
 		const checkbox = label.createEl("input", { attr: { type: "checkbox" } });
 		checkbox.checked = suggestion.force_atomic;
-		label.createEl("b", { text: "Force Atomic Note" });
+		label.createEl("b", { text: "Force atomic note" });
 		label.createSpan({ cls: "hashi-se-muted", text: "— create a standalone note anyway" });
 		checkbox.addEventListener("change", () => {
 			const checked = checkbox.checked;

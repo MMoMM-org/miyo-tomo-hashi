@@ -667,7 +667,7 @@ export class SettingsTab extends PluginSettingTab {
 				for (const [value, label] of options) {
 					dropdown.addOption(value, label);
 				}
-				dropdown.setValue(this.plugin.settings[key] as string);
+				dropdown.setValue(this.plugin.settings[key]);
 				dropdown.onChange(handler);
 			});
 	}

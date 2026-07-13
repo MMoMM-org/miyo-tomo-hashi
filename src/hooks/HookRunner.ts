@@ -94,8 +94,8 @@ function loadHookFresh(absolutePath: string, requireFn: RequireFn): Hook {
 	}
 	const mod = requireFn(absolutePath) as { default?: Hook } | Hook;
 	if (typeof mod === "function") return mod;
-	if (typeof (mod as { default?: Hook }).default === "function") {
-		return (mod as { default: Hook }).default;
+	if (typeof mod.default === "function") {
+		return mod.default;
 	}
 	console.warn(`[hashi:hooks] "${absolutePath}" exports no hook function — ignored (expected module.exports = fn or exports.default = fn).`);
 	return noopHook;

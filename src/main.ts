@@ -99,7 +99,7 @@ import { InstructionExecutor } from "./executor/InstructionExecutor";
 import type { Invocation } from "./executor/InstructionExecutor";
 import { FsHookLoader } from "./hooks/FsHookLoader";
 import { HookDisclosureModal } from "./hooks/HookDisclosureModal";
-import { HookRunner, type RequireFn } from "./hooks/HookRunner";
+import { HookRunner } from "./hooks/HookRunner";
 import type { HookLogger } from "./hooks/HookContext";
 import { validate } from "./schema/validator";
 import { SettingsTab } from "./settings/SettingsTab";
@@ -416,7 +416,7 @@ export default class TomoHashiPlugin extends Plugin {
 		const hookRunner = new HookRunner(this.app, hookLoader, hookLogger, {
 			askCallback,
 			policy: this.settings.hooksPolicy,
-			requireFn: cjsRequire as unknown as RequireFn,
+			requireFn: cjsRequire,
 		});
 
 		// 10. InstructionExecutor — singleton per plugin load.

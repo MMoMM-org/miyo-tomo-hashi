@@ -452,7 +452,7 @@ describe("DailyTab", () => {
 			expect(next.doc.daily_updates[0]?.log_entries[0]?.accepted).toBe(true);
 		});
 
-		it("the Force Atomic Note checkbox is wrapped in a label with visible text", () => {
+		it("the Force atomic note checkbox is wrapped in a label with visible text", () => {
 			const model = getMockModel([
 				getMockDailyUpdate({
 					log_entries: [getMockLogEntry({ force_atomic_note: false })],
@@ -467,7 +467,7 @@ describe("DailyTab", () => {
 			);
 			const forceAtomic = checkboxes[1] as HTMLInputElement;
 
-			expect(labelTextFor(forceAtomic)).toContain("Force Atomic Note");
+			expect(labelTextFor(forceAtomic)).toContain("Force atomic note");
 		});
 
 		it("toggling Force Atomic dispatches setForceAtomicFromDaily using the entry's source_stem", () => {

@@ -123,8 +123,7 @@ export class ProposedMocsTab implements EditorTab {
 	}
 
 	private renderNameField(row: HTMLElement, moc: ProposedMocWire, ctx: TabContext): void {
-		const field = row.createDiv({ cls: "hashi-se-field" });
-		field.style.flex = "1";
+		const field = row.createDiv({ cls: ["hashi-se-field", "hashi-se-field-grow"] });
 		field.createEl("label", { text: `Name (${moc.id})` });
 		const input = field.createEl("input", {
 			cls: ["hashi-se-inp", "hashi-se-name"],
@@ -213,7 +212,7 @@ export class ProposedMocsTab implements EditorTab {
 
 		const mergeButton = row.createEl("button", {
 			cls: "hashi-se-link-btn",
-			text: "⇄ Merge into…",
+			text: "⇄ merge into…",
 			attr: { type: "button" },
 		});
 		mergeButton.addEventListener("click", () => {

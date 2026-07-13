@@ -618,6 +618,9 @@
 	gap: 3px;
 	min-width: 0;
 }
+.hashi-se-field-grow {
+	flex: 1;
+}
 .hashi-se-field label {
 	font-size: 10px;
 	letter-spacing: 0.06em;

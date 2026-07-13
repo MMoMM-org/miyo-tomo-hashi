@@ -220,7 +220,7 @@ export function buildHandlerRegistry(
 		// produces a proper JSON-RPC error envelope. Guard against null (a valid
 		// result for getCurrentSelection/getLatestSelection).
 		if (result !== null && typeof result === "object" && "error" in result) {
-			throw asRpcError((result as { error: unknown }).error);
+			throw asRpcError(result.error);
 		}
 		return toContentEnvelope(result);
 	};

@@ -105,11 +105,11 @@ export class HookDisclosureModal extends Modal {
 		});
 
 		const meta = contentEl.createDiv({ cls: "hashi-hook-disclosure-modal-meta" });
-		meta.createEl("div", {
+		meta.createDiv({
 			cls: "hashi-hook-disclosure-modal-path",
 			text: this.hookInfo.vaultRelativePath,
 		});
-		meta.createEl("div", {
+		meta.createDiv({
 			cls: "hashi-hook-disclosure-modal-size",
 			text: `${this.hookInfo.fileSizeBytes} B`,
 		});
