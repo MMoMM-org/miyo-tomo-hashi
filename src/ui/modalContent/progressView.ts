@@ -210,14 +210,15 @@ function updateErrorBanner(
 		// empty assertive region first and then setting text after caused
 		// some AT to announce the empty insertion before the actual
 		// failure text on first failure.
-		// The banner is deliberately built detached (class + aria-live + text
-		// set below) and only inserted afterwards, per the a11y note above;
-		// createDiv's parent-append default would break build-before-insert.
-		// eslint-disable-next-line obsidianmd/prefer-create-el -- see note above
-		banner = activeDocument.createElement("div");
-		banner.classList.add("hashi-execution-modal-error-banner");
-		banner.setAttribute("aria-live", "assertive");
-		banner.textContent = text;
+		// The global `createDiv` builds a DETACHED, fully-configured element
+		// (unlike the `parentEl.createDiv` method form, which appends to the
+		// parent) — so class + aria-live + text are all in place before the
+		// single insert below, preserving the build-before-insert a11y order.
+		banner = createDiv({
+			cls: "hashi-execution-modal-error-banner",
+			attr: { "aria-live": "assertive" },
+			text,
+		});
 		const headerEl = contentEl.querySelector(
 			".hashi-execution-modal-header",
 		);
