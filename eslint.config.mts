@@ -43,6 +43,11 @@ export default tseslint.config(
 			// built-in acronym list (IDE, URL, …) intact, unlike overriding
 			// `acronyms`.
 			"obsidianmd/ui/sentence-case": ["error", { ignoreWords: ["MOC", "Bridge"] }],
+			// Pushed back: the declarative settings API this rule promotes only
+			// takes effect on Obsidian 1.13+, which is not officially released
+			// yet. Re-enable once 1.13 ships and adopting getSettingDefinitions()
+			// is worthwhile.
+			"obsidianmd/settings-tab/prefer-setting-definitions": "off",
 		},
 	},
 	{
