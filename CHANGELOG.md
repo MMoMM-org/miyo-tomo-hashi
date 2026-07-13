@@ -1,3 +1,9 @@
+## [0.17.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.17.1...0.17.2) (2026-07-13)
+
+### Bug Fixes
+
+* **lint:** drop disallowed prefer-create-el disable in error banner ([03bdbe6](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/03bdbe6e1450d85a09fcbe208d62bebaf9e9da5f))
+
 ## [0.17.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.17.0...0.17.1) (2026-07-13)
 
 ### Bug Fixes
