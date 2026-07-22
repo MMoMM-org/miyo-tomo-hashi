@@ -738,16 +738,18 @@ describe("registerExecutorFileMenu (002)", () => {
 
 import {
 	GARDEN_AUDIT_JSON_RE,
-	registerSuggestionsEditorCommand,
+	listGardenAuditDocs,
+	listSuggestionsDocs,
+	registerOpenTomoEditorCommand,
 	resolveGardenAuditDocPath,
 	resolveSuggestionsDocPath,
-	type SuggestionsEditorCommandDeps,
+	type OpenTomoEditorCommandDeps,
 } from "../../../src/commands/registerCommands";
 
 const OPEN_SUGGESTIONS_EDITOR_ID = "open-suggestions-editor";
 const OPEN_TOMO_EDITOR_LABEL = "Open Tomo editor";
-const NO_SUGGESTIONS_DOC_NOTICE =
-	"Open a Tomo _suggestions.json (or its .md) first";
+const NO_TOMO_DOC_NOTICE =
+	"No Tomo runs found — open a _suggestions.json or _garden-audit.json (or its .md) first";
 
 describe("resolveSuggestionsDocPath", () => {
 	it("returns the path itself when it ends with _suggestions.json", () => {
@@ -790,6 +792,30 @@ describe("resolveSuggestionsDocPath", () => {
 		expect(
 			resolveSuggestionsDocPath("100 Inbox/run-editor-001_garden-audit.json"),
 		).toBeNull();
+	});
+});
+
+describe("listSuggestionsDocs", () => {
+	it("filters to *_suggestions(.json|-fan.json) paths only, sorted", () => {
+		expect(
+			listSuggestionsDocs([
+				"100 Inbox/b_suggestions.json",
+				"notes/random.md",
+				"100 Inbox/a_suggestions-fan.json",
+				"100 Inbox/x_garden-audit.json",
+			]),
+		).toEqual([
+			"100 Inbox/a_suggestions-fan.json",
+			"100 Inbox/b_suggestions.json",
+		]);
+	});
+
+	it("returns an empty array when none match", () => {
+		expect(listSuggestionsDocs(["notes/random.md"])).toEqual([]);
+	});
+
+	it("returns an empty array for an empty input", () => {
+		expect(listSuggestionsDocs([])).toEqual([]);
 	});
 });
 
@@ -851,7 +877,31 @@ describe("resolveGardenAuditDocPath", () => {
 	});
 });
 
-describe("registerSuggestionsEditorCommand", () => {
+describe("listGardenAuditDocs", () => {
+	it("filters to *_garden-audit.json paths only, sorted", () => {
+		expect(
+			listGardenAuditDocs([
+				"100 Inbox/b_garden-audit.json",
+				"notes/random.md",
+				"100 Inbox/a_garden-audit.json",
+				"100 Inbox/x_suggestions.json",
+			]),
+		).toEqual([
+			"100 Inbox/a_garden-audit.json",
+			"100 Inbox/b_garden-audit.json",
+		]);
+	});
+
+	it("returns an empty array when none match", () => {
+		expect(listGardenAuditDocs(["notes/random.md"])).toEqual([]);
+	});
+
+	it("returns an empty array for an empty input", () => {
+		expect(listGardenAuditDocs([])).toEqual([]);
+	});
+});
+
+describe("registerOpenTomoEditorCommand", () => {
 	let pluginMock: PluginMock;
 	let plugin: Plugin;
 	let getActiveFilePath: Mock<() => string | null>;
@@ -860,7 +910,7 @@ describe("registerSuggestionsEditorCommand", () => {
 	let pickEditorDoc: Mock<(docs: string[], onPick: (docPath: string) => void) => void>;
 	let openSuggestionsEditorSpy: Mock<(docPath: string) => Promise<void>>;
 	let openGardenAuditEditorSpy: Mock<(docPath: string) => Promise<void>>;
-	let deps: SuggestionsEditorCommandDeps;
+	let deps: OpenTomoEditorCommandDeps;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -891,7 +941,7 @@ describe("registerSuggestionsEditorCommand", () => {
 	});
 
 	it("registers the 'Open Tomo editor' command under the unchanged 'open-suggestions-editor' id (ADR-6)", () => {
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmds = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID);
 		expect(cmds).toHaveLength(1);
@@ -902,7 +952,7 @@ describe("registerSuggestionsEditorCommand", () => {
 		getActiveFilePath.mockReturnValue(
 			"100 Inbox/2026-07-06_1115_suggestions.json",
 		);
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
 		cmd?.callback?.();
@@ -920,7 +970,7 @@ describe("registerSuggestionsEditorCommand", () => {
 		getActiveFilePath.mockReturnValue(
 			"100 Inbox/2026-07-06_1115_suggestions.md",
 		);
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
 		cmd?.callback?.();
@@ -934,7 +984,7 @@ describe("registerSuggestionsEditorCommand", () => {
 
 	it("active _garden-audit.json → opens the garden-audit editor with that path", async () => {
 		getActiveFilePath.mockReturnValue("100 Inbox/run-editor-001_garden-audit.json");
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
 		cmd?.callback?.();
@@ -950,7 +1000,7 @@ describe("registerSuggestionsEditorCommand", () => {
 
 	it("active _garden-audit.md → opens the garden-audit editor with the .json sibling", async () => {
 		getActiveFilePath.mockReturnValue("100 Inbox/run-editor-001_garden-audit.md");
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
 		cmd?.callback?.();
@@ -964,7 +1014,7 @@ describe("registerSuggestionsEditorCommand", () => {
 
 	it("active file unrelated to either editor → shows a Notice and does NOT open", async () => {
 		getActiveFilePath.mockReturnValue("notes/random.md");
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
 		cmd?.callback?.();
@@ -972,12 +1022,12 @@ describe("registerSuggestionsEditorCommand", () => {
 
 		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
 		expect(openGardenAuditEditorSpy).not.toHaveBeenCalled();
-		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_SUGGESTIONS_DOC_NOTICE);
+		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_TOMO_DOC_NOTICE);
 	});
 
 	it("no active file → shows a Notice and does NOT open", async () => {
 		getActiveFilePath.mockReturnValue(null);
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
 		cmd?.callback?.();
@@ -985,7 +1035,7 @@ describe("registerSuggestionsEditorCommand", () => {
 
 		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
 		expect(openGardenAuditEditorSpy).not.toHaveBeenCalled();
-		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_SUGGESTIONS_DOC_NOTICE);
+		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_TOMO_DOC_NOTICE);
 	});
 
 	it("no active doc but suggestions runs exist → opens the combined picker instead of a Notice", async () => {
@@ -994,7 +1044,7 @@ describe("registerSuggestionsEditorCommand", () => {
 			"100 Inbox/a_suggestions.json",
 			"100 Inbox/b_suggestions.json",
 		]);
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
 		cmd?.callback?.();
@@ -1011,7 +1061,7 @@ describe("registerSuggestionsEditorCommand", () => {
 	it("no active doc but only garden-audit runs exist → opens the combined picker over just those", async () => {
 		getActiveFilePath.mockReturnValue(null);
 		listGardenAuditDocs.mockReturnValue(["100 Inbox/run-a_garden-audit.json"]);
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
 		cmd?.callback?.();
@@ -1028,7 +1078,7 @@ describe("registerSuggestionsEditorCommand", () => {
 		getActiveFilePath.mockReturnValue(null);
 		listGardenAuditDocs.mockReturnValue(["100 Inbox/run-a_garden-audit.json"]);
 		listSuggestionsDocs.mockReturnValue(["100 Inbox/b_suggestions.json"]);
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
 		cmd?.callback?.();
@@ -1050,7 +1100,7 @@ describe("registerSuggestionsEditorCommand", () => {
 		pickEditorDoc.mockImplementation((docs, onPick) => {
 			onPick(docs[0]!);
 		});
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
 		cmd?.callback?.();
@@ -1067,7 +1117,7 @@ describe("registerSuggestionsEditorCommand", () => {
 		pickEditorDoc.mockImplementation((docs, onPick) => {
 			onPick(docs[0]!);
 		});
-		registerSuggestionsEditorCommand(plugin, deps);
+		registerOpenTomoEditorCommand(plugin, deps);
 
 		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
 		cmd?.callback?.();

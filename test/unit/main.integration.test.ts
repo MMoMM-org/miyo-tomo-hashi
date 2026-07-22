@@ -289,7 +289,7 @@ describe("TomoHashiPlugin integration (T5.3)", () => {
 			await Promise.resolve();
 
 			expect(vi.mocked(Notice)).toHaveBeenCalledWith(
-				"Open a Tomo _suggestions.json (or its .md) first",
+				"No Tomo runs found — open a _suggestions.json or _garden-audit.json (or its .md) first",
 			);
 			expect(plugin.app.workspace.getLeaf).not.toHaveBeenCalled();
 		});

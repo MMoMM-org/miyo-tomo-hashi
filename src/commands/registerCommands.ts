@@ -369,17 +369,19 @@ const OPEN_SUGGESTIONS_EDITOR_ID = "open-suggestions-editor";
 // the label changed, from "Open suggestions editor" to reflect that this one
 // command now suffix-dispatches to EITHER editor.
 const OPEN_TOMO_EDITOR_LABEL = "Open Tomo editor";
-const NO_SUGGESTIONS_DOC_NOTICE =
-	"Open a Tomo _suggestions.json (or its .md) first";
+// Covers BOTH doc families (spec-005 fix pass) — the prior 004-only wording
+// ("Open a Tomo _suggestions.json...") went stale once the empty-vault
+// fallback started merging garden-audit runs in too (T3.2).
+const NO_TOMO_DOC_NOTICE =
+	"No Tomo runs found — open a _suggestions.json or _garden-audit.json (or its .md) first";
 
 /**
- * Deps for the unified "Open Tomo editor" command (ADR-6). Keeps its 004
- * name for continuity (main.ts imports it unchanged) even though it now
- * dispatches to both the Suggestions Editor and the Garden-Audit Editor —
- * `pickEditorDoc` is named generically (not `pickSuggestionsDoc`) because the
- * combined-picker fallback below shows BOTH doc families in one merged list.
+ * Deps for the unified "Open Tomo editor" command (ADR-6) — dispatches to
+ * both the Suggestions Editor and the Garden-Audit Editor. `pickEditorDoc`
+ * is named generically (not `pickSuggestionsDoc`) because the combined-
+ * picker fallback below shows BOTH doc families in one merged list.
  */
-export interface SuggestionsEditorCommandDeps {
+export interface OpenTomoEditorCommandDeps {
 	/** Vault-relative path of the active file, or null if none is open. */
 	readonly getActiveFilePath: () => string | null;
 	/**
@@ -411,9 +413,9 @@ export interface SuggestionsEditorCommandDeps {
  * separately from the 001/002/003 registrars so 004/005 wiring stays
  * decoupled — main.ts calls it after constructing the vault-backed openers.
  */
-export function registerSuggestionsEditorCommand(
+export function registerOpenTomoEditorCommand(
 	plugin: Plugin,
-	deps: SuggestionsEditorCommandDeps,
+	deps: OpenTomoEditorCommandDeps,
 ): void {
 	plugin.addCommand({
 		id: OPEN_SUGGESTIONS_EDITOR_ID,
@@ -432,7 +434,7 @@ export function registerSuggestionsEditorCommand(
  * every run of either kind, and only then to the Notice.
  */
 async function dispatchOpenSuggestionsEditor(
-	deps: SuggestionsEditorCommandDeps,
+	deps: OpenTomoEditorCommandDeps,
 ): Promise<void> {
 	const activePath = deps.getActiveFilePath();
 
@@ -454,7 +456,7 @@ async function dispatchOpenSuggestionsEditor(
 	// either at all.
 	const docs = [...deps.listGardenAuditDocs(), ...deps.listSuggestionsDocs()].sort();
 	if (docs.length === 0) {
-		new Notice(NO_SUGGESTIONS_DOC_NOTICE);
+		new Notice(NO_TOMO_DOC_NOTICE);
 		return;
 	}
 	deps.pickEditorDoc(docs, (chosen) => {
@@ -493,6 +495,16 @@ export function resolveSuggestionsDocPath(
 	return null;
 }
 
+/**
+ * Pure filter+sort over a flat list of vault paths (e.g.
+ * `app.vault.getFiles().map(f => f.path)`) to every `*_suggestions.json` run.
+ * Extracted (spec-005 Phase 3 fix pass) so discovery is unit-testable without
+ * a real vault — main.ts supplies the paths, this function owns the rule.
+ */
+export function listSuggestionsDocs(paths: readonly string[]): string[] {
+	return paths.filter((path) => SUGGESTIONS_JSON_RE.test(path)).sort();
+}
+
 // ---------------------------------------------------------------------------
 // 005 spec — garden-audit discovery resolver (T3.1)
 // ---------------------------------------------------------------------------
@@ -522,4 +534,14 @@ export function resolveGardenAuditDocPath(
 		return activePath.slice(0, -".md".length) + ".json";
 	}
 	return null;
+}
+
+/**
+ * Pure filter+sort over a flat list of vault paths to every
+ * `*_garden-audit.json` run. Parity with `listSuggestionsDocs` above —
+ * extracted (spec-005 Phase 3 fix pass) so discovery is unit-testable
+ * without a real vault.
+ */
+export function listGardenAuditDocs(paths: readonly string[]): string[] {
+	return paths.filter((path) => GARDEN_AUDIT_JSON_RE.test(path)).sort();
 }

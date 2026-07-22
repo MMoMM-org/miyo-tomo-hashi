@@ -4,8 +4,9 @@
  * "Open Tomo editor" command when neither is the active file: the
  * dispatcher (src/commands/registerCommands.ts) supplies the merged, sorted
  * doc list and routes the chosen path back to the right opener by suffix
- * (`GARDEN_AUDIT_JSON_RE`) — this picker itself is content-agnostic, same as
- * its siblings `SuggestionsDocPicker`/`GardenAuditDocPicker`.
+ * (`GARDEN_AUDIT_JSON_RE`) — this picker itself is content-agnostic, a thin
+ * `FuzzyFieldPicker` subclass mirroring the base's other concrete pickers
+ * (e.g. `src/ui/suggestions-view/pickers/MocPicker.ts`).
  */
 
 import type { App } from "obsidian";

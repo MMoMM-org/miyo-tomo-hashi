@@ -84,12 +84,12 @@ import { EditorView } from "@codemirror/view";
 import { Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 
 import {
-	GARDEN_AUDIT_JSON_RE,
+	listGardenAuditDocs,
+	listSuggestionsDocs,
 	registerCommands,
 	registerExecutorCommands,
 	registerIdeBridgeCommand,
-	registerSuggestionsEditorCommand,
-	SUGGESTIONS_JSON_RE,
+	registerOpenTomoEditorCommand,
 } from "./commands/registerCommands";
 import { registerFileMenu, registerExecutorFileMenu } from "./commands/fileMenu";
 import { TomoConnection } from "./connection/TomoConnection";
@@ -609,20 +609,12 @@ export default class TomoHashiPlugin extends Plugin {
 
 		// The "Open Tomo editor" command (registered once, below) now
 		// suffix-dispatches to EITHER editor.
-		registerSuggestionsEditorCommand(this, {
+		registerOpenTomoEditorCommand(this, {
 			getActiveFilePath: () => this.app.workspace.getActiveFile()?.path ?? null,
 			listSuggestionsDocs: () =>
-				this.app.vault
-					.getFiles()
-					.map((file) => file.path)
-					.filter((path) => SUGGESTIONS_JSON_RE.test(path))
-					.sort(),
+				listSuggestionsDocs(this.app.vault.getFiles().map((file) => file.path)),
 			listGardenAuditDocs: () =>
-				this.app.vault
-					.getFiles()
-					.map((file) => file.path)
-					.filter((path) => GARDEN_AUDIT_JSON_RE.test(path))
-					.sort(),
+				listGardenAuditDocs(this.app.vault.getFiles().map((file) => file.path)),
 			pickEditorDoc: (docs, onPick) =>
 				new TomoEditorDocPicker(this.app, docs, onPick).open(),
 			openSuggestionsEditor: (docPath: string) =>
