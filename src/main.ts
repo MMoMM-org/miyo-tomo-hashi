@@ -84,6 +84,7 @@ import { EditorView } from "@codemirror/view";
 import { Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 
 import {
+	GARDEN_AUDIT_JSON_RE,
 	registerCommands,
 	registerExecutorCommands,
 	registerIdeBridgeCommand,
@@ -111,10 +112,10 @@ import {
 } from "./types/index";
 import { TomoChatView, VIEW_TYPE_TOMO_CHAT } from "./ui/chat-view/index";
 import { showChatWindow } from "./ui/chat-view/showChatWindow";
+import { openGardenAuditEditor, TomoEditorDocPicker } from "./ui/garden-audit-view/index";
 import { StatusBarIcon, copyAuthToken } from "./ui/status-bar/StatusBarIcon";
 import {
 	openSuggestionsEditor,
-	SuggestionsDocPicker,
 	SuggestionsEditorView,
 	VIEW_TYPE_SUGGESTIONS_EDITOR,
 } from "./ui/suggestions-view/index";
@@ -583,6 +584,16 @@ export default class TomoHashiPlugin extends Plugin {
 					}),
 				}),
 		);
+
+		// =========================================================================
+		// 005 wiring (T3.2) — Garden-Audit Editor suffix-dispatch (ADR-6)
+		// =========================================================================
+		//
+		// The "Open Tomo editor" command (registered once, below) now
+		// suffix-dispatches to EITHER editor. The Garden-Audit Editor's own
+		// `registerView` + placeholder view land in T3.3; the opener and picker
+		// wired here only need `VIEW_TYPE_GARDEN_AUDIT_EDITOR` to exist as an id,
+		// not the view class itself.
 		registerSuggestionsEditorCommand(this, {
 			getActiveFilePath: () => this.app.workspace.getActiveFile()?.path ?? null,
 			listSuggestionsDocs: () =>
@@ -591,10 +602,18 @@ export default class TomoHashiPlugin extends Plugin {
 					.map((file) => file.path)
 					.filter((path) => SUGGESTIONS_JSON_RE.test(path))
 					.sort(),
-			pickSuggestionsDoc: (docs, onPick) =>
-				new SuggestionsDocPicker(this.app, docs, onPick).open(),
+			listGardenAuditDocs: () =>
+				this.app.vault
+					.getFiles()
+					.map((file) => file.path)
+					.filter((path) => GARDEN_AUDIT_JSON_RE.test(path))
+					.sort(),
+			pickEditorDoc: (docs, onPick) =>
+				new TomoEditorDocPicker(this.app, docs, onPick).open(),
 			openSuggestionsEditor: (docPath: string) =>
 				openSuggestionsEditor(this.app, docPath),
+			openGardenAuditEditor: (docPath: string) =>
+				openGardenAuditEditor(this.app, docPath),
 		});
 	}
 

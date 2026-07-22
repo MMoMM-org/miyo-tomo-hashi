@@ -856,8 +856,10 @@ describe("registerSuggestionsEditorCommand", () => {
 	let plugin: Plugin;
 	let getActiveFilePath: Mock<() => string | null>;
 	let listSuggestionsDocs: Mock<() => string[]>;
-	let pickSuggestionsDoc: Mock<(docs: string[], onPick: (docPath: string) => void) => void>;
+	let listGardenAuditDocs: Mock<() => string[]>;
+	let pickEditorDoc: Mock<(docs: string[], onPick: (docPath: string) => void) => void>;
 	let openSuggestionsEditorSpy: Mock<(docPath: string) => Promise<void>>;
+	let openGardenAuditEditorSpy: Mock<(docPath: string) => Promise<void>>;
 	let deps: SuggestionsEditorCommandDeps;
 
 	beforeEach(() => {
@@ -865,32 +867,38 @@ describe("registerSuggestionsEditorCommand", () => {
 		pluginMock = new PluginMock();
 		plugin = asPlugin(pluginMock);
 		getActiveFilePath = vi.fn<() => string | null>(() => null);
-		// Default: no runs in the vault → the no-active-doc path falls back to
-		// the Notice, matching the pre-picker tests below.
+		// Default: no runs of either kind in the vault → the no-active-doc path
+		// falls back to the Notice, matching the pre-picker tests below.
 		listSuggestionsDocs = vi.fn<() => string[]>(() => []);
-		pickSuggestionsDoc = vi.fn<(docs: string[], onPick: (docPath: string) => void) => void>(
+		listGardenAuditDocs = vi.fn<() => string[]>(() => []);
+		pickEditorDoc = vi.fn<(docs: string[], onPick: (docPath: string) => void) => void>(
 			() => {},
 		);
 		openSuggestionsEditorSpy = vi.fn<(docPath: string) => Promise<void>>(
 			async () => {},
 		);
+		openGardenAuditEditorSpy = vi.fn<(docPath: string) => Promise<void>>(
+			async () => {},
+		);
 		deps = {
 			getActiveFilePath,
 			listSuggestionsDocs,
-			pickSuggestionsDoc,
+			listGardenAuditDocs,
+			pickEditorDoc,
 			openSuggestionsEditor: openSuggestionsEditorSpy,
+			openGardenAuditEditor: openGardenAuditEditorSpy,
 		};
 	});
 
-	it("registers the 'Open suggestions editor' command", () => {
+	it("registers the 'Open Tomo editor' command under the unchanged 'open-suggestions-editor' id (ADR-6)", () => {
 		registerSuggestionsEditorCommand(plugin, deps);
 
 		const cmds = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID);
 		expect(cmds).toHaveLength(1);
-		expect(cmds[0]?.name).toBe("Open suggestions editor");
+		expect(cmds[0]?.name).toBe(OPEN_TOMO_EDITOR_LABEL);
 	});
 
-	it("active _suggestions.json → opens the editor with that path", async () => {
+	it("active _suggestions.json → opens the suggestions editor with that path", async () => {
 		getActiveFilePath.mockReturnValue(
 			"100 Inbox/2026-07-06_1115_suggestions.json",
 		);
@@ -904,10 +912,11 @@ describe("registerSuggestionsEditorCommand", () => {
 		expect(openSuggestionsEditorSpy).toHaveBeenCalledWith(
 			"100 Inbox/2026-07-06_1115_suggestions.json",
 		);
+		expect(openGardenAuditEditorSpy).not.toHaveBeenCalled();
 		expect(vi.mocked(Notice)).not.toHaveBeenCalled();
 	});
 
-	it("active _suggestions.md → opens the editor with the .json sibling", async () => {
+	it("active _suggestions.md → opens the suggestions editor with the .json sibling", async () => {
 		getActiveFilePath.mockReturnValue(
 			"100 Inbox/2026-07-06_1115_suggestions.md",
 		);
@@ -923,7 +932,37 @@ describe("registerSuggestionsEditorCommand", () => {
 		);
 	});
 
-	it("active file unrelated to suggestions → shows a Notice and does NOT open", async () => {
+	it("active _garden-audit.json → opens the garden-audit editor with that path", async () => {
+		getActiveFilePath.mockReturnValue("100 Inbox/run-editor-001_garden-audit.json");
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openGardenAuditEditorSpy).toHaveBeenCalledWith(
+			"100 Inbox/run-editor-001_garden-audit.json",
+		);
+		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
+		expect(vi.mocked(Notice)).not.toHaveBeenCalled();
+	});
+
+	it("active _garden-audit.md → opens the garden-audit editor with the .json sibling", async () => {
+		getActiveFilePath.mockReturnValue("100 Inbox/run-editor-001_garden-audit.md");
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openGardenAuditEditorSpy).toHaveBeenCalledWith(
+			"100 Inbox/run-editor-001_garden-audit.json",
+		);
+	});
+
+	it("active file unrelated to either editor → shows a Notice and does NOT open", async () => {
 		getActiveFilePath.mockReturnValue("notes/random.md");
 		registerSuggestionsEditorCommand(plugin, deps);
 
@@ -932,6 +971,7 @@ describe("registerSuggestionsEditorCommand", () => {
 		await Promise.resolve();
 
 		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
+		expect(openGardenAuditEditorSpy).not.toHaveBeenCalled();
 		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_SUGGESTIONS_DOC_NOTICE);
 	});
 
@@ -944,10 +984,11 @@ describe("registerSuggestionsEditorCommand", () => {
 		await Promise.resolve();
 
 		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
+		expect(openGardenAuditEditorSpy).not.toHaveBeenCalled();
 		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_SUGGESTIONS_DOC_NOTICE);
 	});
 
-	it("no active doc but runs exist → opens the doc picker instead of a Notice", async () => {
+	it("no active doc but suggestions runs exist → opens the combined picker instead of a Notice", async () => {
 		getActiveFilePath.mockReturnValue("notes/random.md");
 		listSuggestionsDocs.mockReturnValue([
 			"100 Inbox/a_suggestions.json",
@@ -959,7 +1000,7 @@ describe("registerSuggestionsEditorCommand", () => {
 		cmd?.callback?.();
 		await Promise.resolve();
 
-		expect(pickSuggestionsDoc).toHaveBeenCalledWith(
+		expect(pickEditorDoc).toHaveBeenCalledWith(
 			["100 Inbox/a_suggestions.json", "100 Inbox/b_suggestions.json"],
 			expect.any(Function),
 		);
@@ -967,10 +1008,46 @@ describe("registerSuggestionsEditorCommand", () => {
 		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
 	});
 
-	it("choosing a doc in the picker opens the editor for that path", async () => {
+	it("no active doc but only garden-audit runs exist → opens the combined picker over just those", async () => {
+		getActiveFilePath.mockReturnValue(null);
+		listGardenAuditDocs.mockReturnValue(["100 Inbox/run-a_garden-audit.json"]);
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+
+		expect(pickEditorDoc).toHaveBeenCalledWith(
+			["100 Inbox/run-a_garden-audit.json"],
+			expect.any(Function),
+		);
+		expect(vi.mocked(Notice)).not.toHaveBeenCalled();
+	});
+
+	it("no active doc, both kinds of runs exist → the combined picker lists both, merged", async () => {
+		getActiveFilePath.mockReturnValue(null);
+		listGardenAuditDocs.mockReturnValue(["100 Inbox/run-a_garden-audit.json"]);
+		listSuggestionsDocs.mockReturnValue(["100 Inbox/b_suggestions.json"]);
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+
+		const [docsArg] = pickEditorDoc.mock.calls[0] ?? [];
+		expect(docsArg).toEqual(
+			expect.arrayContaining([
+				"100 Inbox/run-a_garden-audit.json",
+				"100 Inbox/b_suggestions.json",
+			]),
+		);
+		expect(docsArg).toHaveLength(2);
+	});
+
+	it("choosing a suggestions doc in the combined picker opens the suggestions editor", async () => {
 		getActiveFilePath.mockReturnValue(null);
 		listSuggestionsDocs.mockReturnValue(["100 Inbox/a_suggestions.json"]);
-		pickSuggestionsDoc.mockImplementation((docs, onPick) => {
+		pickEditorDoc.mockImplementation((docs, onPick) => {
 			onPick(docs[0]!);
 		});
 		registerSuggestionsEditorCommand(plugin, deps);
@@ -981,5 +1058,23 @@ describe("registerSuggestionsEditorCommand", () => {
 		await Promise.resolve();
 
 		expect(openSuggestionsEditorSpy).toHaveBeenCalledWith("100 Inbox/a_suggestions.json");
+		expect(openGardenAuditEditorSpy).not.toHaveBeenCalled();
+	});
+
+	it("choosing a garden-audit doc in the combined picker opens the garden-audit editor", async () => {
+		getActiveFilePath.mockReturnValue(null);
+		listGardenAuditDocs.mockReturnValue(["100 Inbox/run-a_garden-audit.json"]);
+		pickEditorDoc.mockImplementation((docs, onPick) => {
+			onPick(docs[0]!);
+		});
+		registerSuggestionsEditorCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_SUGGESTIONS_EDITOR_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openGardenAuditEditorSpy).toHaveBeenCalledWith("100 Inbox/run-a_garden-audit.json");
+		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
 	});
 });
