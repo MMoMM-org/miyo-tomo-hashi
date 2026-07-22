@@ -59,6 +59,7 @@
           {"$ref": "#/$defs/insert_under_marker"},
           {"$ref": "#/$defs/replace_section"},
           {"$ref": "#/$defs/add_relationship"},
+          {"$ref": "#/$defs/edit_note_text"},
           {"$ref": "#/$defs/update_tracker"},
           {"$ref": "#/$defs/update_log_entry"},
           {"$ref": "#/$defs/update_log_link"},
@@ -161,6 +162,20 @@
         "marker": {"type": "string", "description": "Dataview inline-field marker that locates the line to replace, e.g. 'up::' or 'related::'. Hashi locates the first line whose stripped content (after optional '> ' callout prefix) starts with this marker."},
         "line": {"type": "string", "description": "Pre-formatted full line content to write, e.g. 'up:: [[Hobbies (MOC)]]' or 'related:: [[A]], [[B]]'. Hashi replaces the located marker line with this verbatim, preserving the line's leading '> ' prefix if the marker was inside a callout. Multi-link aggregation for related:: is done Tomo-side."},
         "source_note_title": {"type": ["string", "null"]},
+        "applied": {"$ref": "#/$defs/applied_field"}
+      }
+    },
+    "edit_note_text": {
+      "type": "object",
+      "required": ["id", "action", "path", "match", "replace"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/action_id"},
+        "action": {"const": "edit_note_text"},
+        "path": {"type": "string", "description": "Vault-relative path of the note to edit (.md). Hashi modifies only; Tomo guarantees the note exists before emitting."},
+        "match": {"type": "string", "description": "LITERAL substring to find in the note BODY (never frontmatter). Not a regex or glob — matched byte-for-byte."},
+        "replace": {"type": "string", "description": "LITERAL replacement written verbatim; empty string deletes the match. A whole-line match deleted this way collapses its now-empty line; an inline match just loses the substring."},
+        "occurrence": {"type": "string", "enum": ["first", "all"], "default": "first", "description": "first (default) replaces the first literal occurrence; all replaces every occurrence. Counted on the literal string within the body."},
         "applied": {"$ref": "#/$defs/applied_field"}
       }
     },

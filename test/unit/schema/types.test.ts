@@ -5,6 +5,7 @@ import type {
 	ActionKind,
 	CreateMocAction,
 	DeleteSourceAction,
+	EditNoteTextAction,
 	InstructionSet,
 	LinkToMocAction,
 	MoveNoteAction,
@@ -15,11 +16,11 @@ import type {
 } from "../../../src/schema/types";
 
 // ---------------------------------------------------------------------------
-// ActionKind — 10-literal union
+// ActionKind — 12-literal union
 // ---------------------------------------------------------------------------
 
 describe("ActionKind", () => {
-	it("is the exact 11-element string-literal union", () => {
+	it("is the exact 12-element string-literal union", () => {
 		expectTypeOf<ActionKind>().toEqualTypeOf<
 			| "create_moc"
 			| "move_note"
@@ -27,6 +28,7 @@ describe("ActionKind", () => {
 			| "insert_under_marker"
 			| "replace_section"
 			| "add_relationship"
+			| "edit_note_text"
 			| "update_tracker"
 			| "update_log_entry"
 			| "update_log_link"
@@ -35,7 +37,7 @@ describe("ActionKind", () => {
 		>();
 	});
 
-	it("all 11 literals are assignable to ActionKind", () => {
+	it("all 12 literals are assignable to ActionKind", () => {
 		const allKinds: ActionKind[] = [
 			"create_moc",
 			"move_note",
@@ -43,14 +45,15 @@ describe("ActionKind", () => {
 			"insert_under_marker",
 			"replace_section",
 			"add_relationship",
+			"edit_note_text",
 			"update_tracker",
 			"update_log_entry",
 			"update_log_link",
 			"delete_source",
 			"skip",
 		];
-		// Runtime check: exactly 11
-		expect(allKinds).toHaveLength(11);
+		// Runtime check: exactly 12
+		expect(allKinds).toHaveLength(12);
 	});
 });
 
@@ -216,8 +219,27 @@ describe("Action discriminated union", () => {
 		}
 	});
 
+	it("narrows to EditNoteTextAction on action === 'edit_note_text'", () => {
+		const a: Action = {
+			id: "I09",
+			action: "edit_note_text",
+			path: "020 Active MOC.md",
+			match: "[[023 Sparks MOC]]",
+			replace: "[[023 Sparks (MOC)]]",
+			occurrence: "all",
+		};
+		if (a.action === "edit_note_text") {
+			const _path: string = a.path;
+			const _match: string = a.match;
+			const _replace: string = a.replace;
+			expect(_path).toBe("020 Active MOC.md");
+			expect(_match).toBeDefined();
+			expect(_replace).toBeDefined();
+		}
+	});
+
 	it("exhaustive switch compiles over all Action variants", () => {
-		// This function compiles only if all 11 variants are handled.
+		// This function compiles only if all 12 variants are handled.
 		function describeAction(a: Action): string {
 			switch (a.action) {
 				case "create_moc":
@@ -232,6 +254,8 @@ describe("Action discriminated union", () => {
 					return `replace_section:${a.target_path}`;
 				case "add_relationship":
 					return `add_relationship:${a.marker}`;
+				case "edit_note_text":
+					return `edit_note_text:${a.path}`;
 				case "update_tracker":
 					return `update_tracker:${a.field}`;
 				case "update_log_entry":
@@ -340,5 +364,19 @@ describe("Action discriminated union", () => {
 		};
 		expectTypeOf(a.source_path).toEqualTypeOf<string | null>();
 		expectTypeOf(a.reason).toEqualTypeOf<string | null | undefined>();
+	});
+
+	it("EditNoteTextAction requires path/match/replace and has optional occurrence", () => {
+		const a: EditNoteTextAction = {
+			id: "I01",
+			action: "edit_note_text",
+			path: "020 Active MOC.md",
+			match: "[[old]]",
+			replace: "[[new]]",
+		};
+		expectTypeOf(a.path).toEqualTypeOf<string>();
+		expectTypeOf(a.match).toEqualTypeOf<string>();
+		expectTypeOf(a.replace).toEqualTypeOf<string>();
+		expectTypeOf(a.occurrence).toEqualTypeOf<"first" | "all" | undefined>();
 	});
 });

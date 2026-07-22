@@ -10,6 +10,7 @@ The instruction executor dispatches each action in an `_instructions.json` to a 
 | [insert_under_marker](#insert_under_marker) | Insert a multi-line block at a marker in any note | Identical block already present | None |
 | [replace_section](#replace_section) | Overwrite a heading section's body in any note | Body already equals content | None |
 | [add_relationship](#add_relationship) | Add a wikilink under a frontmatter relationship key | Wikilink already present | None |
+| [edit_note_text](#edit_note_text) | Literal find-and-replace in a note's body (repoint/remove dead links, strip broken `up::` lines) | Match not found | None |
 | [update_tracker](#update_tracker) | Set a frontmatter scalar on a tracker note | Field already at target value | None |
 | [update_log_entry](#update_log_entry) | Append/insert a line in a daily log at a positional anchor | Exact line already present | None |
 | [update_log_link](#update_log_link) | Replace one wikilink with another inside a log entry | Replacement wikilink already present | None |
@@ -114,6 +115,26 @@ Add a wikilink under a frontmatter relationship key on a note. Used to wire up "
 - `applied` — wikilink appended to the array under `key`.
 - `skipped-already` — wikilink already in the array.
 - `failed` — frontmatter is malformed (cannot parse), or `key` exists but is a non-array scalar (Hashi refuses to coerce types).
+
+## `edit_note_text`
+
+**Literal** find-and-replace inside a note's **body** (never frontmatter). Introduced by Tomo's garden-audit workflow to repoint or remove dead `[[wikilinks]]` and strip broken inline `up::` lines — operations the placement-oriented actions cannot express.
+
+| Field | Type | Notes |
+|---|---|---|
+| `path` | string | Vault-relative path of the note to edit. Modify-only. |
+| `match` | string | **Literal** substring to find in the body — not a regex or glob. Matched byte-for-byte; `[`, `]`, `(`, `.`, `*` etc. are literal characters. |
+| `replace` | string | Literal replacement written verbatim. `""` deletes the match. |
+| `occurrence` | `"first"` \| `"all"` | Optional (default `"first"`). `"first"` replaces the first literal hit; `"all"` replaces every hit. |
+
+**Body-only:** the leading YAML frontmatter block (`--- … ---`) is frozen — a `match` that also appears in frontmatter is never touched. A broken `up::` in frontmatter is out of scope for this action (it targets inline Dataview-style `up::` lines in the body).
+
+**Deletion (`replace: ""`):** a whole-line match collapses its now-empty line, so repeated runs never accumulate blank lines; an inline match just loses the substring.
+
+**Outcome:**
+- `applied` — the body was edited.
+- `skipped-already` — the `match` was not found (the note may have been fixed by hand between report and apply), or an empty `match` was supplied. A no-op success — never fails the batch on a stale single match.
+- `failed` — target note missing. File untouched.
 
 ## `update_tracker`
 

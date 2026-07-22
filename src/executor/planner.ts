@@ -37,6 +37,7 @@ const KIND_ORDER: readonly ActionKind[] = [
 	"link_to_moc",
 	"insert_under_marker",
 	"replace_section",
+	"edit_note_text",
 	"add_relationship",
 	"update_tracker",
 	"update_log_entry",
@@ -260,6 +261,10 @@ function buildSummary(action: Action): string {
 			return `${action.target_path}#${action.anchor.value ?? "—"}`;
 		case "add_relationship":
 			return `${action.target_moc_path} :: ${action.marker}`;
+		case "edit_note_text":
+			// Metadata only — path + occurrence. The `match`/`replace` link text
+			// is note content and must not land in the run-log (Privacy L2).
+			return `${action.path} (${action.occurrence ?? "first"})`;
 		case "update_tracker":
 			return `${action.daily_note_path} :: ${action.field}`;
 		case "update_log_entry":

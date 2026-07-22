@@ -138,6 +138,24 @@ export interface AddRelationshipAction extends ActionBase {
 	readonly source_note_title?: string | null;
 }
 
+/**
+ * EditNoteTextAction — literal find-and-replace inside a note's BODY (never
+ * frontmatter). Introduced by Tomo spec 030 (garden-audit) / ADR-3 to repoint
+ * or remove dead `[[wikilinks]]` and strip broken inline `up::` lines.
+ *
+ * `match` is a literal substring (not regex/glob); `replace: ""` deletes it
+ * (whole-line matches collapse the empty line). `occurrence` defaults to
+ * "first". Match-not-found is a no-op success, not a failure.
+ * [ref: Tomo handoff 2026-07-21 garden-audit-edit-note-text]
+ */
+export interface EditNoteTextAction extends ActionBase {
+	readonly action: "edit_note_text";
+	readonly path: string;
+	readonly match: string;
+	readonly replace: string;
+	readonly occurrence?: "first" | "all";
+}
+
 export interface UpdateTrackerAction extends ActionBase {
 	readonly action: "update_tracker";
 	readonly daily_note_path: string;
@@ -198,6 +216,7 @@ export type Action =
 	| InsertUnderMarkerAction
 	| ReplaceSectionAction
 	| AddRelationshipAction
+	| EditNoteTextAction
 	| UpdateTrackerAction
 	| UpdateLogEntryAction
 	| UpdateLogLinkAction
