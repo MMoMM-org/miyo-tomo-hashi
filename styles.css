@@ -582,6 +582,14 @@
    Garden-Audit Editor root carries both hashi-garden-audit-editor-view and
    hashi-se-view, so these vars are in scope. Card bodies are Phase 5; only
    the tier header + placeholder finding row are styled here. */
+.hashi-ga-nothing-to-apply {
+	padding: 8px 12px;
+	margin-bottom: 14px;
+	border-radius: var(--se-r-sm);
+	background: var(--se-bg-alt);
+	color: var(--se-text-muted);
+	font-size: 12.5px;
+}
 .hashi-ga-tier {
 	margin-bottom: 18px;
 }

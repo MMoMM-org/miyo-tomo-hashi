@@ -15,6 +15,12 @@
  * only. Phase 5 replaces it with the real card (Apply/Skip, target control,
  * candidates, suggest toggle); this task only establishes the tier shell
  * findings render into.
+ *
+ * T4.4: an all-advisory run (zero `fixable` findings) still renders every
+ * tier section — including the advisory cards — but leads with a "Nothing
+ * to apply" note, since Save would have nothing to act on. This is NOT the
+ * same as the view's zero-findings empty state (GardenAuditEditorView's
+ * `count(model) === 0` gate) — there ARE findings here, just none fixable.
  */
 
 import type {
@@ -38,6 +44,14 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 	}
 
 	render(container: HTMLElement, model: GardenAuditModel, ctx: GardenAuditTabContext): void {
+		const hasFixable = model.doc.findings.some((f) => f.fixable);
+		if (!hasFixable) {
+			container.createDiv({
+				cls: "hashi-ga-nothing-to-apply",
+				text: "Nothing to apply — this run has no fixable findings.",
+			});
+		}
+
 		for (const tier of TIER_ORDER) {
 			const findings = model.doc.findings.filter((f) => f.tier === tier);
 			this.renderTierSection(container, tier, findings, ctx);

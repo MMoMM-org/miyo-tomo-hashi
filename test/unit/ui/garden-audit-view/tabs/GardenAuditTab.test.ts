@@ -151,3 +151,57 @@ describe("GardenAuditTab.render — tier grouping", () => {
 		expect(row?.textContent).toContain("F07");
 	});
 });
+
+describe("GardenAuditTab.render — nothing-to-apply (T4.4, all-advisory run)", () => {
+	it("renders a 'Nothing to apply' line alongside the advisory cards when no finding is fixable", () => {
+		const tab = new GardenAuditTab();
+		const findings = [
+			getMockFinding({
+				id: "F09",
+				tier: "advisory",
+				check: "stale_moc",
+				fixable: false,
+				decision: undefined,
+			}),
+			getMockFinding({
+				id: "F10",
+				tier: "advisory",
+				check: "duplicate_stem",
+				fixable: false,
+				decision: undefined,
+			}),
+		];
+		const container = document.createElement("div");
+
+		tab.render(container, getMockModel(findings), makeCtx());
+
+		// The advisory cards still render...
+		expect(container.querySelectorAll(".hashi-ga-finding-row")).toHaveLength(2);
+		// ...alongside the nothing-to-apply note (not instead of the cards,
+		// and NOT worded "no findings" — there are findings, just none
+		// fixable).
+		const note = container.querySelector(".hashi-ga-nothing-to-apply");
+		expect(note?.textContent).toBe(
+			"Nothing to apply — this run has no fixable findings.",
+		);
+	});
+
+	it("does NOT render the nothing-to-apply line when at least one finding is fixable", () => {
+		const tab = new GardenAuditTab();
+		const findings = [
+			getMockFinding({ id: "F01", tier: "integrity", check: "dead_link", fixable: true }),
+			getMockFinding({
+				id: "F09",
+				tier: "advisory",
+				check: "stale_moc",
+				fixable: false,
+				decision: undefined,
+			}),
+		];
+		const container = document.createElement("div");
+
+		tab.render(container, getMockModel(findings), makeCtx());
+
+		expect(container.querySelector(".hashi-ga-nothing-to-apply")).toBeNull();
+	});
+});

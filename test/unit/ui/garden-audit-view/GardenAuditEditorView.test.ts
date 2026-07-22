@@ -197,6 +197,30 @@ describe("GardenAuditEditorView — onOpen with a docPath", () => {
 	});
 });
 
+describe("GardenAuditEditorView — zero-findings empty state (T4.4)", () => {
+	it("renders a clean-vault empty state (not the tab body) when the run has zero findings", async () => {
+		const adapter: GardenAuditDoc = {
+			load: vi.fn(
+				async (): Promise<GardenAuditModel> => ({
+					doc: { ...DEFAULT_SEED, findings: [] },
+					dirty: false,
+				}),
+			),
+			save: vi.fn(async () => {}),
+		};
+		const view = makeView(adapter);
+
+		await view.onOpen();
+
+		expect(bodyEl(view)?.querySelector(".hashi-se-empty")?.textContent).toBe(
+			"No findings — this vault is clean.",
+		);
+		// the leaf-head still renders (findings: 0), it's only the body that
+		// swaps to the empty state — Save/Revert chrome is still present.
+		expect(leafActions(view)).not.toBeNull();
+	});
+});
+
 describe("GardenAuditEditorView — setState retarget", () => {
 	it("re-loads and re-renders when retargeted to a different docPath after onOpen", async () => {
 		const adapter = new FakeGardenAuditDoc();
