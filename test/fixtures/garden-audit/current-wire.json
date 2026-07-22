@@ -1,0 +1,63 @@
+{
+  "schema_version": "1",
+  "generated": "2026-07-22T12:00:00Z",
+  "run_id": "run-editor-001",
+  "profile": "miyo",
+  "approved": false,
+  "findings": [
+    {
+      "id": "F01",
+      "check": "dead_link",
+      "tier": "integrity",
+      "fixable": true,
+      "target": { "path": "Notes/Src.md", "stem": "Src" },
+      "detail": { "dead_target": "Missing Note", "count": 1 },
+      "decision": {
+        "selected": true,
+        "action": "edit_note_text",
+        "replace": "",
+        "candidates": [],
+        "suggest_requested": false
+      }
+    },
+    {
+      "id": "F02",
+      "check": "broken_up",
+      "tier": "integrity",
+      "fixable": true,
+      "target": { "path": "Notes/Child.md", "stem": "Child" },
+      "detail": { "up_target": "Deleted MOC" },
+      "decision": {
+        "selected": true,
+        "action": "edit_note_text",
+        "repoint": "",
+        "candidates": [],
+        "suggest_requested": false
+      }
+    },
+    {
+      "id": "F03",
+      "check": "orphan",
+      "tier": "structure",
+      "fixable": true,
+      "target": { "path": "Notes/Orphan.md", "stem": "Orphan" },
+      "detail": { "candidate_mocs": [] },
+      "decision": {
+        "selected": true,
+        "action": "link_to_moc",
+        "file_under": "",
+        "candidates": [],
+        "suggest_requested": false
+      }
+    },
+    {
+      "id": "F09",
+      "check": "stale_moc",
+      "tier": "advisory",
+      "fixable": false,
+      "target": { "path": "MOCs/Old.md", "stem": "Old" },
+      "detail": { "mtime": "2026-01-01T00:00:00Z" }
+    }
+  ],
+  "emit_digest": "sha256:09b0019e1da79f06abcac28fffed58f586306009a9acaa53609b7cfe5efc127b"
+}
