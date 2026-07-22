@@ -23,9 +23,14 @@
  * 2. Tab: injected via `deps.tab` (singular, optional test seam — defaults
  *    to a real `GardenAuditTab`), not `deps.tabs` (plural) — there is
  *    exactly one tab and no subtab strip to iterate over.
- * 3. Save/Revert/dirty chrome is NOT wired yet (T4.3) — `renderLeafHead`
- *    below renders title+meta only; `.hashi-se-leaf-actions` exists as an
- *    empty placeholder div so T4.3 can fill it without restructuring.
+ * 3. (T4.3) Save/Revert/dirty chrome mirrors SuggestionsEditorView's
+ *    `handleSave` exactly, including its reference-identity guard against
+ *    two races (see `handleSave`'s own doc comment): `savedStore`/
+ *    `savedModel` are captured BEFORE the `await adapter.save(...)`, and
+ *    `dirty` is only cleared if `this.store === savedStore &&
+ *    this.store.get() === savedModel` post-await — an edit or a Revert
+ *    landing mid-flight is never silently marked clean. A `saving` flag
+ *    additionally disables Save/Revert for the whole in-flight window.
  */
 
 import {
@@ -80,6 +85,12 @@ export class GardenAuditEditorView extends ItemView {
 	// every store change (SuggestionsEditorView precedent).
 	private leafHeadEl: HTMLElement | null = null;
 	private bodyEl: HTMLElement | null = null;
+
+	// True while a Save is in flight — disables Save/Revert so a user can't
+	// double-click Save or Revert-out-from-under an in-flight write. See
+	// handleSave() for the store+model reference-identity guard this pairs
+	// with.
+	private saving = false;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -230,9 +241,79 @@ export class GardenAuditEditorView extends ItemView {
 			text: `run ${model.doc.run_id} · profile ${model.doc.profile} · ${model.doc.findings.length} findings`,
 		});
 
-		// Save/Revert/dirty chrome lands in T4.3 — an empty placeholder here
-		// keeps the leaf-head layout stable across that follow-up task.
-		head.createDiv({ cls: "hashi-se-leaf-actions" });
+		const actions = head.createDiv({ cls: "hashi-se-leaf-actions" });
+		if (model.dirty) {
+			const dirty = actions.createSpan({ cls: "hashi-se-dirty" });
+			dirty.createEl("i");
+			dirty.createSpan({ text: "Edited" });
+		}
+
+		const revertBtn = actions.createEl("button", {
+			cls: ["hashi-se-btn", "hashi-se-subtle"],
+			text: "Revert",
+		});
+		revertBtn.setAttr("type", "button");
+		revertBtn.disabled = this.saving;
+		revertBtn.addEventListener("click", () => {
+			void this.loadAndRender();
+		});
+
+		const saveBtn = actions.createEl("button", {
+			cls: ["hashi-se-btn", "hashi-se-primary"],
+			text: "Save",
+		});
+		saveBtn.setAttr("type", "button");
+		saveBtn.disabled = this.saving || !model.dirty;
+		saveBtn.addEventListener("click", () => {
+			void this.handleSave();
+		});
+	}
+
+	/**
+	 * Persists the current model via the adapter, then clears `dirty` on
+	 * success. `ObsidianGardenAuditDoc.save()` already shows its own
+	 * `Notice` and rethrows on the load-bearing JSON-write failure — so a
+	 * rejection here means the user has already been told; the model simply
+	 * stays dirty (nothing to do beyond letting the render reflect that).
+	 *
+	 * Reference-identity guard against two races (mirrors
+	 * SuggestionsEditorView.handleSave exactly): `savedStore`/`savedModel`
+	 * are captured BEFORE the `await`, not re-read from `this.store` after
+	 * it.
+	 *   1. Edit-during-save: a synchronous `ctx.apply` can land a NEWER model
+	 *      while `adapter.save(savedModel)` is still in flight. Clearing
+	 *      `dirty` on whatever `this.store` currently holds (rather than on
+	 *      `savedModel` specifically) would mark those newer, never-written
+	 *      edits as saved — silent data loss. Comparing
+	 *      `this.store.get() === savedModel` after the await catches this:
+	 *      if a newer model landed, its `dirty` stays true.
+	 *   2. Revert/setState-during-save: `loadAndRender()` (Revert's handler)
+	 *      replaces `this.store` — possibly with `null` mid-flight — while a
+	 *      save is still pending. Comparing `this.store === savedStore`
+	 *      catches a replaced/nulled store and skips the clear entirely.
+	 * The `saving` flag additionally disables Save/Revert for the whole
+	 * in-flight window (see renderLeafHead), narrowing the window these
+	 * checks guard.
+	 */
+	private async handleSave(): Promise<void> {
+		const savedStore = this.store;
+		if (savedStore === null) return;
+		const savedModel = savedStore.get();
+
+		this.saving = true;
+		this.render();
+		try {
+			await this.deps.adapter.save(savedModel);
+		} catch {
+			return;
+		} finally {
+			this.saving = false;
+			this.render();
+		}
+
+		if (this.store === savedStore && this.store.get() === savedModel) {
+			this.store.set({ doc: savedModel.doc, dirty: false });
+		}
 	}
 
 	private renderBody(model: GardenAuditModel): void {
