@@ -103,6 +103,7 @@ import { HookDisclosureModal } from "./hooks/HookDisclosureModal";
 import { HookRunner } from "./hooks/HookRunner";
 import type { HookLogger } from "./hooks/HookContext";
 import { validate } from "./schema/validator";
+import { ObsidianGardenAuditDoc } from "./garden-audit/ObsidianGardenAuditDoc";
 import { SettingsTab } from "./settings/SettingsTab";
 import { ObsidianSuggestionsDoc } from "./suggestions/ObsidianSuggestionsDoc";
 import {
@@ -112,7 +113,12 @@ import {
 } from "./types/index";
 import { TomoChatView, VIEW_TYPE_TOMO_CHAT } from "./ui/chat-view/index";
 import { showChatWindow } from "./ui/chat-view/showChatWindow";
-import { openGardenAuditEditor, TomoEditorDocPicker } from "./ui/garden-audit-view/index";
+import {
+	GardenAuditEditorView,
+	openGardenAuditEditor,
+	TomoEditorDocPicker,
+	VIEW_TYPE_GARDEN_AUDIT_EDITOR,
+} from "./ui/garden-audit-view/index";
 import { StatusBarIcon, copyAuthToken } from "./ui/status-bar/StatusBarIcon";
 import {
 	openSuggestionsEditor,
@@ -586,14 +592,23 @@ export default class TomoHashiPlugin extends Plugin {
 		);
 
 		// =========================================================================
-		// 005 wiring (T3.2) — Garden-Audit Editor suffix-dispatch (ADR-6)
+		// 005 wiring (T3.2/T3.3) — Garden-Audit Editor suffix-dispatch (ADR-6)
 		// =========================================================================
 		//
+		// 15. GardenAuditEditorView registration (T3.3) — a Phase-3 PLACEHOLDER
+		//     view (body filled in Phase 4). Reuses the same `vault` (7.) via
+		//     `ObsidianGardenAuditDoc`, the ONE wire-aware adapter for
+		//     `_garden-audit.json` (mirrors ObsidianSuggestionsDoc's role).
+		this.registerView(
+			VIEW_TYPE_GARDEN_AUDIT_EDITOR,
+			(leaf: WorkspaceLeaf) =>
+				new GardenAuditEditorView(leaf, {
+					adapter: new ObsidianGardenAuditDoc(vault),
+				}),
+		);
+
 		// The "Open Tomo editor" command (registered once, below) now
-		// suffix-dispatches to EITHER editor. The Garden-Audit Editor's own
-		// `registerView` + placeholder view land in T3.3; the opener and picker
-		// wired here only need `VIEW_TYPE_GARDEN_AUDIT_EDITOR` to exist as an id,
-		// not the view class itself.
+		// suffix-dispatches to EITHER editor.
 		registerSuggestionsEditorCommand(this, {
 			getActiveFilePath: () => this.app.workspace.getActiveFile()?.path ?? null,
 			listSuggestionsDocs: () =>
