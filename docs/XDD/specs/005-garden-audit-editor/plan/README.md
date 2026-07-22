@@ -86,7 +86,7 @@ and integrates. `main` is PR-only.
 Each phase is defined in a separate file. Tasks follow red-green-refactor: **Prime** → **Test** (red) → **Implement** (green) → **Validate**.
 
 - [x] [Phase 1: Contract foundation — schema, types, validator, fixture](phase-1.md)
-- [ ] [Phase 2: Adapter & transforms](phase-2.md)
+- [x] [Phase 2: Adapter & transforms](phase-2.md)
 - [ ] [Phase 3: Discovery & command dispatch](phase-3.md)
 - [ ] [Phase 4: View & tab shell](phase-4.md)
 - [ ] [Phase 5: Per-check cards & interaction](phase-5.md)
