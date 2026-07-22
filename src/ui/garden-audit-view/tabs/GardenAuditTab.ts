@@ -32,10 +32,13 @@ import type { GardenAuditTabContext, GardenAuditTabSpec } from "../tabContract.j
 
 const TIER_ORDER: readonly FindingTier[] = ["integrity", "structure", "advisory"];
 
+// Title Case source text — the repo convention (see .hashi-se-sec-label in
+// SuggestionsTab.ts/styles.css) keeps DOM text sentence/Title case and does
+// the visual all-caps via CSS `text-transform`, not baked into the string.
 const TIER_LABELS: Record<FindingTier, string> = {
-	integrity: "INTEGRITY",
-	structure: "STRUCTURE",
-	advisory: "ADVISORY",
+	integrity: "Integrity",
+	structure: "Structure",
+	advisory: "Advisory",
 };
 
 export class GardenAuditTab implements GardenAuditTabSpec {

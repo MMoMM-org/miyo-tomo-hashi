@@ -595,8 +595,8 @@ export default class TomoHashiPlugin extends Plugin {
 		// 005 wiring (T3.2/T3.3) — Garden-Audit Editor suffix-dispatch (ADR-6)
 		// =========================================================================
 		//
-		// 15. GardenAuditEditorView registration (T3.3) — a Phase-3 PLACEHOLDER
-		//     view (body filled in Phase 4). Reuses the same `vault` (7.) via
+		// 15. GardenAuditEditorView registration (T3.3 wiring; the real
+		//     Phase-4 view). Reuses the same `vault` (7.) via
 		//     `ObsidianGardenAuditDoc`, the ONE wire-aware adapter for
 		//     `_garden-audit.json` (mirrors ObsidianSuggestionsDoc's role).
 		this.registerView(

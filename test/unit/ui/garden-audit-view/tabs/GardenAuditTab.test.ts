@@ -94,12 +94,15 @@ describe("GardenAuditTab.render — tier grouping", () => {
 		const sections = container.querySelectorAll(".hashi-ga-tier");
 		expect(sections).toHaveLength(3);
 
+		// Source text stays Title Case (repo convention — see
+		// .hashi-se-sec-label in SuggestionsTab.ts): the visual all-caps
+		// comes from CSS text-transform, not baked into the DOM text.
 		const [integrity, structure, advisory] = Array.from(sections);
-		expect(integrity!.querySelector(".hashi-ga-tier-label")?.textContent).toBe("INTEGRITY");
+		expect(integrity!.querySelector(".hashi-ga-tier-label")?.textContent).toBe("Integrity");
 		expect(integrity!.querySelector(".hashi-ga-tier-count")?.textContent).toBe("2");
-		expect(structure!.querySelector(".hashi-ga-tier-label")?.textContent).toBe("STRUCTURE");
+		expect(structure!.querySelector(".hashi-ga-tier-label")?.textContent).toBe("Structure");
 		expect(structure!.querySelector(".hashi-ga-tier-count")?.textContent).toBe("1");
-		expect(advisory!.querySelector(".hashi-ga-tier-label")?.textContent).toBe("ADVISORY");
+		expect(advisory!.querySelector(".hashi-ga-tier-label")?.textContent).toBe("Advisory");
 		expect(advisory!.querySelector(".hashi-ga-tier-count")?.textContent).toBe("1");
 	});
 
