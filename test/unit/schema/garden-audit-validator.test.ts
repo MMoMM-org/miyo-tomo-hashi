@@ -3,9 +3,11 @@ import { validate } from "../../../src/schema/garden-audit-validator.js";
 import type { GardenAuditWire } from "../../../src/types/garden-audit.js";
 
 // ---------------------------------------------------------------------------
-// VALID_FIXTURE — the spec-005 SDD §2 example wire (a real Tomo emission;
-// its emit_digest is verified against Tomo's compute — see T1.3's
-// current-wire.json fixture, which reuses this same doc verbatim).
+// VALID_FIXTURE — the spec-005 SDD §2 example wire (a real Tomo emission).
+// Its emit_digest is a syntactically valid sha256 passthrough value
+// (matches ^sha256:[a-f0-9]{64}$); Hashi never recomputes it — Tomo
+// re-stamps it. See T1.3's current-wire.json fixture, which reuses this
+// same doc verbatim.
 // ---------------------------------------------------------------------------
 
 const VALID_FIXTURE: GardenAuditWire = {
