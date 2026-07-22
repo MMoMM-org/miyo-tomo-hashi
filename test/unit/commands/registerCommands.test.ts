@@ -737,12 +737,15 @@ describe("registerExecutorFileMenu (002)", () => {
 // Spec refs: spec-004 SDD §3 (ADR-S1); PRD F1; plan/phase-4.md T4.1.
 
 import {
+	GARDEN_AUDIT_JSON_RE,
 	registerSuggestionsEditorCommand,
+	resolveGardenAuditDocPath,
 	resolveSuggestionsDocPath,
 	type SuggestionsEditorCommandDeps,
 } from "../../../src/commands/registerCommands";
 
 const OPEN_SUGGESTIONS_EDITOR_ID = "open-suggestions-editor";
+const OPEN_TOMO_EDITOR_LABEL = "Open Tomo editor";
 const NO_SUGGESTIONS_DOC_NOTICE =
 	"Open a Tomo _suggestions.json (or its .md) first";
 
@@ -781,6 +784,70 @@ describe("resolveSuggestionsDocPath", () => {
 
 	it("returns null when there is no active file", () => {
 		expect(resolveSuggestionsDocPath(null)).toBeNull();
+	});
+
+	it("returns null for a _garden-audit.json file (disjoint from garden-audit discovery)", () => {
+		expect(
+			resolveSuggestionsDocPath("100 Inbox/run-editor-001_garden-audit.json"),
+		).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 005 spec — garden-audit discovery resolver (T3.1)
+// ---------------------------------------------------------------------------
+//
+// Spec refs: spec-005 SDD ADR-6; plan/phase-3.md T3.1. Disjoint from the 004
+// suggestions resolver above by construction — a `_garden-audit.json` never
+// matches SUGGESTIONS_JSON_RE and a `_suggestions.json` never matches
+// GARDEN_AUDIT_JSON_RE — so the unified open command (T3.2) can check each
+// resolver in turn without an ambiguous double-match.
+
+describe("GARDEN_AUDIT_JSON_RE", () => {
+	it("matches a garden-audit wire filename", () => {
+		expect(
+			GARDEN_AUDIT_JSON_RE.test("100 Inbox/run-editor-001_garden-audit.json"),
+		).toBe(true);
+	});
+
+	it("does not match a suggestions wire filename", () => {
+		expect(
+			GARDEN_AUDIT_JSON_RE.test("100 Inbox/2026-07-06_1115_suggestions.json"),
+		).toBe(false);
+	});
+});
+
+describe("resolveGardenAuditDocPath", () => {
+	it("returns the path itself when it ends with _garden-audit.json", () => {
+		expect(
+			resolveGardenAuditDocPath("100 Inbox/run-editor-001_garden-audit.json"),
+		).toBe("100 Inbox/run-editor-001_garden-audit.json");
+	});
+
+	it("derives the .json sibling when the path ends with _garden-audit.md", () => {
+		expect(
+			resolveGardenAuditDocPath("100 Inbox/run-editor-001_garden-audit.md"),
+		).toBe("100 Inbox/run-editor-001_garden-audit.json");
+	});
+
+	it("returns null for an unrelated note", () => {
+		expect(resolveGardenAuditDocPath("notes/random.md")).toBeNull();
+	});
+
+	it("returns null for a _suggestions.json file (disjoint from suggestions discovery)", () => {
+		expect(
+			resolveGardenAuditDocPath("100 Inbox/2026-07-06_1115_suggestions.json"),
+		).toBeNull();
+	});
+
+	it("returns null for a _suggestions.md file", () => {
+		expect(
+			resolveGardenAuditDocPath("100 Inbox/2026-07-06_1115_suggestions.md"),
+		).toBeNull();
+	});
+
+	it("returns null when there is no active file", () => {
+		expect(resolveGardenAuditDocPath(null)).toBeNull();
 	});
 });
 

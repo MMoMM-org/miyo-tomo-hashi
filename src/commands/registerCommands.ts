@@ -453,3 +453,34 @@ export function resolveSuggestionsDocPath(
 	}
 	return null;
 }
+
+// ---------------------------------------------------------------------------
+// 005 spec — garden-audit discovery resolver (T3.1)
+// ---------------------------------------------------------------------------
+//
+// Spec refs: spec-005 SDD ADR-6; plan/phase-3.md T3.1. Disjoint from the 004
+// suggestions resolver above by construction — a `_garden-audit.json` never
+// matches SUGGESTIONS_JSON_RE and a `_suggestions.json` never matches
+// GARDEN_AUDIT_JSON_RE — so the unified open command (T3.2 below) can check
+// each resolver in turn without an ambiguous double-match.
+
+export const GARDEN_AUDIT_JSON_RE = /_garden-audit\.json$/;
+const GARDEN_AUDIT_MD_RE = /_garden-audit\.md$/;
+
+/**
+ * Map the active file path to the `_garden-audit.json` doc to open:
+ *   - `<stem>_garden-audit.json` → itself.
+ *   - `<stem>_garden-audit.md` → the `.json` sibling.
+ *   - anything else (no active file, unrelated note, a suggestions doc) →
+ *     null; the caller falls through to the next resolver / picker / Notice.
+ */
+export function resolveGardenAuditDocPath(
+	activePath: string | null,
+): string | null {
+	if (activePath === null) return null;
+	if (GARDEN_AUDIT_JSON_RE.test(activePath)) return activePath;
+	if (GARDEN_AUDIT_MD_RE.test(activePath)) {
+		return activePath.slice(0, -".md".length) + ".json";
+	}
+	return null;
+}
