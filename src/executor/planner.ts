@@ -38,6 +38,7 @@ const KIND_ORDER: readonly ActionKind[] = [
 	"insert_under_marker",
 	"replace_section",
 	"edit_note_text",
+	"remove_up_link",
 	"add_relationship",
 	"update_tracker",
 	"update_log_entry",
@@ -265,6 +266,10 @@ function buildSummary(action: Action): string {
 			// Metadata only — path + occurrence. The `match`/`replace` link text
 			// is note content and must not land in the run-log (Privacy L2).
 			return `${action.path} (${action.occurrence ?? "first"})`;
+		case "remove_up_link":
+			// Metadata only — path + the bare link stem being removed (a
+			// structural identifier, not note body content; Privacy L2).
+			return `${action.path} :: -[[${action.link}]]`;
 		case "update_tracker":
 			return `${action.daily_note_path} :: ${action.field}`;
 		case "update_log_entry":

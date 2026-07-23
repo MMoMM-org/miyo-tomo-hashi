@@ -9,6 +9,7 @@ import type {
 	InstructionSet,
 	LinkToMocAction,
 	MoveNoteAction,
+	RemoveUpLinkAction,
 	SkipAction,
 	UpdateLogEntryAction,
 	UpdateLogLinkAction,
@@ -20,7 +21,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 describe("ActionKind", () => {
-	it("is the exact 12-element string-literal union", () => {
+	it("is the exact 13-element string-literal union", () => {
 		expectTypeOf<ActionKind>().toEqualTypeOf<
 			| "create_moc"
 			| "move_note"
@@ -29,6 +30,7 @@ describe("ActionKind", () => {
 			| "replace_section"
 			| "add_relationship"
 			| "edit_note_text"
+			| "remove_up_link"
 			| "update_tracker"
 			| "update_log_entry"
 			| "update_log_link"
@@ -37,7 +39,7 @@ describe("ActionKind", () => {
 		>();
 	});
 
-	it("all 12 literals are assignable to ActionKind", () => {
+	it("all 13 literals are assignable to ActionKind", () => {
 		const allKinds: ActionKind[] = [
 			"create_moc",
 			"move_note",
@@ -46,14 +48,15 @@ describe("ActionKind", () => {
 			"replace_section",
 			"add_relationship",
 			"edit_note_text",
+			"remove_up_link",
 			"update_tracker",
 			"update_log_entry",
 			"update_log_link",
 			"delete_source",
 			"skip",
 		];
-		// Runtime check: exactly 12
-		expect(allKinds).toHaveLength(12);
+		// Runtime check: exactly 13
+		expect(allKinds).toHaveLength(13);
 	});
 });
 
@@ -238,8 +241,23 @@ describe("Action discriminated union", () => {
 		}
 	});
 
-	it("exhaustive switch compiles over all Action variants", () => {
-		// This function compiles only if all 12 variants are handled.
+	it("narrows to RemoveUpLinkAction on action === 'remove_up_link'", () => {
+		const a: Action = {
+			id: "I10",
+			action: "remove_up_link",
+			path: "022 Placeholders MOC.md",
+			link: "021 Fleeting MOC",
+		};
+		if (a.action === "remove_up_link") {
+			const _path: string = a.path;
+			const _link: string = a.link;
+			expect(_path).toBe("022 Placeholders MOC.md");
+			expect(_link).toBe("021 Fleeting MOC");
+		}
+	});
+
+	it("exhaustive switch compiles over all 13 Action variants", () => {
+		// This function compiles only if all 13 variants are handled.
 		function describeAction(a: Action): string {
 			switch (a.action) {
 				case "create_moc":
@@ -256,6 +274,8 @@ describe("Action discriminated union", () => {
 					return `add_relationship:${a.marker}`;
 				case "edit_note_text":
 					return `edit_note_text:${a.path}`;
+				case "remove_up_link":
+					return `remove_up_link:${a.path}`;
 				case "update_tracker":
 					return `update_tracker:${a.field}`;
 				case "update_log_entry":
@@ -378,5 +398,16 @@ describe("Action discriminated union", () => {
 		expectTypeOf(a.match).toEqualTypeOf<string>();
 		expectTypeOf(a.replace).toEqualTypeOf<string>();
 		expectTypeOf(a.occurrence).toEqualTypeOf<"first" | "all" | undefined>();
+	});
+
+	it("RemoveUpLinkAction requires path/link and has no other fields", () => {
+		const a: RemoveUpLinkAction = {
+			id: "I01",
+			action: "remove_up_link",
+			path: "022 Placeholders MOC.md",
+			link: "021 Fleeting MOC",
+		};
+		expectTypeOf(a.path).toEqualTypeOf<string>();
+		expectTypeOf(a.link).toEqualTypeOf<string>();
 	});
 });

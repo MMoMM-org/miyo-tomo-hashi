@@ -1,6 +1,6 @@
 # Action Reference
 
-The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are eleven kinds; each has its own outcome semantics, idempotency rule, and failure surface.
+The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are thirteen kinds; each has its own outcome semantics, idempotency rule, and failure surface.
 
 | Action | What it does | Idempotency probe | Halt-on-fail effect |
 |---|---|---|---|
@@ -11,6 +11,7 @@ The instruction executor dispatches each action in an `_instructions.json` to a 
 | [replace_section](#replace_section) | Overwrite a heading section's body in any note | Body already equals content | None |
 | [add_relationship](#add_relationship) | Add a wikilink under a frontmatter relationship key | Wikilink already present | None |
 | [edit_note_text](#edit_note_text) | Literal find-and-replace in a note's body (repoint/remove dead links, strip broken `up::` lines) | Match not found | None |
+| [remove_up_link](#remove_up_link) | Remove one link from a note's `up::` line, preserving the field | No up:: line, or link not on it | None |
 | [update_tracker](#update_tracker) | Set a frontmatter scalar on a tracker note | Field already at target value | None |
 | [update_log_entry](#update_log_entry) | Append/insert a line in a daily log at a positional anchor | Exact line already present | None |
 | [update_log_link](#update_log_link) | Replace one wikilink with another inside a log entry | Replacement wikilink already present | None |
@@ -134,6 +135,29 @@ Add a wikilink under a frontmatter relationship key on a note. Used to wire up "
 **Outcome:**
 - `applied` — the body was edited.
 - `skipped-already` — the `match` was not found (the note may have been fixed by hand between report and apply), or an empty `match` was supplied. A no-op success — never fails the batch on a stale single match.
+- `failed` — target note missing. File untouched.
+
+## `remove_up_link`
+
+Remove **one** link from a note's `up::` line while preserving the field itself — the field-level counterpart to `edit_note_text`'s whole-line replacement. Introduced for garden-audit's `broken_up` cleanup: `edit_note_text` can only match/replace the whole line verbatim, so it silently no-oped whenever the `up::` line carried more than one link.
+
+| Field | Type | Notes |
+|---|---|---|
+| `path` | string | Vault-relative path of the note whose `up::` line is edited. Modify-only. |
+| `link` | string | Bare stem of the link to remove (no `[[ ]]`), e.g. `Deleted MOC`. |
+
+**Locator:** the same marker/callout/bullet locator `add_relationship` uses, with the marker fixed to the literal `up::`.
+
+**Removal:** the `[[link]]` occurrence is removed from the line, including a dangling separator — whitespace-tolerant around commas:
+- `up:: [[A]], [[X]]` → `up:: [[A]]` (drop the trailing link)
+- `up:: [[X]], [[A]]` → `up:: [[A]]` (drop the leading link)
+- `up:: [[A]], [[X]], [[B]]` → `up:: [[A]], [[B]]` (drop a middle link)
+
+**Field preservation:** when the removed link was the only one, the line becomes an empty `up:: ` — it is **never** deleted. `up::` is a required structural field; an emptied `up::` correctly resurfaces the note as unparented on the next garden-audit scan, whereas deleting the line would drop the note from the structure model entirely.
+
+**Outcome:**
+- `applied` — the `up::` line was rewritten.
+- `skipped-already` — no `up::` line exists, OR `link` is not present on it (this also covers the idempotent re-run case, where a prior run already removed the link). A no-op success — never fails the batch.
 - `failed` — target note missing. File untouched.
 
 ## `update_tracker`

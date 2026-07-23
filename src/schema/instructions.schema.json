@@ -60,6 +60,7 @@
           {"$ref": "#/$defs/replace_section"},
           {"$ref": "#/$defs/add_relationship"},
           {"$ref": "#/$defs/edit_note_text"},
+          {"$ref": "#/$defs/remove_up_link"},
           {"$ref": "#/$defs/update_tracker"},
           {"$ref": "#/$defs/update_log_entry"},
           {"$ref": "#/$defs/update_log_link"},
@@ -176,6 +177,19 @@
         "match": {"type": "string", "description": "LITERAL substring to find in the note BODY (never frontmatter). Not a regex or glob — matched byte-for-byte."},
         "replace": {"type": "string", "description": "LITERAL replacement written verbatim; empty string deletes the match. A whole-line match deleted this way collapses its now-empty line; an inline match just loses the substring."},
         "occurrence": {"type": "string", "enum": ["first", "all"], "default": "first", "description": "first (default) replaces the first literal occurrence; all replaces every occurrence. Counted on the literal string within the body."},
+        "applied": {"$ref": "#/$defs/applied_field"}
+      }
+    },
+    "remove_up_link": {
+      "type": "object",
+      "required": ["id", "action", "path", "link"],
+      "additionalProperties": false,
+      "description": "Remove ONE link from the note's up:: line (broken_up empty=remove, link-only semantics — user decision 2026-07-23). Hashi locates the up:: line with the same marker regex as add_relationship and removes the [[link]] occurrence on that line INCLUDING a dangling separator (e.g. 'up:: [[A]], [[X]]' → 'up:: [[A]]'). CRITICAL: the up:: FIELD is preserved — when the removed link was the only one, the line becomes an empty 'up::' ('up:: [[X]]' → 'up:: '), it is NOT deleted. up:: is a required structural field; an emptied up:: correctly resurfaces the note as unparented next scan. Skip-and-report on no-match (no up:: line, or link not on it) — no error, no partial write. Replaces the earlier whole-line edit_note_text construction, which silently no-opped on multi-link up:: lines.",
+      "properties": {
+        "id": {"$ref": "#/$defs/action_id"},
+        "action": {"const": "remove_up_link"},
+        "path": {"type": "string", "description": "Vault-relative path of the note whose up:: line is edited (.md)."},
+        "link": {"type": "string", "description": "Bare stem of the link to remove from the up:: line, e.g. 'Deleted MOC' (no [[ ]])."},
         "applied": {"$ref": "#/$defs/applied_field"}
       }
     },

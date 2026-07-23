@@ -2,7 +2,7 @@
  * HANDLERS dispatch registry tests.
  *
  * T3.6 — verifies:
- *   1. Key coverage: HANDLERS has exactly 12 keys matching all ActionKind values.
+ *   1. Key coverage: HANDLERS has exactly 13 keys matching all ActionKind values.
  *   2. Identity: each registry entry points to the canonical handler function.
  *   3. Dispatch smoke: HANDLERS[action.action](action, ctx) routes to the correct handler.
  *
@@ -17,6 +17,7 @@ import {
 	HANDLERS,
 	addRelationship,
 	editNoteText,
+	removeUpLink,
 	createMoc,
 	moveNote,
 	linkToMoc,
@@ -32,6 +33,7 @@ import type {
 	ActionKind,
 	CreateMocAction,
 	MoveNoteAction,
+	RemoveUpLinkAction,
 } from "../../../src/schema/types.js";
 
 // ---------------------------------------------------------------------------
@@ -48,7 +50,7 @@ const makeCtx = (vault: FakeVaultFS) => ({
 // ---------------------------------------------------------------------------
 
 describe("HANDLERS — key coverage", () => {
-	it("has exactly the 12 ActionKind keys", () => {
+	it("has exactly the 13 ActionKind keys", () => {
 		const expectedKeys: ActionKind[] = [
 			"create_moc",
 			"move_note",
@@ -57,6 +59,7 @@ describe("HANDLERS — key coverage", () => {
 			"replace_section",
 			"add_relationship",
 			"edit_note_text",
+			"remove_up_link",
 			"update_tracker",
 			"update_log_entry",
 			"update_log_link",
@@ -117,6 +120,10 @@ describe("HANDLERS — identity", () => {
 
 	it("HANDLERS.edit_note_text === editNoteText", () => {
 		expect(HANDLERS.edit_note_text).toBe(editNoteText);
+	});
+
+	it("HANDLERS.remove_up_link === removeUpLink", () => {
+		expect(HANDLERS.remove_up_link).toBe(removeUpLink);
 	});
 
 	it("HANDLERS.skip === skip", () => {
@@ -298,6 +305,21 @@ describe("HANDLERS — dispatch smoke", () => {
 		expect(outcome.kind).toBe("applied");
 	});
 
+	it("remove_up_link: dispatches and returns applied", async () => {
+		const notePath = "022 Placeholders MOC.md";
+		const vault = new FakeVaultFS();
+		await vault.create(notePath, "up:: [[021 Fleeting MOC]]\n");
+		const action = {
+			action: "remove_up_link" as const,
+			id: "smoke-rul",
+			path: notePath,
+			link: "021 Fleeting MOC",
+		};
+		const handler = HANDLERS[action.action];
+		const outcome = await handler(action, makeCtx(vault));
+		expect(outcome.kind).toBe("applied");
+	});
+
 	it("delete_source: dispatches and returns applied", async () => {
 		const vault = new FakeVaultFS();
 		await vault.create("Inbox/old.md", "# old");
@@ -337,5 +359,9 @@ describe("HANDLERS — type narrowing", () => {
 
 	it("HANDLERS['move_note'] parameter type is MoveNoteAction", () => {
 		expectTypeOf<Parameters<typeof HANDLERS["move_note"]>[0]>().toExtend<MoveNoteAction>();
+	});
+
+	it("HANDLERS['remove_up_link'] parameter type is RemoveUpLinkAction", () => {
+		expectTypeOf<Parameters<typeof HANDLERS["remove_up_link"]>[0]>().toExtend<RemoveUpLinkAction>();
 	});
 });
