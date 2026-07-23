@@ -657,6 +657,58 @@
 	white-space: nowrap;
 }
 
+/* ---- fixable finding cards (spec-005, T5.2) -------------------------------
+   `.hashi-ga-finding-row` is the sole flex child here, so `flex:1` fills the
+   row's full width regardless of the row's own (horizontal) flex axis; the
+   card lays its own header/detail/target lines out in a column. Apply/Skip
+   and target-input styling is intentionally REUSED from the Suggestions
+   Editor (.hashi-se-decision/-approve/-skip, .hashi-se-inp/-mini-pick) —
+   same dual-class idiom TargetControl already uses — rather than duplicating
+   those rules under a ga- prefix. */
+.hashi-ga-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+}
+.hashi-ga-card-header {
+	display: flex;
+	align-items: baseline;
+	gap: 4px;
+	flex-wrap: wrap;
+	font-weight: 600;
+	color: var(--se-text);
+}
+.hashi-ga-card-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.hashi-ga-card-detail {
+	color: var(--se-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* Pushes Apply/Skip to the row's right edge whether or not a detail line
+   precedes it (e.g. orphan/unparented cards have no left-side detail text). */
+.hashi-ga-card-row .hashi-ga-decision {
+	margin-left: auto;
+}
+.hashi-ga-target-field {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.hashi-ga-target-field label {
+	font-size: 10px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--se-text-faint);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
 /* ---- generic card -------------------------------------------------------- */
 .hashi-se-card {
 	border: 1px solid var(--se-border);

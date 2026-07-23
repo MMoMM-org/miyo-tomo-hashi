@@ -28,6 +28,15 @@
  * `duplicate_stem`/`stale_moc` are advisory-only and never reach this widget
  * (T5.5's read-only cards have no target control) — their map entries exist
  * only so the lookup stays a total function over `FindingCheck`.
+ *
+ * Target-value format (T5.2, 2026-07-22 handoff — source of truth): a
+ * free-typed value commits VERBATIM (bare stem or `[[wikilink]]`, Tomo
+ * normalizes either). A PICKED value is different — `TargetNotePicker`
+ * returns a full vault-relative path, and the wire's target fields want a
+ * bare stem — so the pick handler here converts path → stem (basename minus
+ * `.md`) before it ever reaches the input or `onChange`. This is the one
+ * seam that knows about picked-vs-typed provenance; callers (the T5.2 cards)
+ * only ever see a plain committed string and never re-derive it.
  */
 
 import type { App } from "obsidian";
@@ -45,6 +54,12 @@ const EMPTY_LABEL: Record<FindingCheck, string> = {
 	duplicate_stem: "n/a",
 	stale_moc: "n/a",
 };
+
+/** Basename minus a trailing `.md` — vault path → bare stem. */
+function pathToStem(path: string): string {
+	const base = path.split("/").pop() ?? path;
+	return base.endsWith(".md") ? base.slice(0, -3) : base;
+}
 
 export interface TargetControlOptions {
 	/** For the picker button's `TargetNotePicker`. */
@@ -85,14 +100,15 @@ export function renderTargetControl(container: HTMLElement, opts: TargetControlO
 	});
 
 	const pick = wrap.createEl("button", {
-		cls: ["hashi-ga-target-pick", "hashi-se-mini-pick"],
+		cls: ["hashi-se-mini-pick"],
 		text: "Choose…",
 		attr: { type: "button", "aria-label": "Choose target note from vault" },
 	});
 	pick.addEventListener("click", () => {
 		new TargetNotePicker(app, (path) => {
-			input.value = path;
-			onChange(path);
+			const stem = pathToStem(path);
+			input.value = stem;
+			onChange(stem);
 		}).open();
 	});
 

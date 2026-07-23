@@ -36,7 +36,7 @@ Delivers the interactive fixable cards and the strict read-only advisory cards.
   4. Validate: widget unit tests pass (pick / type-new / empty / label-per-check).
   5. Success: pick + free-typed + explicit-empty all expressible `[ref: PRD/F3; SDD/ADR-3]`; empty label correct per check `[ref: README 2026-07-22 unlink decision]`.
 
-- [ ] **T5.2 Fixable cards (broken_up / dead_link / unparented / orphan)** `[activity: frontend-ui]`
+- [x] **T5.2 Fixable cards (broken_up / dead_link / unparented / orphan)** `[activity: frontend-ui]`
 
   1. Prime: Read `SuggestionsTab.renderDecisionControl` (Apply/Skip segmented, `aria-pressed`) `[ref: SDD/User Interface & UX]`.
   2. Test per check type: Apply/Skip toggles `decision.selected`; broken_up uses a repoint TargetControl and sets `action` per ADR-5 (non-empty→add_relationship, empty→edit_note_text); dead_link uses a replace TargetControl (empty label "unlink") and shows `dead_target (count×)`; unparented/orphan use a file_under TargetControl; the target note title is an openable link.

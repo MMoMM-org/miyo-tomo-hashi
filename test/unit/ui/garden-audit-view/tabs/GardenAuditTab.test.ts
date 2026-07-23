@@ -1,9 +1,12 @@
 /**
- * Unit tests for GardenAuditTab (spec-005 Phase 4, T4.2) — the tier-grouped
- * findings shell (Integrity/Structure/Advisory, each with a count; findings
- * in wire order within a tier; each row shows its finding id). Cards
- * themselves (target control, candidates, suggest toggle) are Phase 5 — the
- * per-finding row here is a deliberate placeholder.
+ * Unit tests for GardenAuditTab (spec-005 Phase 4 T4.2 + Phase 5 T5.2) — the
+ * tier-grouped findings shell (Integrity/Structure/Advisory, each with a
+ * count; findings in wire order within a tier; each row shows its finding
+ * id), PLUS (T5.2) the real fixable-finding cards: Apply/Skip → `selected`,
+ * per-check TargetControl → the right transform (with broken_up's ADR-5
+ * action-gating), and an openable note-title link. Advisory findings still
+ * render through the Phase-4 placeholder — T5.5 gives them their own
+ * strictly-read-only card.
  */
 
 import "obsidian";
@@ -52,6 +55,30 @@ function getMockModel(findings: readonly FindingWire[]): GardenAuditModel {
 
 function makeCtx(): GardenAuditTabContext {
 	return { app: new App(), apply: () => {} };
+}
+
+/**
+ * A `GardenAuditTabContext` whose `apply` actually runs the transform against
+ * a live `GardenAuditModel`, so card-interaction tests can assert the model
+ * OUTCOME (per the task brief: "tests assert the outcome through the card")
+ * instead of just spying on which transform got called.
+ */
+function makeRecordingCtx(model: GardenAuditModel): {
+	ctx: GardenAuditTabContext;
+	getModel: () => GardenAuditModel;
+} {
+	let current = model;
+	const ctx: GardenAuditTabContext = {
+		app: new App(),
+		apply: (transform) => {
+			current = transform(current);
+		},
+	};
+	return { ctx, getModel: () => current };
+}
+
+function finding(model: GardenAuditModel, id: string): FindingWire {
+	return model.doc.findings.find((f) => f.id === id)!;
 }
 
 describe("GardenAuditTab.count", () => {
@@ -206,5 +233,253 @@ describe("GardenAuditTab.render — nothing-to-apply (T4.4, all-advisory run)", 
 		tab.render(container, getMockModel(findings), makeCtx());
 
 		expect(container.querySelector(".hashi-ga-nothing-to-apply")).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// T5.2 — fixable cards
+// ---------------------------------------------------------------------------
+
+describe("GardenAuditTab.render — fixable cards, Apply/Skip", () => {
+	it("Apply flips decision.selected to true and marks the model dirty", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F01",
+				check: "dead_link",
+				detail: { dead_target: "Missing Note", count: 1 },
+				decision: { selected: false, action: null, replace: "" },
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const applyButton = container.querySelector(".hashi-ga-apply") as HTMLButtonElement;
+		applyButton.click();
+
+		expect(finding(getModel(), "F01").decision?.selected).toBe(true);
+		expect(getModel().dirty).toBe(true);
+	});
+
+	it("Skip flips decision.selected to false", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F01",
+				check: "dead_link",
+				detail: { dead_target: "Missing Note", count: 1 },
+				decision: { selected: true, action: "edit_note_text", replace: "" },
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const skipButton = container.querySelector(".hashi-ga-skip") as HTMLButtonElement;
+		skipButton.click();
+
+		expect(finding(getModel(), "F01").decision?.selected).toBe(false);
+	});
+
+	it("marks the active Apply/Skip button with aria-pressed=true and the other false", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F01",
+				check: "dead_link",
+				detail: {},
+				decision: { selected: true, action: "edit_note_text", replace: "" },
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(
+			container.querySelector(".hashi-ga-apply")?.getAttribute("aria-pressed"),
+		).toBe("true");
+		expect(
+			container.querySelector(".hashi-ga-skip")?.getAttribute("aria-pressed"),
+		).toBe("false");
+	});
+});
+
+describe("GardenAuditTab.render — broken_up card (ADR-5 action-gating)", () => {
+	function makeBrokenUpModel(repoint: string, action: string | null): GardenAuditModel {
+		return getMockModel([
+			getMockFinding({
+				id: "F02",
+				check: "broken_up",
+				tier: "integrity",
+				target: { path: "Notes/Child.md", stem: "Child" },
+				detail: { up_target: "Deleted MOC" },
+				decision: { selected: true, action, repoint },
+			}),
+		]);
+	}
+
+	it("renders the up_target detail line and a Repoint-to target control", () => {
+		const tab = new GardenAuditTab();
+		const model = makeBrokenUpModel("", "edit_note_text");
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.textContent).toContain("Deleted MOC");
+		expect(container.textContent).toContain("Repoint to");
+		expect(container.querySelector(".hashi-ga-target-inp")).not.toBeNull();
+	});
+
+	it("a non-empty repoint sets decision.action to add_relationship (ADR-5)", () => {
+		const tab = new GardenAuditTab();
+		const model = makeBrokenUpModel("", "edit_note_text");
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const input = container.querySelector(".hashi-ga-target-inp") as HTMLInputElement;
+		input.value = "020 Active MOC";
+		input.dispatchEvent(new Event("change"));
+
+		const decision = finding(getModel(), "F02").decision;
+		expect(decision?.repoint).toBe("020 Active MOC");
+		expect(decision?.action).toBe("add_relationship");
+	});
+
+	it("an empty repoint sets decision.action to edit_note_text — NEVER null (ADR-5)", () => {
+		const tab = new GardenAuditTab();
+		const model = makeBrokenUpModel("020 Active MOC", "add_relationship");
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const input = container.querySelector(".hashi-ga-target-inp") as HTMLInputElement;
+		input.value = "";
+		input.dispatchEvent(new Event("change"));
+
+		const decision = finding(getModel(), "F02").decision;
+		expect(decision?.repoint).toBe("");
+		expect(decision?.action).toBe("edit_note_text");
+		expect(decision?.action).not.toBeNull();
+	});
+});
+
+describe("GardenAuditTab.render — dead_link card", () => {
+	function makeDeadLinkModel(): GardenAuditModel {
+		return getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				tier: "integrity",
+				target: { path: "MOCs/020 Active MOC.md", stem: "020 Active MOC" },
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: { selected: true, action: "edit_note_text", replace: "" },
+			}),
+		]);
+	}
+
+	it("shows dead_target and its count, and a Replace-with target control", () => {
+		const tab = new GardenAuditTab();
+		const model = makeDeadLinkModel();
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.textContent).toContain("023 Sparks MOC");
+		expect(container.textContent).toContain("1×");
+		expect(container.textContent).toContain("Replace with");
+		// dead_link's TargetControl empty label is "unlink", not "remove".
+		expect(container.textContent).toContain("unlink");
+	});
+
+	it("changing the replace target dispatches setReplace", () => {
+		const tab = new GardenAuditTab();
+		const model = makeDeadLinkModel();
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const input = container.querySelector(".hashi-ga-target-inp") as HTMLInputElement;
+		input.value = "025 New Target";
+		input.dispatchEvent(new Event("change"));
+
+		expect(finding(getModel(), "F04").decision?.replace).toBe("025 New Target");
+	});
+});
+
+describe("GardenAuditTab.render — unparented/orphan cards (file_under)", () => {
+	it.each(["orphan", "unparented"] as const)(
+		"%s: renders a File-under target control and dispatches setFileUnder on change",
+		(check) => {
+			const tab = new GardenAuditTab();
+			const model = getMockModel([
+				getMockFinding({
+					id: "F03",
+					check,
+					tier: "structure",
+					target: { path: "Notes/Orphan.md", stem: "Orphan" },
+					detail: { candidate_mocs: [] },
+					decision: { selected: true, action: "link_to_moc", file_under: "" },
+				}),
+			]);
+			const { ctx, getModel } = makeRecordingCtx(model);
+			const container = document.createElement("div");
+
+			tab.render(container, model, ctx);
+			expect(container.textContent).toContain("File under");
+
+			const input = container.querySelector(".hashi-ga-target-inp") as HTMLInputElement;
+			input.value = "021 Fleeting MOC";
+			input.dispatchEvent(new Event("change"));
+
+			expect(finding(getModel(), "F03").decision?.file_under).toBe("021 Fleeting MOC");
+		},
+	);
+});
+
+describe("GardenAuditTab.render — target note title is an openable link", () => {
+	it("renders the finding's target stem as a clickable link that opens the note", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F02",
+				check: "broken_up",
+				target: { path: "Notes/Child.md", stem: "Child" },
+				detail: { up_target: "Deleted MOC" },
+				decision: { selected: false, action: null, repoint: "" },
+			}),
+		]);
+		const ctx = makeCtx();
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const link = container.querySelector(".hashi-se-wlink");
+
+		expect(link?.textContent).toBe("Child");
+		link?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		expect(ctx.app.workspace.openLinkText).toHaveBeenCalledWith("Child", "", false);
+	});
+});
+
+describe("GardenAuditTab.render — advisory findings never get a fixable card", () => {
+	it("renders no Apply/Skip control for an advisory finding", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F09",
+				tier: "advisory",
+				check: "stale_moc",
+				fixable: false,
+				decision: undefined,
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.querySelector(".hashi-ga-apply")).toBeNull();
+		expect(container.querySelector(".hashi-ga-skip")).toBeNull();
+		expect(container.querySelector(".hashi-ga-target-inp")).toBeNull();
 	});
 });

@@ -10,6 +10,11 @@
  * popover — this file only asserts THAT the widget constructs the picker and
  * wires its callback, not the picker's own item-listing behavior (that's
  * `TargetNotePicker.test.ts`).
+ *
+ * A picked value commits as a bare STEM (path → basename minus `.md`), never
+ * the picker's full vault-relative path — the "picker button" describe block
+ * below covers this (T5.2, 2026-07-22 handoff). Free-typed values commit
+ * verbatim (covered separately).
  */
 
 import "obsidian";
@@ -131,15 +136,26 @@ describe("renderTargetControl — picker button", () => {
 		expect(pickerInstances[0]!.open).toHaveBeenCalledOnce();
 	});
 
-	it("populates the input AND fires onChange when a note is picked", () => {
+	it("populates the input AND fires onChange with the note's STEM, not its full path (2026-07-22 handoff)", () => {
 		const onChange = vi.fn();
 		const container = render("unparented", undefined, onChange);
 
 		pickButton(container).dispatchEvent(new MouseEvent("click", { bubbles: true }));
 		pickerInstances[0]!.onChoose("Areas/Work.md");
 
-		expect(input(container).value).toBe("Areas/Work.md");
-		expect(onChange).toHaveBeenCalledWith("Areas/Work.md");
+		expect(input(container).value).toBe("Work");
+		expect(onChange).toHaveBeenCalledWith("Work");
+	});
+
+	it("strips only the trailing .md and keeps nested-folder-free stems for deeper paths", () => {
+		const onChange = vi.fn();
+		const container = render("orphan", undefined, onChange);
+
+		pickButton(container).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		pickerInstances[0]!.onChoose("MOCs/Sub/020 Active MOC.md");
+
+		expect(input(container).value).toBe("020 Active MOC");
+		expect(onChange).toHaveBeenCalledWith("020 Active MOC");
 	});
 
 	it("is keyboard-accessible (a native <button>, focusable and Enter/Space-activatable)", () => {
