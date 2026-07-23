@@ -713,14 +713,14 @@
 	white-space: nowrap;
 }
 
-/* ---- no-scan-candidate hint (2026-07-23, user QA) -------------------------
+/* ---- no-scan-candidate hint (2026-07-23, user QA; repositioned same day) --
    unparented/orphan only — states plainly that an empty target has no
-   fallback here, when `detail.candidate_mocs` is empty/absent. Faint styling
-   mirrors `.hashi-ga-suggest-hint` above. */
+   fallback here, when `detail.candidate_mocs` is empty/absent. Rendered in
+   the card's detail-line slot (see `renderFileUnderCard`) paired with
+   `.hashi-ga-card-detail`, so it reads at the same normal prominence as the
+   broken_up/dead_link detail lines rather than the earlier faint treatment —
+   this class is now just the query hook, no styling of its own. */
 .hashi-ga-no-scan-hint {
-	display: block;
-	font-size: 11px;
-	color: var(--se-text-faint);
 }
 
 /* ---- candidate chips (spec-005, T5.3) -------------------------------------

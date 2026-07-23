@@ -448,6 +448,20 @@ describe("GardenAuditTab.render — unparented/orphan cards (file_under)", () =>
 describe("GardenAuditTab.render — no-scan-candidate hint (2026-07-23 user QA)", () => {
 	const HINT_TEXT = "No scan candidate — an empty target has no fallback here.";
 
+	/**
+	 * 2026-07-23 (user QA follow-up): the hint moved from beneath the target
+	 * field into the detail-line slot directly under the card header — the
+	 * same structural position `renderBrokenUpCard`/`renderDeadLinkCard` use
+	 * for their `up::`/`[[dead_target]]` lines. `querySelectorAll` with a
+	 * multi-selector list returns matches in DOCUMENT order regardless of
+	 * selector order, so the first match tells us which element comes first.
+	 */
+	function expectHintPrecedesTargetField(container: HTMLElement): void {
+		const ordered = container.querySelectorAll(".hashi-ga-no-scan-hint, .hashi-ga-target-field");
+		expect(ordered.length).toBe(2);
+		expect(ordered[0]?.classList.contains("hashi-ga-no-scan-hint")).toBe(true);
+	}
+
 	it.each(["orphan", "unparented"] as const)(
 		"%s: shows the hint when detail.candidate_mocs is an empty array",
 		(check) => {
@@ -468,6 +482,7 @@ describe("GardenAuditTab.render — no-scan-candidate hint (2026-07-23 user QA)"
 			tab.render(container, model, ctx);
 
 			expect(container.textContent).toContain(HINT_TEXT);
+			expectHintPrecedesTargetField(container);
 		},
 	);
 
@@ -491,6 +506,7 @@ describe("GardenAuditTab.render — no-scan-candidate hint (2026-07-23 user QA)"
 			tab.render(container, model, ctx);
 
 			expect(container.textContent).toContain(HINT_TEXT);
+			expectHintPrecedesTargetField(container);
 		},
 	);
 
@@ -519,6 +535,7 @@ describe("GardenAuditTab.render — no-scan-candidate hint (2026-07-23 user QA)"
 			tab.render(container, model, ctx);
 
 			expect(container.textContent).toContain(HINT_TEXT);
+			expectHintPrecedesTargetField(container);
 		},
 	);
 

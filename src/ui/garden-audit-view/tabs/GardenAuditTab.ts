@@ -177,11 +177,18 @@ function formatScore(score: number): string {
 /**
  * 2026-07-23 (user QA) — unparented/orphan's `(empty=fallback)` caption
  * (`TargetControl.ts`) reads as reassuring even when there's no scan
- * candidate to fall back to. This visible hint states that state plainly,
- * right under the target field. Tomo's behavior for empty + no candidate is
- * "skip the finding" per the wire contract (PRD F3 AC); whether that can
- * surface as an error is a separate point under clarification with Tomo —
- * this hint doesn't depend on the answer, it just names the state.
+ * candidate to fall back to. This visible hint states that state plainly.
+ * Tomo's behavior for empty + no candidate is "skip the finding" per the wire
+ * contract (PRD F3 AC); whether that can surface as an error is a separate
+ * point under clarification with Tomo — this hint doesn't depend on the
+ * answer, it just names the state.
+ *
+ * 2026-07-23 (user QA follow-up) — repositioned from beneath the target field
+ * (barely visible there) into the card's detail-line slot directly under the
+ * header, mirroring where `renderBrokenUpCard`/`renderDeadLinkCard` render
+ * their `up::`/`[[dead_target]]` detail line — same `.hashi-ga-card-row`
+ * wrapper, same `.hashi-ga-card-detail` prominence, `renderApplySkip` in the
+ * same row. See `renderFileUnderCard`.
  */
 const NO_SCAN_CANDIDATE_HINT = "No scan candidate — an empty target has no fallback here.";
 
@@ -508,8 +515,14 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		const lead = finding.check === "orphan" ? "orphan:" : "unparented:";
 		const card = this.renderCardHeader(row, finding, ctx, lead);
 
-		const decisionRow = card.createDiv({ cls: "hashi-ga-card-row" });
-		this.renderApplySkip(decisionRow, finding, ctx);
+		const detailRow = card.createDiv({ cls: "hashi-ga-card-row" });
+		if (readScanCandidates(finding.detail).length === 0) {
+			detailRow.createSpan({
+				cls: ["hashi-ga-card-detail", "hashi-ga-no-scan-hint"],
+				text: NO_SCAN_CANDIDATE_HINT,
+			});
+		}
+		this.renderApplySkip(detailRow, finding, ctx);
 
 		this.renderTargetField(
 			card,
@@ -520,9 +533,6 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 			finding.decision?.file_under,
 			setFileUnder,
 		);
-		if (readScanCandidates(finding.detail).length === 0) {
-			card.createSpan({ cls: "hashi-ga-no-scan-hint", text: NO_SCAN_CANDIDATE_HINT });
-		}
 		this.renderCandidateChips(card, finding, finding.decision?.file_under, (stem) => {
 			ctx.apply((model) => setFileUnder(model, finding.id, stem));
 		});
