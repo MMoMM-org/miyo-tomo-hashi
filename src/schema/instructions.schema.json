@@ -59,14 +59,14 @@
           {"$ref": "#/$defs/insert_under_marker"},
           {"$ref": "#/$defs/replace_section"},
           {"$ref": "#/$defs/add_relationship"},
-          {"$ref": "#/$defs/edit_note_text"},
-          {"$ref": "#/$defs/remove_up_link"},
           {"$ref": "#/$defs/update_tracker"},
           {"$ref": "#/$defs/update_log_entry"},
           {"$ref": "#/$defs/update_log_link"},
           {"$ref": "#/$defs/create_moc"},
           {"$ref": "#/$defs/delete_source"},
-          {"$ref": "#/$defs/skip"}
+          {"$ref": "#/$defs/skip"},
+          {"$ref": "#/$defs/edit_note_text"},
+          {"$ref": "#/$defs/remove_up_link"}
         ]
       }
     }
@@ -115,33 +115,6 @@
         "applied": {"$ref": "#/$defs/applied_field"}
       }
     },
-    "insert_under_marker": {
-      "type": "object",
-      "required": ["id", "action", "target_path", "anchor", "placement", "content"],
-      "additionalProperties": false,
-      "properties": {
-        "id": {"$ref": "#/$defs/action_id"},
-        "action": {"const": "insert_under_marker"},
-        "target_path": {"type": "string", "description": "Vault-relative full path of ANY existing note to modify (not a MOC stem). Hashi modifies only; Tomo guarantees the note exists before emitting."},
-        "anchor": {"$ref": "#/$defs/anchor", "description": "Marker locating the insertion point. type=heading matches a heading by text; type=callout matches a callout opening line; type=line matches a body line by content. Same $def and matching rules as link_to_moc."},
-        "placement": {"type": "string", "enum": ["inside", "before", "after"], "description": "Where to write relative to the matched marker. inside: for a callout marker, append as last line(s) of the callout body with '> ' prefix on each line; for a heading marker, append at the end of the heading's section (immediately above the next heading of same-or-higher level, or EOF), verbatim; for a line marker, inside is unsupported (action fails gracefully). before: insert verbatim immediately before the marker's first line. after: insert verbatim immediately after the marker's terminal line."},
-        "content": {"type": "string", "description": "Multi-line markdown block to insert. MAY contain embedded \\n — every line is written as a block (blank lines preserved). Written verbatim for before/after and heading-inside; each line gets a '> ' prefix only for callout-inside. Tomo composes the full block (dated header, bullets, etc.) — Hashi inserts as-is and never replaces existing content."},
-        "applied": {"$ref": "#/$defs/applied_field"}
-      }
-    },
-    "replace_section": {
-      "type": "object",
-      "required": ["id", "action", "target_path", "anchor", "content"],
-      "additionalProperties": false,
-      "properties": {
-        "id": {"$ref": "#/$defs/action_id"},
-        "action": {"const": "replace_section"},
-        "target_path": {"type": "string", "description": "Vault-relative full path of ANY existing note to modify (not a MOC stem). Hashi modifies only; Tomo guarantees the note exists before emitting."},
-        "anchor": {"$ref": "#/$defs/anchor", "description": "Marker locating the section to overwrite. Heading-scoped for v1: anchor.type must be heading; the section body (line after the heading down to the next heading of same-or-higher level, or EOF) is replaced and the heading line preserved. A non-heading anchor type fails gracefully."},
-        "content": {"type": "string", "description": "Multi-line markdown block that REPLACES the heading section body. MAY contain embedded \\n (blank lines preserved). Unlike insert_under_marker, replace_section overwrites — the prior section body is discarded. Anchor-not-found / missing target → graceful no-op, never a blind write."},
-        "applied": {"$ref": "#/$defs/applied_field"}
-      }
-    },
     "anchor": {
       "type": "object",
       "required": ["type", "value"],
@@ -163,33 +136,6 @@
         "marker": {"type": "string", "description": "Dataview inline-field marker that locates the line to replace, e.g. 'up::' or 'related::'. Hashi locates the first line whose stripped content (after optional '> ' callout prefix) starts with this marker."},
         "line": {"type": "string", "description": "Pre-formatted full line content to write, e.g. 'up:: [[Hobbies (MOC)]]' or 'related:: [[A]], [[B]]'. Hashi replaces the located marker line with this verbatim, preserving the line's leading '> ' prefix if the marker was inside a callout. Multi-link aggregation for related:: is done Tomo-side."},
         "source_note_title": {"type": ["string", "null"]},
-        "applied": {"$ref": "#/$defs/applied_field"}
-      }
-    },
-    "edit_note_text": {
-      "type": "object",
-      "required": ["id", "action", "path", "match", "replace"],
-      "additionalProperties": false,
-      "properties": {
-        "id": {"$ref": "#/$defs/action_id"},
-        "action": {"const": "edit_note_text"},
-        "path": {"type": "string", "description": "Vault-relative path of the note to edit (.md). Hashi modifies only; Tomo guarantees the note exists before emitting."},
-        "match": {"type": "string", "description": "LITERAL substring to find in the note BODY (never frontmatter). Not a regex or glob — matched byte-for-byte."},
-        "replace": {"type": "string", "description": "LITERAL replacement written verbatim; empty string deletes the match. A whole-line match deleted this way collapses its now-empty line; an inline match just loses the substring."},
-        "occurrence": {"type": "string", "enum": ["first", "all"], "default": "first", "description": "first (default) replaces the first literal occurrence; all replaces every occurrence. Counted on the literal string within the body."},
-        "applied": {"$ref": "#/$defs/applied_field"}
-      }
-    },
-    "remove_up_link": {
-      "type": "object",
-      "required": ["id", "action", "path", "link"],
-      "additionalProperties": false,
-      "description": "Remove ONE link from the note's up:: line (broken_up empty=remove, link-only semantics — user decision 2026-07-23). Hashi locates the up:: line with the same marker regex as add_relationship and removes the [[link]] occurrence on that line INCLUDING a dangling separator (e.g. 'up:: [[A]], [[X]]' → 'up:: [[A]]'). CRITICAL: the up:: FIELD is preserved — when the removed link was the only one, the line becomes an empty 'up::' ('up:: [[X]]' → 'up:: '), it is NOT deleted. up:: is a required structural field; an emptied up:: correctly resurfaces the note as unparented next scan. Skip-and-report on no-match (no up:: line, or link not on it) — no error, no partial write. Replaces the earlier whole-line edit_note_text construction, which silently no-opped on multi-link up:: lines.",
-      "properties": {
-        "id": {"$ref": "#/$defs/action_id"},
-        "action": {"const": "remove_up_link"},
-        "path": {"type": "string", "description": "Vault-relative path of the note whose up:: line is edited (.md)."},
-        "link": {"type": "string", "description": "Bare stem of the link to remove from the up:: line, e.g. 'Deleted MOC' (no [[ ]])."},
         "applied": {"$ref": "#/$defs/applied_field"}
       }
     },
@@ -287,6 +233,81 @@
         "action": {"const": "skip"},
         "source_path": {"type": ["string", "null"]},
         "reason": {"type": ["string", "null"]},
+        "applied": {"$ref": "#/$defs/applied_field"}
+      }
+    },
+    "insert_under_marker": {
+      "type": "object",
+      "required": ["id", "action", "target_path", "anchor", "placement", "content"],
+      "additionalProperties": false,
+      "description": "Insert a multi-line markdown block under a heading/anchor marker in an arbitrary vault note. Reuses the shared `anchor` $def; `placement` uses the same inline enum as `link_to_moc`. Modify-only — Tomo guarantees the target_path and anchor exist before emitting. Introduced by spec 024-tag-handler-framework (T1.1a handoff 2026-06-23).",
+      "properties": {
+        "id": {"$ref": "#/$defs/action_id"},
+        "action": {"const": "insert_under_marker"},
+        "target_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Vault-relative path to the target note (full path, not a MOC stem). Tomo guarantees the note exists before emitting this action."
+        },
+        "anchor": {
+          "$ref": "#/$defs/anchor",
+          "description": "Where in the target note to find the insertion point. type=heading matches heading text without '#' prefix (most common for this action); type=callout and type=line are also valid."
+        },
+        "placement": {
+          "type": "string",
+          "enum": ["inside", "before", "after"],
+          "description": "Where to insert content relative to the matched anchor. inside (heading) = beneath the matched heading, above the next same-or-higher-level heading. before/after keep standard semantics."
+        },
+        "content": {
+          "type": "string",
+          "description": "Multi-line markdown block to insert verbatim. May contain embedded newlines. Hashi inserts as-is without transformation."
+        },
+        "applied": {"$ref": "#/$defs/applied_field"}
+      }
+    },
+    "replace_section": {
+      "type": "object",
+      "required": ["id", "action", "target_path", "anchor", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/action_id"},
+        "action": {"const": "replace_section"},
+        "target_path": {"type": "string", "description": "Vault-relative full path of ANY existing note to modify (not a MOC stem). Hashi modifies only; Tomo guarantees the note exists before emitting."},
+        "anchor": {"$ref": "#/$defs/anchor", "description": "Marker locating the section to overwrite. Heading-scoped for v1: anchor.type must be heading; the section body (line after the heading down to the next heading of same-or-higher level, or EOF) is replaced and the heading line preserved. A non-heading anchor type fails gracefully."},
+        "content": {"type": "string", "description": "Multi-line markdown block that REPLACES the heading section body. MAY contain embedded \\n (blank lines preserved). Unlike insert_under_marker, replace_section overwrites — the prior section body is discarded. Anchor-not-found / missing target → graceful no-op, never a blind write."},
+        "applied": {"$ref": "#/$defs/applied_field"}
+      }
+    },
+    "edit_note_text": {
+      "type": "object",
+      "required": ["id", "action", "path", "match", "replace"],
+      "additionalProperties": false,
+      "description": "Edit note body by exact literal string match and replacement. One primitive covers dead-wikilink fix (replace='[[New]]'), dead-wikilink remove (replace=''), and broken up:: removal (whole-line match, replace=''). Hashi skips and reports on no-match — no error, no partial write. Broken-up REPOINT uses add_relationship (marker-located line replace), not this action. Introduced by spec 030-garden-audit ADR-3.",
+      "properties": {
+        "id": {"$ref": "#/$defs/action_id"},
+        "action": {"const": "edit_note_text"},
+        "path": {"type": "string", "description": "Vault-relative path of the note to edit (.md)."},
+        "match": {"type": "string", "description": "Exact literal text to locate in the note body, e.g. '[[Missing Note]]' or 'up:: [[Old MOC]]'."},
+        "replace": {"type": "string", "description": "Replacement text. Empty string removes the matched text (and the now-empty line when match covers a whole line)."},
+        "occurrence": {
+          "type": "string",
+          "enum": ["first", "all"],
+          "default": "first",
+          "description": "Which occurrence(s) to replace. 'first' (default) replaces only the first match; 'all' replaces every occurrence."
+        },
+        "applied": {"$ref": "#/$defs/applied_field"}
+      }
+    },
+    "remove_up_link": {
+      "type": "object",
+      "required": ["id", "action", "path", "link"],
+      "additionalProperties": false,
+      "description": "Remove ONE link from the note's up:: line (broken_up empty=remove, link-only semantics — user decision 2026-07-23). Hashi locates the up:: line with the same marker regex as add_relationship and removes the [[link]] occurrence on that line INCLUDING a dangling separator (e.g. 'up:: [[A]], [[X]]' → 'up:: [[A]]'). CRITICAL: the up:: FIELD is preserved — when the removed link was the only one, the line becomes an empty 'up::' ('up:: [[X]]' → 'up:: '), it is NOT deleted. up:: is a required structural field; an emptied up:: correctly resurfaces the note as unparented next scan. Skip-and-report on no-match (no up:: line, or link not on it) — no error, no partial write. Replaces the earlier whole-line edit_note_text construction, which silently no-opped on multi-link up:: lines.",
+      "properties": {
+        "id": {"$ref": "#/$defs/action_id"},
+        "action": {"const": "remove_up_link"},
+        "path": {"type": "string", "description": "Vault-relative path of the note whose up:: line is edited (.md)."},
+        "link": {"type": "string", "description": "Bare stem of the link to remove from the up:: line, e.g. 'Deleted MOC' (no [[ ]])."},
         "applied": {"$ref": "#/$defs/applied_field"}
       }
     }
