@@ -44,7 +44,7 @@ Delivers the interactive fixable cards and the strict read-only advisory cards.
   4. Validate: per-check card unit tests pass incl. the action-gating outcome.
   5. Success: each fixable finding is applyable/skippable/targetable `[ref: PRD/F3; SDD/EARS "WHEN the user toggles Apply/Skip"]`; broken_up never emits `action:null` `[ref: SDD/ADR-5]`.
 
-- [ ] **T5.3 Candidate chips (display-only, click-to-pick)** `[activity: frontend-ui]` `[parallel: true]`
+- [x] **T5.3 Candidate chips (display-only, click-to-pick)** `[activity: frontend-ui]` `[parallel: true]`
 
   1. Prime: Read `renderCandidateRow` (but note: garden-audit candidates are single-write into a field, not multi-select) `[ref: SDD/User Interface & UX]`.
   2. Test: `decision.candidates` (LLM) and, for orphans, `detail.candidate_mocs` (scan) render as distinct scored chip rows; clicking a chip writes its stem into the TargetControl (target field) and NEVER auto-applies; the chip matching the committed target is highlighted; chips are `<button>`s (keyboard-activatable).

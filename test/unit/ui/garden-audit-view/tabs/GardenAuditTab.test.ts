@@ -488,6 +488,247 @@ describe("GardenAuditTab.render — target note title is an openable link", () =
 	});
 });
 
+// ---------------------------------------------------------------------------
+// T5.3 — candidate chips (display-only, click-to-pick)
+// ---------------------------------------------------------------------------
+
+describe("GardenAuditTab.render — candidate chips (T5.3)", () => {
+	it("renders decision.candidates as a scored LLM chip row of buttons", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "",
+					candidates: [
+						{ stem: "020 Active MOC", score: 0.6 },
+						{ stem: "021 Fleeting MOC", score: 0.4 },
+					],
+				},
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const chips = container.querySelectorAll(".hashi-ga-chip");
+		expect(chips).toHaveLength(2);
+		expect(chips[0]?.tagName).toBe("BUTTON");
+		expect(chips[0]?.getAttribute("type")).toBe("button");
+		expect(chips[0]?.textContent).toContain("020 Active MOC");
+		expect(chips[0]?.textContent).toContain(".60");
+	});
+
+	it("renders detail.candidate_mocs as a distinct scan chip row for unparented/orphan", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F03",
+				check: "orphan",
+				tier: "structure",
+				target: { path: "Notes/Orphan.md", stem: "Orphan" },
+				detail: {
+					candidate_mocs: [{ target_moc: "020 Active MOC", score: 0.6 }],
+				},
+				decision: { selected: true, action: "link_to_moc", file_under: "" },
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const scanRow = container.querySelector(".hashi-ga-chip-row--scan");
+		expect(scanRow).not.toBeNull();
+		const chip = scanRow?.querySelector(".hashi-ga-chip");
+		expect(chip?.textContent).toContain("020 Active MOC");
+		expect(chip?.textContent).toContain(".60");
+	});
+
+	it("LLM row and scan row are distinct rows when both are present (unparented)", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F03",
+				check: "unparented",
+				tier: "structure",
+				target: { path: "Notes/Unparented.md", stem: "Unparented" },
+				detail: {
+					candidate_mocs: [{ target_moc: "020 Active MOC", score: 0.6 }],
+				},
+				decision: {
+					selected: true,
+					action: "link_to_moc",
+					file_under: "",
+					candidates: [{ stem: "021 Fleeting MOC", score: 0.8 }],
+				},
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.querySelectorAll(".hashi-ga-chip-row--llm")).toHaveLength(1);
+		expect(container.querySelectorAll(".hashi-ga-chip-row--scan")).toHaveLength(1);
+		expect(container.querySelectorAll(".hashi-ga-chip")).toHaveLength(2);
+	});
+
+	it("clicking an LLM chip writes its stem into the replace target field (dead_link) without flipping selected", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: {
+					selected: false,
+					action: null,
+					replace: "",
+					candidates: [{ stem: "020 Active MOC", score: 0.6 }],
+				},
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const chip = container.querySelector(".hashi-ga-chip") as HTMLButtonElement;
+		chip.click();
+
+		const decision = finding(getModel(), "F04").decision;
+		expect(decision?.replace).toBe("020 Active MOC");
+		expect(decision?.selected).toBe(false);
+	});
+
+	it("clicking a scan chip writes target_moc into file_under (orphan) via setFileUnder", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F03",
+				check: "orphan",
+				tier: "structure",
+				target: { path: "Notes/Orphan.md", stem: "Orphan" },
+				detail: {
+					candidate_mocs: [{ target_moc: "020 Active MOC", score: 0.6 }],
+				},
+				decision: { selected: true, action: "link_to_moc", file_under: "" },
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const chip = container.querySelector(".hashi-ga-chip") as HTMLButtonElement;
+		chip.click();
+
+		expect(finding(getModel(), "F03").decision?.file_under).toBe("020 Active MOC");
+	});
+
+	it("clicking a repoint (broken_up) chip dispatches setRepoint and derives action per ADR-5", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F02",
+				check: "broken_up",
+				target: { path: "Notes/Child.md", stem: "Child" },
+				detail: { up_target: "Deleted MOC" },
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					repoint: "",
+					candidates: [{ stem: "020 Active MOC", score: 0.6 }],
+				},
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const chip = container.querySelector(".hashi-ga-chip") as HTMLButtonElement;
+		chip.click();
+
+		const decision = finding(getModel(), "F02").decision;
+		expect(decision?.repoint).toBe("020 Active MOC");
+		expect(decision?.action).toBe("add_relationship");
+	});
+
+	it("highlights the chip whose stem matches the committed target with is-active + aria-pressed", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "021 Fleeting MOC",
+					candidates: [
+						{ stem: "020 Active MOC", score: 0.6 },
+						{ stem: "021 Fleeting MOC", score: 0.4 },
+					],
+				},
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const chips = Array.from(container.querySelectorAll(".hashi-ga-chip"));
+		const active = chips.find((c) => c.textContent?.includes("021 Fleeting MOC"));
+		const inactive = chips.find((c) => c.textContent?.includes("020 Active MOC"));
+		expect(active?.classList.contains("is-active")).toBe(true);
+		expect(active?.getAttribute("aria-pressed")).toBe("true");
+		expect(inactive?.classList.contains("is-active")).toBe(false);
+		expect(inactive?.getAttribute("aria-pressed")).toBe("false");
+	});
+
+	it("skips a malformed candidate_mocs entry (missing target_moc) without crashing", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F03",
+				check: "orphan",
+				tier: "structure",
+				target: { path: "Notes/Orphan.md", stem: "Orphan" },
+				detail: {
+					candidate_mocs: [
+						{ score: 0.6 },
+						{ target_moc: "020 Active MOC", score: 0.6 },
+						{ target_moc: "bad score", score: "not-a-number" },
+					],
+				},
+				decision: { selected: true, action: "link_to_moc", file_under: "" },
+			}),
+		]);
+		const container = document.createElement("div");
+
+		expect(() => tab.render(container, model, makeCtx())).not.toThrow();
+		const scanRow = container.querySelector(".hashi-ga-chip-row--scan");
+		expect(scanRow?.querySelectorAll(".hashi-ga-chip")).toHaveLength(1);
+	});
+
+	it("renders no chip row when candidates and candidate_mocs are both empty/absent", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: { selected: true, action: "edit_note_text", replace: "" },
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.querySelector(".hashi-ga-chip-row")).toBeNull();
+	});
+});
+
 describe("GardenAuditTab.render — advisory findings never get a fixable card", () => {
 	it("renders no Apply/Skip control for an advisory finding", () => {
 		const tab = new GardenAuditTab();

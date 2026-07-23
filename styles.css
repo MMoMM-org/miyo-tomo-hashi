@@ -709,6 +709,53 @@
 	white-space: nowrap;
 }
 
+/* ---- candidate chips (spec-005, T5.3) -------------------------------------
+   Display-only, click-to-pick — a chip commits its stem into the card's
+   target field (never `decision.selected`); the LLM row (`--llm`) and the
+   scan row (`--scan`) get distinct left-border accents so two rows on the
+   same card (unparented/orphan) read as separate sources at a glance. */
+.hashi-ga-chip-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+	padding-left: 8px;
+	border-left: 2px solid var(--se-border);
+}
+.hashi-ga-chip-row--llm {
+	border-left-color: var(--se-accent);
+}
+.hashi-ga-chip-row--scan {
+	border-left-color: var(--se-border-strong);
+}
+.hashi-ga-chip-row-label {
+	font-size: 10px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--se-text-faint);
+	font-weight: 600;
+	white-space: nowrap;
+}
+.hashi-ga-chip {
+	font-family: var(--se-mono);
+	font-size: 11.5px;
+	padding: 2px 8px;
+	border: 1px solid var(--se-border);
+	border-radius: 999px;
+	background: var(--se-bg-alt);
+	color: var(--se-text-muted);
+	cursor: pointer;
+}
+.hashi-ga-chip:hover {
+	border-color: var(--se-border-strong);
+	color: var(--se-text);
+}
+.hashi-ga-chip.is-active {
+	border-color: var(--se-accent);
+	background: var(--se-accent-soft);
+	color: var(--se-text);
+}
+
 /* ---- generic card -------------------------------------------------------- */
 .hashi-se-card {
 	border: 1px solid var(--se-border);

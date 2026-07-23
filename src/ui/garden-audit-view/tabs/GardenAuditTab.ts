@@ -25,6 +25,14 @@
  * to apply" note, since Save would have nothing to act on. This is NOT the
  * same as the view's zero-findings empty state (GardenAuditEditorView's
  * `count(model) === 0` gate) — there ARE findings here, just none fixable.
+ *
+ * T5.3: each fixable card also renders its scored candidate chips beneath the
+ * target field — `decision.candidates` (LLM, all four checks) and, for
+ * unparented/orphan, `detail.candidate_mocs` (scan) as a SEPARATE row. Chips
+ * are display-only advisory input (SDD "User Interface & UX" / Handoff Q2):
+ * a click writes the chip's stem into the SAME per-check transform the
+ * TargetControl uses (never `decision.selected`), so the pick becomes an
+ * explicit committed value rather than a second channel Tomo reads.
  */
 
 import type {
@@ -68,6 +76,47 @@ function detailNumber(detail: Record<string, unknown>, key: string): number | un
 /** The target note's display title — falls back to the full path if Tomo left `stem` null. */
 function targetTitle(finding: FindingWire): string {
 	return finding.target.stem ?? finding.target.path;
+}
+
+// ---------------------------------------------------------------------------
+// Candidate chips (T5.3) — one normalized {stem, score} shape for both the
+// LLM row (`decision.candidates`, already this shape) and the scan row
+// (`detail.candidate_mocs`, keyed `target_moc` on the wire — see
+// src/types/garden-audit.ts's file header on why `detail` stays a generic
+// Record rather than a per-check union).
+// ---------------------------------------------------------------------------
+
+interface ChipCandidate {
+	readonly stem: string;
+	readonly score: number;
+}
+
+/**
+ * Reads `detail.candidate_mocs` defensively: a missing field, a non-array
+ * value, or a malformed entry (wrong key name / wrong field type) is skipped
+ * rather than crashing the card — `detail` is opaque, per-check data Hashi
+ * doesn't control the shape of.
+ */
+function readScanCandidates(detail: Record<string, unknown>): ChipCandidate[] {
+	const raw = detail["candidate_mocs"];
+	if (!Array.isArray(raw)) return [];
+
+	const candidates: ChipCandidate[] = [];
+	for (const entry of raw) {
+		if (typeof entry !== "object" || entry === null) continue;
+		const targetMoc = (entry as Record<string, unknown>)["target_moc"];
+		const score = (entry as Record<string, unknown>)["score"];
+		if (typeof targetMoc === "string" && typeof score === "number") {
+			candidates.push({ stem: targetMoc, score });
+		}
+	}
+	return candidates;
+}
+
+/** Mockup format `⟨stem .60⟩` — a leading "0." on the score reads as noise at chip size. */
+function formatScore(score: number): string {
+	const fixed = score.toFixed(2);
+	return fixed.startsWith("0.") ? fixed.slice(1) : fixed;
 }
 
 export class GardenAuditTab implements GardenAuditTabSpec {
@@ -196,6 +245,65 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		});
 	}
 
+	/**
+	 * Renders both candidate chip rows beneath a card's target field —
+	 * `decision.candidates` (LLM, all checks) and, when present, the scan row
+	 * from `detail.candidate_mocs` (unparented/orphan only in practice, but
+	 * driven by whatever `detail` actually carries rather than gated by
+	 * `finding.check`). Absent/empty sources render no row at all (T5.4 owns
+	 * the pending/none hint states, not this method).
+	 */
+	private renderCandidateChips(
+		card: HTMLElement,
+		finding: FindingWire,
+		committedValue: string | undefined,
+		onPick: (stem: string) => void,
+	): void {
+		const llmCandidates = finding.decision?.candidates ?? [];
+		if (llmCandidates.length > 0) {
+			this.renderChipRow(card, "hashi-ga-chip-row--llm", "Suggested", llmCandidates, committedValue, onPick);
+		}
+
+		const scanCandidates = readScanCandidates(finding.detail);
+		if (scanCandidates.length > 0) {
+			this.renderChipRow(
+				card,
+				"hashi-ga-chip-row--scan",
+				"Scan candidates",
+				scanCandidates,
+				committedValue,
+				onPick,
+			);
+		}
+	}
+
+	/** One scored chip row — `<button>`s so chips are keyboard-activatable. */
+	private renderChipRow(
+		card: HTMLElement,
+		rowClass: string,
+		label: string,
+		candidates: readonly ChipCandidate[],
+		committedValue: string | undefined,
+		onPick: (stem: string) => void,
+	): void {
+		const row = card.createDiv({ cls: ["hashi-ga-chip-row", rowClass] });
+		row.createSpan({ cls: "hashi-ga-chip-row-label", text: label });
+
+		for (const candidate of candidates) {
+			const isActive = candidate.stem === committedValue;
+			const chip = row.createEl("button", {
+				cls: isActive ? ["hashi-ga-chip", "is-active"] : ["hashi-ga-chip"],
+				text: `⟨${candidate.stem} ${formatScore(candidate.score)}⟩`,
+				attr: { type: "button", "aria-pressed": String(isActive) },
+			});
+			// Candidates are display-only advisory input (Handoff Q2): a click
+			// writes the stem via the SAME per-check transform the
+			// TargetControl uses, becoming an explicit value — it NEVER
+			// touches `decision.selected`.
+			chip.addEventListener("click", () => onPick(candidate.stem));
+		}
+	}
+
 	private renderTargetField(
 		card: HTMLElement,
 		finding: FindingWire,
@@ -234,6 +342,9 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 				ctx.apply((model) => setRepoint(model, finding.id, value));
 			},
 		);
+		this.renderCandidateChips(card, finding, finding.decision?.repoint, (stem) => {
+			ctx.apply((model) => setRepoint(model, finding.id, stem));
+		});
 	}
 
 	// -- dead_link: replace ------------------------------------------------
@@ -260,6 +371,9 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 				ctx.apply((model) => setReplace(model, finding.id, value));
 			},
 		);
+		this.renderCandidateChips(card, finding, finding.decision?.replace, (stem) => {
+			ctx.apply((model) => setReplace(model, finding.id, stem));
+		});
 	}
 
 	// -- orphan/unparented: file_under --------------------------------------
@@ -282,5 +396,8 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 				ctx.apply((model) => setFileUnder(model, finding.id, value));
 			},
 		);
+		this.renderCandidateChips(card, finding, finding.decision?.file_under, (stem) => {
+			ctx.apply((model) => setFileUnder(model, finding.id, stem));
+		});
 	}
 }
