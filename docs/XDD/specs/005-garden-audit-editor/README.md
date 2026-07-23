@@ -30,6 +30,7 @@
 | 2026-07-22 | **PRD review adds Feature 9 + dead-link context (OQ5)** | Note references open beside the editor on click + hover-preview; dead_link cards show surrounding body context inline (derived locally, off-main-thread). |
 | 2026-07-22 | **OQ1 RESOLVED → parallel `GardenAuditEditorView`** (user decision) | Own view + `VIEW_TYPE_GARDEN_AUDIT_EDITOR`, reusing tabContract/pickers/Store/ConfirmModal/`hashi-se-*` CSS + the adapter pattern; one "Open Tomo editor" command dispatches by suffix. Avoids forcing generics through the concrete suggestions view. |
 | 2026-07-22 | **SDD complete: ADR-1..7 all confirmed** (user) | ADR-2 mirror adapter pattern; ADR-3 composite target widget; ADR-4 local async dead-link context; ADR-5 editor sets `decision.action` for broken_up (+ **pending Tomo confirm handoff**); ADR-6 one command dispatches by suffix + Hashi does not write the `.md` in v1; ADR-7 vendor schema + Ajv validator (re-sync discipline). |
+| 2026-07-23 | Target edit on a skipped finding auto-selects Apply (user) | Textbox/picker commits through TargetControl chain setSelected(true) when the target transform changed the model; chips stay display-only per F4. |
 
 ## Follow-ups (non-blocking)
 

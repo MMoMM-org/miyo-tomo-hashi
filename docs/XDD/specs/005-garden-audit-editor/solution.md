@@ -516,7 +516,9 @@ stateDiagram-v2
 - **Apply/Skip** = `decision.selected` (segmented control reused; `aria-pressed` on both).
 - **Target control (ADR-3):** text input (bare stem or `[[wikilink]]`) + picker button; accepts
   free-typed non-existent targets; explicitly-empty is a first-class "(unlink)"/"(remove)"
-  state (label per check type). An explicit value always beats candidates.
+  state (label per check type). An explicit value always beats candidates. Committing a
+  target change on a skipped finding flips it to Apply (target intent implies apply intent;
+  user decision 2026-07-23) — candidate-chip picks remain excluded (never auto-applied).
 - **Candidates:** `decision.candidates` (LLM) and, for orphans, `detail.candidate_mocs` (scan)
   render as distinct scored chip rows; click writes the stem into the target field (never
   auto-applied). Chips are `<button>`s (keyboard-activatable).

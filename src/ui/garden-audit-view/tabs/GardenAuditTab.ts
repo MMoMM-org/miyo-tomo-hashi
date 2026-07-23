@@ -51,6 +51,23 @@
  * `transforms.setSuggestRequested`; the hint precedence between the editor's
  * own `suggest_requested` and Tomo's `suggested` ran-marker lives in
  * `SuggestControl.ts`, not here.
+ *
+ * 2026-07-23 (user decision): committing a target change on a SKIPPED finding
+ * (`decision.selected === false`) through `TargetControl` — a free-typed
+ * commit (change/Enter) or a picker pick, both of which fire the SAME
+ * `onChange` — flips it to Apply in the same dispatch (target intent implies
+ * apply intent). `renderTargetField` is the single site this is wired: it
+ * chains `setSelected(…, true)` onto the per-check setter's result, but ONLY
+ * when the setter actually changed the model (`next !== model` — a same-value
+ * re-commit is a no-op and must not auto-apply; an explicit-empty commit that
+ * clears a previously non-empty target DOES change the model, so it also
+ * flips to Apply). `setSelected` on an already-`true` decision is itself a
+ * no-op (`transforms.ts`), so an already-Apply finding is unaffected. Applies
+ * uniformly to all three target fields (repoint/replace/file_under).
+ * Candidate CHIPS are explicitly excluded from this rule (PRD F4 / SDD
+ * "Q2 precedence" — candidates are display-only and never auto-applied): the
+ * chip click handlers in `renderCandidateChips`/`renderChipRow` dispatch the
+ * per-check setter directly, never through `renderTargetField`'s `onChange`.
  */
 
 import type {
@@ -355,17 +372,39 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		}
 	}
 
+	/**
+	 * Renders the shared `TargetControl` widget and wires its `onChange` to
+	 * `setTarget` (the finding's per-check setter — `setRepoint`/`setReplace`/
+	 * `setFileUnder`). This is the SINGLE site that implements the 2026-07-23
+	 * "target edit on a Skip auto-selects Apply" rule (see file-header note):
+	 * a commit that actually changes the model (`next !== model`, the
+	 * transforms' own no-op-on-same-ref idiom) also flips `selected` to true.
+	 * Candidate chips do NOT go through this method's `onChange` — they call
+	 * `setTarget` directly from their own click handlers — which is how they
+	 * stay excluded from auto-apply.
+	 */
 	private renderTargetField(
 		card: HTMLElement,
 		ctx: GardenAuditTabContext,
 		label: string,
 		check: FindingCheck,
+		findingId: string,
 		value: string | undefined,
-		onChange: (value: string) => void,
+		setTarget: (model: GardenAuditModel, findingId: string, value: string) => GardenAuditModel,
 	): void {
 		const field = card.createDiv({ cls: "hashi-ga-target-field" });
 		field.createEl("label", { text: label });
-		renderTargetControl(field, { app: ctx.app, check, value, onChange });
+		renderTargetControl(field, {
+			app: ctx.app,
+			check,
+			value,
+			onChange: (next) => {
+				ctx.apply((model) => {
+					const updated = setTarget(model, findingId, next);
+					return updated === model ? model : setSelected(updated, findingId, true);
+				});
+			},
+		});
 	}
 
 	/**
@@ -408,10 +447,9 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 			ctx,
 			"Repoint to",
 			"broken_up",
+			finding.id,
 			finding.decision?.repoint,
-			(value) => {
-				ctx.apply((model) => setRepoint(model, finding.id, value));
-			},
+			setRepoint,
 		);
 		this.renderCandidateChips(card, finding, finding.decision?.repoint, (stem) => {
 			ctx.apply((model) => setRepoint(model, finding.id, stem));
@@ -443,10 +481,9 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 			ctx,
 			"Replace with",
 			"dead_link",
+			finding.id,
 			finding.decision?.replace,
-			(value) => {
-				ctx.apply((model) => setReplace(model, finding.id, value));
-			},
+			setReplace,
 		);
 		this.renderCandidateChips(card, finding, finding.decision?.replace, (stem) => {
 			ctx.apply((model) => setReplace(model, finding.id, stem));
@@ -468,10 +505,9 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 			ctx,
 			"File under",
 			finding.check,
+			finding.id,
 			finding.decision?.file_under,
-			(value) => {
-				ctx.apply((model) => setFileUnder(model, finding.id, value));
-			},
+			setFileUnder,
 		);
 		this.renderCandidateChips(card, finding, finding.decision?.file_under, (stem) => {
 			ctx.apply((model) => setFileUnder(model, finding.id, stem));

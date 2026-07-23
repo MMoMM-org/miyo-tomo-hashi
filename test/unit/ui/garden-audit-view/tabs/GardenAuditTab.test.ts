@@ -784,6 +784,220 @@ describe("GardenAuditTab.render — candidate chips (T5.3)", () => {
 	});
 });
 
+// ---------------------------------------------------------------------------
+// Target edit on a skipped finding auto-selects Apply (2026-07-23 user
+// decision) — a committed target change (textbox commit or picker pick,
+// which share the SAME `onChange`) flips a Skip finding to Apply when the
+// per-check transform actually changed the model. Candidate chips are
+// EXCLUDED (covered above in T5.3 — chips dispatch their transforms
+// directly, never through this onChange).
+// ---------------------------------------------------------------------------
+
+describe("GardenAuditTab.render — target edit on a skipped finding auto-selects Apply", () => {
+	it("broken_up: skip + commit a new repoint target flips selected to true (ADR-5 action too)", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F02",
+				check: "broken_up",
+				tier: "integrity",
+				target: { path: "Notes/Child.md", stem: "Child" },
+				detail: { up_target: "Deleted MOC" },
+				decision: { selected: false, action: null, repoint: "" },
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const input = container.querySelector(".hashi-ga-target-inp") as HTMLInputElement;
+		input.value = "New Target";
+		input.dispatchEvent(new Event("change"));
+
+		const decision = finding(getModel(), "F02").decision;
+		expect(decision?.repoint).toBe("New Target");
+		expect(decision?.action).toBe("add_relationship");
+		expect(decision?.selected).toBe(true);
+	});
+
+	it("dead_link: skip + commit a new replace target flips selected to true", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: { selected: false, action: null, replace: "" },
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const input = container.querySelector(".hashi-ga-target-inp") as HTMLInputElement;
+		input.value = "New Target";
+		input.dispatchEvent(new Event("change"));
+
+		const decision = finding(getModel(), "F04").decision;
+		expect(decision?.replace).toBe("New Target");
+		expect(decision?.selected).toBe(true);
+	});
+
+	it.each(["orphan", "unparented"] as const)(
+		"%s: skip + commit a new file_under target flips selected to true",
+		(check) => {
+			const tab = new GardenAuditTab();
+			const model = getMockModel([
+				getMockFinding({
+					id: "F03",
+					check,
+					tier: "structure",
+					target: { path: "Notes/Orphan.md", stem: "Orphan" },
+					detail: {},
+					decision: { selected: false, action: null, file_under: "" },
+				}),
+			]);
+			const { ctx, getModel } = makeRecordingCtx(model);
+			const container = document.createElement("div");
+
+			tab.render(container, model, ctx);
+			const input = container.querySelector(".hashi-ga-target-inp") as HTMLInputElement;
+			input.value = "New Target";
+			input.dispatchEvent(new Event("change"));
+
+			const decision = finding(getModel(), "F03").decision;
+			expect(decision?.file_under).toBe("New Target");
+			expect(decision?.selected).toBe(true);
+		},
+	);
+
+	// The picker button's "choose" callback (TargetControl.ts) calls the SAME
+	// `onChange` a textbox commit does (see TargetControl.test.ts's
+	// picker-button describe block for the picker's own wiring) — so driving
+	// the shared onChange via the textbox exercises the identical dispatch
+	// path a picker pick would take. No separate picker-path test needed here.
+	it("a committed change dispatched via the shared onChange (picker-equivalent path) flips selected", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: { selected: false, action: null, replace: "" },
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const input = container.querySelector(".hashi-ga-target-inp") as HTMLInputElement;
+		// Enter-key commit — the second of TargetControl's two commit paths,
+		// alongside the picker's onChoose callback; both call the identical
+		// onChange the change-event path above already exercises.
+		input.value = "Picked Target";
+		input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+
+		const decision = finding(getModel(), "F04").decision;
+		expect(decision?.replace).toBe("Picked Target");
+		expect(decision?.selected).toBe(true);
+	});
+
+	it("chip click on a skipped finding does NOT flip selected (candidates stay excluded)", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F03",
+				check: "orphan",
+				tier: "structure",
+				target: { path: "Notes/Orphan.md", stem: "Orphan" },
+				detail: {
+					candidate_mocs: [{ target_moc: "020 Active MOC", score: 0.6 }],
+				},
+				decision: { selected: false, action: null, file_under: "" },
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const chip = container.querySelector(".hashi-ga-chip") as HTMLButtonElement;
+		chip.click();
+
+		const decision = finding(getModel(), "F03").decision;
+		expect(decision?.file_under).toBe("020 Active MOC");
+		expect(decision?.selected).toBe(false);
+	});
+
+	it("already-Apply: a target edit leaves selected true (trivial no-op via setSelected)", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: { selected: true, action: "edit_note_text", replace: "" },
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const input = container.querySelector(".hashi-ga-target-inp") as HTMLInputElement;
+		input.value = "New Target";
+		input.dispatchEvent(new Event("change"));
+
+		const decision = finding(getModel(), "F04").decision;
+		expect(decision?.replace).toBe("New Target");
+		expect(decision?.selected).toBe(true);
+	});
+
+	it("a NO-OP commit (re-committing the current value) does NOT flip selected", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: { selected: false, action: null, replace: "Unchanged Target" },
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const input = container.querySelector(".hashi-ga-target-inp") as HTMLInputElement;
+		input.value = "Unchanged Target";
+		input.dispatchEvent(new Event("change"));
+
+		const decision = finding(getModel(), "F04").decision;
+		expect(decision?.replace).toBe("Unchanged Target");
+		expect(decision?.selected).toBe(false);
+	});
+
+	it("explicit-empty commit (clearing a non-empty target) flips selected to true", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: { selected: false, action: null, replace: "Previous Target" },
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const input = container.querySelector(".hashi-ga-target-inp") as HTMLInputElement;
+		input.value = "";
+		input.dispatchEvent(new Event("change"));
+
+		const decision = finding(getModel(), "F04").decision;
+		expect(decision?.replace).toBe("");
+		expect(decision?.selected).toBe(true);
+	});
+});
+
 describe("GardenAuditTab.render — advisory findings never get a fixable card", () => {
 	it("renders no Apply/Skip control for an advisory finding", () => {
 		const tab = new GardenAuditTab();
