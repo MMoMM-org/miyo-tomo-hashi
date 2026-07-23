@@ -460,6 +460,32 @@ describe("GardenAuditTab.render — target note title is an openable link", () =
 		link?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 		expect(ctx.app.workspace.openLinkText).toHaveBeenCalledWith("Child", "", false);
 	});
+
+	it("renders the finding's target path as a clickable link when stem is null", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F02",
+				check: "broken_up",
+				target: { path: "Notes/Child.md", stem: null },
+				detail: { up_target: "Deleted MOC" },
+				decision: { selected: false, action: null, repoint: "" },
+			}),
+		]);
+		const ctx = makeCtx();
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const link = container.querySelector(".hashi-se-wlink");
+
+		expect(link?.textContent).toBe("Notes/Child.md");
+		link?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		expect(ctx.app.workspace.openLinkText).toHaveBeenCalledWith(
+			"Notes/Child.md",
+			"",
+			false,
+		);
+	});
 });
 
 describe("GardenAuditTab.render — advisory findings never get a fixable card", () => {
