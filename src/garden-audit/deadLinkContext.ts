@@ -15,13 +15,15 @@
  * is searched via `String.includes`, which never interprets them.
  *
  * Cache: `createDeadLinkContextExtractor` returns one extractor instance
- * meant to live for the view's lifetime (constructed once by
- * `GardenAuditEditorView`, not per-render), keyed per note PATH — the cache
+ * meant to live for a single DOC LOAD (rebuilt in `GardenAuditEditorView`'s
+ * `loadAndRender()` on every open/retarget/Revert, not per-render within one
+ * load — see that file's class-doc item 4), keyed per note PATH — the cache
  * stores the `cachedRead` PROMISE (not the final per-`deadTarget` result), so
  * concurrent/repeated `extract()` calls for the same note — even for
  * different dead targets within that note — coalesce into a single vault
  * read. A rejected read (missing/moved note) is cached too, as `null`, so a
- * repeatedly-broken link doesn't re-attempt the read on every card render.
+ * repeatedly-broken link doesn't re-attempt the read on every card render
+ * within the same doc load (see `readCached` below for the retry-point note).
  */
 
 import type { VaultFS } from "../vault/VaultFS.js";
@@ -83,6 +85,11 @@ export function createDeadLinkContextExtractor(fs: VaultFS): DeadLinkContextExtr
 		const cached = contentCache.get(notePath);
 		if (cached !== undefined) return cached;
 
+		// A failed read is negative-cached (as `null`) for this extractor
+		// instance's lifetime — no retry-on-next-render. Since the view now
+		// recreates the extractor per doc-load (GardenAuditEditorView T6.1),
+		// that lifetime is "until the next doc load / Revert", which is the
+		// acceptable retry point.
 		const pending = fs.cachedRead(notePath).catch(() => null);
 		contentCache.set(notePath, pending);
 		return pending;

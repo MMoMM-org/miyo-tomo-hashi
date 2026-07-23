@@ -410,6 +410,61 @@ describe("GardenAuditEditorView — Revert affordance (T4.3)", () => {
 	});
 });
 
+describe("GardenAuditEditorView — dead-link context cache reset per doc-load (T6.1 review)", () => {
+	// DEFAULT_SEED's F01 (dead_link) targets this note/dead-target pair —
+	// see test/fixtures/garden-audit/current-wire.json.
+	const NOTE_PATH = "Notes/Src.md";
+	const OTHER_DOC_PATH = "100 Inbox/run-editor-002_garden-audit.json";
+
+	function contextText(view: GardenAuditEditorView): string | null {
+		return view.contentEl.querySelector(".hashi-ga-context")?.textContent ?? null;
+	}
+
+	it("re-reads the affected note on retarget instead of serving a stale per-note cache", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(NOTE_PATH, "# Heading\nSee [[Missing Note]] for more.\n");
+		const cachedReadSpy = vi.spyOn(vault, "cachedRead");
+
+		// Real GardenAuditTab (not DIRTYING_TAB) — only it wires up
+		// ctx.deadLinkContext via renderDeadLinkContext for dead_link cards.
+		const leaf = new WorkspaceLeaf();
+		const adapter = new FakeGardenAuditDoc();
+		const view = new GardenAuditEditorView(leaf, { adapter, docPath: DOC_PATH, vault });
+		view.app = new App();
+		// renderDeadLinkContext's stale-completion guard checks
+		// `placeholder.isConnected` — the mock's contentEl starts detached, so
+		// it must be attached for the async resolution to actually land
+		// (mirrors GardenAuditTab.test.ts's document.body.appendChild pattern).
+		document.body.appendChild(view.contentEl);
+
+		await view.onOpen();
+		await flushAsyncHandler();
+
+		expect(cachedReadSpy).toHaveBeenCalledTimes(1);
+		expect(contextText(view)).toContain("See [[Missing Note]] for more.");
+
+		// The note's content changes on disk after the first render (e.g. the
+		// user edited it in the main workspace).
+		await vault.process(NOTE_PATH, () => "# Heading\nUpdated: [[Missing Note]] appears again.\n");
+
+		// Retarget (setState to a different docPath) is the per-doc-load
+		// boundary under test — precedent at the "setState retarget" describe
+		// block above. FakeGardenAuditDoc ignores docPath and re-serves the
+		// same seed, so F01/NOTE_PATH/"Missing Note" recurs unchanged on the
+		// new load; only the note's on-disk content differs.
+		await view.setState({ docPath: OTHER_DOC_PATH }, { history: false });
+		await flushAsyncHandler();
+
+		// A fresh read must happen — a cache surviving the retarget would
+		// leave this at 1 and serve the OLD content below.
+		expect(cachedReadSpy).toHaveBeenCalledTimes(2);
+		expect(contextText(view)).toContain("Updated: [[Missing Note]] appears again.");
+		expect(contextText(view)).not.toContain("See [[Missing Note]] for more.");
+
+		document.body.removeChild(view.contentEl);
+	});
+});
+
 describe("GardenAuditEditorView — Save/Revert race safety (T4.3 concurrent-change guard)", () => {
 	it("an edit that lands while a save is in flight is NOT silently marked clean", async () => {
 		let resolveSave: () => void = () => {};

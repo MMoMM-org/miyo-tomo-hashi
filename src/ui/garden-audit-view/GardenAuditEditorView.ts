@@ -31,11 +31,16 @@
  *    this.store.get() === savedModel` post-await — an edit or a Revert
  *    landing mid-flight is never silently marked clean. A `saving` flag
  *    additionally disables Save/Revert for the whole in-flight window.
- * 4. (T6.1) The dead-link context extractor is constructed ONCE per view
- *    instance (in the constructor, from `deps.vault`), never per-render —
- *    its per-note-path cache (`deadLinkContext.ts`) needs to survive across
- *    `render()` calls, or every re-render would re-read every affected note.
- *    Only its bound `extract` method reaches the tab, via
+ * 4. (T6.1, reset per-load — 2026-07 review fix) The dead-link context
+ *    extractor's cache lifetime is ONE DOC LOAD: `loadAndRender()` — the
+ *    per-doc-load boundary that already tears down/rebuilds the subscription,
+ *    store, and DOM refs on every retarget (`setState` to a different
+ *    docPath) and on Revert — (re)constructs a fresh extractor there too, so
+ *    a retargeted or reverted view never serves stale/cross-document context
+ *    from a note it read under the PREVIOUS doc. Within one load, the cache
+ *    still survives across `render()` calls, so repeated re-renders of the
+ *    same doc don't re-read every affected note. Only the extractor's bound
+ *    `extract` method reaches the tab, via
  *    `GardenAuditTabContext.deadLinkContext`.
  */
 
@@ -72,10 +77,11 @@ export interface GardenAuditEditorViewDeps {
 	/** Test seam — defaults to a real `GardenAuditTab`; production never overrides it. */
 	readonly tab?: GardenAuditTabSpec;
 	/**
-	 * Raw `VaultFS` — used ONLY to construct this view's per-instance
-	 * `DeadLinkContextExtractor` (T6.1). `adapter` above stays the sole
-	 * wire-aware collaborator; this is the one deliberate exception, since
-	 * context extraction reads note BODIES directly rather than the wire.
+	 * Raw `VaultFS` — used ONLY to construct a fresh
+	 * `DeadLinkContextExtractor` on every doc-load (T6.1). `adapter` above
+	 * stays the sole wire-aware collaborator; this is the one deliberate
+	 * exception, since context extraction reads note BODIES directly rather
+	 * than the wire.
 	 */
 	readonly vault: VaultFS;
 }
@@ -89,9 +95,11 @@ function extractDocPath(state: unknown): string | null {
 
 export class GardenAuditEditorView extends ItemView {
 	private readonly tab: GardenAuditTabSpec;
-	// Constructed once per view instance (T6.1) — see class doc comment
-	// item 4 for why this must not be rebuilt per-render.
-	private readonly deadLinkContext: GardenAuditTabContext["deadLinkContext"];
+	// Rebuilt once per doc-load, in loadAndRender() (T6.1) — see class doc
+	// comment item 4. The constructor-time value below is a cheap placeholder
+	// that's always replaced before onOpen()'s first render; it's never
+	// actually reachable from a rendered tab.
+	private deadLinkContext: GardenAuditTabContext["deadLinkContext"];
 	private store: Store<GardenAuditModel> | null = null;
 	private unsubscribe: (() => void) | null = null;
 	private docPath: string;
@@ -118,8 +126,10 @@ export class GardenAuditEditorView extends ItemView {
 		super(leaf);
 		this.tab = deps.tab ?? new GardenAuditTab();
 		this.docPath = deps.docPath ?? "";
-		const extractor = createDeadLinkContextExtractor(deps.vault);
-		this.deadLinkContext = (notePath, deadTarget) => extractor.extract(notePath, deadTarget);
+		// Placeholder only — loadAndRender() replaces this with a fresh
+		// extractor before the first render reaches the tab (T6.1).
+		this.deadLinkContext = () =>
+			Promise.resolve({ status: "note-not-found" as const });
 	}
 
 	override getViewType(): string {
@@ -166,6 +176,11 @@ export class GardenAuditEditorView extends ItemView {
 		this.store = null;
 		this.leafHeadEl = null;
 		this.bodyEl = null;
+		// Fresh extractor per doc-load (T6.1 review fix) — its per-note-path
+		// cache must not survive a retarget/Revert onto a different (or the
+		// same, but possibly changed-on-disk) document.
+		const extractor = createDeadLinkContextExtractor(this.deps.vault);
+		this.deadLinkContext = (notePath, deadTarget) => extractor.extract(notePath, deadTarget);
 
 		const root = this.contentEl;
 		root.empty();
