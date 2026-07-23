@@ -1,5 +1,19 @@
 # Context Memory
 
+## Garden-Audit Editor Phases 5+6 — COMPLETE (2026-07-23), Phase 7 next
+
+Phase 6 (dead-link context + note navigation) shipped same day: async cached extractor
+(`deadLinkContext.ts`, per-doc-load cache after review fix), card wiring with
+stale-render guard (`DeadLinkContextView.ts`), side-split + hover-preview navigation
+(`noteNavigation.ts` — additive sibling, spec-004 `openNote.ts` untouched),
+`registerHoverLinkSource` wired in onload (boundary-validation catch — the mock can't
+see Page Preview registration). 1850 tests / build / lint green at `052af85`.
+**Phase 7 (final): integration, styles & polish.** Carried-in polish list: extract
+`renderCandidateChips`/`renderChipRow` from `GardenAuditTab.ts` (~535 LOC); code-fence
+heading edge in deadLinkContext; `deadTarget === undefined` branch test; optional
+hover-preview for the suggestions editor (display name "Tomo editor" already umbrella);
+lock the registerHoverLinkSource display string in the main.integration test.
+
 ## Garden-Audit Editor Phase 5 — COMPLETE (2026-07-23)
 
 **Phase 5 shipped same-day after the Tomo round-trip resolved.** Tomo adopted Hashi's

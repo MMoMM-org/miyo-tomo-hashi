@@ -1,6 +1,6 @@
 ---
 title: "Phase 6: Dead-link context & note navigation"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 6
 ---
@@ -43,6 +43,7 @@ Adds the inline dead-link context and the open-beside / hover-preview note navig
   4. Validate: navigation unit tests pass (open-beside, hover, missing-note).
   5. Success: click opens beside, hover previews `[ref: PRD/F9; SDD/EARS "WHEN the user clicks a finding's note reference"]`.
 
-- [ ] **T6.3 Phase validation** `[activity: validate]`
+- [x] **T6.3 Phase validation** `[activity: validate]`
 
   - Run all Phase 6 tests; `npm run build` + `npm run lint` clean. Verify context + navigation work and degrade gracefully.
+  - ✅ 2026-07-23: 1850/1850 tests, build + lint clean at `052af85`. Boundary drift validation: the one MEDIUM finding (hover-link source never registered) fixed in `25ae89f` (`registerHoverLinkSource` in onload, red-proven) plus heading-regex tightening, zero-occurrence hint, stale-comment + SDD-map hygiene. Degrade paths (note-not-found, link-no-longer-present, missing hover on dead targets) all test-pinned.
