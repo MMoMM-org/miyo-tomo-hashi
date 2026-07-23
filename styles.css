@@ -778,6 +778,18 @@
 	text-transform: none;
 	letter-spacing: 0;
 }
+
+/* ---- note-reference navigation (spec-005, T6.2) ---------------------------
+   A finding's target note whose link no longer resolves (moved/deleted since
+   the audit ran) degrades to plain text — no accent color, no pointer, no
+   hover underline (contrast .hashi-se-wlink above). */
+.hashi-ga-note-missing {
+	color: var(--se-text);
+}
+.hashi-ga-note-missing-tag {
+	color: var(--se-text-faint);
+	font-size: 10px;
+}
 .hashi-ga-advisory-dupes {
 	display: flex;
 	flex-direction: column;

@@ -465,7 +465,7 @@ describe("GardenAuditTab.render — target note title is an openable link", () =
 
 		expect(link?.textContent).toBe("Child");
 		link?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-		expect(ctx.app.workspace.openLinkText).toHaveBeenCalledWith("Child", "", false);
+		expect(ctx.app.workspace.openLinkText).toHaveBeenCalledWith("Child", "", "split");
 	});
 
 	it("renders the finding's target path as a clickable link when stem is null", () => {
@@ -490,8 +490,56 @@ describe("GardenAuditTab.render — target note title is an openable link", () =
 		expect(ctx.app.workspace.openLinkText).toHaveBeenCalledWith(
 			"Notes/Child.md",
 			"",
-			false,
+			"split",
 		);
+	});
+
+	it("hovering the note link fires hover-link so Obsidian's page preview is available", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F02",
+				check: "broken_up",
+				target: { path: "Notes/Child.md", stem: "Child" },
+				detail: { up_target: "Deleted MOC" },
+				decision: { selected: false, action: null, repoint: "" },
+			}),
+		]);
+		const ctx = makeCtx();
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const link = container.querySelector(".hashi-se-wlink")!;
+		link.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+
+		expect(ctx.app.workspace.trigger).toHaveBeenCalledWith(
+			"hover-link",
+			expect.objectContaining({ linktext: "Child", targetEl: link }),
+		);
+	});
+
+	it("a target note that no longer resolves renders plain text + 'note not found', not a link", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F02",
+				check: "broken_up",
+				target: { path: "Notes/Child.md", stem: "Child" },
+				detail: { up_target: "Deleted MOC" },
+				decision: { selected: false, action: null, repoint: "" },
+			}),
+		]);
+		const ctx = makeCtx();
+		vi.mocked(ctx.app.metadataCache.getFirstLinkpathDest).mockReturnValue(null);
+		const container = document.createElement("div");
+
+		expect(() => tab.render(container, model, ctx)).not.toThrow();
+		expect(container.querySelector(".hashi-se-wlink")).toBeNull();
+		const missing = container.querySelector(".hashi-ga-note-missing");
+		expect(missing?.textContent).toBe("Child (note not found)");
+
+		missing?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		expect(ctx.app.workspace.openLinkText).not.toHaveBeenCalled();
 	});
 });
 
@@ -1128,7 +1176,7 @@ describe("GardenAuditTab.render — advisory read-only cards (T5.5)", () => {
 		}
 
 		expect(applyCalls).toBe(0);
-		expect(app.workspace.openLinkText).toHaveBeenCalledWith("Old", "", false);
+		expect(app.workspace.openLinkText).toHaveBeenCalledWith("Old", "", "split");
 	});
 
 	it("stale_moc degrades gracefully when mtime is missing/malformed — no crash", () => {

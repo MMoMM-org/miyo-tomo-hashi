@@ -15,7 +15,10 @@
  * `decision`) now renders its real interactive card: an Apply/Skip toggle
  * (`renderDecisionControl` idiom from `SuggestionsTab`, ADR-5-safe for
  * broken_up via `transforms.setRepoint`), a per-check `TargetControl`, and
- * the target note's title as an openable link (`openNote.renderNoteLink`).
+ * the target note's title as an openable link (Phase 6 T6.2:
+ * `noteNavigation.renderNavigableNoteLink` — side-split open + hover-preview,
+ * see that module's header for why it's a sibling of the Suggestions
+ * Editor's `openNote.renderNoteLink` rather than a shared helper).
  *
  * An advisory finding (`duplicate_stem`/`stale_moc` — never `fixable`, never
  * carries a `decision`) renders through `renderAdvisoryCard` (T5.5): a
@@ -63,8 +66,8 @@ import {
 	setSelected,
 	setSuggestRequested,
 } from "../../../garden-audit/transforms.js";
-import { renderNoteLink } from "../../suggestions-view/openNote.js";
 import { renderDeadLinkContext } from "../DeadLinkContextView.js";
+import { renderNavigableNoteLink } from "../noteNavigation.js";
 import { renderSuggestControl } from "../SuggestControl.js";
 import type { GardenAuditTabContext, GardenAuditTabSpec } from "../tabContract.js";
 import { renderTargetControl } from "../TargetControl.js";
@@ -244,7 +247,7 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		const card = row.createDiv({ cls: readOnly ? ["hashi-ga-card", "hashi-ga-card--advisory"] : "hashi-ga-card" });
 		const header = card.createDiv({ cls: "hashi-ga-card-header" });
 		header.createSpan({ text: `${finding.id} · ${lead}` });
-		renderNoteLink(header, ctx.app, targetTitle(finding));
+		renderNavigableNoteLink(header, ctx.app, targetTitle(finding));
 		if (readOnly) {
 			header.createSpan({ cls: "hashi-ga-card-readonly-tag", text: "(read-only)" });
 		}

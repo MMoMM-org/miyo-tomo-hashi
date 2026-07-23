@@ -35,7 +35,7 @@ Adds the inline dead-link context and the open-beside / hover-preview note navig
   4. Validate: context unit tests pass (happy + missing-note degrade + cache hit).
   5. Success: dead-link relationship visible without hover `[ref: PRD/F3 dead-link context; SDD/EARS "WHEN a dead_link finding renders"]`; off-main-thread `[ref: Constitution Perf L1]`.
 
-- [ ] **T6.2 Note navigation — open-beside + hover-preview** `[activity: frontend-ui]`
+- [x] **T6.2 Note navigation — open-beside + hover-preview** `[activity: frontend-ui]`
 
   1. Prime: Read `openNote.ts` + Obsidian split-leaf open + the `hover-link` trigger convention `[ref: PRD/F9]`.
   2. Test (obsidian mock): clicking a finding's note reference opens the note in a side-split leaf (not replacing the editor leaf); the reference is registered so Obsidian hover-preview is available; a missing target renders as plain text + "note not found" and does not throw.
