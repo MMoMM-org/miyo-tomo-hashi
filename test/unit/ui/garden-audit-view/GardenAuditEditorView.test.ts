@@ -14,7 +14,7 @@ import { App, WorkspaceLeaf } from "obsidian";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { DEFAULT_SEED, FakeGardenAuditDoc } from "../../../__mocks__/FakeGardenAuditDoc";
-import type { GardenAuditModel } from "../../../../src/types/garden-audit";
+import type { GardenAuditModel, GardenAuditWire } from "../../../../src/types/garden-audit";
 import { VIEW_TYPE_GARDEN_AUDIT_EDITOR } from "../../../../src/ui/garden-audit-view/index";
 import { GardenAuditEditorView } from "../../../../src/ui/garden-audit-view/GardenAuditEditorView";
 import type { GardenAuditTabSpec } from "../../../../src/ui/garden-audit-view/tabContract";
@@ -322,6 +322,37 @@ describe("GardenAuditEditorView — Save affordance (T4.3)", () => {
 
 		expect(adapter.save).toHaveBeenCalledTimes(1);
 		expect(adapter.save).toHaveBeenCalledWith({ doc: DEFAULT_SEED, dirty: true });
+	});
+
+	it("normalizes a selected broken_up finding's null action before it reaches the adapter (ADR-5 apply-only gap)", async () => {
+		// A wire that arrived already selected with action:null and no
+		// transform in between (approve-only save) — the second of the two
+		// ADR-5 gaps that only a save-time backstop can close.
+		const brokenUpNullAction: GardenAuditWire = {
+			...DEFAULT_SEED,
+			findings: DEFAULT_SEED.findings.map((f) =>
+				f.check === "broken_up" && f.decision !== undefined
+					? { ...f, decision: { ...f.decision, selected: true, action: null } }
+					: f,
+			),
+		};
+		const adapter: SpyAdapter = {
+			load: vi.fn<(docPath: string) => Promise<GardenAuditModel>>(async () => ({
+				doc: brokenUpNullAction,
+				dirty: true,
+			})),
+			save: vi.fn<(model: GardenAuditModel) => Promise<void>>(async () => {}),
+		};
+		const view = makeView(adapter);
+		await view.onOpen();
+
+		findActionButton(view, "Save").click();
+		await flushAsyncHandler();
+
+		const savedModel = adapter.save.mock.calls[0]?.[0];
+		const brokenUpFinding = savedModel?.doc.findings.find((f) => f.check === "broken_up");
+		expect(brokenUpFinding?.decision?.action).not.toBeNull();
+		expect(brokenUpFinding?.decision?.action).toBe("edit_note_text");
 	});
 
 	it("after a successful save, the dirty badge disappears and Save disables", async () => {

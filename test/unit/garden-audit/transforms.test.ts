@@ -12,6 +12,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+	normalizeBrokenUpActions,
 	setFileUnder,
 	setReplace,
 	setRepoint,
@@ -190,6 +191,161 @@ describe("setRepoint (ADR-5 action-gating)", () => {
 		const next = setRepoint(model, "F01", "[[Target]]");
 
 		expect(next).toBe(model);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// normalizeBrokenUpActions — ADR-5 save-time backstop
+// ---------------------------------------------------------------------------
+
+describe("normalizeBrokenUpActions (ADR-5 save-time backstop)", () => {
+	it("derives edit_note_text for a selected broken_up finding with action:null and an empty repoint", () => {
+		const model: GardenAuditModel = {
+			doc: getMockDoc({
+				findings: [
+					getMockFinding({ decision: getMockDecision({ selected: true, action: null, repoint: "" }) }),
+				],
+			}),
+			dirty: false,
+		};
+
+		const next = normalizeBrokenUpActions(model);
+
+		expect(next.doc.findings[0]?.decision).toMatchObject({
+			action: "edit_note_text",
+		});
+		expect(next.dirty).toBe(true);
+		expect(next).not.toBe(model);
+	});
+
+	it("derives edit_note_text when repoint is entirely absent (undefined), not just empty", () => {
+		const model: GardenAuditModel = {
+			doc: getMockDoc({
+				findings: [getMockFinding({ decision: getMockDecision({ selected: true, action: null }) })],
+			}),
+			dirty: false,
+		};
+
+		const next = normalizeBrokenUpActions(model);
+
+		expect(next.doc.findings[0]?.decision?.action).toBe("edit_note_text");
+	});
+
+	it("derives add_relationship for a selected broken_up finding with action:null and a non-empty repoint", () => {
+		const model: GardenAuditModel = {
+			doc: getMockDoc({
+				findings: [
+					getMockFinding({
+						decision: getMockDecision({ selected: true, action: null, repoint: "[[020 Active MOC]]" }),
+					}),
+				],
+			}),
+			dirty: false,
+		};
+
+		const next = normalizeBrokenUpActions(model);
+
+		expect(next.doc.findings[0]?.decision).toMatchObject({
+			action: "add_relationship",
+			repoint: "[[020 Active MOC]]",
+		});
+	});
+
+	it("is a same-reference no-op when the broken_up finding is not selected", () => {
+		const model: GardenAuditModel = {
+			doc: getMockDoc({
+				findings: [getMockFinding({ decision: getMockDecision({ selected: false, action: null }) })],
+			}),
+			dirty: false,
+		};
+
+		const next = normalizeBrokenUpActions(model);
+
+		expect(next).toBe(model);
+	});
+
+	it("is a same-reference no-op when action is already set", () => {
+		const model: GardenAuditModel = {
+			doc: getMockDoc({
+				findings: [
+					getMockFinding({
+						decision: getMockDecision({ selected: true, action: "edit_note_text", repoint: "" }),
+					}),
+				],
+			}),
+			dirty: false,
+		};
+
+		const next = normalizeBrokenUpActions(model);
+
+		expect(next).toBe(model);
+	});
+
+	it("is a same-reference no-op for a non-broken_up fixable finding (dead_link)", () => {
+		const model: GardenAuditModel = {
+			doc: getMockDoc({
+				findings: [
+					getMockFinding({
+						check: "dead_link",
+						detail: { dead_target: "Missing Note", count: 1 },
+						decision: getMockDecision({ selected: true, action: null }),
+					}),
+				],
+			}),
+			dirty: false,
+		};
+
+		const next = normalizeBrokenUpActions(model);
+
+		expect(next).toBe(model);
+	});
+
+	it("is a same-reference no-op for an advisory finding with no decision block", () => {
+		const advisory = getMockFinding({
+			id: "F09",
+			check: "stale_moc",
+			tier: "advisory",
+			fixable: false,
+			detail: { mtime: "2026-01-01T00:00:00Z" },
+			decision: undefined,
+		});
+		const model: GardenAuditModel = { doc: getMockDoc({ findings: [advisory] }), dirty: false };
+
+		const next = normalizeBrokenUpActions(model);
+
+		expect(next).toBe(model);
+	});
+
+	it("leaves the input model and its finding array untouched (immutability)", () => {
+		const decision = getMockDecision({ selected: true, action: null, repoint: "" });
+		const model: GardenAuditModel = {
+			doc: getMockDoc({ findings: [getMockFinding({ decision })] }),
+			dirty: false,
+		};
+		const originalFindings = model.doc.findings;
+
+		normalizeBrokenUpActions(model);
+
+		expect(model.doc.findings).toBe(originalFindings);
+		expect(model.doc.findings[0]?.decision).toBe(decision);
+		expect(decision.action).toBeNull();
+	});
+
+	it("normalizes only the matching finding — sibling findings ride through untouched", () => {
+		const sibling = getMockFinding({ id: "F02", decision: getMockDecision({ selected: false }) });
+		const target = getMockFinding({
+			id: "F01",
+			decision: getMockDecision({ selected: true, action: null, repoint: "" }),
+		});
+		const model: GardenAuditModel = {
+			doc: getMockDoc({ findings: [target, sibling] }),
+			dirty: false,
+		};
+
+		const next = normalizeBrokenUpActions(model);
+
+		expect(next.doc.findings[1]).toBe(sibling);
+		expect(next.doc.findings[0]?.decision?.action).toBe("edit_note_text");
 	});
 });
 

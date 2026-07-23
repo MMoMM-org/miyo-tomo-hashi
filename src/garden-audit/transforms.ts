@@ -22,7 +22,10 @@
  * editor closes that gap deterministically — a non-empty repoint always
  * means "point at this MOC" (add_relationship), an empty one always means
  * "remove the line" (edit_note_text) — so a selected broken_up finding is
- * never left with `action:null`.
+ * never left with `action:null`. `setRepoint` only fires when the user
+ * actually edits the repoint field, though — `normalizeBrokenUpActions`
+ * below is the save-time backstop for the two paths that never touch it
+ * (bare Apply, and an already-selected wire saved with no edits at all).
  */
 
 import type { DecisionWire, GardenAuditModel } from "../types/garden-audit.js";
@@ -90,6 +93,50 @@ export function setRepoint(
 		if (decision.repoint === repoint && decision.action === action) return null;
 		return { ...decision, repoint, action };
 	});
+}
+
+// ---------------------------------------------------------------------------
+// normalizeBrokenUpActions — ADR-5 save-time backstop
+// ---------------------------------------------------------------------------
+
+/**
+ * Closes the two ADR-5 gaps `setRepoint` alone can't: (1) a user clicks
+ * Apply (`setSelected(…, true)`) without ever touching the repoint field,
+ * and (2) a wire arrives already `selected:true, action:null` (schema-legal
+ * — "not yet determined") and gets approve-only-saved with no transform in
+ * between. Both leave `decision.action` null, which Tomo's `build_from_wire`
+ * silently treats as "skip this finding" — exactly the trap ADR-5 exists to
+ * close. This is a whole-doc pass rather than a per-finding-id setter (there
+ * is no single target id — every finding is a candidate), so it stands
+ * alone instead of routing through `updateDecision`, but mirrors that
+ * helper's immutability idiom: map+spread into new objects, same-reference
+ * no-op when nothing needs normalizing.
+ *
+ * `dirty:true` on change, matching every other transform's convention, even
+ * though the intended caller (`GardenAuditEditorView.handleSave`) runs this
+ * immediately before a save that's about to clear `dirty` — that's safe
+ * because the view re-reads its reference-identity guard's baseline model
+ * AFTER calling this, so the flag never leaks past the save it's running
+ * for. A transform that instead tried to preserve the incoming `dirty`
+ * would have to thread the caller's pre-normalize flag through as an extra
+ * parameter for no observable behavior difference.
+ */
+export function normalizeBrokenUpActions(model: GardenAuditModel): GardenAuditModel {
+	let changed = false;
+	const findings = model.doc.findings.map((finding) => {
+		if (finding.check !== "broken_up" || finding.decision === undefined) return finding;
+		const decision = finding.decision;
+		if (decision.selected !== true || decision.action !== null) return finding;
+
+		changed = true;
+		const action = decision.repoint === undefined || decision.repoint === ""
+			? "edit_note_text"
+			: "add_relationship";
+		return { ...finding, decision: { ...decision, action } };
+	});
+
+	if (!changed) return model;
+	return { doc: { ...model.doc, findings }, dirty: true };
 }
 
 // ---------------------------------------------------------------------------
