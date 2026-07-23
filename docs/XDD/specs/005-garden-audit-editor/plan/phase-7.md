@@ -39,8 +39,9 @@ Integrates the surface end-to-end, adds the minimal new styles, and gates on the
   mockup + `hashi-se-*` idiom — typed-target input (`.hashi-ga-target-inp` + reused
   `.hashi-se-inp`/`.hashi-se-mini-pick`), pending/empty suggest hints
   (`.hashi-ga-suggest-hint--pending`/`--empty`), tier count (`.hashi-ga-tier-count` — already
-  `border-radius:999px` + `--se-bg-alt` fill, i.e. already pill-shaped, matching the
-  `.hashi-se-warn-pill`/`.hashi-se-src-badge` rounded-badge idiom), dead-link context
+  `border-radius:999px` + `--se-bg-alt` fill, i.e. already pill-shaped; shape precedent is
+  `.hashi-se-warn-pill` — review correction: `.hashi-se-src-badge` is a 3px-radius squared
+  badge, not a pill, and was wrongly cited as idiom precedent in the first audit pass), dead-link context
   (`.hashi-ga-context`/`-line`/`-missing`), candidate chips, `.hashi-ga-card--advisory` dim, and
   `.hashi-ga-note-missing` tag all resolve purely through `--se-*` custom props / Obsidian theme
   vars — zero raw hex/rgb literals in the `hashi-ga-*` block, zero `text-decoration` style-value
