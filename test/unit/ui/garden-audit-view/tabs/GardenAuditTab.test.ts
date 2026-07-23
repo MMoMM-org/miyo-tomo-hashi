@@ -445,6 +445,116 @@ describe("GardenAuditTab.render — unparented/orphan cards (file_under)", () =>
 	);
 });
 
+describe("GardenAuditTab.render — no-scan-candidate hint (2026-07-23 user QA)", () => {
+	const HINT_TEXT = "No scan candidate — an empty target has no fallback here.";
+
+	it.each(["orphan", "unparented"] as const)(
+		"%s: shows the hint when detail.candidate_mocs is an empty array",
+		(check) => {
+			const tab = new GardenAuditTab();
+			const model = getMockModel([
+				getMockFinding({
+					id: "F03",
+					check,
+					tier: "structure",
+					target: { path: "Notes/Orphan.md", stem: "Orphan" },
+					detail: { candidate_mocs: [] },
+					decision: { selected: true, action: "link_to_moc", file_under: "" },
+				}),
+			]);
+			const ctx = makeCtx();
+			const container = document.createElement("div");
+
+			tab.render(container, model, ctx);
+
+			expect(container.textContent).toContain(HINT_TEXT);
+		},
+	);
+
+	it.each(["orphan", "unparented"] as const)(
+		"%s: shows the hint when detail.candidate_mocs is missing entirely",
+		(check) => {
+			const tab = new GardenAuditTab();
+			const model = getMockModel([
+				getMockFinding({
+					id: "F03",
+					check,
+					tier: "structure",
+					target: { path: "Notes/Orphan.md", stem: "Orphan" },
+					detail: {},
+					decision: { selected: true, action: "link_to_moc", file_under: "" },
+				}),
+			]);
+			const ctx = makeCtx();
+			const container = document.createElement("div");
+
+			tab.render(container, model, ctx);
+
+			expect(container.textContent).toContain(HINT_TEXT);
+		},
+	);
+
+	it("does not show the hint when a valid scan candidate is present", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F03",
+				check: "orphan",
+				tier: "structure",
+				target: { path: "Notes/Orphan.md", stem: "Orphan" },
+				detail: { candidate_mocs: [{ target_moc: "020 Active MOC", score: 0.6 }] },
+				decision: { selected: true, action: "link_to_moc", file_under: "" },
+			}),
+		]);
+		const ctx = makeCtx();
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+
+		expect(container.textContent).not.toContain(HINT_TEXT);
+	});
+
+	it("never shows the hint on a dead_link card (no fallback semantics)", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F02",
+				check: "dead_link",
+				tier: "integrity",
+				target: { path: "Notes/Child.md", stem: "Child" },
+				detail: { dead_target: "Deleted MOC", count: 1 },
+				decision: { selected: false, action: null, replace: "" },
+			}),
+		]);
+		const ctx = makeCtx();
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+
+		expect(container.textContent).not.toContain(HINT_TEXT);
+	});
+
+	it("never shows the hint on a broken_up card (no fallback semantics)", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F02",
+				check: "broken_up",
+				tier: "integrity",
+				target: { path: "Notes/Child.md", stem: "Child" },
+				detail: { up_target: "Deleted MOC" },
+				decision: { selected: false, action: null, repoint: "" },
+			}),
+		]);
+		const ctx = makeCtx();
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+
+		expect(container.textContent).not.toContain(HINT_TEXT);
+	});
+});
+
 describe("GardenAuditTab.render — target note title is an openable link", () => {
 	it("renders the finding's target stem as a clickable link that opens the note", () => {
 		const tab = new GardenAuditTab();

@@ -166,6 +166,44 @@ describe("renderTargetControl — picker button", () => {
 	});
 });
 
+describe("renderTargetControl — empty-state caption tooltip (2026-07-23 user QA)", () => {
+	function hint(container: HTMLElement): HTMLElement {
+		return container.querySelector(".hashi-ga-target-hint") as HTMLElement;
+	}
+
+	it("dead_link's caption carries the unlink-explanation aria-label", () => {
+		const container = render("dead_link", undefined);
+
+		expect(hint(container).getAttribute("aria-label")).toBe(
+			"Empty = unlink: the [[brackets]] are removed but the link text is kept, at every occurrence. The note text is not deleted.",
+		);
+	});
+
+	it("broken_up's caption carries the remove-explanation aria-label", () => {
+		const container = render("broken_up", undefined);
+
+		expect(hint(container).getAttribute("aria-label")).toBe(
+			"Empty = remove: the broken up:: line is removed from the note.",
+		);
+	});
+
+	it("orphan's caption carries the fallback-explanation aria-label", () => {
+		const container = render("orphan", undefined);
+
+		expect(hint(container).getAttribute("aria-label")).toBe(
+			"Empty = fallback: Tomo files the note under the first scan candidate. With no scan candidate the finding is skipped.",
+		);
+	});
+
+	it("unparented's caption carries the same fallback-explanation aria-label as orphan", () => {
+		const container = render("unparented", undefined);
+
+		expect(hint(container).getAttribute("aria-label")).toBe(
+			"Empty = fallback: Tomo files the note under the first scan candidate. With no scan candidate the finding is skipped.",
+		);
+	});
+});
+
 describe("renderTargetControl — per-check empty label (README 2026-07-22 unlink decision)", () => {
 	it("labels dead_link's empty state 'unlink', NOT 'remove'", () => {
 		const container = render("dead_link", undefined);

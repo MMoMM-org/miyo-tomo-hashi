@@ -713,6 +713,16 @@
 	white-space: nowrap;
 }
 
+/* ---- no-scan-candidate hint (2026-07-23, user QA) -------------------------
+   unparented/orphan only — states plainly that an empty target has no
+   fallback here, when `detail.candidate_mocs` is empty/absent. Faint styling
+   mirrors `.hashi-ga-suggest-hint` above. */
+.hashi-ga-no-scan-hint {
+	display: block;
+	font-size: 11px;
+	color: var(--se-text-faint);
+}
+
 /* ---- candidate chips (spec-005, T5.3) -------------------------------------
    Display-only, click-to-pick — a chip commits its stem into the card's
    target field (never `decision.selected`); the LLM row (`--llm`) and the

@@ -55,6 +55,28 @@ const EMPTY_LABEL: Record<FindingCheck, string> = {
 	stale_moc: "n/a",
 };
 
+/**
+ * Per-check hover explanation for the `(empty=…)` caption (2026-07-23 user
+ * QA) — Obsidian renders a plain `aria-label` as a native tooltip (no
+ * `setTooltip`/stronger idiom found elsewhere in this repo, see
+ * `rg -n "aria-label" src/`), so this map feeds the caption span's
+ * `aria-label` directly. Same totality pattern as `EMPTY_LABEL` above:
+ * advisory checks get a harmless placeholder since they never reach this
+ * widget.
+ */
+const EMPTY_TOOLTIP: Record<FindingCheck, string> = {
+	dead_link:
+		"Empty = unlink: the [[brackets]] are removed but the link text is kept, at every occurrence. The note text is not deleted.",
+	broken_up: "Empty = remove: the broken up:: line is removed from the note.",
+	orphan:
+		"Empty = fallback: Tomo files the note under the first scan candidate. With no scan candidate the finding is skipped.",
+	unparented:
+		"Empty = fallback: Tomo files the note under the first scan candidate. With no scan candidate the finding is skipped.",
+	// Advisory checks never render this widget — see file header.
+	duplicate_stem: "n/a",
+	stale_moc: "n/a",
+};
+
 /** Basename minus a trailing `.md` — vault path → bare stem. */
 function pathToStem(path: string): string {
 	const base = path.split("/").pop() ?? path;
@@ -115,5 +137,6 @@ export function renderTargetControl(container: HTMLElement, opts: TargetControlO
 	wrap.createSpan({
 		cls: "hashi-ga-target-hint",
 		text: `(empty=${EMPTY_LABEL[check]})`,
+		attr: { "aria-label": EMPTY_TOOLTIP[check] },
 	});
 }
