@@ -222,6 +222,7 @@ graph LR
     Tab --> Cards["per-check cards<br/>(tier-grouped)"]
     Cards --> Target[TargetControl<br/>input+picker]
     Cards --> Ctx[DeadLinkContext<br/>async+cached]
+    Cards --> Nav["NoteNavigation<br/>(side-split + hover-preview)"]
     Cards --> Transforms["pure Model→Model setters"]
     Target --> Pickers["TargetNotePicker<br/>(VaultNotePicker subclass)"]
     Transforms --> Store
@@ -252,6 +253,10 @@ graph LR
 │   │   ├── pickers/TomoEditorDocPicker.ts   # NEW: FuzzyFieldPicker subclass (doc-open picker)
 │   │   ├── pickers/TargetNotePicker.ts      # NEW: VaultNotePicker subclass (fix-target picker, ADR-3)
 │   │   ├── TargetControl.ts                 # NEW: composite input+picker widget (ADR-3)
+│   │   ├── SuggestControl.ts                # NEW: suggest toggle + hints (T5.4)
+│   │   ├── tabContract.ts                   # NEW: tab contract (Phase 4)
+│   │   ├── DeadLinkContextView.ts           # NEW: dead_link card context rendering (T6.1)
+│   │   ├── noteNavigation.ts                # NEW: side-split + hover-preview link (T6.2)
 │   │   └── tabs/GardenAuditTab.ts           # NEW: tier-grouped findings render
 │   ├── commands/registerCommands.ts         # MODIFY: dispatch open command by suffix; GARDEN_AUDIT_JSON_RE, resolveGardenAuditDocPath, listGardenAuditDocs
 │   └── main.ts                              # MODIFY: registerView(VIEW_TYPE_GARDEN_AUDIT_EDITOR, …) + wire opener/command
