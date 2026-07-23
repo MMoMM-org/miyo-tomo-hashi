@@ -16,6 +16,16 @@ Tomo answers: re-vendor the schema (ADR-7), build T5.4 (toggle + dirty-on-sugges
 pending hint + the gated "no suggestions found" state). T5.5 pulled forward meanwhile;
 phase completion waits on T5.4.
 
+**Session pause point (2026-07-23):** T5.1/T5.2/T5.3/T5.5 shipped, each through
+spec-compliance + code-quality review. T5.6's mechanical gates ran green (1804 tests,
+build, lint) but the task stays unchecked until T5.4 lands. Phase-boundary drift
+validation done — the one substantive finding (ADR-5 apply-only/approve-only gap: a wire
+arriving `action:null` could be saved null) is FIXED via `normalizeBrokenUpActions` on the
+save path (`f7a43c2`), hygiene items in `b34f83b`. Branch pushed
+(`origin/feat/garden-audit-editor`). Handoff already picked up by Tomo (`in-progress`).
+Resume: on Tomo's answer → re-vendor schema, build T5.4, check T5.6, complete phase, then
+Phase 6 (dead-link context + note navigation).
+
 ## Suggestions Editor (ADR-026) — ABSORBED, BLOCKED on Tomo (2026-07-03)
 
 Kokoro ADR-026 (Draft) amends Hashi's charter (ADR-009): Hashi gains a **Suggestions Editor** — a structured, editable view of Tomo's Pass-1 `suggestions.json` with four deterministic ops (re-point to MOC / pick spot in MOC / merge-rename proposed MOCs / change lifecycle state). Decision + open points recorded in `decisions.md` (2026-07-03). **Not started — gated on Tomo:** the `suggestions.json` schema + change-signal are Tomo-owned and not yet defined (paired Kokoro→Tomo handoff issued same day). Next steps once Tomo's contract lands: scaffold `docs/XDD/specs/NNN-suggestions-editor/` via `tcs-workflow:xdd`, do the ADR-026 §0 capability-mapping (four ops → existing executor contracts ADR-016/023/024) in the SDD, push back on any op that duplicates Tomo. Inbound handoff (absorbed, ack'd): `_inbox/from-kokoro/2026-07-03_kokoro-to-hashi_suggestions-editor-charter.md`.
