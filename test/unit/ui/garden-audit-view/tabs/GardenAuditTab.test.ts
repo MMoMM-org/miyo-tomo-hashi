@@ -843,6 +843,9 @@ describe("GardenAuditTab.render — advisory read-only cards (T5.5)", () => {
 		tab.render(container, model, makeCtx());
 
 		expect(container.querySelector(".hashi-ga-card--advisory")).not.toBeNull();
+		expect(container.querySelector(".hashi-ga-card-readonly-tag")?.textContent).toBe(
+			"(read-only)",
+		);
 	});
 
 	it("clicking every clickable element in an advisory card dispatches NO transform — only the note link opens", () => {
@@ -888,6 +891,7 @@ describe("GardenAuditTab.render — advisory read-only cards (T5.5)", () => {
 		const container = document.createElement("div");
 
 		expect(() => tab.render(container, model, makeCtx())).not.toThrow();
+		expect(container.textContent).toContain("(no colliding paths reported)");
 	});
 
 	it("duplicate_stem skips non-string entries within a malformed dupes array — no crash", () => {
