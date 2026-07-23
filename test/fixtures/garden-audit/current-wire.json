@@ -51,6 +51,21 @@
       }
     },
     {
+      "id": "F04",
+      "check": "unparented",
+      "tier": "structure",
+      "fixable": true,
+      "target": { "path": "Notes/Unparented.md", "stem": "Unparented" },
+      "detail": { "candidate_mocs": [] },
+      "decision": {
+        "selected": true,
+        "action": "link_to_moc",
+        "file_under": "",
+        "candidates": [],
+        "suggest_requested": false
+      }
+    },
+    {
       "id": "F09",
       "check": "stale_moc",
       "tier": "advisory",

@@ -47,13 +47,31 @@ Integrates the surface end-to-end, adds the minimal new styles, and gates on the
   vars — zero raw hex/rgb literals in the `hashi-ga-*` block, zero `text-decoration` style-value
   usage anywhere in the file. Audit clean, no CSS changes needed; no class renamed.
 
-- [ ] **T7.2 End-to-end integration + fixtures** `[activity: integration]`
+- [x] **T7.2 End-to-end integration + fixtures** `[activity: integration]`
 
   1. Prime: Re-read `main.ts` wiring + the regenerated current-shape fixture (T1.3) + the two real vault fixtures `[ref: SDD/Runtime View]`.
   2. Test (integration, real stack against fixtures): open the current-shape fixture → render all tiers → edit a target on each fixable check type → Save → assert the written JSON has the decisions + `approved:true` + `emit_digest` byte-identical to the input; the stale fixtures open into the error surface (validator reject); a Suggest-only edit saves and changes no apply-field.
   3. Implement: any remaining wiring in `main.ts`; ensure the whole flow runs against real Tomo emission (not synthetic).
   4. Validate: `npm run build` (full tsc over `test/`) + `npm test` + `npm run lint` all green; manual QA in the test vault.
   5. Success: a full run is reviewable + approvable through the editor with the digest preserved `[ref: PRD/F7; SDD/Quality Requirements]`; Tomo↔Hashi round-trip proven against real emission `[ref: README/OQ3]`.
+
+  **Audit note (T7.2):** `test/integration/garden-audit-e2e.test.ts` drives the
+  real `GardenAuditEditorView` → real `GardenAuditTab` DOM → real
+  `ObsidianGardenAuditDoc` over `FakeVaultFS` → real `garden-audit-validator`,
+  mirroring `suggestions-editor-e2e.test.ts`'s idiom. `current-wire.json`
+  (T1.3, real `build_wire_payload` output) was extended with one minimal F04
+  `unparented` finding — mirroring F03 orphan's shape — since it previously
+  had no fixable case for that check type; `emit_digest` was left untouched
+  (Hashi never recomputes it). A new synthetic `stale-pre030-wire.json`
+  (anonymous paths, `decision` missing the now-required `action` field)
+  stands in for the two real pre-spec-030 vault fixtures, which are NOT
+  vendored (Constitution Privacy L1 — the gitignored test vault is never read
+  from or copied into committed tests). All four tests passed on the FIRST
+  run against the existing production wiring — Phases 3–6 had already closed
+  every gap this task's brief anticipated (command dispatch, view
+  registration, adapter path); no `main.ts`/view changes were needed. Full
+  gate green: `npm run build` + `npm test` (1854 tests, 126 files) + `npm run
+  lint`.
 
 - [ ] **T7.3 Phase validation (integration & E2E)** `[activity: validate]`
 
