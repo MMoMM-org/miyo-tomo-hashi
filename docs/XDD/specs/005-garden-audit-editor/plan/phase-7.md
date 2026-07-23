@@ -1,6 +1,6 @@
 ---
 title: "Phase 7: Integration, styles & polish"
-status: pending
+status: in_progress
 version: "1.0"
 phase: 7
 ---
@@ -27,13 +27,24 @@ phase: 7
 
 Integrates the surface end-to-end, adds the minimal new styles, and gates on the full suite + real fixtures.
 
-- [ ] **T7.1 Styles for new elements** `[activity: frontend-ui]`
+- [x] **T7.1 Styles for new elements** `[activity: frontend-ui]`
 
   1. Prime: Read the `hashi-se-*` classes + theme vars + the obsidianmd CSS rule (no `text-decoration` style value → use `border-bottom`) `[ref: SDD/User Interface & UX]`.
   2. Test: stylelint passes; the new elements (typed-target input, pending-suggest hint, tier count pill, dead-link context snippet) resolve against existing light/dark vars.
   3. Implement: add the minimal `styles.css` rules, reusing `hashi-se-*` vars; no new color tokens.
   4. Validate: `npm run lint` (stylelint) clean; visual check in the test vault (`HASHI_DEPLOY_VAULT=1 npm run build`).
   5. Success: the surface matches the editor idiom in light + dark `[ref: SDD/User Interface & UX]`.
+
+  **Audit note (T7.1, post-P4-6 pass):** re-checked every `hashi-ga-*` rule against the SDD
+  mockup + `hashi-se-*` idiom — typed-target input (`.hashi-ga-target-inp` + reused
+  `.hashi-se-inp`/`.hashi-se-mini-pick`), pending/empty suggest hints
+  (`.hashi-ga-suggest-hint--pending`/`--empty`), tier count (`.hashi-ga-tier-count` — already
+  `border-radius:999px` + `--se-bg-alt` fill, i.e. already pill-shaped, matching the
+  `.hashi-se-warn-pill`/`.hashi-se-src-badge` rounded-badge idiom), dead-link context
+  (`.hashi-ga-context`/`-line`/`-missing`), candidate chips, `.hashi-ga-card--advisory` dim, and
+  `.hashi-ga-note-missing` tag all resolve purely through `--se-*` custom props / Obsidian theme
+  vars — zero raw hex/rgb literals in the `hashi-ga-*` block, zero `text-decoration` style-value
+  usage anywhere in the file. Audit clean, no CSS changes needed; no class renamed.
 
 - [ ] **T7.2 End-to-end integration + fixtures** `[activity: integration]`
 
