@@ -1,5 +1,30 @@
 # Context Memory
 
+## Garden-Audit executor actions + QA polish landed (2026-07-23)
+
+After Phase 7's core (T7.1/T7.2 done), a QA + Tomo-round-trip burst on `feat/garden-audit-editor`:
+- **Editor UX (spec-005):** skip+target-edit auto-selects Apply (`080f173`); empty-state
+  aria-label tooltips + "no scan candidate" detail-line hint (`c66c21e`→`bd51b05`);
+  broken_up remove tooltip flipped to link-only wording (`5e8d0cb`).
+- **Executor actions (spec-002, needed for garden-audit apply end-to-end):**
+  cherry-picked the finished-but-unmerged **`edit_note_text`** action (`feat/edit-note-text-action`
+  8492b19 → clean, no conflicts: executor namespace `src/actions`+`src/schema/types.ts` is
+  disjoint from the garden-audit-editor namespace `src/garden-audit`+`src/ui/garden-audit-view`),
+  then added **`remove_up_link`** (13th kind, `4ee6d40`+`8ecdc27`): removes one `[[link]]` from
+  the `up::` line, KEEPS the field (empty `up:: ` when last link, never delete — up:: is
+  structural, resurfaces as unparented next scan), whole-stem `indexOf` match (not substring),
+  callout/bullet prefix preserved, skip-and-report on no-match. Reuses `addRelationship`'s locator.
+- **ADR-7 full re-vendor** of `instructions.schema.json` from Tomo's `hashi-instructions.schema.json`
+  (`cc24db3`): vendored copy had drifted (terser descriptions + `minLength:1` on
+  insert_under_marker.target_path); now byte-identical to Tomo.
+- **Withdrawn by Tomo mid-flight:** advisory `ack` wire field (Correction 2 → pushback is
+  Tomo-internal, T5.5 read-only stays correct); `decision.selected` now defaults false at scan
+  (no Hashi change — editor renders from wire; skip+target-edit→apply complements it).
+- Adding an executor action kind touches ~20 sites; the Explore scout's checklist + memory
+  `troubleshooting_adding_action_kind_test_enumeration_sites` caught them all. KIND_ORDER is the
+  silent-drop trap (only the planner.test.ts slot assertion guards it).
+- 3 Tomo handoffs closed `done`; branch pushed. 1923 tests green at `5e8d0cb`.
+
 ## Garden-Audit Editor Phases 5+6 — COMPLETE (2026-07-23), Phase 7 next
 
 Phase 6 (dead-link context + note navigation) shipped same day: async cached extractor
