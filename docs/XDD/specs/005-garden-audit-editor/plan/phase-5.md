@@ -1,6 +1,6 @@
 ---
 title: "Phase 5: Per-check cards & interaction"
-status: pending
+status: in_progress
 version: "1.0"
 phase: 5
 ---
@@ -28,7 +28,7 @@ phase: 5
 
 Delivers the interactive fixable cards and the strict read-only advisory cards.
 
-- [ ] **T5.1 Composite TargetControl widget** `[activity: frontend-ui]`
+- [x] **T5.1 Composite TargetControl widget** `[activity: frontend-ui]`
 
   1. Prime: Read the `mini-pick` field idiom + `MocPicker`/`VaultNotePicker` (return existing notes only) `[ref: SDD/ADR-3; PRD/Detailed Feature Specifications]`.
   2. Test: shows the current value or an explicit empty state; accepts a free-typed value (bare stem or `[[wikilink]]`) that need not exist; a picker button populates it from a vault note; the empty-state label is per check type (dead_link "unlink", broken_up "remove", orphan/unparented "fallback"); a change fires the target transform (dirty).

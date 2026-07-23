@@ -640,6 +640,23 @@
 	white-space: nowrap;
 }
 
+/* ---- TargetControl (spec-005, T5.1 — ADR-3 composite target widget) ----- */
+.hashi-ga-target {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.hashi-ga-target-inp {
+	flex: 1;
+	min-width: 120px;
+}
+.hashi-ga-target-hint {
+	font-size: 11px;
+	color: var(--se-text-faint);
+	white-space: nowrap;
+}
+
 /* ---- generic card -------------------------------------------------------- */
 .hashi-se-card {
 	border: 1px solid var(--se-border);
