@@ -238,6 +238,12 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 	 * Apply/Skip segmented toggle — mirrors `SuggestionsTab.renderDecisionControl`
 	 * (`aria-pressed` on both buttons), narrowed to the boolean `decision.selected`
 	 * this editor uses instead of the Suggestions Editor's 3-state decision enum.
+	 *
+	 * `hashi-ga-apply`/`hashi-ga-skip` carry no rules of their own in
+	 * styles.css — they're intentionally unstyled semantic/test hooks
+	 * (query selectors, not style targets); the actual look rides entirely
+	 * on the paired `hashi-se-approve`/`hashi-se-skip` classes reused from
+	 * the Suggestions Editor.
 	 */
 	private renderApplySkip(container: HTMLElement, finding: FindingWire, ctx: GardenAuditTabContext): void {
 		// Guard rather than assert: only fixable findings with a `decision`

@@ -4,9 +4,8 @@
  * count; findings in wire order within a tier; each row shows its finding
  * id), PLUS (T5.2) the real fixable-finding cards: Apply/Skip → `selected`,
  * per-check TargetControl → the right transform (with broken_up's ADR-5
- * action-gating), and an openable note-title link. Advisory findings still
- * render through the Phase-4 placeholder — T5.5 gives them their own
- * strictly-read-only card.
+ * action-gating), and an openable note-title link. Advisory findings render
+ * through their own strictly-read-only card (T5.5).
  */
 
 import "obsidian";

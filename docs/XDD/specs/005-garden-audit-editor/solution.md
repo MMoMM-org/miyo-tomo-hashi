@@ -223,7 +223,7 @@ graph LR
     Cards --> Target[TargetControl<br/>input+picker]
     Cards --> Ctx[DeadLinkContext<br/>async+cached]
     Cards --> Transforms["pure Model→Model setters"]
-    Target --> Pickers[MocPicker / VaultNotePicker]
+    Target --> Pickers["TargetNotePicker<br/>(VaultNotePicker subclass)"]
     Transforms --> Store
 ```
 
@@ -249,7 +249,8 @@ graph LR
 │   │   ├── index.ts                         # NEW: VIEW_TYPE_GARDEN_AUDIT_EDITOR + exports
 │   │   ├── GardenAuditEditorView.ts         # NEW: leaf ItemView (mirror SuggestionsEditorView)
 │   │   ├── openGardenAuditEditor.ts         # NEW: opener (mirror openSuggestionsEditor)
-│   │   ├── GardenAuditDocPicker.ts          # NEW: FuzzyFieldPicker subclass
+│   │   ├── pickers/TomoEditorDocPicker.ts   # NEW: FuzzyFieldPicker subclass (doc-open picker)
+│   │   ├── pickers/TargetNotePicker.ts      # NEW: VaultNotePicker subclass (fix-target picker, ADR-3)
 │   │   ├── TargetControl.ts                 # NEW: composite input+picker widget (ADR-3)
 │   │   └── tabs/GardenAuditTab.ts           # NEW: tier-grouped findings render
 │   ├── commands/registerCommands.ts         # MODIFY: dispatch open command by suffix; GARDEN_AUDIT_JSON_RE, resolveGardenAuditDocPath, listGardenAuditDocs

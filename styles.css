@@ -625,20 +625,6 @@
 	margin-bottom: 6px;
 	font-size: 12.5px;
 }
-.hashi-ga-finding-id {
-	font-family: var(--se-mono);
-	font-weight: 650;
-	color: var(--se-text);
-}
-.hashi-ga-finding-check {
-	color: var(--se-text-muted);
-}
-.hashi-ga-finding-target {
-	color: var(--se-text-faint);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
 
 /* ---- TargetControl (spec-005, T5.1 — ADR-3 composite target widget) ----- */
 .hashi-ga-target {
