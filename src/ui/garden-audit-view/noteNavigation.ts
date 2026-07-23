@@ -25,8 +25,14 @@
 
 import type { App } from "obsidian";
 
-/** Stable `hover-link` event source id — identifies Hashi as the trigger's emitter. */
-const HOVER_LINK_SOURCE = "miyo-tomo-hashi";
+/**
+ * Stable `hover-link` event source id — identifies Hashi as the trigger's
+ * emitter. Exported so `main.ts` can register it with
+ * `Plugin.registerHoverLinkSource` (Obsidian's Page Preview settings entry) —
+ * single-sourced so the id used in the trigger payload and the registration
+ * can never drift apart.
+ */
+export const HOVER_LINK_SOURCE = "miyo-tomo-hashi";
 
 function resolvesToFile(app: App, linktext: string, sourcePath: string): boolean {
 	if (typeof app.metadataCache.getFirstLinkpathDest !== "function") return false;

@@ -2,10 +2,14 @@
  * `renderDeadLinkContext` (spec-005 Phase 6, T6.1) — the dead_link card's
  * async context block. Kicks off `ctx.deadLinkContext(...)`, shows a
  * "Loading context…" placeholder synchronously, then fills in the resolved
- * occurrence snippet(s) or a "Note not found." message. Extracted as a
- * sibling module (mirrors `SuggestControl.ts`/`TargetControl.ts`'s plain-
- * function widget idiom) rather than inlined in `GardenAuditTab.ts`, which is
- * already past the repo's ~300-500 LOC soft band (Constitution L2).
+ * occurrence snippet(s), a "Note not found." message (the note itself is
+ * missing/moved), or a "No longer found in note." hint (the note still
+ * exists, but the note has been edited since the audit ran and the flagged
+ * `[[dead_target]]` wikilink is simply gone — a Phase-6 validation edge case,
+ * distinct from the note-not-found degrade). Extracted as a sibling module
+ * (mirrors `SuggestControl.ts`/`TargetControl.ts`'s plain-function widget
+ * idiom) rather than inlined in `GardenAuditTab.ts`, which is already past
+ * the repo's ~300-500 LOC soft band (Constitution L2).
  *
  * Stale-completion guard: `GardenAuditTab` rebuilds its whole subtree on
  * every re-render (store convention), so a card's placeholder element can be
@@ -51,6 +55,17 @@ export function renderDeadLinkContext(container: HTMLElement, opts: DeadLinkCont
 function renderResult(container: HTMLElement, result: DeadLinkContextResult): void {
 	if (result.status === "note-not-found") {
 		container.createSpan({ cls: "hashi-ga-context-missing", text: "Note not found." });
+		return;
+	}
+
+	if (result.occurrences.length === 0) {
+		// The note has been edited since the audit ran — the `[[dead_target]]`
+		// wikilink is simply gone. Distinct from "note not found": the note
+		// still exists, it just no longer contains the flagged link.
+		container.createSpan({
+			cls: "hashi-ga-context-missing",
+			text: "No longer found in note.",
+		});
 		return;
 	}
 

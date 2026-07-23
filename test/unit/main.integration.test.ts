@@ -68,6 +68,7 @@ import TomoHashiPlugin from "../../src/main";
 import { VIEW_TYPE_TOMO_CHAT } from "../../src/ui/chat-view/index";
 import {
 	GardenAuditEditorView,
+	HOVER_LINK_SOURCE,
 	VIEW_TYPE_GARDEN_AUDIT_EDITOR,
 } from "../../src/ui/garden-audit-view/index";
 import {
@@ -322,6 +323,16 @@ describe("TomoHashiPlugin integration (T5.3)", () => {
 		it("still registers the unified 'open-suggestions-editor' command (no regression)", async () => {
 			await plugin.onload();
 			expect(findCommand(plugin, OPEN_SUGGESTIONS_EDITOR_ID)).toBeDefined();
+		});
+
+		it("registers the garden-audit hover-link source so Page Preview has a settings entry", async () => {
+			await plugin.onload();
+
+			expect(plugin.registerHoverLinkSource).toHaveBeenCalledTimes(1);
+			expect(plugin.registerHoverLinkSource).toHaveBeenCalledWith(
+				HOVER_LINK_SOURCE,
+				expect.objectContaining({ defaultMod: false }),
+			);
 		});
 	});
 

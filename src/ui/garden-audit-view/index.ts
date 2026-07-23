@@ -13,4 +13,5 @@ export {
 export type { GardenAuditTabContext, GardenAuditTabSpec } from "./tabContract.js";
 export { GardenAuditTab } from "./tabs/GardenAuditTab.js";
 export { openGardenAuditEditor } from "./openGardenAuditEditor.js";
+export { HOVER_LINK_SOURCE } from "./noteNavigation.js";
 export { TomoEditorDocPicker } from "./pickers/TomoEditorDocPicker.js";

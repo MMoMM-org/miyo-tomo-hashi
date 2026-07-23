@@ -263,6 +263,10 @@ export class Plugin extends Component {
 	addCommand = vi.fn();
 	addSettingTab = vi.fn();
 	registerView = vi.fn();
+	// Page Preview integration (spec-005 Phase 6, T6.2) — registers a hover-link
+	// source so it appears in Obsidian's Page Preview settings. Assertion-only:
+	// the mock never simulates the settings UI itself.
+	registerHoverLinkSource = vi.fn();
 	register = vi.fn();
 	removeCommand = vi.fn();
 	// CM6 editor extension registration (T4.5 — IDE Bridge selection tracking).

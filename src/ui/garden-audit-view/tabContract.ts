@@ -12,9 +12,12 @@
  *   - No `pickerScopes` yet — Phase 4 has no pickers (TargetControl/
  *     MocPicker/VaultNotePicker are Phase 5). Added there if needed.
  *   - (Phase 6, T6.1) `deadLinkContext` — the view owns the
- *     `DeadLinkContextExtractor` instance (constructed once, not per-render)
- *     so its per-note cache survives across re-renders; the tab only ever
- *     sees the bound `extract` function, never the extractor itself.
+ *     `DeadLinkContextExtractor` instance, rebuilt once per DOC LOAD (not
+ *     per-render — see `GardenAuditEditorView`'s class-doc item 4) so its
+ *     per-note cache survives across re-renders within one load but never
+ *     serves stale/cross-document context after a retarget or Revert; the
+ *     tab only ever sees the bound `extract` function, never the extractor
+ *     itself.
  */
 
 import type { App } from "obsidian";

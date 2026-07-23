@@ -46,6 +46,42 @@ describe("createDeadLinkContextExtractor — single occurrence", () => {
 	});
 });
 
+describe("createDeadLinkContextExtractor — heading detection", () => {
+	it("does not treat a #tag line as a heading", async () => {
+		const fs = new FakeVaultFS();
+		await fs.create(
+			NOTE_PATH,
+			["#project", "", "- see [[023 Sparks MOC]] for background."].join("\n"),
+		);
+		const extractor = createDeadLinkContextExtractor(fs);
+
+		const result = await extractor.extract(NOTE_PATH, "023 Sparks MOC");
+
+		expect(result.status).toBe("ok");
+		if (result.status !== "ok") return;
+		expect(result.occurrences).toEqual([
+			{ line: "- see [[023 Sparks MOC]] for background.", heading: null },
+		]);
+	});
+
+	it("still treats a level-6 (######) heading as a heading", async () => {
+		const fs = new FakeVaultFS();
+		await fs.create(
+			NOTE_PATH,
+			["###### H6", "", "- see [[023 Sparks MOC]] for background."].join("\n"),
+		);
+		const extractor = createDeadLinkContextExtractor(fs);
+
+		const result = await extractor.extract(NOTE_PATH, "023 Sparks MOC");
+
+		expect(result.status).toBe("ok");
+		if (result.status !== "ok") return;
+		expect(result.occurrences).toEqual([
+			{ line: "- see [[023 Sparks MOC]] for background.", heading: "H6" },
+		]);
+	});
+});
+
 describe("createDeadLinkContextExtractor — multiple occurrences", () => {
 	it("returns every occurrence in order, each with its own nearest heading", async () => {
 		const fs = new FakeVaultFS();

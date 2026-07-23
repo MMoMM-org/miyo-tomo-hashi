@@ -62,7 +62,7 @@ function extractOccurrences(content: string, deadTarget: string): DeadLinkOccurr
 
 	for (const rawLine of content.split("\n")) {
 		const line = rawLine.trim();
-		if (line.startsWith("#")) {
+		if (/^#{1,6}\s/.test(line)) {
 			heading = stripHeadingMarker(line);
 		}
 		// Literal substring search — `deadTarget` is untrusted note content,

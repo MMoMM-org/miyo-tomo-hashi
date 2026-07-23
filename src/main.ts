@@ -115,6 +115,7 @@ import { TomoChatView, VIEW_TYPE_TOMO_CHAT } from "./ui/chat-view/index";
 import { showChatWindow } from "./ui/chat-view/showChatWindow";
 import {
 	GardenAuditEditorView,
+	HOVER_LINK_SOURCE,
 	openGardenAuditEditor,
 	TomoEditorDocPicker,
 	VIEW_TYPE_GARDEN_AUDIT_EDITOR,
@@ -607,6 +608,16 @@ export default class TomoHashiPlugin extends Plugin {
 					vault,
 				}),
 		);
+
+		// Registers Hashi's `hover-link` source (T6.2 note navigation, PRD F9)
+		// with Obsidian's Page Preview core plugin — without this, Page Preview
+		// has no settings entry for Hashi and hovering a note link falls back to
+		// the Mod-key-gated default instead of the always-on preview the
+		// navigation contract wants (`defaultMod: false`).
+		this.registerHoverLinkSource(HOVER_LINK_SOURCE, {
+			display: "Tomo editor",
+			defaultMod: false,
+		});
 
 		// The "Open Tomo editor" command (registered once, below) now
 		// suffix-dispatches to EITHER editor.

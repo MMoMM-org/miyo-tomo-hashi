@@ -1289,6 +1289,28 @@ describe("GardenAuditTab.render — dead-link context (T6.1)", () => {
 		document.body.removeChild(container);
 	});
 
+	it("renders 'No longer found in note.' when the note resolves but the wikilink has since been removed", async () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([makeDeadLinkFinding()]);
+		const deadLinkContext = vi.fn(
+			async (): Promise<DeadLinkContextResult> => ({ status: "ok", occurrences: [] }),
+		);
+		const ctx: GardenAuditTabContext = { app: new App(), apply: () => {}, deadLinkContext };
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+
+		tab.render(container, model, ctx);
+		await flushMicrotasks();
+
+		expect(container.querySelector(".hashi-ga-context-missing")?.textContent).toBe(
+			"No longer found in note.",
+		);
+		// The rest of the card renders normally alongside the hint.
+		expect(container.textContent).toContain("Replace with");
+
+		document.body.removeChild(container);
+	});
+
 	it("only dead_link cards call deadLinkContext — broken_up/orphan/advisory never do", () => {
 		const tab = new GardenAuditTab();
 		const deadLinkContext = vi.fn(
