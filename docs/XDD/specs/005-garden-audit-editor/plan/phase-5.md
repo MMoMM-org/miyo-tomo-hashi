@@ -1,6 +1,6 @@
 ---
 title: "Phase 5: Per-check cards & interaction"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 5
 ---
@@ -69,6 +69,7 @@ Delivers the interactive fixable cards and the strict read-only advisory cards.
   4. Validate: advisory read-only unit tests pass (assert absence of controls).
   5. Success: advisory findings cannot be mutated `[ref: PRD/F6; SDD/EARS "WHILE rendering an advisory finding"]`.
 
-- [ ] **T5.6 Phase validation** `[activity: validate]`
+- [x] **T5.6 Phase validation** `[activity: validate]`
 
   - Run all Phase 5 tests; `npm run build` + `npm run lint` clean. Verify every check type renders correctly and advisory is inert.
+  - ✅ 2026-07-23: 1818/1818 tests, build + lint clean at `c6d588f`. Drift validation ran at the phase boundary: ADR-5 apply-only gap fixed (`f7a43c2`), hygiene in `b34f83b`. Per-check rendering + advisory inertness pinned by the T5.2/T5.3/T5.5 unit suites.

@@ -89,7 +89,7 @@ Each phase is defined in a separate file. Tasks follow red-green-refactor: **Pri
 - [x] [Phase 2: Adapter & transforms](phase-2.md)
 - [x] [Phase 3: Discovery & command dispatch](phase-3.md)
 - [x] [Phase 4: View & tab shell](phase-4.md)
-- [ ] [Phase 5: Per-check cards & interaction](phase-5.md)
+- [x] [Phase 5: Per-check cards & interaction](phase-5.md)
 - [ ] [Phase 6: Dead-link context & note navigation](phase-6.md)
 - [ ] [Phase 7: Integration, styles & polish](phase-7.md)
 

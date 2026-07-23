@@ -1,30 +1,22 @@
 # Context Memory
 
-## Garden-Audit Editor Phase 5 — T5.4 BLOCKED on Tomo (2026-07-23)
+## Garden-Audit Editor Phase 5 — COMPLETE (2026-07-23)
 
-Spec-005 Phase 5 in progress on `feat/garden-audit-editor`: T5.1 (TargetControl), T5.2
-(fixable cards), T5.3 (candidate chips) shipped + double-reviewed. **T5.4 is blocked**: the
-wire cannot distinguish "suggest pending" from "suggest ran, returned empty" (both are
-`suggest_requested:true, candidates:[]`; Tomo's `enrich_wire_with_candidates` never resets
-`suggest_requested`, and `decision` is `additionalProperties:false` so Hashi can't pre-read
-a speculative field). Second finding: Tomo's `garden-auditor.md` S.4 never re-uploads the
-enriched wire, so candidates never reach the vault `.json` (would starve T5.3's chips in
-live use). Handoff sent (requires_action):
-`_outbox/for-tomo/2026-07-23_hashi-to-tomo_garden-audit-suggest-state-and-wire-reupload.md`
-— proposes additive `decision.suggested:true` (digest-excluded) + S.4 wire re-upload. When
-Tomo answers: re-vendor the schema (ADR-7), build T5.4 (toggle + dirty-on-suggest-only +
-pending hint + the gated "no suggestions found" state). T5.5 pulled forward meanwhile;
-phase completion waits on T5.4.
+**Phase 5 shipped same-day after the Tomo round-trip resolved.** Tomo adopted Hashi's
+`decision.suggested` ran-marker proposal as-is (+ fixed the S.4 wire re-upload AND a
+third self-found Gap C: the `enriched N` count stopping zero-candidate runs). Schema
+re-vendored (ADR-7), T5.4 shipped (`SuggestControl.ts`: toggle + pending /
+"no suggestions found" hint precedence per the reply handoff), Phase 5 fully validated
+(1818 tests, build, lint; drift-checked). Handoff pair closed `done` both ways. Next:
+Phase 6 (dead-link context T6.1, open-beside/hover T6.2), then Phase 7 (integration,
+styles, polish — carry-over item: extract `renderCandidateChips`/`renderChipRow` from
+`GardenAuditTab.ts` (~525 LOC, over the 500 soft band)).
 
-**Session pause point (2026-07-23):** T5.1/T5.2/T5.3/T5.5 shipped, each through
-spec-compliance + code-quality review. T5.6's mechanical gates ran green (1804 tests,
-build, lint) but the task stays unchecked until T5.4 lands. Phase-boundary drift
-validation done — the one substantive finding (ADR-5 apply-only/approve-only gap: a wire
-arriving `action:null` could be saved null) is FIXED via `normalizeBrokenUpActions` on the
-save path (`f7a43c2`), hygiene items in `b34f83b`. Branch pushed
-(`origin/feat/garden-audit-editor`). Handoff already picked up by Tomo (`in-progress`).
-Resume: on Tomo's answer → re-vendor schema, build T5.4, check T5.6, complete phase, then
-Phase 6 (dead-link context + note navigation).
+Wire-gap history (short): T5.4 was blocked half a day because "suggest pending" vs
+"ran-and-empty" were wire-identical and `decision` is `additionalProperties:false` — the
+handoff pair `2026-07-23_*garden-audit-suggest*` (outbox/inbox, both `done`) carries the
+full analysis. Also fixed en route: the ADR-5 apply-only/approve-only gap
+(`normalizeBrokenUpActions` on the save path, `f7a43c2`).
 
 ## Suggestions Editor (ADR-026) — ABSORBED, BLOCKED on Tomo (2026-07-03)
 
