@@ -183,7 +183,7 @@ describe("renderTargetControl — empty-state caption tooltip (2026-07-23 user Q
 		const container = render("broken_up", undefined);
 
 		expect(hint(container).getAttribute("aria-label")).toBe(
-			"Empty = remove: the broken up:: line is removed from the note.",
+			"Empty = remove: only the broken link is removed from the up:: line; if it was the only link, up:: is left empty (the field is kept, never deleted).",
 		);
 	});
 

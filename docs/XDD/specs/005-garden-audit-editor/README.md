@@ -34,6 +34,7 @@
 | 2026-07-23 | Empty-state tooltips + explicit no-scan-candidate hint (user QA) | (empty=…) captions carry aria-label explanations; unparented/orphan cards state "no scan candidate" when detail.candidate_mocs is empty — (empty=fallback) alone was misleading there. Ground-truthed same day: Tomo's parser skips+warns on empty+no-candidate (`garden-audit-parser.py:361`), no error. |
 | 2026-07-23 | No-scan hint sits in the detail-line slot (user QA) | Moved from a faint post-target line to the `.hashi-ga-card-row` under the header (where broken_up/dead_link show their link detail) — normal detail prominence; Apply/Skip stays unconditional in that row (test-locked). |
 | 2026-07-23 | broken_up empty=remove → link-only removal requested from Tomo (user) | Ground truth: Tomo removes the whole `up::` line (match=`up_line(up_target)`, replace="") and silently no-ops on multi-link lines. User wants only the broken `[[link]]` removed. Handoff `2026-07-23_hashi-to-tomo_garden-audit-broken-up-link-only-removal.md` sent; Hashi's tooltip keeps describing CURRENT whole-line behavior until Tomo lands the change (honest UI), then flips wording. Semantics ownership: Tomo builds match/replace; Hashi executes literally + labels honestly. |
+| 2026-07-23 | broken_up remove tooltip flipped to link-only wording (Tomo remove_up_link shipped) | Tooltip now: "only the broken link is removed…up:: kept, never deleted"; matches Tomo's corrected executor semantics (was whole-line). |
 
 ## Follow-ups (non-blocking)
 

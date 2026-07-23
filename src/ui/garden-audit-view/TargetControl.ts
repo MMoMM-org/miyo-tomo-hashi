@@ -67,7 +67,8 @@ const EMPTY_LABEL: Record<FindingCheck, string> = {
 const EMPTY_TOOLTIP: Record<FindingCheck, string> = {
 	dead_link:
 		"Empty = unlink: the [[brackets]] are removed but the link text is kept, at every occurrence. The note text is not deleted.",
-	broken_up: "Empty = remove: the broken up:: line is removed from the note.",
+	broken_up:
+		"Empty = remove: only the broken link is removed from the up:: line; if it was the only link, up:: is left empty (the field is kept, never deleted).",
 	orphan:
 		"Empty = fallback: Tomo files the note under the first scan candidate. With no scan candidate the finding is skipped.",
 	unparented:
