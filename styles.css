@@ -718,10 +718,8 @@
    fallback here, when `detail.candidate_mocs` is empty/absent. Rendered in
    the card's detail-line slot (see `renderFileUnderCard`) paired with
    `.hashi-ga-card-detail`, so it reads at the same normal prominence as the
-   broken_up/dead_link detail lines rather than the earlier faint treatment —
-   this class is now just the query hook, no styling of its own. */
-.hashi-ga-no-scan-hint {
-}
+   broken_up/dead_link detail lines rather than the earlier faint treatment.
+   This class is a bare marker for querying/testing, with no styling of its own. */
 
 /* ---- candidate chips (spec-005, T5.3) -------------------------------------
    Display-only, click-to-pick — a chip commits its stem into the card's

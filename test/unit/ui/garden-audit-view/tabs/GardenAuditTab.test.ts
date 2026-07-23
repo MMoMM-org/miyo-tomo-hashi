@@ -557,6 +557,8 @@ describe("GardenAuditTab.render — no-scan-candidate hint (2026-07-23 user QA)"
 		tab.render(container, model, ctx);
 
 		expect(container.textContent).not.toContain(HINT_TEXT);
+		expect(container.querySelector(".hashi-ga-apply")).not.toBeNull();
+		expect(container.querySelector(".hashi-ga-skip")).not.toBeNull();
 	});
 
 	it("never shows the hint on a dead_link card (no fallback semantics)", () => {
