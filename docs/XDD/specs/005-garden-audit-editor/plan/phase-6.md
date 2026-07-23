@@ -1,6 +1,6 @@
 ---
 title: "Phase 6: Dead-link context & note navigation"
-status: pending
+status: in_progress
 version: "1.0"
 phase: 6
 ---
@@ -27,7 +27,7 @@ phase: 6
 
 Adds the inline dead-link context and the open-beside / hover-preview note navigation.
 
-- [ ] **T6.1 Dead-link context extractor (async, cached)** `[activity: backend-api]`
+- [x] **T6.1 Dead-link context extractor (async, cached)** `[activity: backend-api]`
 
   1. Prime: Read `VaultFS.cachedRead` + the metadataCache-race guidance (resolve from content, not `vault.metadata()`) `[ref: SDD/ADR-4; SDD/Implementation Gotchas]`.
   2. Test: given a note body containing `[[dead_target]]`, returns the occurrence line(s) + nearest preceding heading; multiple occurrences handled; a missing/moved note degrades gracefully (returns a "note not found" marker, never throws); results cached per note path; extraction is async and does not block the caller.

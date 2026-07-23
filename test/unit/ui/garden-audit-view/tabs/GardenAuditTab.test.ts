@@ -10,8 +10,9 @@
 
 import "obsidian";
 import { App } from "obsidian";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import type { DeadLinkContextResult } from "../../../../../src/garden-audit/deadLinkContext";
 import type {
 	FindingWire,
 	GardenAuditModel,
@@ -52,8 +53,14 @@ function getMockModel(findings: readonly FindingWire[]): GardenAuditModel {
 	return { doc: getMockDoc(findings), dirty: false };
 }
 
+/** Default stub — resolves "note-not-found" for every call; tests that care
+ * about the dead-link context wiring override this explicitly. */
+function stubDeadLinkContext(): GardenAuditTabContext["deadLinkContext"] {
+	return vi.fn(async (): Promise<DeadLinkContextResult> => ({ status: "note-not-found" }));
+}
+
 function makeCtx(): GardenAuditTabContext {
-	return { app: new App(), apply: () => {} };
+	return { app: new App(), apply: () => {}, deadLinkContext: stubDeadLinkContext() };
 }
 
 /**
@@ -72,6 +79,7 @@ function makeRecordingCtx(model: GardenAuditModel): {
 		apply: (transform) => {
 			current = transform(current);
 		},
+		deadLinkContext: stubDeadLinkContext(),
 	};
 	return { ctx, getModel: () => current };
 }
@@ -1107,6 +1115,7 @@ describe("GardenAuditTab.render — advisory read-only cards (T5.5)", () => {
 				applyCalls += 1;
 				transform(model);
 			},
+			deadLinkContext: stubDeadLinkContext(),
 		};
 		const container = document.createElement("div");
 
@@ -1154,5 +1163,173 @@ describe("GardenAuditTab.render — advisory read-only cards (T5.5)", () => {
 		expect(() => tab.render(container, model, makeCtx())).not.toThrow();
 		expect(container.textContent).toContain("Notes/A.md");
 		expect(container.textContent).toContain("Folder/Deep/A.md");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// T6.1 — dead-link context (async, cached, off the main thread)
+// ---------------------------------------------------------------------------
+
+describe("GardenAuditTab.render — dead-link context (T6.1)", () => {
+	function makeDeadLinkFinding(overrides?: Partial<FindingWire>): FindingWire {
+		return getMockFinding({
+			id: "F04",
+			check: "dead_link",
+			tier: "integrity",
+			target: { path: "MOCs/020 Active MOC.md", stem: "020 Active MOC" },
+			detail: { dead_target: "023 Sparks MOC", count: 1 },
+			decision: { selected: true, action: "edit_note_text", replace: "" },
+			...overrides,
+		});
+	}
+
+	async function flushMicrotasks(): Promise<void> {
+		await Promise.resolve();
+		await Promise.resolve();
+	}
+
+	it("shows a loading placeholder synchronously, then the resolved snippet after flush", async () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([makeDeadLinkFinding()]);
+		const deadLinkContext = vi.fn(
+			async (): Promise<DeadLinkContextResult> => ({
+				status: "ok",
+				occurrences: [
+					{ line: "- see [[023 Sparks MOC]] for background.", heading: "Sparks" },
+				],
+			}),
+		);
+		const ctx: GardenAuditTabContext = { app: new App(), apply: () => {}, deadLinkContext };
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+
+		tab.render(container, model, ctx);
+
+		expect(container.querySelector(".hashi-ga-context")?.textContent).toBe(
+			"Loading context…",
+		);
+		expect(deadLinkContext).toHaveBeenCalledWith("MOCs/020 Active MOC.md", "023 Sparks MOC");
+
+		await flushMicrotasks();
+
+		const text = container.querySelector(".hashi-ga-context")?.textContent;
+		expect(text).toContain("- see [[023 Sparks MOC]] for background.");
+		expect(text).toContain("Sparks");
+
+		document.body.removeChild(container);
+	});
+
+	it("renders 'Note not found.' when the affected note is missing/moved — card stays intact", async () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([makeDeadLinkFinding()]);
+		const deadLinkContext = vi.fn(
+			async (): Promise<DeadLinkContextResult> => ({ status: "note-not-found" }),
+		);
+		const ctx: GardenAuditTabContext = { app: new App(), apply: () => {}, deadLinkContext };
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+
+		tab.render(container, model, ctx);
+		await flushMicrotasks();
+
+		expect(container.querySelector(".hashi-ga-context-missing")?.textContent).toBe(
+			"Note not found.",
+		);
+		// The rest of the card renders normally alongside the degraded context.
+		expect(container.textContent).toContain("Replace with");
+
+		document.body.removeChild(container);
+	});
+
+	it("only dead_link cards call deadLinkContext — broken_up/orphan/advisory never do", () => {
+		const tab = new GardenAuditTab();
+		const deadLinkContext = vi.fn(
+			async (): Promise<DeadLinkContextResult> => ({ status: "note-not-found" }),
+		);
+		const model = getMockModel([
+			getMockFinding({
+				id: "F02",
+				check: "broken_up",
+				tier: "integrity",
+				target: { path: "Notes/Child.md", stem: "Child" },
+				detail: { up_target: "Deleted MOC" },
+				decision: { selected: false, action: null, repoint: "" },
+			}),
+			getMockFinding({
+				id: "F03",
+				check: "orphan",
+				tier: "structure",
+				target: { path: "Notes/Orphan.md", stem: "Orphan" },
+				detail: {},
+				decision: { selected: false, action: null, file_under: "" },
+			}),
+			getMockFinding({
+				id: "F09",
+				tier: "advisory",
+				check: "stale_moc",
+				fixable: false,
+				target: { path: "MOCs/Old.md", stem: "Old" },
+				detail: { mtime: "2026-01-01T00:00:00Z" },
+				decision: undefined,
+			}),
+			makeDeadLinkFinding(),
+		]);
+		const ctx: GardenAuditTabContext = { app: new App(), apply: () => {}, deadLinkContext };
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+
+		expect(deadLinkContext).toHaveBeenCalledTimes(1);
+		expect(deadLinkContext).toHaveBeenCalledWith("MOCs/020 Active MOC.md", "023 Sparks MOC");
+	});
+
+	it("stale-completion guard: re-rendering before resolve drops the stale result — no throw, no duplicate", async () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([makeDeadLinkFinding()]);
+		const resolvers: Array<(result: DeadLinkContextResult) => void> = [];
+		const deadLinkContext = vi.fn(
+			() =>
+				new Promise<DeadLinkContextResult>((resolve) => {
+					resolvers.push(resolve);
+				}),
+		);
+		const ctx: GardenAuditTabContext = { app: new App(), apply: () => {}, deadLinkContext };
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+
+		// First render — captures the stale placeholder + its resolver.
+		tab.render(container, model, ctx);
+		expect(resolvers).toHaveLength(1);
+
+		// A second render rebuilds the subtree (mirrors GardenAuditEditorView's
+		// real convention: the caller empties the container before re-
+		// rendering), detaching the first render's placeholder from the doc.
+		container.empty();
+		tab.render(container, model, ctx);
+		expect(resolvers).toHaveLength(2);
+
+		// Resolve the STALE (first) call first — it must not throw, and must
+		// not mutate anything now that its placeholder is detached.
+		expect(() => {
+			resolvers[0]?.({
+				status: "ok",
+				occurrences: [{ line: "STALE — must never appear", heading: null }],
+			});
+		}).not.toThrow();
+		await flushMicrotasks();
+
+		// Then the fresh (second) call resolves normally.
+		resolvers[1]?.({
+			status: "ok",
+			occurrences: [{ line: "- see [[023 Sparks MOC]] fresh", heading: null }],
+		});
+		await flushMicrotasks();
+
+		const contextBlocks = container.querySelectorAll(".hashi-ga-context");
+		expect(contextBlocks).toHaveLength(1);
+		expect(container.textContent).not.toContain("STALE");
+		expect(container.textContent).toContain("fresh");
+
+		document.body.removeChild(container);
 	});
 });

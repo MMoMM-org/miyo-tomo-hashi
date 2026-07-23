@@ -604,6 +604,7 @@ export default class TomoHashiPlugin extends Plugin {
 			(leaf: WorkspaceLeaf) =>
 				new GardenAuditEditorView(leaf, {
 					adapter: new ObsidianGardenAuditDoc(vault),
+					vault,
 				}),
 		);
 

@@ -681,6 +681,24 @@
 .hashi-ga-card-row .hashi-ga-decision {
 	margin-left: auto;
 }
+/* ---- dead-link context (spec-005, T6.1) -----------------------------------
+   Async, cached snippet(s) rendered beneath the dead_link card's detail row
+   (SDD ADR-4) — "Loading context…" swaps for the resolved line(s), or a
+   "Note not found." message when the affected note is missing/moved. */
+.hashi-ga-context {
+	font-size: 12px;
+	color: var(--se-text-muted);
+	font-style: italic;
+}
+.hashi-ga-context-line {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.hashi-ga-context-missing {
+	color: var(--se-text-faint);
+}
+
 .hashi-ga-target-field {
 	display: flex;
 	align-items: center;

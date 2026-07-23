@@ -31,6 +31,12 @@
  *    this.store.get() === savedModel` post-await — an edit or a Revert
  *    landing mid-flight is never silently marked clean. A `saving` flag
  *    additionally disables Save/Revert for the whole in-flight window.
+ * 4. (T6.1) The dead-link context extractor is constructed ONCE per view
+ *    instance (in the constructor, from `deps.vault`), never per-render —
+ *    its per-note-path cache (`deadLinkContext.ts`) needs to survive across
+ *    `render()` calls, or every re-render would re-read every affected note.
+ *    Only its bound `extract` method reaches the tab, via
+ *    `GardenAuditTabContext.deadLinkContext`.
  */
 
 import {
@@ -40,10 +46,12 @@ import {
 	type WorkspaceLeaf,
 } from "obsidian";
 
+import { createDeadLinkContextExtractor } from "../../garden-audit/deadLinkContext.js";
 import { normalizeBrokenUpActions } from "../../garden-audit/transforms.js";
 import type { GardenAuditModel } from "../../types/garden-audit.js";
 import { Store } from "../../util/store.js";
 import type { GardenAuditDoc } from "../../vault/GardenAuditDoc.js";
+import type { VaultFS } from "../../vault/VaultFS.js";
 import { ConfirmModal } from "../ConfirmModal.js";
 
 import { VIEW_TYPE_GARDEN_AUDIT_EDITOR } from "./index.js";
@@ -63,6 +71,13 @@ export interface GardenAuditEditorViewDeps {
 	readonly docPath?: string;
 	/** Test seam — defaults to a real `GardenAuditTab`; production never overrides it. */
 	readonly tab?: GardenAuditTabSpec;
+	/**
+	 * Raw `VaultFS` — used ONLY to construct this view's per-instance
+	 * `DeadLinkContextExtractor` (T6.1). `adapter` above stays the sole
+	 * wire-aware collaborator; this is the one deliberate exception, since
+	 * context extraction reads note BODIES directly rather than the wire.
+	 */
+	readonly vault: VaultFS;
 }
 
 /** Narrow, defensive read of `state.docPath` — never throws on a malformed state. */
@@ -74,6 +89,9 @@ function extractDocPath(state: unknown): string | null {
 
 export class GardenAuditEditorView extends ItemView {
 	private readonly tab: GardenAuditTabSpec;
+	// Constructed once per view instance (T6.1) — see class doc comment
+	// item 4 for why this must not be rebuilt per-render.
+	private readonly deadLinkContext: GardenAuditTabContext["deadLinkContext"];
 	private store: Store<GardenAuditModel> | null = null;
 	private unsubscribe: (() => void) | null = null;
 	private docPath: string;
@@ -100,6 +118,8 @@ export class GardenAuditEditorView extends ItemView {
 		super(leaf);
 		this.tab = deps.tab ?? new GardenAuditTab();
 		this.docPath = deps.docPath ?? "";
+		const extractor = createDeadLinkContextExtractor(deps.vault);
+		this.deadLinkContext = (notePath, deadTarget) => extractor.extract(notePath, deadTarget);
 	}
 
 	override getViewType(): string {
@@ -348,6 +368,7 @@ export class GardenAuditEditorView extends ItemView {
 				if (this.store === null) return;
 				this.store.set(transform(this.store.get()));
 			},
+			deadLinkContext: this.deadLinkContext,
 		};
 		this.tab.render(body, model, ctx);
 	}

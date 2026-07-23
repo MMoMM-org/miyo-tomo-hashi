@@ -11,10 +11,15 @@
  *     state instead of calling `render()`).
  *   - No `pickerScopes` yet — Phase 4 has no pickers (TargetControl/
  *     MocPicker/VaultNotePicker are Phase 5). Added there if needed.
+ *   - (Phase 6, T6.1) `deadLinkContext` — the view owns the
+ *     `DeadLinkContextExtractor` instance (constructed once, not per-render)
+ *     so its per-note cache survives across re-renders; the tab only ever
+ *     sees the bound `extract` function, never the extractor itself.
  */
 
 import type { App } from "obsidian";
 
+import type { DeadLinkContextResult } from "../../garden-audit/deadLinkContext.js";
 import type { GardenAuditModel } from "../../types/garden-audit.js";
 
 /** Per-render context handed to the tab's `render()`. */
@@ -28,6 +33,16 @@ export interface GardenAuditTabContext {
 	 * transforms.ts): no re-render, no dirty flip.
 	 */
 	apply(transform: (model: GardenAuditModel) => GardenAuditModel): void;
+	/**
+	 * Extracts a dead_link finding's surrounding body context (occurrence
+	 * line(s) + nearest heading), async and cached per note path (SDD ADR-4).
+	 * Only the `dead_link` card calls this — every other check renders
+	 * without it.
+	 */
+	readonly deadLinkContext: (
+		notePath: string,
+		deadTarget: string,
+	) => Promise<DeadLinkContextResult>;
 }
 
 /**

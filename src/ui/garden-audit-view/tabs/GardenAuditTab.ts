@@ -64,6 +64,7 @@ import {
 	setSuggestRequested,
 } from "../../../garden-audit/transforms.js";
 import { renderNoteLink } from "../../suggestions-view/openNote.js";
+import { renderDeadLinkContext } from "../DeadLinkContextView.js";
 import { renderSuggestControl } from "../SuggestControl.js";
 import type { GardenAuditTabContext, GardenAuditTabSpec } from "../tabContract.js";
 import { renderTargetControl } from "../TargetControl.js";
@@ -427,6 +428,12 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		const countSuffix = count !== undefined ? ` (${count}×)` : "";
 		detailRow.createSpan({ cls: "hashi-ga-card-detail", text: `${label}${countSuffix}` });
 		this.renderApplySkip(detailRow, finding, ctx);
+
+		renderDeadLinkContext(card, {
+			notePath: finding.target.path,
+			deadTarget,
+			deadLinkContext: ctx.deadLinkContext,
+		});
 
 		this.renderTargetField(
 			card,

@@ -18,6 +18,7 @@ import type { GardenAuditModel, GardenAuditWire } from "../../../../src/types/ga
 import { VIEW_TYPE_GARDEN_AUDIT_EDITOR } from "../../../../src/ui/garden-audit-view/index";
 import { GardenAuditEditorView } from "../../../../src/ui/garden-audit-view/GardenAuditEditorView";
 import type { GardenAuditTabSpec } from "../../../../src/ui/garden-audit-view/tabContract";
+import { FakeVaultFS } from "../../../../src/vault/FakeVaultFS";
 import type { GardenAuditDoc } from "../../../../src/vault/GardenAuditDoc";
 
 // --- ConfirmModal mock -------------------------------------------------------
@@ -50,7 +51,10 @@ function makeView(
 	tab?: GardenAuditTabSpec,
 ): GardenAuditEditorView {
 	const leaf = new WorkspaceLeaf();
-	const view = new GardenAuditEditorView(leaf, { adapter, docPath, tab });
+	// Empty FakeVaultFS — this file doesn't exercise dead-link context
+	// resolution (that's GardenAuditTab.test.ts's job); any card reaching for
+	// it degrades to "note-not-found", which is harmless here.
+	const view = new GardenAuditEditorView(leaf, { adapter, docPath, tab, vault: new FakeVaultFS() });
 	view.app = new App();
 	return view;
 }
