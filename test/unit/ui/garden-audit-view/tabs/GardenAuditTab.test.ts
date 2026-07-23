@@ -494,6 +494,34 @@ describe("GardenAuditTab.render — no-scan-candidate hint (2026-07-23 user QA)"
 		},
 	);
 
+	it.each(["orphan", "unparented"] as const)(
+		"%s: shows the hint even when LLM candidates are present but scan candidates are empty",
+		(check) => {
+			const tab = new GardenAuditTab();
+			const model = getMockModel([
+				getMockFinding({
+					id: "F03",
+					check,
+					tier: "structure",
+					target: { path: "Notes/Orphan.md", stem: "Orphan" },
+					detail: { candidate_mocs: [] },
+					decision: {
+						selected: true,
+						action: "link_to_moc",
+						file_under: "",
+						candidates: [{ stem: "Some MOC", score: 0.8 }],
+					},
+				}),
+			]);
+			const ctx = makeCtx();
+			const container = document.createElement("div");
+
+			tab.render(container, model, ctx);
+
+			expect(container.textContent).toContain(HINT_TEXT);
+		},
+	);
+
 	it("does not show the hint when a valid scan candidate is present", () => {
 		const tab = new GardenAuditTab();
 		const model = getMockModel([
