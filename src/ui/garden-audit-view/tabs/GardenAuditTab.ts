@@ -373,6 +373,9 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 	 * method never re-implements that.
 	 */
 	private renderSuggestField(card: HTMLElement, finding: FindingWire, ctx: GardenAuditTabContext): void {
+		// Guard rather than assert: only fixable findings with a `decision`
+		// reach this method (renderFindingRow gates the call), but TS doesn't
+		// carry that narrowing across the method boundary.
 		if (finding.decision === undefined) return;
 		const decision = finding.decision;
 		renderSuggestControl(card, {

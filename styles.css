@@ -796,6 +796,9 @@
 .hashi-ga-suggest-hint--pending {
 	color: var(--se-text-muted);
 }
+.hashi-ga-suggest-hint--empty {
+	font-style: italic;
+}
 
 /* ---- generic card -------------------------------------------------------- */
 .hashi-se-card {
