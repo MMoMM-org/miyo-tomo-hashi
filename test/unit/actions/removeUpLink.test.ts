@@ -96,6 +96,36 @@ describe("removeUpLink — multi-link removal", () => {
 		expect(outcome.kind).toBe("applied");
 		expect(await vault.read(PATH)).toBe("up:: [[021 Fleeting MOC]]");
 	});
+
+	it("substring-stem disambiguation: removes exact stem when a prefix exists", async () => {
+		// Regression test: indexOf()-based whole-stem matching vs naive include()-based substring match.
+		// If matching were changed to line.includes("[[MOC]]"), this test would fail because
+		// "[[MOC]]" appears as a substring inside "[[Old MOC]]".
+		const vault = new FakeVaultFS();
+		await vault.create(PATH, "up:: [[MOC]], [[Old MOC]]");
+
+		const outcome = await removeUpLink(
+			makeAction({ link: "MOC" }),
+			makeCtx(vault),
+		);
+
+		expect(outcome.kind).toBe("applied");
+		expect(await vault.read(PATH)).toBe("up:: [[Old MOC]]");
+	});
+
+	it("substring-stem disambiguation: reverse case (remove the longer stem)", async () => {
+		// Regression test: removing [[Old MOC]] from a line containing both [[MOC]] and [[Old MOC]].
+		const vault = new FakeVaultFS();
+		await vault.create(PATH, "up:: [[MOC]], [[Old MOC]]");
+
+		const outcome = await removeUpLink(
+			makeAction({ link: "Old MOC" }),
+			makeCtx(vault),
+		);
+
+		expect(outcome.kind).toBe("applied");
+		expect(await vault.read(PATH)).toBe("up:: [[MOC]]");
+	});
 });
 
 // ---------------------------------------------------------------------------

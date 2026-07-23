@@ -30,6 +30,8 @@ import type { VaultFS } from "../vault/VaultFS.js";
 // just-linked MOC. insert_under_marker sits beside link_to_moc as the second
 // insert primitive (arbitrary-note inserts; no dependency on create_moc).
 // replace_section follows insert_under_marker as the section-overwrite sibling.
+// Garden-audit link-edit actions (edit_note_text, remove_up_link) run before
+// add_relationship, allowing structured link updates before navigation.
 // Update kinds and source cleanup follow.
 const KIND_ORDER: readonly ActionKind[] = [
 	"create_moc",
