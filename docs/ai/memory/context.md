@@ -1,5 +1,21 @@
 # Context Memory
 
+## Garden-Audit Editor Phase 5 — T5.4 BLOCKED on Tomo (2026-07-23)
+
+Spec-005 Phase 5 in progress on `feat/garden-audit-editor`: T5.1 (TargetControl), T5.2
+(fixable cards), T5.3 (candidate chips) shipped + double-reviewed. **T5.4 is blocked**: the
+wire cannot distinguish "suggest pending" from "suggest ran, returned empty" (both are
+`suggest_requested:true, candidates:[]`; Tomo's `enrich_wire_with_candidates` never resets
+`suggest_requested`, and `decision` is `additionalProperties:false` so Hashi can't pre-read
+a speculative field). Second finding: Tomo's `garden-auditor.md` S.4 never re-uploads the
+enriched wire, so candidates never reach the vault `.json` (would starve T5.3's chips in
+live use). Handoff sent (requires_action):
+`_outbox/for-tomo/2026-07-23_hashi-to-tomo_garden-audit-suggest-state-and-wire-reupload.md`
+— proposes additive `decision.suggested:true` (digest-excluded) + S.4 wire re-upload. When
+Tomo answers: re-vendor the schema (ADR-7), build T5.4 (toggle + dirty-on-suggest-only +
+pending hint + the gated "no suggestions found" state). T5.5 pulled forward meanwhile;
+phase completion waits on T5.4.
+
 ## Suggestions Editor (ADR-026) — ABSORBED, BLOCKED on Tomo (2026-07-03)
 
 Kokoro ADR-026 (Draft) amends Hashi's charter (ADR-009): Hashi gains a **Suggestions Editor** — a structured, editable view of Tomo's Pass-1 `suggestions.json` with four deterministic ops (re-point to MOC / pick spot in MOC / merge-rename proposed MOCs / change lifecycle state). Decision + open points recorded in `decisions.md` (2026-07-03). **Not started — gated on Tomo:** the `suggestions.json` schema + change-signal are Tomo-owned and not yet defined (paired Kokoro→Tomo handoff issued same day). Next steps once Tomo's contract lands: scaffold `docs/XDD/specs/NNN-suggestions-editor/` via `tcs-workflow:xdd`, do the ADR-026 §0 capability-mapping (four ops → existing executor contracts ADR-016/023/024) in the SDD, push back on any op that duplicates Tomo. Inbound handoff (absorbed, ack'd): `_inbox/from-kokoro/2026-07-03_kokoro-to-hashi_suggestions-editor-charter.md`.

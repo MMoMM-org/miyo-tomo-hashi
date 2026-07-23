@@ -750,3 +750,157 @@ describe("GardenAuditTab.render — advisory findings never get a fixable card",
 		expect(container.querySelector(".hashi-ga-target-inp")).toBeNull();
 	});
 });
+
+// ---------------------------------------------------------------------------
+// T5.5 — advisory read-only cards
+// ---------------------------------------------------------------------------
+
+describe("GardenAuditTab.render — advisory read-only cards (T5.5)", () => {
+	function getStaleMocFinding(overrides?: Partial<FindingWire>): FindingWire {
+		return getMockFinding({
+			id: "F09",
+			tier: "advisory",
+			check: "stale_moc",
+			fixable: false,
+			target: { path: "MOCs/Old.md", stem: "Old" },
+			detail: { mtime: "2026-01-01T00:00:00Z" },
+			decision: undefined,
+			...overrides,
+		});
+	}
+
+	function getDuplicateStemFinding(overrides?: Partial<FindingWire>): FindingWire {
+		return getMockFinding({
+			id: "F10",
+			tier: "advisory",
+			check: "duplicate_stem",
+			fixable: false,
+			target: { path: "Notes/A.md", stem: "A" },
+			detail: { dupes: ["Notes/A.md", "Folder/Deep/A.md"] },
+			decision: undefined,
+			...overrides,
+		});
+	}
+
+	it("stale_moc card renders the last-modified mtime detail", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([getStaleMocFinding()]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.textContent).toContain("2026-01-01T00:00:00Z");
+	});
+
+	it("duplicate_stem card renders the FULL colliding paths from dupes (not just stems)", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([getDuplicateStemFinding()]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.textContent).toContain("Notes/A.md");
+		expect(container.textContent).toContain("Folder/Deep/A.md");
+	});
+
+	it.each([
+		["stale_moc", getStaleMocFinding] as const,
+		["duplicate_stem", getDuplicateStemFinding] as const,
+	])("%s card exposes no Apply/Skip, target field, or chip controls", (_check, factory) => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([factory()]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.querySelector(".hashi-ga-apply")).toBeNull();
+		expect(container.querySelector(".hashi-ga-skip")).toBeNull();
+		expect(container.querySelector(".hashi-ga-target-inp")).toBeNull();
+		expect(container.querySelector(".hashi-ga-target-field")).toBeNull();
+		expect(container.querySelector(".hashi-ga-chip")).toBeNull();
+		expect(container.querySelector(".hashi-ga-chip-row")).toBeNull();
+	});
+
+	it("the only interactive element (button/a/input) in an advisory card is the note link", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([getStaleMocFinding()]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const card = container.querySelector(".hashi-ga-card")!;
+		expect(card.querySelectorAll("button, a, input")).toHaveLength(0);
+		const link = card.querySelector(".hashi-se-wlink");
+		expect(link).not.toBeNull();
+		expect(link?.getAttribute("role")).toBe("link");
+	});
+
+	it("renders the advisory card dimmed via the --advisory modifier class", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([getStaleMocFinding()]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.querySelector(".hashi-ga-card--advisory")).not.toBeNull();
+	});
+
+	it("clicking every clickable element in an advisory card dispatches NO transform — only the note link opens", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([getStaleMocFinding()]);
+		let applyCalls = 0;
+		const app = new App();
+		const ctx: GardenAuditTabContext = {
+			app,
+			apply: (transform) => {
+				applyCalls += 1;
+				transform(model);
+			},
+		};
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+
+		const card = container.querySelector(".hashi-ga-card")!;
+		const clickables = card.querySelectorAll<HTMLElement>("button, a, input, [role='link']");
+		for (const el of Array.from(clickables)) {
+			el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		}
+
+		expect(applyCalls).toBe(0);
+		expect(app.workspace.openLinkText).toHaveBeenCalledWith("Old", "", false);
+	});
+
+	it("stale_moc degrades gracefully when mtime is missing/malformed — no crash", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([getStaleMocFinding({ detail: {} })]);
+		const container = document.createElement("div");
+
+		expect(() => tab.render(container, model, makeCtx())).not.toThrow();
+		expect(container.querySelector(".hashi-ga-apply")).toBeNull();
+	});
+
+	it("duplicate_stem degrades gracefully when dupes is missing or malformed — no crash", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getDuplicateStemFinding({ detail: { dupes: "not-an-array" } }),
+		]);
+		const container = document.createElement("div");
+
+		expect(() => tab.render(container, model, makeCtx())).not.toThrow();
+	});
+
+	it("duplicate_stem skips non-string entries within a malformed dupes array — no crash", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getDuplicateStemFinding({
+				detail: { dupes: ["Notes/A.md", 42, null, "Folder/Deep/A.md"] },
+			}),
+		]);
+		const container = document.createElement("div");
+
+		expect(() => tab.render(container, model, makeCtx())).not.toThrow();
+		expect(container.textContent).toContain("Notes/A.md");
+		expect(container.textContent).toContain("Folder/Deep/A.md");
+	});
+});

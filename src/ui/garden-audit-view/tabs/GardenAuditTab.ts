@@ -16,9 +16,15 @@
  * (`renderDecisionControl` idiom from `SuggestionsTab`, ADR-5-safe for
  * broken_up via `transforms.setRepoint`), a per-check `TargetControl`, and
  * the target note's title as an openable link (`openNote.renderNoteLink`).
- * An advisory finding still renders through `renderAdvisoryPlaceholder` — a
- * deliberate placeholder; T5.5 gives advisory findings their own strictly
- * read-only card.
+ *
+ * An advisory finding (`duplicate_stem`/`stale_moc` — never `fixable`, never
+ * carries a `decision`) renders through `renderAdvisoryCard` (T5.5): a
+ * strictly read-only card, dimmed via `.hashi-ga-card--advisory`, showing
+ * only its per-check detail (colliding paths / last-modified) — no Apply
+ * toggle, target field, or candidate chip, only its note-title link is
+ * interactive. This is a UI-level guarantee on top of the wire's structural
+ * one (advisory findings have no `decision` block, so the fixable transforms
+ * are already no-ops for them).
  *
  * T4.4: an all-advisory run (zero `fixable` findings) still renders every
  * tier section — including the advisory cards — but leads with a "Nothing
@@ -71,6 +77,18 @@ function detailString(detail: Record<string, unknown>, key: string): string | un
 function detailNumber(detail: Record<string, unknown>, key: string): number | undefined {
 	const value = detail[key];
 	return typeof value === "number" ? value : undefined;
+}
+
+/**
+ * Guarded string-array read (for `duplicate_stem`'s `dupes`) — a missing key,
+ * a non-array value, or non-string entries within the array all degrade
+ * rather than crash: non-array returns `undefined` (caller falls back to an
+ * empty list), non-string entries are silently skipped.
+ */
+function detailStringArray(detail: Record<string, unknown>, key: string): string[] | undefined {
+	const raw = detail[key];
+	if (!Array.isArray(raw)) return undefined;
+	return raw.filter((entry): entry is string => typeof entry === "string");
 }
 
 /** The target note's display title — falls back to the full path if Tomo left `stem` null. */
@@ -164,16 +182,8 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		if (finding.fixable && finding.decision !== undefined) {
 			this.renderFixableCard(row, finding, ctx);
 		} else {
-			this.renderAdvisoryPlaceholder(row, finding);
+			this.renderAdvisoryCard(row, finding, ctx);
 		}
-	}
-
-	// -- advisory placeholder (T4.2; real read-only card is T5.5) ----------
-
-	private renderAdvisoryPlaceholder(row: HTMLElement, finding: FindingWire): void {
-		row.createSpan({ cls: "hashi-ga-finding-id", text: finding.id });
-		row.createSpan({ cls: "hashi-ga-finding-check", text: finding.check });
-		row.createSpan({ cls: "hashi-ga-finding-target", text: finding.target.path });
 	}
 
 	// -- fixable card dispatch ------------------------------------------------
@@ -193,19 +203,34 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 			case "duplicate_stem":
 			case "stale_moc":
 				// Schema-level invariant: these two checks are never `fixable`.
-				// Fall back to the placeholder rather than crash if that ever breaks.
-				this.renderAdvisoryPlaceholder(row, finding);
+				// Fall back to the strict read-only card rather than crash if
+				// that invariant ever breaks.
+				this.renderAdvisoryCard(row, finding, ctx);
 				return;
 		}
 	}
 
 	// -- shared card scaffolding ----------------------------------------------
 
-	private renderCardHeader(row: HTMLElement, finding: FindingWire, ctx: GardenAuditTabContext, lead: string): HTMLElement {
-		const card = row.createDiv({ cls: "hashi-ga-card" });
+	/**
+	 * `readOnly` (T5.5) adds the `--advisory` dim modifier and a trailing
+	 * "(read-only)" tag to the header — the note link stays the one
+	 * interactive element either way.
+	 */
+	private renderCardHeader(
+		row: HTMLElement,
+		finding: FindingWire,
+		ctx: GardenAuditTabContext,
+		lead: string,
+		readOnly = false,
+	): HTMLElement {
+		const card = row.createDiv({ cls: readOnly ? ["hashi-ga-card", "hashi-ga-card--advisory"] : "hashi-ga-card" });
 		const header = card.createDiv({ cls: "hashi-ga-card-header" });
 		header.createSpan({ text: `${finding.id} · ${lead}` });
 		renderNoteLink(header, ctx.app, targetTitle(finding));
+		if (readOnly) {
+			header.createSpan({ cls: "hashi-ga-card-readonly-tag", text: "(read-only)" });
+		}
 		return card;
 	}
 
@@ -306,7 +331,6 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 
 	private renderTargetField(
 		card: HTMLElement,
-		finding: FindingWire,
 		ctx: GardenAuditTabContext,
 		label: string,
 		check: FindingCheck,
@@ -333,7 +357,6 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 
 		this.renderTargetField(
 			card,
-			finding,
 			ctx,
 			"Repoint to",
 			"broken_up",
@@ -362,7 +385,6 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 
 		this.renderTargetField(
 			card,
-			finding,
 			ctx,
 			"Replace with",
 			"dead_link",
@@ -387,7 +409,6 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 
 		this.renderTargetField(
 			card,
-			finding,
 			ctx,
 			"File under",
 			finding.check,
@@ -399,5 +420,62 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		this.renderCandidateChips(card, finding, finding.decision?.file_under, (stem) => {
 			ctx.apply((model) => setFileUnder(model, finding.id, stem));
 		});
+	}
+
+	// -- advisory: duplicate_stem / stale_moc — strictly read-only (T5.5) ------
+
+	/**
+	 * Advisory findings carry no `decision` block on the wire — that's the
+	 * structural guarantee that they can't be mutated. This card is the
+	 * matching UI-level guarantee (SDD EARS "WHILE rendering an advisory
+	 * finding, THE SYSTEM SHALL expose no Apply/target/candidate/suggest
+	 * control"): only `renderCardHeader`'s note link is interactive; every
+	 * other span here is inert text.
+	 */
+	private renderAdvisoryCard(row: HTMLElement, finding: FindingWire, ctx: GardenAuditTabContext): void {
+		const lead = finding.check === "stale_moc" ? "stale MOC" : "duplicate stem";
+		const card = this.renderCardHeader(row, finding, ctx, lead, true);
+
+		if (finding.check === "stale_moc") {
+			this.renderStaleMocDetail(card, finding);
+		} else {
+			this.renderDuplicateStemDetail(card, finding);
+		}
+	}
+
+	/** Mirrors Tomo's `.md` rendering: "Last modified: <mtime>". */
+	private renderStaleMocDetail(card: HTMLElement, finding: FindingWire): void {
+		const mtime = detailString(finding.detail, "mtime");
+		const detailRow = card.createDiv({ cls: "hashi-ga-card-row" });
+		detailRow.createSpan({
+			cls: "hashi-ga-card-detail",
+			text: `Last modified: ${mtime ?? "(unknown)"}`,
+		});
+	}
+
+	/**
+	 * Mirrors Tomo's `.md` rendering: "Notes sharing stem <stem>:" followed by
+	 * one line per FULL colliding path (paths — not stems — disambiguate the
+	 * collision). Plain text lines, not links: the note link in the header
+	 * stays the card's only interactive element.
+	 */
+	private renderDuplicateStemDetail(card: HTMLElement, finding: FindingWire): void {
+		const stem = finding.target.stem ?? finding.target.path;
+		const dupes = detailStringArray(finding.detail, "dupes") ?? [];
+
+		const detailRow = card.createDiv({ cls: "hashi-ga-card-row" });
+		detailRow.createSpan({
+			cls: "hashi-ga-card-detail",
+			text: `Notes sharing stem "${stem}":`,
+		});
+
+		const list = card.createDiv({ cls: "hashi-ga-advisory-dupes" });
+		if (dupes.length === 0) {
+			list.createDiv({ cls: "hashi-ga-advisory-dupe", text: "(no colliding paths reported)" });
+			return;
+		}
+		for (const path of dupes) {
+			list.createDiv({ cls: "hashi-ga-advisory-dupe", text: path });
+		}
 	}
 }

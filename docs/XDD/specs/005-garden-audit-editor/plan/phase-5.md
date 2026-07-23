@@ -53,6 +53,10 @@ Delivers the interactive fixable cards and the strict read-only advisory cards.
   5. Success: candidates are advisory input; explicit target wins `[ref: PRD/F4; SDD/EARS "WHEN the user clicks a candidate chip"]`.
 
 - [ ] **T5.4 Suggest-targets toggle + two-run hints** `[activity: frontend-ui]` `[parallel: true]`
+  > **BLOCKED (2026-07-23)** on Tomo handoff `_outbox/for-tomo/2026-07-23_hashi-to-tomo_garden-audit-suggest-state-and-wire-reupload.md`:
+  > the wire cannot distinguish "suggest pending" from "suggest ran, returned empty" (both `suggest_requested:true, candidates:[]`;
+  > `decision` is `additionalProperties:false`, so no speculative field). The "no suggestions found" AC needs a Tomo-side marker
+  > (proposed: `decision.suggested:true`, digest-excluded) + the S.4 wire-reupload fix. Toggle + dirty + pending hint are buildable now.
 
   1. Prime: Read the `.md`'s Suggest wording + the pending/none states `[ref: SDD/User Interface & UX]`.
   2. Test: toggling "Suggest targets" sets `decision.suggest_requested` and marks dirty even though the digest is unchanged; a ticked-but-no-candidates finding shows the pending hint (run `/garden-audit --suggest` in Tomo, reopen); a suggest-returned-empty finding shows the distinct "no suggestions found" note.
@@ -60,7 +64,7 @@ Delivers the interactive fixable cards and the strict read-only advisory cards.
   4. Validate: suggest-toggle unit tests pass incl. dirty-on-suggest-only.
   5. Success: two-run flow legible; suggest-only edits savable `[ref: PRD/F5; SDD/EARS "WHEN the user toggles Suggest targets"]`.
 
-- [ ] **T5.5 Advisory cards — strictly read-only** `[activity: frontend-ui]`
+- [x] **T5.5 Advisory cards — strictly read-only** `[activity: frontend-ui]`
 
   1. Prime: Read the advisory `.md` rendering (stale_moc mtime, duplicate_stem dupes) `[ref: PRD/F6]`.
   2. Test: `duplicate_stem`/`stale_moc` cards render their read-only detail and expose NO Apply/target/candidate/suggest control; only the note link is interactive; asserted that no control can change their outcome.

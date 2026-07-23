@@ -756,6 +756,40 @@
 	color: var(--se-text);
 }
 
+/* ---- advisory read-only card (spec-005, T5.5) -----------------------------
+   `duplicate_stem`/`stale_moc` findings never carry a `decision` — this
+   modifier is the visual half of that guarantee (dimmed; only the header's
+   note link stays full-opacity/interactive, matching every other -- row
+   modifier in this block: --llm/--scan above). */
+.hashi-ga-card--advisory {
+	opacity: 0.7;
+}
+.hashi-ga-card--advisory .hashi-se-wlink {
+	opacity: 1;
+}
+.hashi-ga-card-readonly-tag {
+	font-size: 10px;
+	color: var(--se-text-faint);
+	font-weight: 400;
+	text-transform: none;
+	letter-spacing: 0;
+}
+.hashi-ga-advisory-dupes {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding-left: 8px;
+	border-left: 2px solid var(--se-border);
+}
+.hashi-ga-advisory-dupe {
+	font-family: var(--se-mono);
+	font-size: 11.5px;
+	color: var(--se-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 /* ---- generic card -------------------------------------------------------- */
 .hashi-se-card {
 	border: 1px solid var(--se-border);
