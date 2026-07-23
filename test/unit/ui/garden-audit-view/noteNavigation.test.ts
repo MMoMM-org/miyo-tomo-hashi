@@ -99,6 +99,17 @@ describe("renderNavigableNoteLink — missing target", () => {
 		expect(app.workspace.openLinkText).not.toHaveBeenCalled();
 	});
 
+	it("hovering the missing-target element does nothing (no hover-preview trigger, no throw)", () => {
+		const app = new App();
+		vi.mocked(app.metadataCache.getFirstLinkpathDest).mockReturnValue(null);
+		const parent = document.createElement("div");
+
+		const el = renderNavigableNoteLink(parent, app, "Ghost");
+		expect(() => el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))).not.toThrow();
+
+		expect(app.workspace.trigger).not.toHaveBeenCalled();
+	});
+
 	it("degrades to 'note not found' when metadataCache lacks getFirstLinkpathDest", () => {
 		const app = new App();
 		// Simulate a host/mock missing the API — guard-by-typeof path.

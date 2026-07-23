@@ -184,10 +184,10 @@ export class App {
 		getRightLeaf: vi.fn(() => new WorkspaceLeaf()),
 		// `newLeaf` mirrors real Obsidian's `PaneType | boolean` union (a bare
 		// `boolean` for replace/new-tab, or `"split"`/`"tab"`/`"window"` for a
-		// `PaneType`) — typed as `boolean | string` here since the mock has no
-		// need to import the real `PaneType` union.
+		// `PaneType`) — typed with a local literal union instead of importing the
+		// real `PaneType`.
 		openLinkText: vi.fn<
-			(linktext: string, sourcePath: string, newLeaf?: boolean | string) => Promise<void>
+			(linktext: string, sourcePath: string, newLeaf?: boolean | "tab" | "split" | "window") => Promise<void>
 		>(async () => {}),
 		getLeaf: vi.fn(() => new WorkspaceLeaf()),
 		revealLeaf: vi.fn(),
