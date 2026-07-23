@@ -751,6 +751,253 @@ describe("GardenAuditTab.render — advisory findings never get a fixable card",
 });
 
 // ---------------------------------------------------------------------------
+// T5.4 — Suggest-targets toggle + two-run hints
+// ---------------------------------------------------------------------------
+
+describe("GardenAuditTab.render — suggest-targets toggle (T5.4)", () => {
+	it("renders the checkbox UNCHECKED when suggest_requested is absent/false", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: { selected: true, action: "edit_note_text", replace: "" },
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const checkbox = container.querySelector(".hashi-ga-suggest-toggle") as HTMLInputElement;
+		expect(checkbox).not.toBeNull();
+		expect(checkbox.checked).toBe(false);
+		expect(container.textContent).toContain("Suggest targets");
+	});
+
+	it("renders the checkbox CHECKED when suggest_requested is true", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "",
+					suggest_requested: true,
+				},
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const checkbox = container.querySelector(".hashi-ga-suggest-toggle") as HTMLInputElement;
+		expect(checkbox.checked).toBe(true);
+	});
+
+	it("toggling the checkbox ON dispatches setSuggestRequested, marks dirty, and touches NO other decision field", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "021 Fleeting MOC",
+					candidates: [],
+				},
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const checkbox = container.querySelector(".hashi-ga-suggest-toggle") as HTMLInputElement;
+		checkbox.checked = true;
+		checkbox.dispatchEvent(new Event("change"));
+
+		const decision = finding(getModel(), "F04").decision;
+		expect(decision?.suggest_requested).toBe(true);
+		expect(getModel().dirty).toBe(true);
+		// Suggest-only edit — every other apply-decision field is untouched.
+		expect(decision?.selected).toBe(true);
+		expect(decision?.action).toBe("edit_note_text");
+		expect(decision?.replace).toBe("021 Fleeting MOC");
+	});
+
+	it("toggling the checkbox OFF dispatches setSuggestRequested(false)", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: {},
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "",
+					suggest_requested: true,
+				},
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const checkbox = container.querySelector(".hashi-ga-suggest-toggle") as HTMLInputElement;
+		checkbox.checked = false;
+		checkbox.dispatchEvent(new Event("change"));
+
+		expect(finding(getModel(), "F04").decision?.suggest_requested).toBe(false);
+	});
+
+	it.each(["broken_up", "orphan", "unparented"] as const)(
+		"%s card also gets the suggest-targets toggle",
+		(check) => {
+			const tab = new GardenAuditTab();
+			const model = getMockModel([
+				getMockFinding({
+					id: "F02",
+					check,
+					tier: check === "broken_up" ? "integrity" : "structure",
+					detail: {},
+					decision: { selected: true, action: "edit_note_text" },
+				}),
+			]);
+			const container = document.createElement("div");
+
+			tab.render(container, model, makeCtx());
+
+			expect(container.querySelector(".hashi-ga-suggest-toggle")).not.toBeNull();
+		},
+	);
+
+	const PENDING_TEXT = "Suggestions pending — run /garden-audit --suggest in Tomo, then reopen.";
+	const EMPTY_TEXT = "No suggestions found.";
+
+	it("pending hint: suggest_requested:true, no `suggested` key, empty candidates", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: {},
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "",
+					candidates: [],
+					suggest_requested: true,
+				},
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.textContent).toContain(PENDING_TEXT);
+		expect(container.textContent).not.toContain(EMPTY_TEXT);
+	});
+
+	it("legacy wire (no `suggested` key anywhere) behaves as the pending branch by construction", () => {
+		const tab = new GardenAuditTab();
+		// Pre-030 decision shape — `suggested` was never a field on this wire.
+		const decision = {
+			selected: true,
+			action: "edit_note_text",
+			replace: "",
+			suggest_requested: true,
+		};
+		expect("suggested" in decision).toBe(false);
+		const model = getMockModel([
+			getMockFinding({ id: "F04", check: "dead_link", detail: {}, decision }),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.textContent).toContain(PENDING_TEXT);
+	});
+
+	it.each([true, false])(
+		"ran-empty hint shows regardless of suggest_requested (suggested:true, candidates:[], suggest_requested:%s)",
+		(suggestRequested) => {
+			const tab = new GardenAuditTab();
+			const model = getMockModel([
+				getMockFinding({
+					id: "F04",
+					check: "dead_link",
+					detail: {},
+					decision: {
+						selected: true,
+						action: "edit_note_text",
+						replace: "",
+						candidates: [],
+						suggest_requested: suggestRequested,
+						suggested: true,
+					},
+				}),
+			]);
+			const container = document.createElement("div");
+
+			tab.render(container, model, makeCtx());
+
+			expect(container.textContent).toContain(EMPTY_TEXT);
+			expect(container.textContent).not.toContain(PENDING_TEXT);
+		},
+	);
+
+	it("candidates present → chips render and NEITHER hint text appears", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "",
+					candidates: [{ stem: "020 Active MOC", score: 0.6 }],
+					suggest_requested: true,
+					suggested: true,
+				},
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.querySelectorAll(".hashi-ga-chip")).toHaveLength(1);
+		expect(container.textContent).not.toContain(PENDING_TEXT);
+		expect(container.textContent).not.toContain(EMPTY_TEXT);
+	});
+
+	it("neither hint renders when suggest_requested is absent/false and suggested is absent", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: {},
+				decision: { selected: true, action: "edit_note_text", replace: "" },
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.textContent).not.toContain(PENDING_TEXT);
+		expect(container.textContent).not.toContain(EMPTY_TEXT);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // T5.5 — advisory read-only cards
 // ---------------------------------------------------------------------------
 
@@ -818,6 +1065,8 @@ describe("GardenAuditTab.render — advisory read-only cards (T5.5)", () => {
 		expect(container.querySelector(".hashi-ga-target-field")).toBeNull();
 		expect(container.querySelector(".hashi-ga-chip")).toBeNull();
 		expect(container.querySelector(".hashi-ga-chip-row")).toBeNull();
+		expect(container.querySelector(".hashi-ga-suggest")).toBeNull();
+		expect(container.querySelector(".hashi-ga-suggest-toggle")).toBeNull();
 	});
 
 	it("the only interactive element (button/a/input) in an advisory card is the note link", () => {

@@ -145,6 +145,23 @@ describe("validate (garden-audit wire)", () => {
 		expect(validate(fixture).ok).toBe(false);
 	});
 
+	it("accepts a decision carrying suggested:true (ADR-7 re-vendor proof — fails against the pre-re-vendor schema's additionalProperties:false)", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			findings: [
+				{
+					...VALID_FIXTURE.findings[0],
+					decision: {
+						...VALID_FIXTURE.findings[0]?.decision,
+						suggested: true,
+					},
+				},
+				...VALID_FIXTURE.findings.slice(1),
+			],
+		};
+		expect(validate(fixture).ok).toBe(true);
+	});
+
 	it("rejects an unknown top-level property (additionalProperties:false at root)", () => {
 		const fixture = { ...VALID_FIXTURE, extra_root_field: true };
 		expect(validate(fixture).ok).toBe(false);

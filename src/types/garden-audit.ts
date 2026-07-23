@@ -57,6 +57,12 @@ export interface DecisionWire {
 	readonly candidates?: readonly CandidateWire[];
 	/** Editable — marks a finding that wants LLM candidates. */
 	readonly suggest_requested?: boolean;
+	/**
+	 * Read-only Tomo ran-marker — set true by `--suggest` on every finding it
+	 * processed; absent = never ran (or no longer requested). Excluded from
+	 * emit_digest.
+	 */
+	readonly suggested?: boolean;
 }
 
 // ---------------------------------------------------------------------------

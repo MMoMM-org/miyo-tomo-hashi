@@ -52,11 +52,8 @@ Delivers the interactive fixable cards and the strict read-only advisory cards.
   4. Validate: candidate unit tests pass (click-to-pick, explicit-wins, no auto-apply).
   5. Success: candidates are advisory input; explicit target wins `[ref: PRD/F4; SDD/EARS "WHEN the user clicks a candidate chip"]`.
 
-- [ ] **T5.4 Suggest-targets toggle + two-run hints** `[activity: frontend-ui]` `[parallel: true]`
-  > **BLOCKED (2026-07-23)** on Tomo handoff `_outbox/for-tomo/2026-07-23_hashi-to-tomo_garden-audit-suggest-state-and-wire-reupload.md`:
-  > the wire cannot distinguish "suggest pending" from "suggest ran, returned empty" (both `suggest_requested:true, candidates:[]`;
-  > `decision` is `additionalProperties:false`, so no speculative field). The "no suggestions found" AC needs a Tomo-side marker
-  > (proposed: `decision.suggested:true`, digest-excluded) + the S.4 wire-reupload fix. Toggle + dirty + pending hint are buildable now.
+- [x] **T5.4 Suggest-targets toggle + two-run hints** `[activity: frontend-ui]` `[parallel: true]`
+  > **Unblocked 2026-07-23**: Tomo shipped `decision.suggested` ran-marker + S.4 wire re-upload (reply handoff `_inbox/from-tomo/2026-07-23_tomo-to-hashi_garden-audit-suggested-marker-and-wire-reupload.md`); schema re-vendored.
 
   1. Prime: Read the `.md`'s Suggest wording + the pending/none states `[ref: SDD/User Interface & UX]`.
   2. Test: toggling "Suggest targets" sets `decision.suggest_requested` and marks dirty even though the digest is unchanged; a ticked-but-no-candidates finding shows the pending hint (run `/garden-audit --suggest` in Tomo, reopen); a suggest-returned-empty finding shows the distinct "no suggestions found" note.

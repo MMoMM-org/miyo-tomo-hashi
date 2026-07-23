@@ -776,6 +776,27 @@
 	white-space: nowrap;
 }
 
+/* ---- suggest-targets toggle + two-run hints (spec-005, T5.4) --------------
+   The checkbox rides on `.hashi-se-cbx` (reused — see the Apply/Skip
+   precedent above); `.hashi-ga-suggest-toggle` itself carries no rules,
+   matching the `.hashi-ga-apply`/`.hashi-ga-skip` unstyled-test-hook idiom.
+   The two hint states are mutually exclusive (SuggestControl.ts's
+   `resolveSuggestHint`) so only ever one `--pending`/`--empty` variant
+   renders at a time. */
+.hashi-ga-suggest {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.hashi-ga-suggest-hint {
+	font-size: 11px;
+	color: var(--se-text-faint);
+}
+.hashi-ga-suggest-hint--pending {
+	color: var(--se-text-muted);
+}
+
 /* ---- generic card -------------------------------------------------------- */
 .hashi-se-card {
 	border: 1px solid var(--se-border);

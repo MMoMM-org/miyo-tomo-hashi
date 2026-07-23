@@ -39,6 +39,15 @@
  * a click writes the chip's stem into the SAME per-check transform the
  * TargetControl uses (never `decision.selected`), so the pick becomes an
  * explicit committed value rather than a second channel Tomo reads.
+ *
+ * T5.4: each fixable card also renders a "Suggest targets" checkbox +
+ * two-run hint (pending / "no suggestions found") beneath the chips, via
+ * `renderSuggestField` → `SuggestControl.renderSuggestControl` — extracted to
+ * a sibling module (mirrors `TargetControl.ts`) rather than inlined here, to
+ * keep this file inside the repo's LOC soft band. The toggle routes through
+ * `transforms.setSuggestRequested`; the hint precedence between the editor's
+ * own `suggest_requested` and Tomo's `suggested` ran-marker lives in
+ * `SuggestControl.ts`, not here.
  */
 
 import type {
@@ -47,8 +56,15 @@ import type {
 	FindingWire,
 	GardenAuditModel,
 } from "../../../types/garden-audit.js";
-import { setFileUnder, setRepoint, setReplace, setSelected } from "../../../garden-audit/transforms.js";
+import {
+	setFileUnder,
+	setRepoint,
+	setReplace,
+	setSelected,
+	setSuggestRequested,
+} from "../../../garden-audit/transforms.js";
 import { renderNoteLink } from "../../suggestions-view/openNote.js";
+import { renderSuggestControl } from "../SuggestControl.js";
 import type { GardenAuditTabContext, GardenAuditTabSpec } from "../tabContract.js";
 import { renderTargetControl } from "../TargetControl.js";
 
@@ -348,6 +364,25 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		renderTargetControl(field, { app: ctx.app, check, value, onChange });
 	}
 
+	/**
+	 * T5.4 — "Suggest targets" toggle + pending/no-suggestions hints, shared
+	 * by every fixable card (widget itself lives in `SuggestControl.ts` — see
+	 * that file's header for the state precedence). Routes through
+	 * `transforms.setSuggestRequested`, which already marks the model dirty
+	 * on a suggest-only edit (PRD F5/F7 — dirty is NOT digest-gated) — this
+	 * method never re-implements that.
+	 */
+	private renderSuggestField(card: HTMLElement, finding: FindingWire, ctx: GardenAuditTabContext): void {
+		if (finding.decision === undefined) return;
+		const decision = finding.decision;
+		renderSuggestControl(card, {
+			decision,
+			onToggle: (checked) => {
+				ctx.apply((model) => setSuggestRequested(model, finding.id, checked));
+			},
+		});
+	}
+
 	// -- broken_up: repoint (ADR-5 action-gating lives in transforms.setRepoint) --
 
 	private renderBrokenUpCard(row: HTMLElement, finding: FindingWire, ctx: GardenAuditTabContext): void {
@@ -374,6 +409,7 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		this.renderCandidateChips(card, finding, finding.decision?.repoint, (stem) => {
 			ctx.apply((model) => setRepoint(model, finding.id, stem));
 		});
+		this.renderSuggestField(card, finding, ctx);
 	}
 
 	// -- dead_link: replace ------------------------------------------------
@@ -402,6 +438,7 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		this.renderCandidateChips(card, finding, finding.decision?.replace, (stem) => {
 			ctx.apply((model) => setReplace(model, finding.id, stem));
 		});
+		this.renderSuggestField(card, finding, ctx);
 	}
 
 	// -- orphan/unparented: file_under --------------------------------------
@@ -426,6 +463,7 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		this.renderCandidateChips(card, finding, finding.decision?.file_under, (stem) => {
 			ctx.apply((model) => setFileUnder(model, finding.id, stem));
 		});
+		this.renderSuggestField(card, finding, ctx);
 	}
 
 	// -- advisory: duplicate_stem / stale_moc — strictly read-only (T5.5) ------
