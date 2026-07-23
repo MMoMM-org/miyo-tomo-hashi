@@ -101,10 +101,10 @@ Each phase is defined in a separate file. Tasks follow red-green-refactor: **Pri
 |-----|---------|-----------|
 | F1 | Discover & open a garden-audit surface | P3 (T3.1–T3.3), P4 (T4.1) |
 | F2 | Findings grouped by tier + counts | P4 (T4.2) |
-| F3 | Apply/Skip + target control (pick/type/empty) + dead-link context | P2 (T2.2), P5 (T5.1–T5.3), P6 (T6.1) |
-| F4 | Display-only candidates (click-to-pick) | P5 (T5.4) |
-| F5 | Suggest-targets toggle + two-run legibility | P2 (T2.2), P5 (T5.5) |
-| F6 | Advisory read-only | P5 (T5.6) |
+| F3 | Apply/Skip + target control (pick/type/empty) + dead-link context | P2 (T2.2), P5 (T5.1–T5.2), P6 (T6.1) |
+| F4 | Display-only candidates (click-to-pick) | P5 (T5.3) |
+| F5 | Suggest-targets toggle + two-run legibility | P2 (T2.2), P5 (T5.4) |
+| F6 | Advisory read-only | P5 (T5.5) |
 | F7 | Save=approve / Revert / dirty | P2 (T2.1), P4 (T4.3) |
 | F8 | Empty & error states | P4 (T4.4) |
 | F9 | Open-beside + hover-preview | P6 (T6.2) |
