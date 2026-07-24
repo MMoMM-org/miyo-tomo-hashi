@@ -1,5 +1,29 @@
 # Context Memory
 
+## suggest_pending gate + two-run UX (2026-07-24)
+
+Two-run garden-audit gate shipped on `feat/garden-audit-editor` (`7a630f0`, 1935 tests):
+a Save with a pending Suggest must NOT approve for /inbox (else Tomo processes a half-finished
+review — the mixed-edit footgun: an apply edit changes the digest → JSON authoritative, while a
+suggest-requested finding still has no target). Parts:
+- Additive top-level `suggest_pending?: boolean` (vendored ahead of Tomo's push — **reconcile-vendor
+  when Tomo lands their authoritative schema**, ADR-7); `GardenAuditWire.suggest_pending`.
+- Save gate (ADR-2, view-owned): `ObsidianGardenAuditDoc.save` now writes `model.doc` VERBATIM
+  (dropped the hardcoded `approved:true`); `handleSave` applies `applyApprovalGate` +
+  `normalizeBrokenUpActions` before the reference-identity baseline. pending → `approved:false,
+  suggest_pending:true`; else → `approved:true, suggest_pending:false`. Both gate fields are
+  digest-excluded (e2e proves emit_digest + apply fields byte-identical under a suggest-only save).
+- UX: two-state header banner (`GardenAuditBanner.ts`) + accent border/"New" badge on fresh
+  findings (`suggested && candidates>0`); single shared `isFreshFinding` predicate.
+- **The actual /inbox enforcement is 100% Tomo-side** (triage gates on `approved AND NOT
+  suggest_pending`); Hashi only signals. Handoff sent (`2026-07-24_hashi-to-tomo_garden-audit-
+  suggest-pending-gate.md`) with a **push-back**: the field is derivable from `suggest_requested &&
+  !suggested` (both shipped) — asked Tomo keep-explicit-field vs derive. **Open: Tomo's answer.**
+
+**Follow-up debt:** `GardenAuditTab.ts` is ~620 LOC, over the 500 L2 soft band — extract
+`renderCandidateChips`/`renderChipRow` (and/or card renderers) into a sibling; banner + suggest +
+target + note-nav already extracted, tab still over budget.
+
 ## Garden-Audit executor actions + QA polish landed (2026-07-23)
 
 After Phase 7's core (T7.1/T7.2 done), a QA + Tomo-round-trip burst on `feat/garden-audit-editor`:
