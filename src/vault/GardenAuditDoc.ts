@@ -15,9 +15,12 @@
  * round-trip. See `GardenAuditModel`'s doc comment (src/types/garden-audit.ts).
  *
  * ADR-6 divergence from SuggestionsDoc: there is NO courtesy `.md` write in
- * v1 — `save` persists the JSON wire only. `save` also sets the top-level
- * `approved` gate (PRD F7); `emit_digest` rides along inside `doc` and is
- * serialized untouched — Hashi never recomputes it.
+ * v1 — `save` persists the JSON wire only. `save` writes `model.doc`
+ * VERBATIM (ADR-2 — the adapter is dumb): the top-level approval gate
+ * (`approved` / `suggest_pending`, PRD F7) is owned by the caller
+ * (`GardenAuditEditorView.handleSave` via `applyApprovalGate`), not set here.
+ * `emit_digest` rides along inside `doc` and is serialized untouched — Hashi
+ * never recomputes it.
  */
 
 import type { GardenAuditModel } from "../types/garden-audit.js";
@@ -28,9 +31,9 @@ export interface GardenAuditDoc {
 
 	/**
 	 * Persist the WHOLE model as JSON only (ADR-6 — no sibling `.md` write).
-	 * Dirty-gated: a no-op when `model.dirty` is false. Sets `approved:true`
-	 * on the object actually serialized (the JSON state gate, PRD F7);
-	 * `emit_digest` is never recomputed.
+	 * Dirty-gated: a no-op when `model.dirty` is false. Writes `model.doc`
+	 * VERBATIM (ADR-2) — the caller owns the top-level approval gate
+	 * (`approved` / `suggest_pending`, PRD F7); `emit_digest` is never recomputed.
 	 */
 	save(model: GardenAuditModel): Promise<void>;
 }
