@@ -145,6 +145,12 @@ describe("validate (garden-audit wire)", () => {
 		expect(validate(fixture).ok).toBe(false);
 	});
 
+	it("accepts a wire carrying top-level suggest_pending:true (spec-005 Phase 6 suggest_pending gate)", () => {
+		const result = validate({ ...VALID_FIXTURE, suggest_pending: true });
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.data.suggest_pending).toBe(true);
+	});
+
 	it("accepts a decision carrying suggested:true (ADR-7 re-vendor proof — fails against the pre-re-vendor schema's additionalProperties:false)", () => {
 		const fixture = {
 			...VALID_FIXTURE,

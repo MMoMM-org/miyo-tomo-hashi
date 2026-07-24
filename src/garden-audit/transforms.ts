@@ -28,7 +28,7 @@
  * (bare Apply, and an already-selected wire saved with no edits at all).
  */
 
-import type { DecisionWire, GardenAuditModel } from "../types/garden-audit.js";
+import type { DecisionWire, FindingWire, GardenAuditModel } from "../types/garden-audit.js";
 
 // ---------------------------------------------------------------------------
 // Shared helper
@@ -187,4 +187,61 @@ export function setSuggestRequested(
 		if (decision.suggest_requested === suggestRequested) return null;
 		return { ...decision, suggest_requested: suggestRequested };
 	});
+}
+
+// ---------------------------------------------------------------------------
+// suggest_pending gate (2026-07-24) — a finding is "pending" when the user
+// requested `--suggest` but Tomo hasn't enriched it yet; "fresh" when Tomo
+// enriched it AND left display-only candidates behind. Both predicates are
+// pure lookups over `DecisionWire`/`FindingWire` — shared by the save-time
+// gate below, the header banner, and the fixable-card highlight (no DOM
+// dependency, so both the view and the render-only UI modules import from
+// here rather than re-deriving the same two booleans).
+// ---------------------------------------------------------------------------
+
+/** True when ≥1 fixable finding has a requested-but-not-yet-enriched suggest. */
+export function hasPendingSuggest(model: GardenAuditModel): boolean {
+	return model.doc.findings.some(
+		(f) => f.decision?.suggest_requested === true && f.decision.suggested !== true,
+	);
+}
+
+/** True when `--suggest` ran for this finding AND left ≥1 display-only candidate. */
+export function isFreshFinding(finding: FindingWire): boolean {
+	return (
+		finding.decision?.suggested === true &&
+		(finding.decision.candidates?.length ?? 0) > 0
+	);
+}
+
+/** Count of findings currently "fresh" (see `isFreshFinding`). */
+export function countFreshFindings(model: GardenAuditModel): number {
+	return model.doc.findings.filter(isFreshFinding).length;
+}
+
+/**
+ * Save-time approval gate (2026-07-24, suggest_pending gate) — ADR-2: the
+ * adapter writes `model.doc` verbatim now, so the view is the sole owner of
+ * `approved`/`suggest_pending`. A pending suggest PARKS the run
+ * (`approved:false, suggest_pending:true`) so Tomo's triage never processes a
+ * half-finished review; otherwise it approves normally
+ * (`approved:true, suggest_pending:false`). Same-reference no-op when both
+ * gate fields are already correct (mirrors `normalizeBrokenUpActions`'s
+ * idiom) — `dirty:true` on change even though the intended caller
+ * (`GardenAuditEditorView.handleSave`) is about to clear it immediately after,
+ * for the same reason `normalizeBrokenUpActions` documents: the view re-reads
+ * its reference-identity guard's baseline model AFTER calling this, so the
+ * flag never leaks past the save it's running for.
+ */
+export function applyApprovalGate(model: GardenAuditModel): GardenAuditModel {
+	const pending = hasPendingSuggest(model);
+	const approved = !pending;
+	const suggestPending = pending;
+	if (model.doc.approved === approved && model.doc.suggest_pending === suggestPending) {
+		return model;
+	}
+	return {
+		doc: { ...model.doc, approved, suggest_pending: suggestPending },
+		dirty: true,
+	};
 }

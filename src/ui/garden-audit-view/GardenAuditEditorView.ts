@@ -52,7 +52,7 @@ import {
 } from "obsidian";
 
 import { createDeadLinkContextExtractor } from "../../garden-audit/deadLinkContext.js";
-import { normalizeBrokenUpActions } from "../../garden-audit/transforms.js";
+import { applyApprovalGate, normalizeBrokenUpActions } from "../../garden-audit/transforms.js";
 import type { GardenAuditModel } from "../../types/garden-audit.js";
 import { Store } from "../../util/store.js";
 import type { GardenAuditDoc } from "../../vault/GardenAuditDoc.js";
@@ -331,20 +331,22 @@ export class GardenAuditEditorView extends ItemView {
 	 * in-flight window (see renderLeafHead), narrowing the window these
 	 * checks guard.
 	 *
-	 * ADR-5 apply-only gap: `normalizeBrokenUpActions` runs here, BEFORE the
+	 * ADR-5 apply-only gap + suggest_pending gate (2026-07-24): both
+	 * `normalizeBrokenUpActions` and `applyApprovalGate` run here, BEFORE the
 	 * reference-identity guard's baseline is captured — so `savedModel` is
-	 * already the normalized model, and the store itself is updated to match
-	 * (via `savedStore.set`) so `this.store.get() === savedModel` still holds
-	 * post-await when the user made no further edits. Normalizing after
-	 * capturing `savedModel` instead would make that comparison falsely look
-	 * like a concurrent edit landed, leaving `dirty` stuck true on a clean
-	 * save. `ObsidianGardenAuditDoc.save()` stays untouched (ADR-2 — the
-	 * adapter writes verbatim; this view owns save-time semantics).
+	 * already the normalized+gated model, and the store itself is updated to
+	 * match (via `savedStore.set`) so `this.store.get() === savedModel` still
+	 * holds post-await when the user made no further edits. Running either
+	 * transform after capturing `savedModel` instead would make that
+	 * comparison falsely look like a concurrent edit landed, leaving `dirty`
+	 * stuck true on a clean save. `ObsidianGardenAuditDoc.save()` stays
+	 * untouched (ADR-2 — the adapter writes verbatim; this view owns
+	 * save-time semantics, including the approve/suggest_pending gate).
 	 */
 	private async handleSave(): Promise<void> {
 		const savedStore = this.store;
 		if (savedStore === null) return;
-		savedStore.set(normalizeBrokenUpActions(savedStore.get()));
+		savedStore.set(applyApprovalGate(normalizeBrokenUpActions(savedStore.get())));
 		const savedModel = savedStore.get();
 
 		this.saving = true;

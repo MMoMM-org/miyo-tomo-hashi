@@ -577,6 +577,29 @@
 	color: var(--se-text-faint);
 }
 
+/* ---- garden-audit header banner (2026-07-24, suggest_pending gate) -------
+   Rendered at the top of GardenAuditTab, before the tier sections — the
+   --pending variant is the blocking state (Saving now would park the run),
+   the --fresh variant is purely informational (points at the highlighted
+   cards below). Mutually exclusive by precedence (GardenAuditBanner.ts). */
+.hashi-ga-banner {
+	padding: 8px 12px;
+	margin-bottom: 14px;
+	border-radius: var(--se-r-sm);
+	font-size: 12.5px;
+	line-height: 1.4;
+}
+.hashi-ga-banner--pending {
+	background: var(--se-bg-alt);
+	color: var(--se-text);
+	border: 1px solid var(--se-border-strong);
+}
+.hashi-ga-banner--fresh {
+	background: var(--se-accent-soft);
+	color: var(--se-text);
+	border: 1px solid var(--se-accent);
+}
+
 /* ---- garden-audit tier shell (spec-005, T4.2) ----------------------------
    Reuses the --se-* custom properties defined on .hashi-se-view above — the
    Garden-Audit Editor root carries both hashi-garden-audit-editor-view and
@@ -785,6 +808,27 @@
 	font-weight: 400;
 	text-transform: none;
 	letter-spacing: 0;
+}
+
+/* ---- fresh-suggestion highlight (2026-07-24, suggest_pending gate) --------
+   A fixable finding whose `--suggest` run just left ≥1 display-only
+   candidate (transforms.isFreshFinding) — accent left-border + a small
+   badge, everything else on the card renders unchanged (user-approved: no
+   dimming of the rest of the deck). Advisory cards never get this modifier
+   (renderCardHeader guards on !readOnly). */
+.hashi-ga-card--fresh {
+	border-left: 2px solid var(--se-accent);
+	padding-left: 8px;
+}
+.hashi-ga-fresh-badge {
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--se-accent);
+	background: var(--se-accent-soft);
+	border-radius: 999px;
+	padding: 1px 7px;
 }
 
 /* ---- note-reference navigation (spec-005, T6.2) ---------------------------

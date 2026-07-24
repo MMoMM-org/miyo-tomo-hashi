@@ -108,6 +108,13 @@ export interface GardenAuditWire {
 	readonly emit_digest: string;
 	/** Editable — JSON-side approve gate (Q1); absent treated as false. */
 	readonly approved?: boolean;
+	/**
+	 * Editor-set gate: true when ≥1 finding has a requested-but-not-yet-
+	 * enriched suggest (`decision.suggest_requested && !decision.suggested`).
+	 * Blocks /inbox approval until Tomo runs `--suggest` and clears it.
+	 * Digest-excluded, like `approved`. Absent = false.
+	 */
+	readonly suggest_pending?: boolean;
 	readonly findings: readonly FindingWire[];
 }
 

@@ -59,12 +59,13 @@ export class ObsidianGardenAuditDoc implements GardenAuditDoc {
 		const docPath = this.requireActiveDocPath();
 
 		// ADR-6: no courtesy `.md` write in v1 — the JSON wire is the only
-		// write. Save is the whole-run approve gate (PRD F7): stamp
-		// approved:true on the object actually serialized, not on
-		// `model.doc` itself, so a failed write below leaves the caller's
-		// model untouched. emit_digest and every other read-only/passthrough
-		// field ride along verbatim because this transform never touches them.
-		const toWrite: GardenAuditWire = { ...model.doc, approved: true };
+		// write. ADR-2 (2026-07-24 suggest_pending gate): the adapter writes
+		// `model.doc` VERBATIM — the view now owns `approved`/`suggest_pending`
+		// (GardenAuditEditorView.handleSave, via transforms.applyApprovalGate),
+		// mirroring how normalizeBrokenUpActions already lives in the view, not
+		// here. emit_digest and every other read-only/passthrough field ride
+		// along verbatim because this function never touches them.
+		const toWrite: GardenAuditWire = { ...model.doc };
 		const json = JSON.stringify(toWrite, null, 2) + "\n";
 
 		try {

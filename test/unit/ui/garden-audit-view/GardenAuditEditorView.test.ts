@@ -316,7 +316,7 @@ describe("GardenAuditEditorView — Save affordance (T4.3)", () => {
 		expect(findActionButton(view, "Save").disabled).toBe(false);
 	});
 
-	it("clicking Save calls adapter.save with the current (dirty) model", async () => {
+	it("clicking Save calls adapter.save with the current (dirty) model, gated (2026-07-24: no pending suggest → approved:true)", async () => {
 		const adapter = makeSpyAdapter(true);
 		const view = makeView(adapter);
 		await view.onOpen();
@@ -325,7 +325,10 @@ describe("GardenAuditEditorView — Save affordance (T4.3)", () => {
 		await flushAsyncHandler();
 
 		expect(adapter.save).toHaveBeenCalledTimes(1);
-		expect(adapter.save).toHaveBeenCalledWith({ doc: DEFAULT_SEED, dirty: true });
+		expect(adapter.save).toHaveBeenCalledWith({
+			doc: { ...DEFAULT_SEED, approved: true, suggest_pending: false },
+			dirty: true,
+		});
 	});
 
 	it("normalizes a selected broken_up finding's null action before it reaches the adapter (ADR-5 apply-only gap)", async () => {
@@ -357,6 +360,48 @@ describe("GardenAuditEditorView — Save affordance (T4.3)", () => {
 		const brokenUpFinding = savedModel?.doc.findings.find((f) => f.check === "broken_up");
 		expect(brokenUpFinding?.decision?.action).not.toBeNull();
 		expect(brokenUpFinding?.decision?.action).toBe("edit_note_text");
+	});
+
+	it("suggest_pending gate (2026-07-24): Save with no pending suggest sets approved:true, suggest_pending:false", async () => {
+		// DEFAULT_SEED's fixable findings all carry suggest_requested:false —
+		// nothing pending, so Save should approve normally.
+		const adapter = makeSpyAdapter(true);
+		const view = makeView(adapter);
+		await view.onOpen();
+
+		findActionButton(view, "Save").click();
+		await flushAsyncHandler();
+
+		const savedModel = adapter.save.mock.calls[0]?.[0];
+		expect(savedModel?.doc.approved).toBe(true);
+		expect(savedModel?.doc.suggest_pending).toBe(false);
+	});
+
+	it("suggest_pending gate (2026-07-24): Save with a pending suggest parks the run — approved:false, suggest_pending:true", async () => {
+		const pendingSeed: GardenAuditWire = {
+			...DEFAULT_SEED,
+			findings: DEFAULT_SEED.findings.map((f) =>
+				f.id === "F01" && f.decision !== undefined
+					? { ...f, decision: { ...f.decision, suggest_requested: true, suggested: undefined } }
+					: f,
+			),
+		};
+		const adapter: SpyAdapter = {
+			load: vi.fn<(docPath: string) => Promise<GardenAuditModel>>(async () => ({
+				doc: pendingSeed,
+				dirty: true,
+			})),
+			save: vi.fn<(model: GardenAuditModel) => Promise<void>>(async () => {}),
+		};
+		const view = makeView(adapter);
+		await view.onOpen();
+
+		findActionButton(view, "Save").click();
+		await flushAsyncHandler();
+
+		const savedModel = adapter.save.mock.calls[0]?.[0];
+		expect(savedModel?.doc.approved).toBe(false);
+		expect(savedModel?.doc.suggest_pending).toBe(true);
 	});
 
 	it("after a successful save, the dirty badge disappears and Save disables", async () => {

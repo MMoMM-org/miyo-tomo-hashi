@@ -15,6 +15,10 @@
       "type": "boolean",
       "description": "JSON-side approve gate (Q1). The Tomo-Editor sets this true on 'ready for /inbox'; the markdown '- [x] Approved' box still works for .md-only users, and Pass-2 is picked up when EITHER is set. EXCLUDED from emit_digest (approving is not an apply-decision edit), but approved:true forces Pass-2 to the JSON path regardless of digest so an all-default editor approval still applies fixes. Optional — absent is treated as false for back-compat with older wires."
     },
+    "suggest_pending": {
+      "type": "boolean",
+      "description": "Editor-set gate: true when the user requested '--suggest' on ≥1 finding that has not yet been enriched (decision.suggest_requested && !decision.suggested). Blocks /inbox approval until Tomo runs --suggest and clears it. Set false/absent when nothing is pending. EXCLUDED from emit_digest (a gate toggle, not an apply-decision edit) — like 'approved'. Additive; schema_version '1' survives."
+    },
     "generated": {
       "type": "string",
       "description": "ISO-8601 timestamp when this wire was produced."

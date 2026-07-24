@@ -77,6 +77,7 @@ import type {
 	GardenAuditModel,
 } from "../../../types/garden-audit.js";
 import {
+	isFreshFinding,
 	setFileUnder,
 	setRepoint,
 	setReplace,
@@ -84,6 +85,7 @@ import {
 	setSuggestRequested,
 } from "../../../garden-audit/transforms.js";
 import { renderDeadLinkContext } from "../DeadLinkContextView.js";
+import { renderGardenAuditBanner } from "../GardenAuditBanner.js";
 import { renderNavigableNoteLink } from "../noteNavigation.js";
 import { renderSuggestControl } from "../SuggestControl.js";
 import type { GardenAuditTabContext, GardenAuditTabSpec } from "../tabContract.js";
@@ -198,6 +200,8 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 	}
 
 	render(container: HTMLElement, model: GardenAuditModel, ctx: GardenAuditTabContext): void {
+		renderGardenAuditBanner(container, model);
+
 		const hasFixable = model.doc.findings.some((f) => f.fixable);
 		if (!hasFixable) {
 			container.createDiv({
@@ -271,6 +275,16 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 	 * `readOnly` (T5.5) adds the `--advisory` dim modifier and a trailing
 	 * "(read-only)" tag to the header — the note link stays the one
 	 * interactive element either way.
+	 *
+	 * 2026-07-24 (suggest_pending gate): a fixable finding that's "fresh"
+	 * (`transforms.isFreshFinding` — Tomo enriched it and left ≥1 display-only
+	 * candidate) gets an accent-border modifier + a "New" badge, so the user
+	 * can spot which cards changed since the last `--suggest` run without
+	 * dimming or otherwise altering every other card (user-approved: rest of
+	 * the deck renders unchanged). `readOnly` guards this — advisory findings
+	 * have no `decision` (so `isFreshFinding` is already false for them by
+	 * construction), but the guard states that structural guarantee
+	 * explicitly rather than relying on it silently.
 	 */
 	private renderCardHeader(
 		row: HTMLElement,
@@ -279,9 +293,17 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		lead: string,
 		readOnly = false,
 	): HTMLElement {
-		const card = row.createDiv({ cls: readOnly ? ["hashi-ga-card", "hashi-ga-card--advisory"] : "hashi-ga-card" });
+		const fresh = !readOnly && isFreshFinding(finding);
+		const cardCls = ["hashi-ga-card"];
+		if (readOnly) cardCls.push("hashi-ga-card--advisory");
+		if (fresh) cardCls.push("hashi-ga-card--fresh");
+
+		const card = row.createDiv({ cls: cardCls });
 		const header = card.createDiv({ cls: "hashi-ga-card-header" });
 		header.createSpan({ text: `${finding.id} · ${lead}` });
+		if (fresh) {
+			header.createSpan({ cls: "hashi-ga-fresh-badge", text: "New" });
+		}
 		renderNavigableNoteLink(header, ctx.app, targetTitle(finding));
 		if (readOnly) {
 			header.createSpan({ cls: "hashi-ga-card-readonly-tag", text: "(read-only)" });

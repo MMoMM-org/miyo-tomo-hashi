@@ -11,6 +11,11 @@ const ajv = new Ajv2020({ allErrors: true, allowUnionTypes: true });
 /** Compiled ajv validator for the vendored garden-audit wire schema (spec-005). */
 export const validateGardenAuditWire = ajv.compile(schema);
 
+// 2026-07-24: top-level `suggest_pending` was added to this vendored schema
+// AHEAD of Tomo's own push — Tomo builds the matching field in parallel.
+// Reconcile-vendor Tomo's authoritative garden-audit-wire.schema.json when it
+// lands (ADR-7) to confirm the field name/shape matches exactly.
+
 /**
  * Validates a parsed JSON value against the bundled garden-audit wire schema
  * (spec-005 SDD, Tomo ADR-4/ADR-026). Returns a discriminated outcome with

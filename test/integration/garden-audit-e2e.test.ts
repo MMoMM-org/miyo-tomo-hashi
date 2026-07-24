@@ -226,7 +226,11 @@ describe("Garden-Audit Editor end-to-end — real view + real adapter + real val
 		const written = await readWritten(vault);
 
 		expect(findFinding(written, "F01").decision?.suggest_requested).toBe(true);
-		expect(written.approved).toBe(true);
+		// 2026-07-24 suggest_pending gate: F01 now has suggest_requested:true
+		// with no `suggested` marker yet — a pending suggest — so Save PARKS
+		// the run instead of approving it (transforms.applyApprovalGate).
+		expect(written.approved).toBe(false);
+		expect(written.suggest_pending).toBe(true);
 		expect(written.emit_digest).toBe(fixture.emit_digest);
 
 		// Every apply-decision field, on EVERY finding, is byte-equal to the

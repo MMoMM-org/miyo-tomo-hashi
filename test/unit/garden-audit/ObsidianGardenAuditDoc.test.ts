@@ -97,7 +97,7 @@ describe("ObsidianGardenAuditDoc.save()", () => {
 		expect(await vault.read(DOC_PATH)).toBe(JSON.stringify(rawFixture, null, 2) + "\n");
 	});
 
-	it("writes the wire verbatim with emit_digest unchanged and top-level approved:true", async () => {
+	it("writes the wire verbatim with emit_digest unchanged (ADR-2: the adapter no longer forces approved)", async () => {
 		const vault = await seededVault();
 		const adapter = new ObsidianGardenAuditDoc(vault);
 		const model = await adapter.load(DOC_PATH);
@@ -119,9 +119,27 @@ describe("ObsidianGardenAuditDoc.save()", () => {
 
 		const written = JSON.parse(await vault.read(DOC_PATH)) as GardenAuditWire;
 		expect(written.emit_digest).toBe(rawFixture.emit_digest);
-		expect(written.approved).toBe(true);
+		// verbatim — the fixture's approved:false rides through unchanged;
+		// the VIEW is responsible for setting the gate before save (T4.3/2026-07-24).
+		expect(written.approved).toBe(false);
 		const writtenF01 = written.findings.find((f) => f.id === "F01");
 		expect(writtenF01?.decision?.replace).toBe("[[New Note]]");
+	});
+
+	it("writes approved:true verbatim when the model already carries it (view-set gate passthrough)", async () => {
+		const vault = await seededVault();
+		const adapter = new ObsidianGardenAuditDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+		const edited: GardenAuditModel = {
+			doc: { ...model.doc, approved: true, suggest_pending: false },
+			dirty: true,
+		};
+
+		await adapter.save(edited);
+
+		const written = JSON.parse(await vault.read(DOC_PATH)) as GardenAuditWire;
+		expect(written.approved).toBe(true);
+		expect(written.suggest_pending).toBe(false);
 	});
 
 	it("on write failure: notifies, keeps the caller's model unchanged, and rethrows", async () => {

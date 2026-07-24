@@ -1774,3 +1774,233 @@ describe("GardenAuditTab.render — dead-link context (T6.1)", () => {
 		document.body.removeChild(container);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 2026-07-24 — suggest_pending gate: header banner + fresh-suggestion
+// highlight (Phase 6 follow-up).
+// ---------------------------------------------------------------------------
+
+describe("GardenAuditTab.render — header banner (2026-07-24 suggest_pending gate)", () => {
+	const PENDING_BANNER_TEXT =
+		"Suggestions requested — run /garden-audit --suggest in Tomo, then reopen. " +
+		"Saving now parks this run; it won't be applied until suggestions are generated.";
+
+	it("renders the pending banner when a finding has suggest_requested:true and no suggested", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: {},
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "",
+					suggest_requested: true,
+				},
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const banner = container.querySelector(".hashi-ga-banner");
+		expect(banner).not.toBeNull();
+		expect(banner?.classList.contains("hashi-ga-banner--pending")).toBe(true);
+		expect(banner?.textContent).toBe(PENDING_BANNER_TEXT);
+	});
+
+	it("renders the fresh banner with the correct count when nothing is pending", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "",
+					candidates: [{ stem: "020 Active MOC", score: 0.6 }],
+					suggest_requested: true,
+					suggested: true,
+				},
+			}),
+			getMockFinding({
+				id: "F02",
+				check: "broken_up",
+				tier: "integrity",
+				target: { path: "Notes/Child.md", stem: "Child" },
+				detail: { up_target: "Deleted MOC" },
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					repoint: "020 Active MOC",
+					candidates: [{ stem: "020 Active MOC", score: 0.5 }],
+					suggest_requested: true,
+					suggested: true,
+				},
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const banner = container.querySelector(".hashi-ga-banner");
+		expect(banner).not.toBeNull();
+		expect(banner?.classList.contains("hashi-ga-banner--fresh")).toBe(true);
+		expect(banner?.textContent).toBe(
+			"Suggestions generated — 2 finding(s) with new suggestions are highlighted below. " +
+				"Review them, then Save to approve.",
+		);
+	});
+
+	it("pending takes precedence over fresh when somehow both are true at once", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: {},
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "",
+					candidates: [{ stem: "020 Active MOC", score: 0.6 }],
+					suggest_requested: true,
+					suggested: true, // fresh
+				},
+			}),
+			getMockFinding({
+				id: "F02",
+				check: "broken_up",
+				tier: "integrity",
+				target: { path: "Notes/Child.md", stem: "Child" },
+				detail: { up_target: "Deleted MOC" },
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					repoint: "",
+					suggest_requested: true, // pending — no `suggested`
+				},
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const banner = container.querySelector(".hashi-ga-banner");
+		expect(banner?.classList.contains("hashi-ga-banner--pending")).toBe(true);
+		expect(banner?.textContent).toBe(PENDING_BANNER_TEXT);
+	});
+
+	it("renders no banner when nothing is pending and no finding is fresh", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: {},
+				decision: { selected: true, action: "edit_note_text", replace: "" },
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.querySelector(".hashi-ga-banner")).toBeNull();
+	});
+});
+
+describe("GardenAuditTab.render — fresh-suggestion card highlight (2026-07-24)", () => {
+	it("a fresh finding's card gets the --fresh modifier class and a 'New' badge", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "",
+					candidates: [{ stem: "020 Active MOC", score: 0.6 }],
+					suggest_requested: true,
+					suggested: true,
+				},
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const card = container.querySelector(".hashi-ga-card");
+		expect(card?.classList.contains("hashi-ga-card--fresh")).toBe(true);
+		expect(card?.querySelector(".hashi-ga-fresh-badge")?.textContent).toBe("New");
+	});
+
+	it("a finding with suggested:true but empty candidates (ran-empty) is NOT fresh", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: {},
+				decision: {
+					selected: true,
+					action: "edit_note_text",
+					replace: "",
+					candidates: [],
+					suggested: true,
+				},
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const card = container.querySelector(".hashi-ga-card");
+		expect(card?.classList.contains("hashi-ga-card--fresh")).toBe(false);
+		expect(container.querySelector(".hashi-ga-fresh-badge")).toBeNull();
+	});
+
+	it("an ordinary (non-fresh) finding's card is unaffected — no --fresh class, no badge", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: { selected: true, action: "edit_note_text", replace: "" },
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		const card = container.querySelector(".hashi-ga-card");
+		expect(card?.classList.contains("hashi-ga-card--fresh")).toBe(false);
+		expect(container.querySelector(".hashi-ga-fresh-badge")).toBeNull();
+	});
+
+	it("an advisory card is never marked fresh, even in shape (no decision block to begin with)", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F09",
+				tier: "advisory",
+				check: "stale_moc",
+				fixable: false,
+				target: { path: "MOCs/Old.md", stem: "Old" },
+				detail: { mtime: "2026-01-01T00:00:00Z" },
+				decision: undefined,
+			}),
+		]);
+		const container = document.createElement("div");
+
+		tab.render(container, model, makeCtx());
+
+		expect(container.querySelector(".hashi-ga-card--fresh")).toBeNull();
+		expect(container.querySelector(".hashi-ga-fresh-badge")).toBeNull();
+	});
+});
