@@ -5,8 +5,11 @@
  * the user toggles "Suggest targets" checkboxes. Extracted as a sibling
  * module rather than inlined in `GardenAuditTab.ts` — mirrors
  * `SuggestControl.ts`'s plain-function widget idiom (no lifecycle of its own;
- * rebuilt on every re-render) and keeps the tab file inside the repo's
- * ~300-500 LOC soft band (Constitution L2 — Code Quality).
+ * rebuilt on every re-render) and curbs further growth of the tab file. NOTE:
+ * `GardenAuditTab.ts` is already over the repo's ~300-500 LOC soft band
+ * (Constitution L2); this extraction reduces the growth, it does not bring the
+ * file into compliance — a dedicated split (candidate-chips / card renderers)
+ * is a tracked follow-up.
  *
  * Two independent, mutually-exclusive-by-precedence states, both derived
  * straight from the model via `transforms.ts`'s pure predicates (no
