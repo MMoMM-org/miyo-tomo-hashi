@@ -2,7 +2,7 @@
  * HANDLERS dispatch registry tests.
  *
  * T3.6 — verifies:
- *   1. Key coverage: HANDLERS has exactly 11 keys matching all ActionKind values.
+ *   1. Key coverage: HANDLERS has exactly 14 keys matching all ActionKind values.
  *   2. Identity: each registry entry points to the canonical handler function.
  *   3. Dispatch smoke: HANDLERS[action.action](action, ctx) routes to the correct handler.
  *
@@ -16,6 +16,9 @@ import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import {
 	HANDLERS,
 	addRelationship,
+	editNoteText,
+	removeUpLink,
+	resolveDeadLink,
 	createMoc,
 	moveNote,
 	linkToMoc,
@@ -31,6 +34,8 @@ import type {
 	ActionKind,
 	CreateMocAction,
 	MoveNoteAction,
+	RemoveUpLinkAction,
+	ResolveDeadLinkAction,
 } from "../../../src/schema/types.js";
 
 // ---------------------------------------------------------------------------
@@ -47,7 +52,7 @@ const makeCtx = (vault: FakeVaultFS) => ({
 // ---------------------------------------------------------------------------
 
 describe("HANDLERS — key coverage", () => {
-	it("has exactly the 11 ActionKind keys", () => {
+	it("has exactly the 14 ActionKind keys", () => {
 		const expectedKeys: ActionKind[] = [
 			"create_moc",
 			"move_note",
@@ -55,6 +60,9 @@ describe("HANDLERS — key coverage", () => {
 			"insert_under_marker",
 			"replace_section",
 			"add_relationship",
+			"edit_note_text",
+			"remove_up_link",
+			"resolve_dead_link",
 			"update_tracker",
 			"update_log_entry",
 			"update_log_link",
@@ -111,6 +119,18 @@ describe("HANDLERS — identity", () => {
 	// closes the registration-completeness gap.
 	it("HANDLERS.add_relationship === addRelationship (M20)", () => {
 		expect(HANDLERS.add_relationship).toBe(addRelationship);
+	});
+
+	it("HANDLERS.edit_note_text === editNoteText", () => {
+		expect(HANDLERS.edit_note_text).toBe(editNoteText);
+	});
+
+	it("HANDLERS.remove_up_link === removeUpLink", () => {
+		expect(HANDLERS.remove_up_link).toBe(removeUpLink);
+	});
+
+	it("HANDLERS.resolve_dead_link === resolveDeadLink", () => {
+		expect(HANDLERS.resolve_dead_link).toBe(resolveDeadLink);
 	});
 
 	it("HANDLERS.skip === skip", () => {
@@ -275,6 +295,54 @@ describe("HANDLERS — dispatch smoke", () => {
 		expect(outcome.kind).toBe("applied");
 	});
 
+	it("edit_note_text: dispatches and returns applied", async () => {
+		const notePath = "020 Active MOC.md";
+		const vault = new FakeVaultFS();
+		await vault.create(notePath, "- [[023 Sparks MOC]]\n");
+		const action = {
+			action: "edit_note_text" as const,
+			id: "smoke-ent",
+			path: notePath,
+			match: "[[023 Sparks MOC]]",
+			replace: "[[023 Sparks (MOC)]]",
+			occurrence: "all" as const,
+		};
+		const handler = HANDLERS[action.action];
+		const outcome = await handler(action, makeCtx(vault));
+		expect(outcome.kind).toBe("applied");
+	});
+
+	it("remove_up_link: dispatches and returns applied", async () => {
+		const notePath = "022 Placeholders MOC.md";
+		const vault = new FakeVaultFS();
+		await vault.create(notePath, "up:: [[021 Fleeting MOC]]\n");
+		const action = {
+			action: "remove_up_link" as const,
+			id: "smoke-rul",
+			path: notePath,
+			link: "021 Fleeting MOC",
+		};
+		const handler = HANDLERS[action.action];
+		const outcome = await handler(action, makeCtx(vault));
+		expect(outcome.kind).toBe("applied");
+	});
+
+	it("resolve_dead_link: dispatches and returns applied", async () => {
+		const notePath = "020 Active MOC.md";
+		const vault = new FakeVaultFS();
+		await vault.create(notePath, "[[023 Sparks MOC]]\n");
+		const action = {
+			action: "resolve_dead_link" as const,
+			id: "smoke-rdl",
+			path: notePath,
+			target: "023 Sparks MOC",
+			replace: "[[023 Sparks (MOC)]]",
+		};
+		const handler = HANDLERS[action.action];
+		const outcome = await handler(action, makeCtx(vault));
+		expect(outcome.kind).toBe("applied");
+	});
+
 	it("delete_source: dispatches and returns applied", async () => {
 		const vault = new FakeVaultFS();
 		await vault.create("Inbox/old.md", "# old");
@@ -314,5 +382,13 @@ describe("HANDLERS — type narrowing", () => {
 
 	it("HANDLERS['move_note'] parameter type is MoveNoteAction", () => {
 		expectTypeOf<Parameters<typeof HANDLERS["move_note"]>[0]>().toExtend<MoveNoteAction>();
+	});
+
+	it("HANDLERS['remove_up_link'] parameter type is RemoveUpLinkAction", () => {
+		expectTypeOf<Parameters<typeof HANDLERS["remove_up_link"]>[0]>().toExtend<RemoveUpLinkAction>();
+	});
+
+	it("HANDLERS['resolve_dead_link'] parameter type is ResolveDeadLinkAction", () => {
+		expectTypeOf<Parameters<typeof HANDLERS["resolve_dead_link"]>[0]>().toExtend<ResolveDeadLinkAction>();
 	});
 });

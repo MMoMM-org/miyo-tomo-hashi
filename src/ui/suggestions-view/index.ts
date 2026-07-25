@@ -15,4 +15,3 @@ export {
 export type { EditorTab, PickerScopes, TabContext } from "./tabContract.js";
 export { DEFAULT_TABS } from "./tabs/defaultTabs.js";
 export { openSuggestionsEditor } from "./openSuggestionsEditor.js";
-export { SuggestionsDocPicker } from "./pickers/SuggestionsDocPicker.js";

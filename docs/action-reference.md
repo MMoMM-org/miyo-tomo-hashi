@@ -1,6 +1,6 @@
 # Action Reference
 
-The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are eleven kinds; each has its own outcome semantics, idempotency rule, and failure surface.
+The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are fourteen kinds; each has its own outcome semantics, idempotency rule, and failure surface.
 
 | Action | What it does | Idempotency probe | Halt-on-fail effect |
 |---|---|---|---|
@@ -10,6 +10,9 @@ The instruction executor dispatches each action in an `_instructions.json` to a 
 | [insert_under_marker](#insert_under_marker) | Insert a multi-line block at a marker in any note | Identical block already present | None |
 | [replace_section](#replace_section) | Overwrite a heading section's body in any note | Body already equals content | None |
 | [add_relationship](#add_relationship) | Add a wikilink under a frontmatter relationship key | Wikilink already present | None |
+| [edit_note_text](#edit_note_text) | Literal find-and-replace in a note's body (repoint/remove dead links, strip broken `up::` lines) | Match not found | None |
+| [remove_up_link](#remove_up_link) | Remove one link from a note's `up::` line, preserving the field | No up:: line, or link not on it | None |
+| [resolve_dead_link](#resolve_dead_link) | Alias-aware unlink/repoint of a dead wikilink in a note's body | Target not present in any wikilink form | None |
 | [update_tracker](#update_tracker) | Set a frontmatter scalar on a tracker note | Field already at target value | None |
 | [update_log_entry](#update_log_entry) | Append/insert a line in a daily log at a positional anchor | Exact line already present | None |
 | [update_log_link](#update_log_link) | Replace one wikilink with another inside a log entry | Replacement wikilink already present | None |
@@ -114,6 +117,72 @@ Add a wikilink under a frontmatter relationship key on a note. Used to wire up "
 - `applied` — wikilink appended to the array under `key`.
 - `skipped-already` — wikilink already in the array.
 - `failed` — frontmatter is malformed (cannot parse), or `key` exists but is a non-array scalar (Hashi refuses to coerce types).
+
+## `edit_note_text`
+
+**Literal** find-and-replace inside a note's **body** (never frontmatter). Introduced by Tomo's garden-audit workflow to repoint or remove dead `[[wikilinks]]` and strip broken inline `up::` lines — operations the placement-oriented actions cannot express.
+
+| Field | Type | Notes |
+|---|---|---|
+| `path` | string | Vault-relative path of the note to edit. Modify-only. |
+| `match` | string | **Literal** substring to find in the body — not a regex or glob. Matched byte-for-byte; `[`, `]`, `(`, `.`, `*` etc. are literal characters. |
+| `replace` | string | Literal replacement written verbatim. `""` deletes the match. |
+| `occurrence` | `"first"` \| `"all"` | Optional (default `"first"`). `"first"` replaces the first literal hit; `"all"` replaces every hit. |
+
+**Body-only:** the leading YAML frontmatter block (`--- … ---`) is frozen — a `match` that also appears in frontmatter is never touched. A broken `up::` in frontmatter is out of scope for this action (it targets inline Dataview-style `up::` lines in the body).
+
+**Deletion (`replace: ""`):** a whole-line match collapses its now-empty line, so repeated runs never accumulate blank lines; an inline match just loses the substring.
+
+**Outcome:**
+- `applied` — the body was edited.
+- `skipped-already` — the `match` was not found (the note may have been fixed by hand between report and apply), or an empty `match` was supplied. A no-op success — never fails the batch on a stale single match.
+- `failed` — target note missing. File untouched.
+
+## `remove_up_link`
+
+Remove **one** link from a note's `up::` line while preserving the field itself — the field-level counterpart to `edit_note_text`'s whole-line replacement. Introduced for garden-audit's `broken_up` cleanup: `edit_note_text` can only match/replace the whole line verbatim, so it silently no-oped whenever the `up::` line carried more than one link.
+
+| Field | Type | Notes |
+|---|---|---|
+| `path` | string | Vault-relative path of the note whose `up::` line is edited. Modify-only. |
+| `link` | string | Bare stem of the link to remove (no `[[ ]]`), e.g. `Deleted MOC`. |
+
+**Locator:** the same marker/callout/bullet locator `add_relationship` uses, with the marker fixed to the literal `up::`.
+
+**Removal:** the `[[link]]` occurrence is removed from the line, including a dangling separator — whitespace-tolerant around commas:
+- `up:: [[A]], [[X]]` → `up:: [[A]]` (drop the trailing link)
+- `up:: [[X]], [[A]]` → `up:: [[A]]` (drop the leading link)
+- `up:: [[A]], [[X]], [[B]]` → `up:: [[A]], [[B]]` (drop a middle link)
+
+**Field preservation:** when the removed link was the only one, the line becomes an empty `up:: ` — it is **never** deleted. `up::` is a required structural field; an emptied `up::` correctly resurfaces the note as unparented on the next garden-audit scan, whereas deleting the line would drop the note from the structure model entirely.
+
+**Outcome:**
+- `applied` — the `up::` line was rewritten.
+- `skipped-already` — no `up::` line exists, OR `link` is not present on it (this also covers the idempotent re-run case, where a prior run already removed the link). A no-op success — never fails the batch.
+- `failed` — target note missing. File untouched.
+
+## `resolve_dead_link`
+
+Alias-aware unlink/repoint of a dead wikilink in a note's **body**. Supersedes `edit_note_text` for dead-link fixes: `edit_note_text` matches the whole `[[…]]` text literally, so it silently no-oped whenever the dead link carried a display alias — Tomo never sees the note body or its alias text, so this resolution is delegated to Hashi.
+
+| Field | Type | Notes |
+|---|---|---|
+| `path` | string | Vault-relative path of the note whose body is edited. Modify-only. |
+| `target` | string | Bare dead-link target to find (no `[[ ]]`, no alias), e.g. `023 Sparks MOC`. |
+| `replace` | string | `""` unlinks (keeps the display text). A `[[New]]` wikilink repoints to `New` (display preserved). |
+
+**Forms matched:** every occurrence of `target` across all wikilink forms in the body — bare `[[target]]`, aliased `[[target|display]]`, and embed `![[target]]`. Matching is anchored to the full link-target slot, so a shorter target never matches inside a longer one (`[[Old MOC]]` is untouched by target `MOC`).
+
+**Unlink (`replace: ""`):** drops the `[[ ]]`, keeping the DISPLAY text when there was an alias — `[[t|Nice]]` → `Nice` — else the bare target — `[[t]]` → `t`, `![[t]]` → `t` (an embed unlink mirrors a bare unlink: the `!` and brackets are dropped, the target survives as plain text).
+
+**Repoint (`replace: "[[New]]"`):** rewrites the target to `New`, preserving any display — `[[t|Nice]]` → `[[New|Nice]]`, `[[t]]` → `[[New]]`.
+
+Every occurrence in the body is replaced.
+
+**Outcome:**
+- `applied` — the body was edited.
+- `skipped-already` — `target` was not found in any wikilink form (the note may have been fixed by hand, or a prior run already resolved it — idempotent re-run). A no-op success — never fails the batch.
+- `failed` — target note missing. File untouched.
 
 ## `update_tracker`
 

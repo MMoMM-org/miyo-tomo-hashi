@@ -1,0 +1,26 @@
+{
+  "schema_version": "1",
+  "generated": "2026-01-01T00:00:00Z",
+  "run_id": "run-stale-001",
+  "profile": "miyo",
+  "findings": [
+    {
+      "id": "F01",
+      "check": "dead_link",
+      "tier": "integrity",
+      "fixable": true,
+      "target": {
+        "path": "Note A.md",
+        "stem": "Note A"
+      },
+      "detail": {
+        "dead_target": "020 Example MOC",
+        "count": 1
+      },
+      "decision": {
+        "selected": true
+      }
+    }
+  ],
+  "emit_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

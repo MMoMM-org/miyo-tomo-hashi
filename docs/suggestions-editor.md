@@ -14,7 +14,7 @@ the whole run for Pass 2.
 
 ## Opening it
 
-Run **Open suggestions editor** from the command palette (`Ctrl/Cmd+P`):
+Run **Open Tomo editor** from the command palette (`Ctrl/Cmd+P`):
 
 | Active file | Behaviour |
 |---|---|
@@ -139,6 +139,6 @@ to your vault:
 
 ## See also
 
-- [Commands reference](commands-reference.md) — the **Open suggestions editor** command
+- [Commands reference](commands-reference.md) — the **Open Tomo editor** command
 - [Instruction executor](instruction-executor.md) — runs the `_instructions.json` Tomo renders from an approved run
 - [How it works](how-it-works.md) — where the editor sits in the Tomo → Hashi flow
