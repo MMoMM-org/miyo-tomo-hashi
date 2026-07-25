@@ -145,11 +145,12 @@ describe("Garden-Audit Editor end-to-end — real view + real adapter + real val
 		expect(sections).toHaveLength(3);
 
 		const [integrity, structure, advisory] = Array.from(sections);
-		// Integrity: F01 (dead_link) + F02 (broken_up).
-		expect(integrity?.querySelector(".hashi-ga-tier-count")?.textContent).toBe("2");
-		// Structure: F03 (orphan) + F04 (unparented).
-		expect(structure?.querySelector(".hashi-ga-tier-count")?.textContent).toBe("2");
-		// Advisory: F09 (stale_moc).
+		// Integrity: F01 (dead_link) + F02 (broken_up), both fixable and
+		// already decision.selected:true in the fixture → "2 of 2".
+		expect(integrity?.querySelector(".hashi-ga-tier-count")?.textContent).toBe("2 of 2");
+		// Structure: F03 (orphan) + F04 (unparented), same shape → "2 of 2".
+		expect(structure?.querySelector(".hashi-ga-tier-count")?.textContent).toBe("2 of 2");
+		// Advisory: F09 (stale_moc) — never fixable, so the plain count.
 		expect(advisory?.querySelector(".hashi-ga-tier-count")?.textContent).toBe("1");
 
 		document.body.removeChild(view.contentEl);

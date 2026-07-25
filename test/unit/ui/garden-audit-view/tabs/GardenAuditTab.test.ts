@@ -107,12 +107,33 @@ describe("GardenAuditTab.count", () => {
 });
 
 describe("GardenAuditTab.render — tier grouping", () => {
-	it("renders exactly three tier sections — Integrity, Structure, Advisory — each with a count", () => {
+	it("renders exactly three tier sections — Integrity, Structure, Advisory — each with an apply-progress or plain count", () => {
 		const tab = new GardenAuditTab();
 		const findings = [
-			getMockFinding({ id: "F01", tier: "integrity", check: "dead_link" }),
-			getMockFinding({ id: "F02", tier: "integrity", check: "broken_up" }),
-			getMockFinding({ id: "F03", tier: "structure", check: "orphan" }),
+			// Integrity: 2 fixable, 1 selected → "1 of 2".
+			getMockFinding({
+				id: "F01",
+				tier: "integrity",
+				check: "dead_link",
+				fixable: true,
+				decision: { selected: true, action: "edit_note_text", replace: "" },
+			}),
+			getMockFinding({
+				id: "F02",
+				tier: "integrity",
+				check: "broken_up",
+				fixable: true,
+				decision: { selected: false, action: null, repoint: "" },
+			}),
+			// Structure: 1 fixable, 0 selected → "0 of 1".
+			getMockFinding({
+				id: "F03",
+				tier: "structure",
+				check: "orphan",
+				fixable: true,
+				decision: { selected: false, action: null, file_under: "" },
+			}),
+			// Advisory: no fixable findings → plain count, not "X of Y".
 			getMockFinding({
 				id: "F09",
 				tier: "advisory",
@@ -133,9 +154,9 @@ describe("GardenAuditTab.render — tier grouping", () => {
 		// comes from CSS text-transform, not baked into the DOM text.
 		const [integrity, structure, advisory] = Array.from(sections);
 		expect(integrity!.querySelector(".hashi-ga-tier-label")?.textContent).toBe("Integrity");
-		expect(integrity!.querySelector(".hashi-ga-tier-count")?.textContent).toBe("2");
+		expect(integrity!.querySelector(".hashi-ga-tier-count")?.textContent).toBe("1 of 2");
 		expect(structure!.querySelector(".hashi-ga-tier-label")?.textContent).toBe("Structure");
-		expect(structure!.querySelector(".hashi-ga-tier-count")?.textContent).toBe("1");
+		expect(structure!.querySelector(".hashi-ga-tier-count")?.textContent).toBe("0 of 1");
 		expect(advisory!.querySelector(".hashi-ga-tier-label")?.textContent).toBe("Advisory");
 		expect(advisory!.querySelector(".hashi-ga-tier-count")?.textContent).toBe("1");
 	});
@@ -158,6 +179,99 @@ describe("GardenAuditTab.render — tier grouping", () => {
 		const integrity = container.querySelectorAll(".hashi-ga-tier")[0]!;
 		expect(integrity.querySelector(".hashi-ga-tier-count")?.textContent).toBe("0");
 		expect(integrity.querySelectorAll(".hashi-ga-finding-row")).toHaveLength(0);
+	});
+
+	it("a fixable tier with zero findings selected shows '0 of N'", () => {
+		const tab = new GardenAuditTab();
+		const findings = [
+			getMockFinding({
+				id: "F01",
+				tier: "integrity",
+				check: "dead_link",
+				fixable: true,
+				decision: { selected: false, action: null, replace: "" },
+			}),
+			getMockFinding({
+				id: "F02",
+				tier: "integrity",
+				check: "broken_up",
+				fixable: true,
+				decision: { selected: false, action: null, repoint: "" },
+			}),
+		];
+		const container = document.createElement("div");
+
+		tab.render(container, getMockModel(findings), makeCtx());
+
+		const integrity = container.querySelectorAll(".hashi-ga-tier")[0]!;
+		expect(integrity.querySelector(".hashi-ga-tier-count")?.textContent).toBe("0 of 2");
+	});
+
+	it("flipping a finding's decision.selected and re-rendering increments the tier's X-of-Y count", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F01",
+				tier: "integrity",
+				check: "dead_link",
+				fixable: true,
+				decision: { selected: false, action: null, replace: "" },
+			}),
+			getMockFinding({
+				id: "F02",
+				tier: "integrity",
+				check: "broken_up",
+				fixable: true,
+				decision: { selected: false, action: null, repoint: "" },
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		expect(
+			container.querySelector(".hashi-ga-tier-count")?.textContent,
+		).toBe("0 of 2");
+
+		const applyButton = container.querySelector(".hashi-ga-apply") as HTMLButtonElement;
+		applyButton.click();
+
+		container.empty();
+		tab.render(container, getModel(), ctx);
+		expect(
+			container.querySelector(".hashi-ga-tier-count")?.textContent,
+		).toBe("1 of 2");
+	});
+
+	it("sets an aria-label on the tier count for both the X-of-Y and plain-count cases", () => {
+		const tab = new GardenAuditTab();
+		const findings = [
+			getMockFinding({
+				id: "F01",
+				tier: "integrity",
+				check: "dead_link",
+				fixable: true,
+				decision: { selected: true, action: "edit_note_text", replace: "" },
+			}),
+			getMockFinding({
+				id: "F09",
+				tier: "advisory",
+				check: "stale_moc",
+				fixable: false,
+				decision: undefined,
+			}),
+		];
+		const container = document.createElement("div");
+
+		tab.render(container, getMockModel(findings), makeCtx());
+
+		const [integrity, , advisory] = Array.from(container.querySelectorAll(".hashi-ga-tier"));
+		expect(
+			integrity!.querySelector(".hashi-ga-tier-count")?.getAttribute("aria-label"),
+		).toBe("1 of 1 findings selected to apply");
+		expect(
+			advisory!.querySelector(".hashi-ga-tier-count")?.getAttribute("aria-label"),
+		).toBe("1 findings");
 	});
 
 	it("renders findings within a tier in wire order, not re-sorted", () => {

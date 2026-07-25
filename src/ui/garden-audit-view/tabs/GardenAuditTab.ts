@@ -2,8 +2,17 @@
  * GardenAuditTab (spec-005 Phase 4 T4.2 tier shell + Phase 5 T5.2 fixable
  * cards) — the Garden-Audit Editor's single tab: three tier sections —
  * Integrity, Structure, Advisory (SDD "User Interface & UX" Information
- * Architecture) — each with a count, findings kept in wire order within a
- * tier (no re-sorting).
+ * Architecture) — each with a live apply-progress count, findings kept in
+ * wire order within a tier (no re-sorting).
+ *
+ * 2026-07-25: the tier-header count is an "X of Y" apply-progress meter for
+ * sections that hold fixable findings — Y is the number of fixable findings
+ * in the section, X is how many of those have `decision.selected === true`
+ * (recomputed from the passed `findings` on every render, so it stays live
+ * as Apply toggles/chip picks flip `selected`). A section with NO fixable
+ * findings (Advisory, in practice — `stale_moc`/`duplicate_stem` are never
+ * fixable) falls back to the plain finding count, since "selected to apply"
+ * has no meaning there.
  *
  * Grouped by `finding.tier` directly (already computed by Tomo) rather than
  * re-deriving from `finding.check` — the wire is the source of truth for
@@ -252,7 +261,19 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		const section = container.createDiv({ cls: "hashi-ga-tier" });
 		const header = section.createDiv({ cls: "hashi-ga-tier-header" });
 		header.createSpan({ cls: "hashi-ga-tier-label", text: TIER_LABELS[tier] });
-		header.createSpan({ cls: "hashi-ga-tier-count", text: String(findings.length) });
+
+		const fixable = findings.filter((f) => f.fixable);
+		const applyCount = fixable.filter((f) => f.decision?.selected === true).length;
+		const hasFixable = fixable.length > 0;
+		const countText = hasFixable ? `${applyCount} of ${fixable.length}` : String(findings.length);
+		const countLabel = hasFixable
+			? `${applyCount} of ${fixable.length} findings selected to apply`
+			: `${findings.length} findings`;
+		header.createSpan({
+			cls: "hashi-ga-tier-count",
+			text: countText,
+			attr: { "aria-label": countLabel },
+		});
 
 		for (const finding of findings) {
 			this.renderFindingRow(section, finding, ctx);
