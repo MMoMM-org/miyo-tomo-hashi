@@ -788,7 +788,7 @@ describe("GardenAuditTab.render — candidate chips (T5.3)", () => {
 		expect(container.querySelectorAll(".hashi-ga-chip")).toHaveLength(2);
 	});
 
-	it("clicking an LLM chip writes its stem into the replace target field (dead_link) without flipping selected", () => {
+	it("clicking an LLM chip writes its stem into the replace target field (dead_link) and flips selected to true", () => {
 		const tab = new GardenAuditTab();
 		const model = getMockModel([
 			getMockFinding({
@@ -812,10 +812,10 @@ describe("GardenAuditTab.render — candidate chips (T5.3)", () => {
 
 		const decision = finding(getModel(), "F04").decision;
 		expect(decision?.replace).toBe("020 Active MOC");
-		expect(decision?.selected).toBe(false);
+		expect(decision?.selected).toBe(true);
 	});
 
-	it("clicking a scan chip writes target_moc into file_under (orphan) via setFileUnder", () => {
+	it("clicking a scan chip writes target_moc into file_under (orphan) via setFileUnder, leaving an already-Apply finding true", () => {
 		const tab = new GardenAuditTab();
 		const model = getMockModel([
 			getMockFinding({
@@ -836,10 +836,12 @@ describe("GardenAuditTab.render — candidate chips (T5.3)", () => {
 		const chip = container.querySelector(".hashi-ga-chip") as HTMLButtonElement;
 		chip.click();
 
-		expect(finding(getModel(), "F03").decision?.file_under).toBe("020 Active MOC");
+		const decision = finding(getModel(), "F03").decision;
+		expect(decision?.file_under).toBe("020 Active MOC");
+		expect(decision?.selected).toBe(true);
 	});
 
-	it("clicking a repoint (broken_up) chip dispatches setRepoint and derives action per ADR-5", () => {
+	it("clicking a repoint (broken_up) chip dispatches setRepoint, derives action per ADR-5, and flips selected to true", () => {
 		const tab = new GardenAuditTab();
 		const model = getMockModel([
 			getMockFinding({
@@ -848,8 +850,8 @@ describe("GardenAuditTab.render — candidate chips (T5.3)", () => {
 				target: { path: "Notes/Child.md", stem: "Child" },
 				detail: { up_target: "Deleted MOC" },
 				decision: {
-					selected: true,
-					action: "edit_note_text",
+					selected: false,
+					action: null,
 					repoint: "",
 					candidates: [{ stem: "020 Active MOC", score: 0.6 }],
 				},
@@ -865,6 +867,7 @@ describe("GardenAuditTab.render — candidate chips (T5.3)", () => {
 		const decision = finding(getModel(), "F02").decision;
 		expect(decision?.repoint).toBe("020 Active MOC");
 		expect(decision?.action).toBe("add_relationship");
+		expect(decision?.selected).toBe(true);
 	});
 
 	it("highlights the chip whose stem matches the committed target with is-active + aria-pressed", () => {
@@ -943,11 +946,12 @@ describe("GardenAuditTab.render — candidate chips (T5.3)", () => {
 
 // ---------------------------------------------------------------------------
 // Target edit on a skipped finding auto-selects Apply (2026-07-23 user
-// decision) — a committed target change (textbox commit or picker pick,
-// which share the SAME `onChange`) flips a Skip finding to Apply when the
-// per-check transform actually changed the model. Candidate chips are
-// EXCLUDED (covered above in T5.3 — chips dispatch their transforms
-// directly, never through this onChange).
+// decision, amended 2026-07-25) — a committed target change (textbox commit,
+// picker pick, OR a candidate chip click — all three now share the SAME
+// `commitTargetSelectingApply` helper) flips a Skip finding to Apply when the
+// per-check transform actually changed the model. Chip-specific coverage
+// (per check, plus the already-Apply and no-op cases) also lives above in
+// the T5.3 candidate-chips describe block.
 // ---------------------------------------------------------------------------
 
 describe("GardenAuditTab.render — target edit on a skipped finding auto-selects Apply", () => {
@@ -1059,7 +1063,7 @@ describe("GardenAuditTab.render — target edit on a skipped finding auto-select
 		expect(decision?.selected).toBe(true);
 	});
 
-	it("chip click on a skipped finding does NOT flip selected (candidates stay excluded)", () => {
+	it("chip click on a skipped finding flips selected to true (2026-07-25 — chips no longer excluded)", () => {
 		const tab = new GardenAuditTab();
 		const model = getMockModel([
 			getMockFinding({
@@ -1082,6 +1086,33 @@ describe("GardenAuditTab.render — target edit on a skipped finding auto-select
 
 		const decision = finding(getModel(), "F03").decision;
 		expect(decision?.file_under).toBe("020 Active MOC");
+		expect(decision?.selected).toBe(true);
+	});
+
+	it("a no-op chip click (stem equals the already-committed target) does NOT flip selected", () => {
+		const tab = new GardenAuditTab();
+		const model = getMockModel([
+			getMockFinding({
+				id: "F04",
+				check: "dead_link",
+				detail: { dead_target: "023 Sparks MOC", count: 1 },
+				decision: {
+					selected: false,
+					action: null,
+					replace: "020 Active MOC",
+					candidates: [{ stem: "020 Active MOC", score: 0.6 }],
+				},
+			}),
+		]);
+		const { ctx, getModel } = makeRecordingCtx(model);
+		const container = document.createElement("div");
+
+		tab.render(container, model, ctx);
+		const chip = container.querySelector(".hashi-ga-chip") as HTMLButtonElement;
+		chip.click();
+
+		const decision = finding(getModel(), "F04").decision;
+		expect(decision?.replace).toBe("020 Active MOC");
 		expect(decision?.selected).toBe(false);
 	});
 

@@ -6,7 +6,7 @@
 |-------|-------|
 | **Created** | 2026-07-22 |
 | **Current Phase** | Ready |
-| **Last Updated** | 2026-07-24 |
+| **Last Updated** | 2026-07-25 |
 
 ## Documents
 
@@ -36,6 +36,7 @@
 | 2026-07-23 | broken_up empty=remove → link-only removal requested from Tomo (user) | Ground truth: Tomo removes the whole `up::` line (match=`up_line(up_target)`, replace="") and silently no-ops on multi-link lines. User wants only the broken `[[link]]` removed. Handoff `2026-07-23_hashi-to-tomo_garden-audit-broken-up-link-only-removal.md` sent; Hashi's tooltip keeps describing CURRENT whole-line behavior until Tomo lands the change (honest UI), then flips wording. Semantics ownership: Tomo builds match/replace; Hashi executes literally + labels honestly. |
 | 2026-07-23 | broken_up remove tooltip flipped to link-only wording (Tomo remove_up_link shipped) | Tooltip now: "only the broken link is removed…up:: kept, never deleted"; matches Tomo's corrected executor semantics (was whole-line). |
 | 2026-07-24 | `suggest_pending` gate + two-run banner + fresh-suggestion highlight (user) | A finding with a requested-but-not-yet-enriched suggest (`decision.suggest_requested && !decision.suggested`) must not reach Tomo's /inbox triage half-finished. Save now computes the gate (`transforms.applyApprovalGate`): pending → `approved:false, suggest_pending:true` (parks the run); otherwise → `approved:true, suggest_pending:false`. Adapter (`ObsidianGardenAuditDoc.save`) writes `model.doc` verbatim (ADR-2) — the view is sole owner of both gate fields, same split as `normalizeBrokenUpActions`. Additive top-level `suggest_pending` boolean added to the vendored wire schema + `GardenAuditWire` type ahead of Tomo's own push (Tomo builds the matching field + the `approved AND NOT suggest_pending` triage gate in parallel); reconcile-vendor pending when Tomo's authoritative schema lands (ADR-7). UI: a `GardenAuditTab`-top banner (pending / fresh / none, pending wins on precedence) plus an accent-border + "New" badge on fixable cards whose last `--suggest` run left ≥1 display-only candidate — the rest of the deck renders unchanged (no dimming). Banner/highlight predicates (`hasPendingSuggest`, `isFreshFinding`, `countFreshFindings`) extracted to `transforms.ts` as pure, DOM-free lookups shared by the save gate, the banner, and the card modifier. |
+| 2026-07-25 | Candidate chip click now also auto-selects Apply (user) — amends the 2026-07-23 "chips stay display-only per F4" clause | Clicking a candidate chip that changes the committed target now flips a Skip finding to Apply — the SAME shared `commitTargetSelectingApply` helper a textbox/picker target edit already used (2026-07-23 row). F4 precedence (the chip writes the stem into the explicit target field, never a second `decision.selected` channel) is preserved; only the stricter "chip never flips selected" behavior is retired. One helper, two call sites (`renderTargetField`'s `onChange` and every chip row's `onPick`) — no-op re-picks (same stem as the committed value) still don't flip. |
 
 ## Follow-ups (non-blocking)
 

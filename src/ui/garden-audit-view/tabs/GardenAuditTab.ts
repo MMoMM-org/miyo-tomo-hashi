@@ -52,22 +52,27 @@
  * own `suggest_requested` and Tomo's `suggested` ran-marker lives in
  * `SuggestControl.ts`, not here.
  *
- * 2026-07-23 (user decision): committing a target change on a SKIPPED finding
- * (`decision.selected === false`) through `TargetControl` — a free-typed
- * commit (change/Enter) or a picker pick, both of which fire the SAME
- * `onChange` — flips it to Apply in the same dispatch (target intent implies
- * apply intent). `renderTargetField` is the single site this is wired: it
- * chains `setSelected(…, true)` onto the per-check setter's result, but ONLY
- * when the setter actually changed the model (`next !== model` — a same-value
- * re-commit is a no-op and must not auto-apply; an explicit-empty commit that
- * clears a previously non-empty target DOES change the model, so it also
- * flips to Apply). `setSelected` on an already-`true` decision is itself a
- * no-op (`transforms.ts`), so an already-Apply finding is unaffected. Applies
+ * 2026-07-23 (user decision), amended 2026-07-25: committing a target change
+ * on a SKIPPED finding (`decision.selected === false`) — a free-typed commit
+ * (change/Enter) or a picker pick through `TargetControl`, OR a candidate
+ * chip click — flips it to Apply in the same dispatch (target intent implies
+ * apply intent). All three routes funnel through the shared
+ * `commitTargetSelectingApply` helper below: it chains `setSelected(…, true)`
+ * onto the per-check setter's result, but ONLY when the setter actually
+ * changed the model (`next !== model` — a same-value re-commit is a no-op and
+ * must not auto-apply; an explicit-empty commit that clears a previously
+ * non-empty target DOES change the model, so it also flips to Apply).
+ * `setSelected` on an already-`true` decision is itself a no-op
+ * (`transforms.ts`), so an already-Apply finding is unaffected. Applies
  * uniformly to all three target fields (repoint/replace/file_under).
- * Candidate CHIPS are explicitly excluded from this rule (PRD F4 / SDD
- * "Q2 precedence" — candidates are display-only and never auto-applied): the
- * chip click handlers in `renderCandidateChips`/`renderChipRow` dispatch the
- * per-check setter directly, never through `renderTargetField`'s `onChange`.
+ * `renderTargetField` wires the textbox/picker route; the chip click handlers
+ * in `renderCandidateChips`/`renderChipRow`'s callers wire the chip route —
+ * both call the same helper so there is exactly one definition of "committing
+ * a target auto-selects Apply". This retires the original, stricter
+ * 2026-07-23 exclusion of candidate chips (PRD F4 / SDD "Q2 precedence" still
+ * holds for what chips ARE — display-only advisory input that writes the same
+ * explicit target field a textbox/picker would — only the "chips never flip
+ * selected" clause is amended).
  */
 
 import type {
@@ -193,6 +198,25 @@ function formatScore(score: number): string {
  * same row. See `renderFileUnderCard`.
  */
 const NO_SCAN_CANDIDATE_HINT = "No scan candidate — an empty target has no fallback here.";
+
+/**
+ * The ONE definition of "committing a target auto-selects Apply" (2026-07-23,
+ * amended 2026-07-25) — shared by `renderTargetField`'s textbox/picker
+ * `onChange` and every chip row's `onPick`. Runs `setter`, then chains
+ * `setSelected(…, true)` onto the result ONLY when the setter actually
+ * changed the model (`updated !== model` — transforms' own no-op-on-same-ref
+ * idiom): a same-value re-commit (textbox re-commit or a chip whose stem
+ * already equals the committed target) must not auto-apply.
+ */
+function commitTargetSelectingApply(
+	model: GardenAuditModel,
+	findingId: string,
+	value: string,
+	setter: (model: GardenAuditModel, findingId: string, value: string) => GardenAuditModel,
+): GardenAuditModel {
+	const updated = setter(model, findingId, value);
+	return updated === model ? model : setSelected(updated, findingId, true);
+}
 
 export class GardenAuditTab implements GardenAuditTabSpec {
 	count(model: GardenAuditModel): number {
@@ -406,22 +430,23 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 			});
 			// Candidates are display-only advisory input (Handoff Q2): a click
 			// writes the stem via the SAME per-check transform the
-			// TargetControl uses, becoming an explicit value — it NEVER
-			// touches `decision.selected`.
+			// TargetControl uses, becoming an explicit value. As of 2026-07-25
+			// this ALSO auto-selects Apply on a skipped finding (see `onPick`'s
+			// caller — routed through `commitTargetSelectingApply`), same as a
+			// textbox/picker commit.
 			chip.addEventListener("click", () => onPick(candidate.stem));
 		}
 	}
 
 	/**
-	 * Renders the shared `TargetControl` widget and wires its `onChange` to
+	 * Renders the shared `TargetControl` widget and wires its `onChange`
+	 * through `commitTargetSelectingApply` (the module-level helper — see its
+	 * doc comment and the 2026-07-23/2026-07-25 file-header note) with
 	 * `setTarget` (the finding's per-check setter — `setRepoint`/`setReplace`/
-	 * `setFileUnder`). This is the SINGLE site that implements the 2026-07-23
-	 * "target edit on a Skip auto-selects Apply" rule (see file-header note):
-	 * a commit that actually changes the model (`next !== model`, the
-	 * transforms' own no-op-on-same-ref idiom) also flips `selected` to true.
-	 * Candidate chips do NOT go through this method's `onChange` — they call
-	 * `setTarget` directly from their own click handlers — which is how they
-	 * stay excluded from auto-apply.
+	 * `setFileUnder`). Candidate chips wire through the SAME helper from their
+	 * own click handlers (see `renderBrokenUpCard`/`renderDeadLinkCard`/
+	 * `renderFileUnderCard`'s `renderCandidateChips` calls) rather than this
+	 * method's `onChange` — two call sites, one shared commit rule.
 	 */
 	private renderTargetField(
 		card: HTMLElement,
@@ -439,10 +464,7 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 			check,
 			value,
 			onChange: (next) => {
-				ctx.apply((model) => {
-					const updated = setTarget(model, findingId, next);
-					return updated === model ? model : setSelected(updated, findingId, true);
-				});
+				ctx.apply((model) => commitTargetSelectingApply(model, findingId, next, setTarget));
 			},
 		});
 	}
@@ -492,7 +514,7 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 			setRepoint,
 		);
 		this.renderCandidateChips(card, finding, finding.decision?.repoint, (stem) => {
-			ctx.apply((model) => setRepoint(model, finding.id, stem));
+			ctx.apply((model) => commitTargetSelectingApply(model, finding.id, stem, setRepoint));
 		});
 		this.renderSuggestField(card, finding, ctx);
 	}
@@ -526,7 +548,7 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 			setReplace,
 		);
 		this.renderCandidateChips(card, finding, finding.decision?.replace, (stem) => {
-			ctx.apply((model) => setReplace(model, finding.id, stem));
+			ctx.apply((model) => commitTargetSelectingApply(model, finding.id, stem, setReplace));
 		});
 		this.renderSuggestField(card, finding, ctx);
 	}
@@ -556,7 +578,7 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 			setFileUnder,
 		);
 		this.renderCandidateChips(card, finding, finding.decision?.file_under, (stem) => {
-			ctx.apply((model) => setFileUnder(model, finding.id, stem));
+			ctx.apply((model) => commitTargetSelectingApply(model, finding.id, stem, setFileUnder));
 		});
 		this.renderSuggestField(card, finding, ctx);
 	}
