@@ -268,7 +268,7 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		const countText = hasFixable ? `${applyCount} of ${fixable.length}` : String(findings.length);
 		const countLabel = hasFixable
 			? `${applyCount} of ${fixable.length} findings selected to apply`
-			: `${findings.length} findings`;
+			: `${findings.length} ${findings.length === 1 ? "finding" : "findings"}`;
 		header.createSpan({
 			cls: "hashi-ga-tier-count",
 			text: countText,

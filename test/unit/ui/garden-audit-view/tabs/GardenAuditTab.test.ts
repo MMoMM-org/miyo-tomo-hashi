@@ -271,7 +271,7 @@ describe("GardenAuditTab.render — tier grouping", () => {
 		).toBe("1 of 1 findings selected to apply");
 		expect(
 			advisory!.querySelector(".hashi-ga-tier-count")?.getAttribute("aria-label"),
-		).toBe("1 findings");
+		).toBe("1 finding");
 	});
 
 	it("renders findings within a tier in wire order, not re-sorted", () => {
