@@ -19,9 +19,12 @@ components** in one plugin (they share nothing at runtime):
   files Tomo writes into your vault and applies them as deterministic, previewable,
   idempotent vault operations through Obsidian's API.
 
-Feeding the executor is the **[Suggestions Editor](suggestions-editor.md)** — a tabbed
-review surface for the `_suggestions.json` Tomo publishes after an `/inbox` Pass 1, where
-you refine every proposed decision and **Save** to approve the run.
+Feeding the executor are two review surfaces, both opened by the same **Open Tomo
+editor** command: the **[Suggestions Editor](suggestions-editor.md)** — a tabbed
+review surface for the `_suggestions.json` Tomo publishes after an `/inbox` Pass 1 —
+and the **[Garden-Audit Editor](garden-audit-editor.md)** — a tier-grouped review
+surface for the `_garden-audit.json` Tomo publishes after a `/garden-audit` vault
+scan. Both let you refine every proposed decision and **Save** to approve the run.
 
 Hashi is **local-first** and **proposal-first**: its only inbound surface is the
 loopback Tomo-context bridge (disabled by default), and the approval for what it
@@ -38,6 +41,7 @@ automated vault updates in one place.
 - [Chat](chat.md)
 - [Action reference](action-reference.md)
 - [Suggestions editor](suggestions-editor.md)
+- [Garden-audit editor](garden-audit-editor.md)
 - [Instruction executor](instruction-executor.md)
 - [Hooks](hooks.md)
 - [Commands reference](commands-reference.md)
@@ -50,5 +54,6 @@ automated vault updates in one place.
 - **Connect to a Tomo container** → [Session View](session-view.md)
 - **Share editor context with Claude Code** → [Tomo context](context.md)
 - **Review a Tomo inbox run** → [Suggestions editor](suggestions-editor.md)
+- **Review a Tomo garden-audit scan** → [Garden-audit editor](garden-audit-editor.md)
 - **Run an instruction set** → [Instruction executor](instruction-executor.md)
 - **Something's broken** → [Troubleshooting](troubleshooting.md)
