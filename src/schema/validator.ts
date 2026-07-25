@@ -117,6 +117,12 @@ function formatErrors(errors: ErrorObject[], raw: unknown): string {
 	// required property 'source'" for a kind that isn't move_note/create_moc
 	// at all. Give the earliest genuinely-unknown kind a clear message
 	// instead of surfacing that misleading sub-schema diagnostic.
+	//
+	// Deliberate: an unknown kind ANYWHERE takes priority over an Ajv error on
+	// an earlier known-kind action. A newer-schema instruction set is the
+	// load-bearing diagnosis ("update Hashi") — other errors are likely the
+	// same skew's artifacts, so the unknown-kind message is the actionable one
+	// to surface even if it isn't the numerically-earliest failing index.
 	const unknownKind = findUnknownActionKind(raw);
 	if (unknownKind !== null) {
 		return `/actions/${unknownKind.index}: unknown action kind '${unknownKind.kind}' — the instruction set may target a newer Tomo schema than this Hashi build`;

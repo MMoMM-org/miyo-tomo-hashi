@@ -82,9 +82,10 @@ function extractNewTarget(replace: string): string {
 
 /**
  * Build a regex matching every wikilink occurrence of `target` — bare,
- * aliased, or embedded. Group 1 is the optional `!` embed marker; group 2
- * is the optional `|display` alias tail (undefined when absent); group 3 is
- * the display text itself.
+ * aliased, or embedded. The `!?` embed marker is matched but NOT captured
+ * (it's dropped along with the brackets on replace). Group 1 is the optional
+ * `|display` alias tail (undefined when absent); group 2 is the display text
+ * itself.
  */
 function buildLinkRegex(target: string): RegExp {
 	const escaped = escapeRegExp(target);
