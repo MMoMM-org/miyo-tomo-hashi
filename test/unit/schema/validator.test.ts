@@ -372,6 +372,47 @@ describe("validate", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Unknown action kind — clear message, not a misleading sub-schema error
+// ---------------------------------------------------------------------------
+
+describe("validate — unknown action kind", () => {
+	it("reports a clear 'unknown action kind' message instead of a misleading oneOf sub-error", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{ id: "I01", action: "totally_unknown_action", path: "a.md" },
+			],
+		};
+
+		const result = validate(fixture);
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.message).toContain("unknown action kind 'totally_unknown_action'");
+			expect(result.message).not.toContain("must have required property");
+		}
+	});
+
+	it("identifies the earliest failing action index among multiple actions", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{ id: "I01", action: "skip", source_path: "a.md" },
+				{ id: "I02", action: "another_unknown_kind" },
+			],
+		};
+
+		const result = validate(fixture);
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.message).toContain("/actions/1");
+			expect(result.message).toContain("unknown action kind 'another_unknown_kind'");
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
 // edit_note_text — spec 030 garden-audit / ADR-3
 // ---------------------------------------------------------------------------
 
