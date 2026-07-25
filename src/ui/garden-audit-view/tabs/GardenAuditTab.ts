@@ -38,10 +38,13 @@
  * T5.3: each fixable card also renders its scored candidate chips beneath the
  * target field — `decision.candidates` (LLM, all four checks) and, for
  * unparented/orphan, `detail.candidate_mocs` (scan) as a SEPARATE row. Chips
- * are display-only advisory input (SDD "User Interface & UX" / Handoff Q2):
- * a click writes the chip's stem into the SAME per-check transform the
- * TargetControl uses (never `decision.selected`), so the pick becomes an
- * explicit committed value rather than a second channel Tomo reads.
+ * are advisory input (SDD "User Interface & UX" / Handoff Q2): a click writes
+ * the chip's stem into the SAME per-check target field the TargetControl uses,
+ * so the pick becomes an explicit committed value rather than a second channel
+ * Tomo reads (F4 precedence — the explicit target wins). As of 2026-07-25 a
+ * chip click ALSO auto-selects Apply, same as a textbox/picker commit — see
+ * the shared `commitTargetSelectingApply` note below (this retired the earlier
+ * "chips never touch `decision.selected`" rule).
  *
  * T5.4: each fixable card also renders a "Suggest targets" checkbox +
  * two-run hint (pending / "no suggestions found") beneath the chips, via
