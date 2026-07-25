@@ -2,7 +2,7 @@
  * HANDLERS dispatch registry tests.
  *
  * T3.6 — verifies:
- *   1. Key coverage: HANDLERS has exactly 13 keys matching all ActionKind values.
+ *   1. Key coverage: HANDLERS has exactly 14 keys matching all ActionKind values.
  *   2. Identity: each registry entry points to the canonical handler function.
  *   3. Dispatch smoke: HANDLERS[action.action](action, ctx) routes to the correct handler.
  *
@@ -18,6 +18,7 @@ import {
 	addRelationship,
 	editNoteText,
 	removeUpLink,
+	resolveDeadLink,
 	createMoc,
 	moveNote,
 	linkToMoc,
@@ -34,6 +35,7 @@ import type {
 	CreateMocAction,
 	MoveNoteAction,
 	RemoveUpLinkAction,
+	ResolveDeadLinkAction,
 } from "../../../src/schema/types.js";
 
 // ---------------------------------------------------------------------------
@@ -50,7 +52,7 @@ const makeCtx = (vault: FakeVaultFS) => ({
 // ---------------------------------------------------------------------------
 
 describe("HANDLERS — key coverage", () => {
-	it("has exactly the 13 ActionKind keys", () => {
+	it("has exactly the 14 ActionKind keys", () => {
 		const expectedKeys: ActionKind[] = [
 			"create_moc",
 			"move_note",
@@ -60,6 +62,7 @@ describe("HANDLERS — key coverage", () => {
 			"add_relationship",
 			"edit_note_text",
 			"remove_up_link",
+			"resolve_dead_link",
 			"update_tracker",
 			"update_log_entry",
 			"update_log_link",
@@ -124,6 +127,10 @@ describe("HANDLERS — identity", () => {
 
 	it("HANDLERS.remove_up_link === removeUpLink", () => {
 		expect(HANDLERS.remove_up_link).toBe(removeUpLink);
+	});
+
+	it("HANDLERS.resolve_dead_link === resolveDeadLink", () => {
+		expect(HANDLERS.resolve_dead_link).toBe(resolveDeadLink);
 	});
 
 	it("HANDLERS.skip === skip", () => {
@@ -320,6 +327,22 @@ describe("HANDLERS — dispatch smoke", () => {
 		expect(outcome.kind).toBe("applied");
 	});
 
+	it("resolve_dead_link: dispatches and returns applied", async () => {
+		const notePath = "020 Active MOC.md";
+		const vault = new FakeVaultFS();
+		await vault.create(notePath, "[[023 Sparks MOC]]\n");
+		const action = {
+			action: "resolve_dead_link" as const,
+			id: "smoke-rdl",
+			path: notePath,
+			target: "023 Sparks MOC",
+			replace: "[[023 Sparks (MOC)]]",
+		};
+		const handler = HANDLERS[action.action];
+		const outcome = await handler(action, makeCtx(vault));
+		expect(outcome.kind).toBe("applied");
+	});
+
 	it("delete_source: dispatches and returns applied", async () => {
 		const vault = new FakeVaultFS();
 		await vault.create("Inbox/old.md", "# old");
@@ -363,5 +386,9 @@ describe("HANDLERS — type narrowing", () => {
 
 	it("HANDLERS['remove_up_link'] parameter type is RemoveUpLinkAction", () => {
 		expectTypeOf<Parameters<typeof HANDLERS["remove_up_link"]>[0]>().toExtend<RemoveUpLinkAction>();
+	});
+
+	it("HANDLERS['resolve_dead_link'] parameter type is ResolveDeadLinkAction", () => {
+		expectTypeOf<Parameters<typeof HANDLERS["resolve_dead_link"]>[0]>().toExtend<ResolveDeadLinkAction>();
 	});
 });

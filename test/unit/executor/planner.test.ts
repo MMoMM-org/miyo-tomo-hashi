@@ -30,6 +30,7 @@ import type {
 	MoveNoteAction,
 	RemoveUpLinkAction,
 	ReplaceSectionAction,
+	ResolveDeadLinkAction,
 } from "../../../src/schema/types.js";
 
 // ---------------------------------------------------------------------------
@@ -120,6 +121,23 @@ function makeRemoveUpLink(id: string, path: string, link: string, applied?: bool
 		id,
 		path,
 		link,
+		...(applied !== undefined ? { applied } : {}),
+	};
+}
+
+function makeResolveDeadLink(
+	id: string,
+	path: string,
+	target: string,
+	replace: string,
+	applied?: boolean,
+): ResolveDeadLinkAction {
+	return {
+		action: "resolve_dead_link",
+		id,
+		path,
+		target,
+		replace,
 		...(applied !== undefined ? { applied } : {}),
 	};
 }
@@ -313,6 +331,29 @@ describe("computeRemaining — canonical order", () => {
 		]);
 	});
 
+	it("plans resolve_dead_link in its canonical slot beside remove_up_link (silent-drop guard)", () => {
+		// Regression guard: a kind missing from planner KIND_ORDER is silently
+		// dropped from the execution list, invisible to handler/registry tests
+		// run in isolation. This is the only test proving resolve_dead_link is
+		// actually planned end-to-end.
+		const actions: Action[] = [
+			makeAddRelationship("I04", "moc/MyMOC.md", "up::", "up:: [[X]]"),
+			makeResolveDeadLink("I03", "020 Active MOC.md", "023 Sparks MOC", ""),
+			makeLinkToMoc("I02", "moc/MyMOC.md", "- [[note]]"),
+			makeCreateMoc("I01", "inbox/note.md", "moc/A.md"),
+		];
+		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
+
+		const { records } = computeRemaining(sources);
+
+		expect(records.map((r) => r.kind)).toEqual([
+			"create_moc",
+			"link_to_moc",
+			"resolve_dead_link",
+			"add_relationship",
+		]);
+	});
+
 	it("preserves monotonic I## order within each kind", () => {
 		const actions: Action[] = [
 			makeCreateMoc("I03", "inbox/note3.md", "moc/C.md"),
@@ -486,6 +527,19 @@ describe("computeRemaining — summary strings", () => {
 
 		expect(records[0]?.summary).toContain("022 Placeholders MOC.md");
 		expect(records[0]?.summary).toContain("021 Fleeting MOC");
+	});
+
+	it("resolve_dead_link summary contains path, target, and the structural replace value (privacy-safe: no note body content)", () => {
+		const actions: Action[] = [
+			makeResolveDeadLink("I01", "020 Active MOC.md", "023 Sparks MOC", "[[023 Sparks (MOC)]]"),
+		];
+		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
+
+		const { records } = computeRemaining(sources);
+
+		expect(records[0]?.summary).toContain("020 Active MOC.md");
+		expect(records[0]?.summary).toContain("023 Sparks MOC");
+		expect(records[0]?.summary).toContain("[[023 Sparks (MOC)]]");
 	});
 
 	it("update_tracker summary contains path and field but NOT value (privacy H1)", () => {

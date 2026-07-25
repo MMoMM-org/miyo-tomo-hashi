@@ -5,7 +5,7 @@
  *   - Handler<A>       — generic handler type alias (SDD/Action Handler Contract)
  *   - HandlerContext   — re-exported from ./types
  *   - HANDLERS         — dispatch registry keyed by ActionKind
- *   - 13 handler functions — re-exported for direct import convenience
+ *   - 14 handler functions — re-exported for direct import convenience
  *
  * Note: Action discriminant is `action`, not `kind` (see plan/README.md T1.2 deviation).
  * HANDLERS is therefore typed as { [K in ActionKind]: Handler<Extract<Action, { action: K }>> }.
@@ -25,6 +25,7 @@ import { replaceSection } from "./replaceSection.js";
 import { addRelationship } from "./addRelationship.js";
 import { editNoteText } from "./editNoteText.js";
 import { removeUpLink } from "./removeUpLink.js";
+import { resolveDeadLink } from "./resolveDeadLink.js";
 import { updateTracker } from "./updateTracker.js";
 import { updateLogEntry } from "./updateLogEntry.js";
 import { updateLogLink } from "./updateLogLink.js";
@@ -61,6 +62,7 @@ export const HANDLERS: {
 	add_relationship: addRelationship,
 	edit_note_text: editNoteText,
 	remove_up_link: removeUpLink,
+	resolve_dead_link: resolveDeadLink,
 	update_tracker: updateTracker,
 	update_log_entry: updateLogEntry,
 	update_log_link: updateLogLink,
@@ -80,6 +82,7 @@ export { replaceSection } from "./replaceSection.js";
 export { addRelationship } from "./addRelationship.js";
 export { editNoteText } from "./editNoteText.js";
 export { removeUpLink } from "./removeUpLink.js";
+export { resolveDeadLink } from "./resolveDeadLink.js";
 export { updateTracker } from "./updateTracker.js";
 export { updateLogEntry } from "./updateLogEntry.js";
 export { updateLogLink } from "./updateLogLink.js";

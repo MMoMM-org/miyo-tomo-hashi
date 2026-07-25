@@ -30,8 +30,9 @@ import type { VaultFS } from "../vault/VaultFS.js";
 // just-linked MOC. insert_under_marker sits beside link_to_moc as the second
 // insert primitive (arbitrary-note inserts; no dependency on create_moc).
 // replace_section follows insert_under_marker as the section-overwrite sibling.
-// Garden-audit link-edit actions (edit_note_text, remove_up_link) run before
-// add_relationship, allowing structured link updates before navigation.
+// Garden-audit link-edit actions (edit_note_text, remove_up_link,
+// resolve_dead_link) run before add_relationship, allowing structured link
+// updates before navigation.
 // Update kinds and source cleanup follow.
 const KIND_ORDER: readonly ActionKind[] = [
 	"create_moc",
@@ -41,6 +42,7 @@ const KIND_ORDER: readonly ActionKind[] = [
 	"replace_section",
 	"edit_note_text",
 	"remove_up_link",
+	"resolve_dead_link",
 	"add_relationship",
 	"update_tracker",
 	"update_log_entry",
@@ -272,6 +274,11 @@ function buildSummary(action: Action): string {
 			// Metadata only — path + the bare link stem being removed (a
 			// structural identifier, not note body content; Privacy L2).
 			return `${action.path} :: -[[${action.link}]]`;
+		case "resolve_dead_link":
+			// Metadata only — path, the dead target stem, and the structural
+			// replace value (empty = unlink, or a "[[New]]" pointer). Never
+			// the note body's alias/display text (Privacy L2).
+			return `${action.path} :: ${action.target} → ${action.replace || "(unlink)"}`;
 		case "update_tracker":
 			return `${action.daily_note_path} :: ${action.field}`;
 		case "update_log_entry":

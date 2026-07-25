@@ -179,6 +179,26 @@ export interface RemoveUpLinkAction extends ActionBase {
 	readonly link: string;
 }
 
+/**
+ * ResolveDeadLinkAction — resolve a dead wikilink in a note BODY, alias-aware
+ * (unlink or repoint). Supersedes `edit_note_text` for dead_link fixes: that
+ * literal construction silently no-oped on ALIASED links, since it could
+ * only match/replace the whole `[[…]]` text verbatim. Tomo cannot build
+ * these edits as literal strings itself — it never sees the note body or
+ * its display text — so the resolution is delegated to Hashi, which locates
+ * every occurrence of `target` across all wikilink forms (bare, aliased,
+ * embed) and unlinks (`replace: ""`, keeping display text) or repoints
+ * (`replace: "[[New]]"`, preserving display) every one.
+ *
+ * [ref: Tomo commit 4251618; src/actions/resolveDeadLink.ts]
+ */
+export interface ResolveDeadLinkAction extends ActionBase {
+	readonly action: "resolve_dead_link";
+	readonly path: string;
+	readonly target: string;
+	readonly replace: string;
+}
+
 export interface UpdateTrackerAction extends ActionBase {
 	readonly action: "update_tracker";
 	readonly daily_note_path: string;
@@ -241,6 +261,7 @@ export type Action =
 	| AddRelationshipAction
 	| EditNoteTextAction
 	| RemoveUpLinkAction
+	| ResolveDeadLinkAction
 	| UpdateTrackerAction
 	| UpdateLogEntryAction
 	| UpdateLogLinkAction

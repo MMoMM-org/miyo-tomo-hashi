@@ -10,6 +10,7 @@ import type {
 	LinkToMocAction,
 	MoveNoteAction,
 	RemoveUpLinkAction,
+	ResolveDeadLinkAction,
 	SkipAction,
 	UpdateLogEntryAction,
 	UpdateLogLinkAction,
@@ -21,7 +22,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 describe("ActionKind", () => {
-	it("is the exact 13-element string-literal union", () => {
+	it("is the exact 14-element string-literal union", () => {
 		expectTypeOf<ActionKind>().toEqualTypeOf<
 			| "create_moc"
 			| "move_note"
@@ -31,6 +32,7 @@ describe("ActionKind", () => {
 			| "add_relationship"
 			| "edit_note_text"
 			| "remove_up_link"
+			| "resolve_dead_link"
 			| "update_tracker"
 			| "update_log_entry"
 			| "update_log_link"
@@ -39,7 +41,7 @@ describe("ActionKind", () => {
 		>();
 	});
 
-	it("all 13 literals are assignable to ActionKind", () => {
+	it("all 14 literals are assignable to ActionKind", () => {
 		const allKinds: ActionKind[] = [
 			"create_moc",
 			"move_note",
@@ -49,14 +51,15 @@ describe("ActionKind", () => {
 			"add_relationship",
 			"edit_note_text",
 			"remove_up_link",
+			"resolve_dead_link",
 			"update_tracker",
 			"update_log_entry",
 			"update_log_link",
 			"delete_source",
 			"skip",
 		];
-		// Runtime check: exactly 13
-		expect(allKinds).toHaveLength(13);
+		// Runtime check: exactly 14
+		expect(allKinds).toHaveLength(14);
 	});
 });
 
@@ -256,8 +259,26 @@ describe("Action discriminated union", () => {
 		}
 	});
 
-	it("exhaustive switch compiles over all 13 Action variants", () => {
-		// This function compiles only if all 13 variants are handled.
+	it("narrows to ResolveDeadLinkAction on action === 'resolve_dead_link'", () => {
+		const a: Action = {
+			id: "I11",
+			action: "resolve_dead_link",
+			path: "020 Active MOC.md",
+			target: "023 Sparks MOC",
+			replace: "",
+		};
+		if (a.action === "resolve_dead_link") {
+			const _path: string = a.path;
+			const _target: string = a.target;
+			const _replace: string = a.replace;
+			expect(_path).toBe("020 Active MOC.md");
+			expect(_target).toBe("023 Sparks MOC");
+			expect(_replace).toBe("");
+		}
+	});
+
+	it("exhaustive switch compiles over all 14 Action variants", () => {
+		// This function compiles only if all 14 variants are handled.
 		function describeAction(a: Action): string {
 			switch (a.action) {
 				case "create_moc":
@@ -276,6 +297,8 @@ describe("Action discriminated union", () => {
 					return `edit_note_text:${a.path}`;
 				case "remove_up_link":
 					return `remove_up_link:${a.path}`;
+				case "resolve_dead_link":
+					return `resolve_dead_link:${a.path}`;
 				case "update_tracker":
 					return `update_tracker:${a.field}`;
 				case "update_log_entry":
@@ -409,5 +432,18 @@ describe("Action discriminated union", () => {
 		};
 		expectTypeOf(a.path).toEqualTypeOf<string>();
 		expectTypeOf(a.link).toEqualTypeOf<string>();
+	});
+
+	it("ResolveDeadLinkAction requires path/target/replace and has no other fields", () => {
+		const a: ResolveDeadLinkAction = {
+			id: "I01",
+			action: "resolve_dead_link",
+			path: "020 Active MOC.md",
+			target: "023 Sparks MOC",
+			replace: "[[023 Sparks (MOC)]]",
+		};
+		expectTypeOf(a.path).toEqualTypeOf<string>();
+		expectTypeOf(a.target).toEqualTypeOf<string>();
+		expectTypeOf(a.replace).toEqualTypeOf<string>();
 	});
 });
