@@ -1,5 +1,21 @@
 # Context Memory
 
+## resolve_dead_link — 14th executor kind (2026-07-25)
+
+User's garden-audit apply failed with a misleading `/actions/0 must have required property
+'source'`. Root cause: **version skew** — Tomo shipped `resolve_dead_link` (commit 4251618,
+alias/embed-aware dead-link fix, supersedes edit_note_text for dead_link because edit_note_text
+no-opped on aliased `[[t|display]]` links) AFTER Hashi's last vendor. Ajv couldn't match the
+unknown kind and reported the wrong oneOf branch's error. Fix (`a18577c`+`7287867`): full
+re-vendor (byte-parity w/ Tomo, 14 defs) + `resolveDeadLink.ts` handler (regex-escaped
+whole-target matcher over bare/aliased/embed forms; replace="" unlinks keeping display,
+"[[New]]" repoints preserving display; skipped-already/no-match, failed/missing) + full 13→14
+enumeration surface + a validator improvement: unknown action kind now emits
+`unknown action kind 'X'` instead of the misleading required-field error. 1966 tests, deployed
+`…-1010`. **Lesson:** an unfamiliar Ajv `required`-property error on an instruction set often
+means an unknown (newer-Tomo) action kind, not a genuinely missing field — check the action's
+`action` value against the vendored schema's oneOf consts first.
+
 ## suggest_pending gate + two-run UX (2026-07-24)
 
 Two-run garden-audit gate shipped on `feat/garden-audit-editor` (`7a630f0`, 1935 tests):
