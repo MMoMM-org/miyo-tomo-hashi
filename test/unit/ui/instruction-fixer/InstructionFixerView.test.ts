@@ -14,6 +14,10 @@ import { App, WorkspaceLeaf } from "obsidian";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import type { ActionOutcome } from "../../../../src/executor/state";
+import {
+	InstructionSetSaveError,
+	ObsidianInstructionSetDoc,
+} from "../../../../src/instruction-fixer/ObsidianInstructionSetDoc";
 import type { Action, InstructionSet } from "../../../../src/schema/types";
 import type {
 	FixerCardContext,
@@ -25,6 +29,7 @@ import {
 	NO_TRUSTED_SIGNAL,
 	type OutcomeResolution,
 } from "../../../../src/ui/instruction-fixer/outcomeSource";
+import { FakeVaultFS } from "../../../../src/vault/FakeVaultFS";
 import type {
 	InstructionFixerModel,
 	InstructionSetDoc,
@@ -94,6 +99,14 @@ function makeSet(actions: readonly Action[] = [I07, I09, I12]): InstructionSet {
 		action_count: actions.length,
 		actions,
 	};
+}
+
+/** The same set as `makeSet()` but without `action_count` — seeded into a
+ * FakeVaultFS for the tests that drive the REAL adapter, where an edit changes
+ * the action count and a stale `action_count` would muddy what is under test. */
+function makeWireSet(): InstructionSet {
+	const { action_count: _omitted, ...rest } = makeSet();
+	return rest;
 }
 
 /** A trusted resolution matching the SDD's traced example: I07 failed, I09
@@ -559,7 +572,7 @@ describe("InstructionFixerView — Save affordance", () => {
 		expect(findActionButton(view, "Save").disabled).toBe(true);
 	});
 
-	it("a failed save keeps the edit pending and warns that some actions may already be written", async () => {
+	it("a rejection carrying no landed-count is reported as genuinely unknown, edit pending", async () => {
 		const adapter = makeSpyAdapter();
 		adapter.save.mockImplementation(async () => {
 			throw new Error("disk full");
@@ -573,7 +586,9 @@ describe("InstructionFixerView — Save affordance", () => {
 
 		const panel = view.contentEl.querySelector(".hashi-if-save-error");
 		expect(panel?.textContent).toContain("disk full");
-		expect(panel?.textContent).toContain("Some actions may already have been written");
+		expect(panel?.textContent).toContain("couldn't tell how much of this save was written");
+		// Neither of the two confident claims may be made on an untagged error.
+		expect(panel?.textContent).not.toContain("Nothing was written");
 		expect(dirtyBadge(view)).not.toBeNull();
 		expect(findActionButton(view, "Save").disabled).toBe(false);
 	});
@@ -609,6 +624,52 @@ describe("InstructionFixerView — Save affordance", () => {
 		// The edit stays pending — the user's work is never discarded.
 		expect(dirtyBadge(view)).not.toBeNull();
 		expect(findActionButton(view, "Save").disabled).toBe(false);
+	});
+
+	it("a structural edit reports that nothing was written (never invites a pointless retry)", async () => {
+		// Through the REAL adapter: a schema-VALID edit the per-action patch
+		// path still cannot express rejects in derivePatches, before the write
+		// loop. Nothing landed, so "save again to finish" would be a lie — and
+		// retrying cannot fix it. The view must read that off the adapter's
+		// error rather than re-deriving the invariant (T3.1 review).
+		const vault = new FakeVaultFS();
+		await vault.create(DOC_PATH, `${JSON.stringify(makeWireSet(), null, 2)}\n`);
+		const view = makeView(new ObsidianInstructionSetDoc(vault, vi.fn()), {
+			card: makeDirtyingCard((m) => ({
+				doc: { ...m.doc, actions: m.doc.actions.slice(0, 2) },
+				dirty: true,
+			})),
+		});
+		await view.onOpen();
+		clickBodyButton(view, "dirty I07");
+
+		findActionButton(view, "Save").click();
+		await flushAsyncHandler();
+
+		const panel = view.contentEl.querySelector(".hashi-if-save-error");
+		expect(panel?.textContent).toContain("unsupported edit");
+		expect(panel?.textContent).toContain("Nothing was written");
+		expect(panel?.textContent).not.toContain("may already have been written");
+		expect(dirtyBadge(view)).not.toBeNull();
+	});
+
+	it("a mid-loop write failure reports how many patches landed", async () => {
+		const adapter = makeSpyAdapter();
+		adapter.save.mockImplementation(async () => {
+			throw new InstructionSetSaveError("disk full on write 2", 1, 3);
+		});
+		const view = makeView(adapter, { card: makeDirtyingCard() });
+		await view.onOpen();
+		clickBodyButton(view, "dirty I07");
+
+		findActionButton(view, "Save").click();
+		await flushAsyncHandler();
+
+		const panel = view.contentEl.querySelector(".hashi-if-save-error");
+		expect(panel?.textContent).toContain("disk full on write 2");
+		expect(panel?.textContent).toContain("1 of 3");
+		expect(panel?.textContent).toContain("save again to write the rest");
+		expect(dirtyBadge(view)).not.toBeNull();
 	});
 
 	it("a later successful save clears the error panel", async () => {

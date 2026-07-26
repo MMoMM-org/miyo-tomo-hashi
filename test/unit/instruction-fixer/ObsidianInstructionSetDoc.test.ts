@@ -18,7 +18,10 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { markActionApplied } from "../../../src/executor/jsonAppliedWriter.js";
-import { ObsidianInstructionSetDoc } from "../../../src/instruction-fixer/ObsidianInstructionSetDoc.js";
+import {
+	InstructionSetSaveError,
+	ObsidianInstructionSetDoc,
+} from "../../../src/instruction-fixer/ObsidianInstructionSetDoc.js";
 import { setTargetField } from "../../../src/instruction-fixer/transforms.js";
 import type { InstructionFixerModel } from "../../../src/vault/InstructionSetDoc.js";
 import type { Action, InstructionSet } from "../../../src/schema/types.js";
@@ -552,5 +555,94 @@ describe("ObsidianInstructionSetDoc.save() — schema validation before write (P
 		expect(fieldOf(findAction(written, "I04"), "target_path")).toBe(
 			"Atlas/202 Notes/Other.md",
 		);
+	});
+});
+
+/**
+ * T3.1 review: every save() rejection carries how much of the save reached
+ * disk, because only this adapter knows. The view renders opposite recovery
+ * instructions off that number ("nothing was written" vs. "k of n landed —
+ * save again to finish"), and must not re-derive it from a second copy of the
+ * patch-path invariant.
+ */
+describe("ObsidianInstructionSetDoc.save() — failures report how much landed", () => {
+	async function saveError(
+		adapter: ObsidianInstructionSetDoc,
+		model: InstructionFixerModel,
+	): Promise<InstructionSetSaveError> {
+		try {
+			await adapter.save(model);
+		} catch (err) {
+			if (err instanceof InstructionSetSaveError) return err;
+			throw new Error(`expected an InstructionSetSaveError, got: ${String(err)}`);
+		}
+		throw new Error("expected save() to reject");
+	}
+
+	it("a structural edit reports zero landed patches — it rejects before the write loop", async () => {
+		const vault = await seededVault();
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		const err = await saveError(adapter, {
+			doc: { ...model.doc, actions: model.doc.actions.slice(0, 2) },
+			dirty: true,
+		});
+
+		expect(err.landedPatchCount).toBe(0);
+		expect(err.message).toMatch(/unsupported edit/);
+		expect(await vault.read(DOC_PATH)).toBe(FIXTURE_JSON);
+	});
+
+	it("a schema-invalid document reports zero landed patches", async () => {
+		const vault = await seededVault();
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		const err = await saveError(adapter, {
+			doc: { ...model.doc, schema_version: "1" as unknown as "2" },
+			dirty: true,
+		});
+
+		expect(err.landedPatchCount).toBe(0);
+		expect(await vault.read(DOC_PATH)).toBe(FIXTURE_JSON);
+	});
+
+	it("save() before load() reports zero landed patches", async () => {
+		const vault = await seededVault();
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const loaded = await new ObsidianInstructionSetDoc(vault).load(DOC_PATH);
+
+		const err = await saveError(adapter, { doc: loaded.doc, dirty: true });
+
+		expect(err.landedPatchCount).toBe(0);
+		expect(err.message).toMatch(/load\(\)/);
+	});
+
+	it("a mid-loop write failure reports how many of the n patches landed", async () => {
+		const vault = await seededVault();
+		const failing = withNthWriteFailing(vault, DOC_PATH, 2);
+		const adapter = new ObsidianInstructionSetDoc(failing, vi.fn());
+		const model = await adapter.load(DOC_PATH);
+
+		const err = await saveError(adapter, repairI02(repointI01(model)));
+
+		expect(err.landedPatchCount).toBe(1);
+		expect(err.totalPatchCount).toBe(2);
+		// The underlying failure rides along, message verbatim.
+		expect(err.message).toBe("disk full on write 2");
+		expect((err.reason as Error).message).toBe("disk full on write 2");
+	});
+
+	it("a first-patch failure reports zero landed out of n", async () => {
+		const vault = await seededVault();
+		const failing = withNthWriteFailing(vault, DOC_PATH, 1);
+		const adapter = new ObsidianInstructionSetDoc(failing, vi.fn());
+		const model = await adapter.load(DOC_PATH);
+
+		const err = await saveError(adapter, repairI02(repointI01(model)));
+
+		expect(err.landedPatchCount).toBe(0);
+		expect(err.totalPatchCount).toBe(2);
 	});
 });

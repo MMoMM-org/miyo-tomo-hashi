@@ -49,6 +49,44 @@ interface ActionPatch {
 	readonly patch: Partial<Action>;
 }
 
+/**
+ * Every rejection `save()` produces, carrying HOW MUCH of the save landed
+ * (spec-006 T3.1 review).
+ *
+ * Why the count is on the error: `save()` writes one atomic patch per changed
+ * action, so a rejection can mean either "nothing was written" (no active doc,
+ * schema-invalid document, or a structural edit the patch path can't express —
+ * all of which reject before the write loop starts) or "k of n patches landed,
+ * retry to finish". Only this adapter knows which, because only it knows where
+ * in the loop it was. The view has to tell the user, and it must not re-derive
+ * the answer from a second copy of this invariant — that copy would drift.
+ *
+ * `landedPatchCount === 0` therefore means "the document on disk is exactly as
+ * it was"; anything higher means the set is partially repaired (always
+ * schema-valid) and re-saving the same still-dirty model converges.
+ */
+export class InstructionSetSaveError extends Error {
+	/** Patches that were written before the failure. 0 = nothing landed. */
+	readonly landedPatchCount: number;
+	/** Patches this save had to write. 0 when the failure preceded derivation. */
+	readonly totalPatchCount: number;
+	/** The underlying failure, when this error wraps one (the write-loop case). */
+	readonly reason: unknown;
+
+	constructor(
+		message: string,
+		landedPatchCount: number,
+		totalPatchCount: number,
+		reason?: unknown,
+	) {
+		super(message);
+		this.name = "InstructionSetSaveError";
+		this.landedPatchCount = landedPatchCount;
+		this.totalPatchCount = totalPatchCount;
+		this.reason = reason;
+	}
+}
+
 export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 	// Stateful — one active doc at a time. Set by load(), read by save() so
 	// the caller never has to re-pass the path.
@@ -97,8 +135,10 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 		// I/O failures, which have no other channel.
 		const result = validate(model.doc);
 		if (!result.ok) {
-			throw new Error(
+			throw new InstructionSetSaveError(
 				`ObsidianInstructionSetDoc.save(${docPath}): ${result.message}`,
+				0,
+				0,
 			);
 		}
 
@@ -106,6 +146,10 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 		// the `.md` peer's `tomo.sources` block is never touched.
 		const patches = this.derivePatches(pristine, model.doc, docPath);
 
+		// Counts patches that actually reached disk, so the rejection below can
+		// state how much of the save landed instead of leaving the caller to
+		// guess (see InstructionSetSaveError).
+		let landed = 0;
 		try {
 			// Serialized per-path by processJSON, so N patches = N atomic
 			// cycles rather than one — acceptable because a repair session
@@ -126,11 +170,16 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 			// load() re-baselines `pristine` on what is actually on disk.
 			for (const { actionId, patch } of patches) {
 				await markActionFields(this.vault, docPath, actionId, patch);
+				landed += 1;
 			}
 		} catch (err) {
 			const reason = err instanceof Error ? err.message : String(err);
 			this.notify(`Could not save instruction set to ${docPath}: ${reason}`);
-			throw err;
+			// Re-thrown as an InstructionSetSaveError carrying `landed` — this is
+			// the only point in the system that knows how much of the save reached
+			// disk. The message stays the underlying failure's, verbatim, so the
+			// user still sees what actually went wrong.
+			throw new InstructionSetSaveError(reason, landed, patches.length, err);
 		}
 
 		this.pristine = deepCopy(model.doc);
@@ -176,8 +225,10 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 	/** `docPath` + `pristine` are always set together by load(), so one guard covers both. */
 	private requireActiveDoc(): { docPath: string; pristine: InstructionSet } {
 		if (this.docPath === null || this.pristine === null) {
-			throw new Error(
+			throw new InstructionSetSaveError(
 				"ObsidianInstructionSetDoc.save(): no active document — call load() first",
+				0,
+				0,
 			);
 		}
 		return { docPath: this.docPath, pristine: this.pristine };
@@ -258,9 +309,17 @@ function deepEqual(a: unknown, b: unknown): boolean {
 	return true;
 }
 
-function unsupportedEdit(docPath: string, what: string): Error {
-	return new Error(
+/**
+ * Rejects a schema-VALID edit that the per-action patch path still cannot
+ * express. Raised by `derivePatches`, i.e. strictly before the write loop —
+ * hence `landedPatchCount: 0`, which is what lets the view say "nothing was
+ * written" instead of inviting a retry that cannot help.
+ */
+function unsupportedEdit(docPath: string, what: string): InstructionSetSaveError {
+	return new InstructionSetSaveError(
 		`ObsidianInstructionSetDoc.save(${docPath}): unsupported edit — the Fixer writes ` +
 			`per-action field patches only (ADR-9), but ${what} changed since load()`,
+		0,
+		0,
 	);
 }

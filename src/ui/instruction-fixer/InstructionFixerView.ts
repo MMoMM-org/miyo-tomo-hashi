@@ -34,26 +34,28 @@
  *    `logFolder` = `settings.tomoInboxFolder`, which can change while a leaf is
  *    open; closing over it at the main.ts call site keeps that live and keeps
  *    this view from reaching into settings or the executionStore singleton.
- * 3. Save pre-validates the edited document itself (Decision 4 below) and the
- *    view — not the adapter — owns the failure copy, because only the view can
- *    tell the user which of the two failure shapes happened.
+ * 3. Save pre-validates the edited document, so a schema-invalid edit is
+ *    reported against the pending edit without a round trip (PRD F4-AC2). The
+ *    adapter re-validates on its own — this is a promptness convenience, not
+ *    the gate, and NOT how the failure taxonomy below is decided.
  * 4. `ObsidianInstructionSetDoc.save()` writes one atomic patch PER CHANGED
  *    ACTION, so atomicity is per-action, not per-save: a mid-loop I/O failure
- *    leaves the set schema-valid but only partially repaired, and the adapter's
- *    single `notify()` cannot distinguish that from "nothing landed". The two
- *    cases need opposite user instructions, so this view separates them at the
- *    only point where they are still distinguishable: a schema-invalid document
- *    is rejected BEFORE `adapter.save` is called (nothing written, edit kept
- *    pending — PRD F4-AC2), which leaves an actual `save()` rejection as the
- *    I/O case, reported as "some actions may already have been written — save
- *    again to finish, or revert". The adapter re-validates on its own; this
- *    pre-check is a UX discriminator, not the gate.
+ *    leaves the set schema-valid but only partially repaired. That case and a
+ *    reject-before-any-write (schema-invalid, or a structural edit the patch
+ *    path can't express) need OPPOSITE recovery instructions, and the view
+ *    cannot tell them apart on its own — a structural rejection is schema-VALID,
+ *    so no amount of pre-checking here would catch it without duplicating an
+ *    invariant only the adapter enforces. So the adapter says: every rejection
+ *    is an `InstructionSetSaveError` carrying `landedPatchCount` (T3.1 review).
+ *    `SaveFailure`/`saveErrorHint` below render from that number, and report
+ *    "unknown" rather than guess when a rejection carries none.
  */
 
 import { ItemView, setIcon, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 
 import type { ActionOutcome } from "../../executor/state.js";
 import type { Action, InstructionSet } from "../../schema/types.js";
+import { InstructionSetSaveError } from "../../instruction-fixer/ObsidianInstructionSetDoc.js";
 import { validate } from "../../schema/validator.js";
 import { Store } from "../../util/store.js";
 import type {
@@ -117,6 +119,45 @@ const GATE_TAGS: Record<EditGateResult, string | null> = {
 	"read-only-no-signal": "read-only",
 };
 
+/**
+ * A rejected Save, plus how much of it reached disk.
+ *
+ * `landed` is the load-bearing field, because the two failure shapes need
+ * OPPOSITE instructions: nothing written → the retry is pointless until the
+ * problem is fixed; some patches written → retrying is exactly the recovery.
+ * It comes from the adapter (`InstructionSetSaveError`), which is the only
+ * component that knows where in its per-action write loop it was. `null` means
+ * the rejection carried no count — a foreign `InstructionSetDoc` implementation
+ * or an unexpected throw — and is reported as genuinely unknown rather than
+ * guessed in either direction.
+ */
+interface SaveFailure {
+	readonly message: string;
+	readonly landed: number | null;
+	readonly total: number;
+}
+
+/** The recovery instruction for a failed Save. See `SaveFailure`. */
+function saveErrorHint(failure: SaveFailure): string {
+	if (failure.landed === null) {
+		return (
+			"Hashi couldn't tell how much of this save was written. Your edits are still " +
+			"pending: save again to re-send every repair, or revert to reload from disk."
+		);
+	}
+	if (failure.landed === 0) {
+		return (
+			"Nothing was written — the set on disk is unchanged. Your edits are still " +
+			"pending: fix the problem above and save again."
+		);
+	}
+	return (
+		`${failure.landed} of ${failure.total} repaired actions were written before the ` +
+		"failure, so the set is partly repaired (and still valid). Your edits are still " +
+		"pending: save again to write the rest, or revert to reload from disk."
+	);
+}
+
 /** Narrow, defensive read of `state.docPath` — never throws on a malformed state. */
 function extractDocPath(state: unknown): string | null {
 	if (typeof state !== "object" || state === null) return null;
@@ -163,8 +204,8 @@ export class InstructionFixerView extends ItemView {
 	private saving = false;
 
 	// Last Save failure, cleared on the next successful save and on every
-	// doc-load. `partial` distinguishes the two failure shapes (Decision 4).
-	private saveError: { readonly message: string; readonly partial: boolean } | null = null;
+	// doc-load. See `SaveFailure` for how the recovery copy is chosen.
+	private saveError: SaveFailure | null = null;
 
 	constructor(
 		leaf: WorkspaceLeaf,
@@ -420,15 +461,7 @@ export class InstructionFixerView extends ItemView {
 		if (error === null) return;
 		const panel = body.createDiv({ cls: "hashi-if-save-error" });
 		panel.createDiv({ text: `Save failed: ${error.message}` });
-		panel.createDiv({
-			cls: "hashi-if-save-error-hint",
-			text: error.partial
-				? "Some actions may already have been written — the set is still valid, " +
-					"just partly repaired. Your edits are still pending: save again to finish, " +
-					"or revert to reload from disk."
-				: "Nothing was written. Your edits are still pending — fix the reported value " +
-					"and save again.",
-		});
+		panel.createDiv({ cls: "hashi-if-save-error-hint", text: saveErrorHint(error) });
 	}
 
 	private renderNoSignalBanner(body: HTMLElement): void {
@@ -524,10 +557,9 @@ export class InstructionFixerView extends ItemView {
 	 * The `saving` flag additionally disables Save/Revert/Re-run for the whole
 	 * in-flight window, narrowing what these checks have to guard.
 	 *
-	 * On the failure paths see Decision 4 in the class doc comment: the
-	 * pre-validation rejection means nothing was written, an `adapter.save`
-	 * rejection means some per-action patches may already have landed. Neither
-	 * discards the user's edit.
+	 * On the failure paths see Decision 4 in the class doc comment: the recovery
+	 * copy is chosen from the adapter's reported `landedPatchCount`, never
+	 * assumed. No failure path discards the user's edit.
 	 */
 	private async handleSave(): Promise<void> {
 		const savedStore = this.store;
@@ -537,7 +569,7 @@ export class InstructionFixerView extends ItemView {
 
 		const validation = validate(savedModel.doc);
 		if (!validation.ok) {
-			this.saveError = { message: validation.message, partial: false };
+			this.saveError = { message: validation.message, landed: 0, total: 0 };
 			this.render();
 			return;
 		}
@@ -550,7 +582,12 @@ export class InstructionFixerView extends ItemView {
 		} catch (err) {
 			this.saveError = {
 				message: err instanceof Error ? err.message : String(err),
-				partial: true,
+				// The adapter is the only component that knows how far its
+				// per-action write loop got, so the count is READ off the error
+				// rather than re-derived here — a second copy of that invariant
+				// would drift from the one the adapter actually enforces.
+				landed: err instanceof InstructionSetSaveError ? err.landedPatchCount : null,
+				total: err instanceof InstructionSetSaveError ? err.totalPatchCount : 0,
 			};
 			return;
 		} finally {
