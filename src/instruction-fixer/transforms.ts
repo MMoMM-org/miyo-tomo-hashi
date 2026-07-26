@@ -78,69 +78,33 @@ export function setTargetField(
 }
 
 // ---------------------------------------------------------------------------
-// Per-kind field application — one branch per ADR-5 kind so each field write
-// stays type-narrowed against its actual interface rather than a blind cast.
+// Field application — single dispatch. `setTargetField` has already checked
+// `fieldKey` against `TARGET_FIELD_WHITELIST[action.action]`, so there is
+// deliberately no second, hand-maintained (kind, field) listing here — one
+// authoritative copy of the ADR-5 roster is what actually protects the
+// writes. `anchor` is the one whitelisted field that isn't a plain string
+// (it nests inside `Anchor`), so it gets its own branch; the `"anchor" in
+// action` check is what gives `setAnchorValue` real compile-time narrowing
+// (Action → the 3 anchor-bearing kinds), not a re-statement of the whitelist.
 // ---------------------------------------------------------------------------
 
 function applyTargetField(action: Action, fieldKey: string, value: string): Action {
-	switch (action.action) {
-		case "link_to_moc":
-			if (fieldKey === "target_moc") return setStringField(action, "target_moc", value);
-			if (fieldKey === "target_moc_path") {
-				return setStringField(action, "target_moc_path", value);
-			}
-			if (fieldKey === "anchor") return setAnchorValue(action, value);
-			return action;
-
-		case "insert_under_marker":
-		case "replace_section":
-			if (fieldKey === "target_path") return setStringField(action, "target_path", value);
-			if (fieldKey === "anchor") return setAnchorValue(action, value);
-			return action;
-
-		case "add_relationship":
-			if (fieldKey === "target_moc_path") {
-				return setStringField(action, "target_moc_path", value);
-			}
-			if (fieldKey === "marker") return setStringField(action, "marker", value);
-			if (fieldKey === "line") return setStringField(action, "line", value);
-			return action;
-
-		case "edit_note_text":
-			if (fieldKey === "path") return setStringField(action, "path", value);
-			if (fieldKey === "match") return setStringField(action, "match", value);
-			if (fieldKey === "replace") return setStringField(action, "replace", value);
-			return action;
-
-		case "remove_up_link":
-			if (fieldKey === "path") return setStringField(action, "path", value);
-			if (fieldKey === "link") return setStringField(action, "link", value);
-			return action;
-
-		case "resolve_dead_link":
-			if (fieldKey === "path") return setStringField(action, "path", value);
-			if (fieldKey === "target") return setStringField(action, "target", value);
-			if (fieldKey === "replace") return setStringField(action, "replace", value);
-			return action;
-
-		default:
-			// View-only kind — no whitelist entry ever routes here (guarded in
-			// setTargetField), but the fallback keeps this function total.
-			return action;
-	}
+	if (fieldKey === "anchor" && "anchor" in action) return setAnchorValue(action, value);
+	return setStringField(action, fieldKey, value);
 }
 
 /**
- * Generic string-field setter for the whitelist's plain `string` fields.
- * Reads/writes via an unknown-valued record (not `any`) since the field key
- * is a runtime string, not a static keyof — every call site above is already
- * narrowed to a kind that actually declares `key` as a string. No-op
- * (same reference) when the value is unchanged.
+ * String-field setter for the whitelist's plain `string` fields. `key` is a
+ * runtime string validated by the caller's whitelist check, not a static
+ * `keyof Action` — a generic constrained to `keyof T` would only create the
+ * appearance of safety here, since `T` is the unnarrowed `Action` union at
+ * every call site. Reads/writes via an unknown-valued record (not `any`).
+ * No-op (same reference) when the value is unchanged.
  */
-function setStringField<T extends Action>(action: T, key: string, value: string): T {
+function setStringField(action: Action, key: string, value: string): Action {
 	const record = action as unknown as Record<string, unknown>;
 	if (record[key] === value) return action;
-	return { ...action, [key]: value };
+	return { ...action, [key]: value } as Action;
 }
 
 /**

@@ -361,6 +361,48 @@ describe("setTargetField — reject / no-op paths", () => {
 // Empty / whitespace handling — per-field semantics, no silent trimming
 // ---------------------------------------------------------------------------
 
+describe("setTargetField — first-time fill-in of an unresolved-at-emission field", () => {
+	it("fills an omitted (undefined) optional field — e.g. link_to_moc.target_moc_path", () => {
+		const seed = linkToMoc();
+		// `target_moc_path` is optional on the wire (LinkToMocAction.target_moc_path?:
+		// string | null) — this is the actual "target was unresolved at emission"
+		// scenario the Fixer exists for, not an edit of an already-populated value.
+		const { target_moc_path, ...withoutPath } = seed as Extract<Action, { action: "link_to_moc" }>;
+		void target_moc_path;
+		const model = makeModel([withoutPath as Action]);
+		const next = setTargetField(model, "I01", "target_moc_path", "Atlas/200 Maps/Cooking (MOC).md");
+		expect(next).not.toBe(model);
+		expect(next.dirty).toBe(true);
+		const action = next.doc.actions[0];
+		expect(action?.action === "link_to_moc" && action.target_moc_path).toBe(
+			"Atlas/200 Maps/Cooking (MOC).md",
+		);
+	});
+
+	it("fills an explicit null optional field — e.g. link_to_moc.target_moc_path", () => {
+		const model = makeModel([linkToMoc({ target_moc_path: null })]);
+		const next = setTargetField(model, "I01", "target_moc_path", "Atlas/200 Maps/Cooking (MOC).md");
+		expect(next).not.toBe(model);
+		expect(next.dirty).toBe(true);
+		const action = next.doc.actions[0];
+		expect(action?.action === "link_to_moc" && action.target_moc_path).toBe(
+			"Atlas/200 Maps/Cooking (MOC).md",
+		);
+	});
+
+	it("fills an anchor left null at emission — anchor.value: null is the documented unresolved state", () => {
+		const model = makeModel([linkToMoc({ anchor: { type: "heading", value: null } })]);
+		const next = setTargetField(model, "I01", "anchor", "Key Concepts");
+		expect(next).not.toBe(model);
+		expect(next.dirty).toBe(true);
+		const action = next.doc.actions[0];
+		expect(action?.action === "link_to_moc" && action.anchor).toEqual({
+			type: "heading",
+			value: "Key Concepts",
+		});
+	});
+});
+
 describe("setTargetField — empty/whitespace value handling", () => {
 	it("accepts an empty string for a plain whitelisted field (e.g. add_relationship line)", () => {
 		const model = makeModel([addRelationship()]);
@@ -388,5 +430,26 @@ describe("setTargetField — empty/whitespace value handling", () => {
 		expect(next).not.toBe(model);
 		const action = next.doc.actions[0];
 		expect(action?.action === "edit_note_text" && action.match).toBe("   ");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Duplicate id — documents intentional first-match behaviour
+// ---------------------------------------------------------------------------
+
+describe("setTargetField — duplicate id", () => {
+	it("replaces only the FIRST action matching a duplicated id, leaving the rest untouched", () => {
+		const first = linkToMoc({ id: "DUPE", target_moc: "First (MOC)" } as Partial<
+			Action & { action: "link_to_moc" }
+		>);
+		const second = linkToMoc({ id: "DUPE", target_moc: "Second (MOC)" } as Partial<
+			Action & { action: "link_to_moc" }
+		>);
+		const model = makeModel([first, second]);
+		const next = setTargetField(model, "DUPE", "target_moc", "Renamed (MOC)");
+		expect(next).not.toBe(model);
+		const [a, b] = next.doc.actions;
+		expect(a?.action === "link_to_moc" && a.target_moc).toBe("Renamed (MOC)");
+		expect(b?.action === "link_to_moc" && b.target_moc).toBe("Second (MOC)");
 	});
 });
