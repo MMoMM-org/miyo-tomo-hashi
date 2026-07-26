@@ -69,6 +69,18 @@ reads `metadataCache` before Obsidian refreshes it post-write → null frontmatt
 frontmatter on modify before assuming Hashi caused it — the `Updated:` field is the fingerprint
 (it sits on every Hashi log, good or clobbered). Don't "fix" third-party throws in Hashi.
 
+<!-- 2026-07-26 -->
+## `FakeVaultFS.process`/`processJSON` doesn't throw "File not found" on a missing path
+**Symptom:** a test asserting a vault-failure path rejects with `"File not found"` (mirroring
+`FakeVaultFS.read`'s behavior) fails with `SyntaxError: Unexpected end of JSON input` instead.
+**Cause:** `read()` throws on a missing path, but `process()`/`processJSON()` default to `""`
+(`this.content.get(path) ?? ""`) rather than throwing — so a JSON-based writer's own
+`JSON.parse("")` is what fails, not a vault-level "not found" error. This differs from the real
+`ObsidianVaultFS`, whose `process()` calls `requireFile()` first and does throw "File not found".
+**How to apply:** when writing a `processJSON`-based failure/denial test against `FakeVaultFS`
+with an unseeded path, assert `.rejects.toThrow(SyntaxError)` (or the JSON parse message), not
+`"File not found"`. (Found adding L1 failure-path coverage for `markActionFields`, spec 006 T1.2.)
+
 ## Dev console flooded by `[hashi:hooks]` lines during a run (#52)
 **Cause:** `FsHookLoader.resolve()` ran per (phase × action) — a 126-action run did ~250
 `readdirSync` calls, each `console.debug`-logging (and logging the ENOENT when the hooks

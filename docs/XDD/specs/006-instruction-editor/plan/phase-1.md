@@ -1,6 +1,6 @@
 ---
 title: "Phase 1: Data spine — port, adapter, atomic writer, transforms"
-status: completed
+status: in_progress
 version: "1.0"
 phase: 1
 ---
@@ -64,3 +64,23 @@ Establishes the load/save/edit data spine the view builds on — everything test
 
   - Run all Phase 1 tests; `npm run build` (full tsc) + `npm run lint` clean. Confirm the per-kind
     whitelist matches the SDD ADR-5 roster exactly (drift guard for the fix-field set).
+
+- [ ] **T1.5 Route `save()` through `markActionFields` + validate before write** `[activity: backend-api]`
+
+  *Added after the T1.4 drift check found two HIGH findings (user-approved resolution: fix both now).*
+
+  1. Prime: Re-read `[ref: SDD/ADR-9]`, `[ref: SDD/Building Block View]` (`Adapter --> Writer`),
+     `[ref: SDD/Runtime View/Primary Flow]` (`save() → markActionFields`), `[ref: SDD/Error Handling]`
+     ("Invalid edit at Save: schema validation fails → reject the write"), `[ref: PRD/F4-AC2]`.
+  2. Test: a concurrent `applied:true` flip on a *different* action between `load()` and `save()`
+     survives the save (the lost-update regression — must fail against the whole-document save);
+     a schema-invalid edit (`insert_under_marker.target_path = ""` violates `minLength:1`) is
+     rejected at save with a message and NOT written; unedited save still a byte-identical no-op;
+     verbatim round-trip still holds for all untouched fields.
+  3. Implement: `save()` validates the whole doc, then applies per-action patches via
+     `markActionFields` instead of a whole-document `JSON.stringify` + `writeFile`.
+  4. Validate: unit tests pass; full `npm run build` + `npm run lint` clean.
+  - Success:
+    - [ ] No second writer — the Fixer's write goes through the executor's atomic path `[ref: SDD/ADR-9]`
+    - [ ] A concurrent executor `applied` flush is never reverted by a Fixer save `[ref: SDD/ADR-9]`
+    - [ ] Schema-invalid edits are rejected before write, not on next load `[ref: PRD/F4-AC2]`
