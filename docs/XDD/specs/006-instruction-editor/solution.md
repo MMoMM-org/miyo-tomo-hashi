@@ -586,6 +586,19 @@ registration in `main.ts`/`registerCommands.ts`. No migration, no config, no fea
   surface option must attach + clean up listeners by hand.
 - **Run-log source matching** must be *confident* — a fuzzy path match that wrongly maps a stale log
   would defeat fail-closed; require the log's `sources:` to include the exact set path.
+- **Run-log parsing must survive both `I##` cell formats** (found in Phase 2). Until ADR-8 lands in
+  T4.3, `renderIdCell` still emits `[[<peerStem>#<heading>|I##]]`; afterwards it emits plain `I##`.
+  Logs already in users' vaults keep the old form forever, so `outcomeSource.parseIdCell` accepts
+  both — permanently, not as a migration step.
+- **Run logs are sectioned per source** (`## <sourcePath>`) — found in Phase 2, not anticipated here.
+  A multi-source run writes one section per set, so row parsing MUST be confined to this set's own
+  section or another set's `I##` rows leak into this one's outcome map.
+- **`resolveOutcomes` needs the run-log folder** (`settings.tomoInboxFolder`) as a third dependency
+  beyond the vault and the `executionStore` accessor — `VaultFS.list` requires a folder. Phase 3's
+  view must thread it through.
+- **Run-log scan cost scales with the folder**: when no log matches, every candidate is read
+  newest-first. Cheap today because `only-after-failed` retention keeps the folder small; revisit if
+  retention ever defaults to `always`.
 
 ## Glossary
 

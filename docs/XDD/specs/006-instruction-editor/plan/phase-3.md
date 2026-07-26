@@ -31,6 +31,11 @@ phase: 3
   today cannot tell the user "nothing landed" from "some actions landed — retry to finish". The
   view owns that distinction: surface it when wiring the Save button.
 
+- **Carried from Phase 2:** `resolveOutcomes` takes a third dep, `deps.logFolder` — pass
+  `settings.tomoInboxFolder`. And `editGate(action, outcomeResult, appliedFlag)` takes `appliedFlag`
+  separately from `action` (the SDD's signature), so the card loop MUST derive it from the *same*
+  action it passes as the first argument — `editGate(a, res, a.applied)`, never from a sibling.
+
 **Dependencies**: Phase 1 (adapter/transforms), Phase 2 (outcome source + gate).
 
 ---

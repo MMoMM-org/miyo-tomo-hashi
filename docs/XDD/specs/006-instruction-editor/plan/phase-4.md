@@ -58,6 +58,14 @@ whole feature. Entry tasks are independent of each other and can run in parallel
   - Success:
     - [ ] `I##` cell is plain text; pointer line present; log otherwise stable `[ref: PRD/F2-AC4]` `[ref: PRD/F1-AC3]` `[ref: SDD/ADR-8]`
 
+  > **DO NOT remove the wikilink fallback in `outcomeSource.parseIdCell` when landing this.**
+  > Phase 2's `parseIdCell` (`src/ui/instruction-fixer/outcomeSource.ts`) deliberately accepts BOTH
+  > the plain `I##` form and the legacy `[[<peerStem>#<heading>|I##]]` form. Run logs already written
+  > to users' vaults before this task lands still carry the wikilink form, and the Fixer must keep
+  > resolving outcomes from them — dropping the fallback would silently turn every pre-existing log
+  > into `NO_TRUSTED_SIGNAL`. Keep both branches and keep their tests. (Surfaced by the Phase 2
+  > drift check, which flagged the dual parse as undocumented.)
+
 - [ ] **T4.4 Phase Validation** `[activity: validate]`
 
   - Run all Phase 4 tests; `npm run build` + `npm run lint`. Grep docs for any run-log/`I##`
