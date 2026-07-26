@@ -1,0 +1,392 @@
+/**
+ * Instruction Fixer target-field transform (spec-006 Phase 1, T1.3) —
+ * `setTargetField` pure setter tests.
+ *
+ * Every whitelisted (kind, field) pair gets an accept case (ADR-5's 7 repair
+ * kinds), paired with rejection/no-op cases per MiYo Constitution L1
+ * (Testing — permission/validation logic must prove both): a non-whitelisted
+ * field, a view-only kind, and an unknown id all return the SAME model
+ * reference untouched.
+ */
+
+import { describe, expect, it } from "vitest";
+
+import { setTargetField, TARGET_FIELD_WHITELIST } from "../../../src/instruction-fixer/transforms.js";
+import type { Action } from "../../../src/schema/types.js";
+import type { InstructionFixerModel } from "../../../src/vault/InstructionSetDoc.js";
+
+// ---------------------------------------------------------------------------
+// Factories — fresh state per test, no shared mutable fixtures.
+// ---------------------------------------------------------------------------
+
+function makeModel(actions: Action[], dirty = false): InstructionFixerModel {
+	return {
+		doc: {
+			schema_version: "2",
+			type: "tomo-instructions",
+			generated: "2026-07-20T10:15:00Z",
+			profile: "default",
+			actions,
+		},
+		dirty,
+	};
+}
+
+function linkToMoc(overrides?: Partial<Action & { action: "link_to_moc" }>): Action {
+	return {
+		id: "I01",
+		action: "link_to_moc",
+		target_moc: "Hobbies (MOC)",
+		target_moc_path: "Atlas/200 Maps/Hobbies (MOC).md",
+		anchor: { type: "heading", value: "Key Concepts" },
+		placement: "after",
+		line_to_add: "- [[New Note]]",
+		...overrides,
+	} as Action;
+}
+
+function insertUnderMarker(): Action {
+	return {
+		id: "I02",
+		action: "insert_under_marker",
+		target_path: "Atlas/202 Notes/Existing.md",
+		anchor: { type: "heading", value: "Notes" },
+		placement: "inside",
+		content: "some content",
+	};
+}
+
+function replaceSection(): Action {
+	return {
+		id: "I03",
+		action: "replace_section",
+		target_path: "Atlas/202 Notes/Existing.md",
+		anchor: { type: "heading", value: "Notes" },
+		content: "new body",
+	};
+}
+
+function addRelationship(): Action {
+	return {
+		id: "I04",
+		action: "add_relationship",
+		target_moc_path: "Atlas/200 Maps/Hobbies (MOC).md",
+		marker: "## Related",
+		line: "- [[Some Note]]",
+	};
+}
+
+function editNoteText(): Action {
+	return {
+		id: "I05",
+		action: "edit_note_text",
+		path: "Atlas/202 Notes/Existing.md",
+		match: "[[Missing Note]]",
+		replace: "",
+	};
+}
+
+function removeUpLink(): Action {
+	return {
+		id: "I06",
+		action: "remove_up_link",
+		path: "Atlas/202 Notes/Existing.md",
+		link: "[[Old Parent]]",
+	};
+}
+
+function resolveDeadLink(): Action {
+	return {
+		id: "I07",
+		action: "resolve_dead_link",
+		path: "Atlas/202 Notes/Existing.md",
+		target: "Missing Note",
+		replace: "[[Found Note]]",
+	};
+}
+
+function moveNote(): Action {
+	return {
+		id: "I08",
+		action: "move_note",
+		source: "100 Inbox/note.md",
+		destination: "Atlas/note.md",
+		title: "Note",
+	};
+}
+
+function skip(): Action {
+	return {
+		id: "I09",
+		action: "skip",
+		source_path: "100 Inbox/orphan.md",
+		reason: "duplicate",
+	};
+}
+
+// ---------------------------------------------------------------------------
+// TARGET_FIELD_WHITELIST — the ADR-5 roster
+// ---------------------------------------------------------------------------
+
+describe("TARGET_FIELD_WHITELIST", () => {
+	it("lists exactly the 7 repair kinds with ADR-5's editable fields", () => {
+		expect(TARGET_FIELD_WHITELIST).toEqual({
+			link_to_moc: ["target_moc", "target_moc_path", "anchor"],
+			insert_under_marker: ["target_path", "anchor"],
+			replace_section: ["target_path", "anchor"],
+			add_relationship: ["target_moc_path", "marker", "line"],
+			edit_note_text: ["path", "match", "replace"],
+			remove_up_link: ["path", "link"],
+			resolve_dead_link: ["path", "target", "replace"],
+		});
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Accept paths — one per (kind, field) in the ADR-5 roster
+// ---------------------------------------------------------------------------
+
+describe("setTargetField — accept paths", () => {
+	it("link_to_moc: target_moc", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setTargetField(model, "I01", "target_moc", "Cooking (MOC)");
+		expect(next).not.toBe(model);
+		expect(next.dirty).toBe(true);
+		const action = next.doc.actions[0];
+		expect(action?.action === "link_to_moc" && action.target_moc).toBe("Cooking (MOC)");
+	});
+
+	it("link_to_moc: target_moc_path", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setTargetField(model, "I01", "target_moc_path", "Atlas/200 Maps/Cooking (MOC).md");
+		expect(next).not.toBe(model);
+		expect(next.dirty).toBe(true);
+		const action = next.doc.actions[0];
+		expect(action?.action === "link_to_moc" && action.target_moc_path).toBe(
+			"Atlas/200 Maps/Cooking (MOC).md",
+		);
+	});
+
+	it("link_to_moc: anchor (sets anchor.value, preserves anchor.type)", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setTargetField(model, "I01", "anchor", "Related Links");
+		expect(next).not.toBe(model);
+		expect(next.dirty).toBe(true);
+		const action = next.doc.actions[0];
+		expect(action?.action === "link_to_moc" && action.anchor).toEqual({
+			type: "heading",
+			value: "Related Links",
+		});
+	});
+
+	it("insert_under_marker: target_path", () => {
+		const model = makeModel([insertUnderMarker()]);
+		const next = setTargetField(model, "I02", "target_path", "Atlas/202 Notes/Other.md");
+		expect(next).not.toBe(model);
+		expect(next.dirty).toBe(true);
+		const action = next.doc.actions[0];
+		expect(action?.action === "insert_under_marker" && action.target_path).toBe(
+			"Atlas/202 Notes/Other.md",
+		);
+	});
+
+	it("insert_under_marker: anchor", () => {
+		const model = makeModel([insertUnderMarker()]);
+		const next = setTargetField(model, "I02", "anchor", "Different Heading");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "insert_under_marker" && action.anchor.value).toBe(
+			"Different Heading",
+		);
+	});
+
+	it("replace_section: target_path", () => {
+		const model = makeModel([replaceSection()]);
+		const next = setTargetField(model, "I03", "target_path", "Atlas/202 Notes/Other.md");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "replace_section" && action.target_path).toBe(
+			"Atlas/202 Notes/Other.md",
+		);
+	});
+
+	it("replace_section: anchor", () => {
+		const model = makeModel([replaceSection()]);
+		const next = setTargetField(model, "I03", "anchor", "Different Heading");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "replace_section" && action.anchor.value).toBe(
+			"Different Heading",
+		);
+	});
+
+	it("add_relationship: target_moc_path", () => {
+		const model = makeModel([addRelationship()]);
+		const next = setTargetField(model, "I04", "target_moc_path", "Atlas/200 Maps/Other.md");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "add_relationship" && action.target_moc_path).toBe(
+			"Atlas/200 Maps/Other.md",
+		);
+	});
+
+	it("add_relationship: marker", () => {
+		const model = makeModel([addRelationship()]);
+		const next = setTargetField(model, "I04", "marker", "## See Also");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "add_relationship" && action.marker).toBe("## See Also");
+	});
+
+	it("add_relationship: line", () => {
+		const model = makeModel([addRelationship()]);
+		const next = setTargetField(model, "I04", "line", "- [[Other Note]]");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "add_relationship" && action.line).toBe("- [[Other Note]]");
+	});
+
+	it("edit_note_text: path", () => {
+		const model = makeModel([editNoteText()]);
+		const next = setTargetField(model, "I05", "path", "Atlas/202 Notes/Other.md");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "edit_note_text" && action.path).toBe("Atlas/202 Notes/Other.md");
+	});
+
+	it("edit_note_text: match", () => {
+		const model = makeModel([editNoteText()]);
+		const next = setTargetField(model, "I05", "match", "[[Other Missing]]");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "edit_note_text" && action.match).toBe("[[Other Missing]]");
+	});
+
+	it("edit_note_text: replace", () => {
+		const model = makeModel([editNoteText()]);
+		const next = setTargetField(model, "I05", "replace", "[[Found Note]]");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "edit_note_text" && action.replace).toBe("[[Found Note]]");
+	});
+
+	it("remove_up_link: path", () => {
+		const model = makeModel([removeUpLink()]);
+		const next = setTargetField(model, "I06", "path", "Atlas/202 Notes/Other.md");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "remove_up_link" && action.path).toBe("Atlas/202 Notes/Other.md");
+	});
+
+	it("remove_up_link: link", () => {
+		const model = makeModel([removeUpLink()]);
+		const next = setTargetField(model, "I06", "link", "[[New Parent]]");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "remove_up_link" && action.link).toBe("[[New Parent]]");
+	});
+
+	it("resolve_dead_link: path", () => {
+		const model = makeModel([resolveDeadLink()]);
+		const next = setTargetField(model, "I07", "path", "Atlas/202 Notes/Other.md");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "resolve_dead_link" && action.path).toBe(
+			"Atlas/202 Notes/Other.md",
+		);
+	});
+
+	it("resolve_dead_link: target", () => {
+		const model = makeModel([resolveDeadLink()]);
+		const next = setTargetField(model, "I07", "target", "Other Missing");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "resolve_dead_link" && action.target).toBe("Other Missing");
+	});
+
+	it("resolve_dead_link: replace", () => {
+		const model = makeModel([resolveDeadLink()]);
+		const next = setTargetField(model, "I07", "replace", "[[Other Found]]");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "resolve_dead_link" && action.replace).toBe("[[Other Found]]");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Reject / no-op paths — same reference, no dirty flip
+// ---------------------------------------------------------------------------
+
+describe("setTargetField — reject / no-op paths", () => {
+	it("unknown id returns the SAME model reference", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setTargetField(model, "I99", "target_moc", "Cooking (MOC)");
+		expect(next).toBe(model);
+	});
+
+	it("non-whitelisted field on a repair kind is rejected (same reference)", () => {
+		const model = makeModel([linkToMoc()]);
+		// `placement` exists on link_to_moc but is not in the ADR-5 whitelist.
+		const next = setTargetField(model, "I01", "placement", "before");
+		expect(next).toBe(model);
+	});
+
+	it("view-only kind (move_note) rejects every field (same reference)", () => {
+		const model = makeModel([moveNote()]);
+		const next = setTargetField(model, "I08", "destination", "Atlas/Other.md");
+		expect(next).toBe(model);
+	});
+
+	it("view-only kind (skip) rejects every field (same reference)", () => {
+		const model = makeModel([skip()]);
+		const next = setTargetField(model, "I09", "reason", "changed my mind");
+		expect(next).toBe(model);
+	});
+
+	it("setting a whitelisted field to its current value is a no-op (same reference, dirty unchanged)", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setTargetField(model, "I01", "target_moc", "Hobbies (MOC)");
+		expect(next).toBe(model);
+		expect(next.dirty).toBe(false);
+	});
+
+	it("setting anchor to its current value is a no-op (same reference)", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setTargetField(model, "I01", "anchor", "Key Concepts");
+		expect(next).toBe(model);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Empty / whitespace handling — per-field semantics, no silent trimming
+// ---------------------------------------------------------------------------
+
+describe("setTargetField — empty/whitespace value handling", () => {
+	it("accepts an empty string for a plain whitelisted field (e.g. add_relationship line)", () => {
+		const model = makeModel([addRelationship()]);
+		const next = setTargetField(model, "I04", "line", "");
+		expect(next).not.toBe(model);
+		expect(next.dirty).toBe(true);
+		const action = next.doc.actions[0];
+		expect(action?.action === "add_relationship" && action.line).toBe("");
+	});
+
+	it("accepts an empty anchor value verbatim — never coerced to null", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setTargetField(model, "I01", "anchor", "");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "link_to_moc" && action.anchor).toEqual({
+			type: "heading",
+			value: "",
+		});
+	});
+
+	it("does not trim whitespace-only values — literal-match fields depend on exact text", () => {
+		const model = makeModel([editNoteText()]);
+		const next = setTargetField(model, "I05", "match", "   ");
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "edit_note_text" && action.match).toBe("   ");
+	});
+});
