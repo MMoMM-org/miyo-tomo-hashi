@@ -1,0 +1,575 @@
+/**
+ * InstructionFixerView — the Instruction Fixer's leaf `ItemView`
+ * (spec-006 Phase 3, T3.1; SDD ADR-2). Mirrors
+ * `src/ui/garden-audit-view/GardenAuditEditorView.ts`'s lifecycle — Store
+ * subscription, `setState`-docPath handoff, load-error state, Save/Revert
+ * chrome with the reference-identity race guard — with the Fixer's deltas:
+ *
+ *   - Identity: "Instruction fixer" / `wrench` (not "Garden audit" / "compass").
+ *     Sentence case, per the obsidianmd lint rule and the SDD's own command
+ *     name ("Open instruction fixer") — the SDD prose's Title Case is a
+ *     documentation-side inconsistency, not a UI string.
+ *   - Sections are derived from the Phase-2 EDIT GATE, not from a wire field:
+ *     `editable` → "Needs repair", `frozen-applied` → "Applied",
+ *     `read-only-no-signal` → "Not attempted". Grouping is what makes the
+ *     fail-closed state legible, and deriving it from the gate keeps exactly
+ *     one definition of "can this be repaired?".
+ *   - A `NO_TRUSTED_SIGNAL` resolution collapses the sections into ONE
+ *     read-only "All actions" group under a banner that states the reason once
+ *     (never per card) and offers Run. Cards still render: viewing is
+ *     unrestricted and is a distinct capability from editing (ADR-027 ①).
+ *   - Card BODIES are not this file's business — see `fixerContract.ts` for
+ *     where the T3.2 seam sits and why.
+ *
+ * --- Decisions ---
+ *
+ * 1. Outcomes are resolved once per DOC LOAD (`loadAndRender`), not per render:
+ *    `resolveOutcomes` is async (it may parse a run log off disk) while
+ *    `render()` is a synchronous store subscriber. The GATE is still derived
+ *    per render from that stored resolution, exactly as the SDD requires — the
+ *    model itself never carries outcomes, so a re-run refresh (T3.3) only has
+ *    to re-resolve and re-render.
+ * 2. `resolveOutcomes` arrives as an injected `(set, docPath) => Promise<…>`
+ *    rather than as its `OutcomeSourceDeps`. The real dep bundle needs
+ *    `logFolder` = `settings.tomoInboxFolder`, which can change while a leaf is
+ *    open; closing over it at the main.ts call site keeps that live and keeps
+ *    this view from reaching into settings or the executionStore singleton.
+ * 3. Save pre-validates the edited document itself (Decision 4 below) and the
+ *    view — not the adapter — owns the failure copy, because only the view can
+ *    tell the user which of the two failure shapes happened.
+ * 4. `ObsidianInstructionSetDoc.save()` writes one atomic patch PER CHANGED
+ *    ACTION, so atomicity is per-action, not per-save: a mid-loop I/O failure
+ *    leaves the set schema-valid but only partially repaired, and the adapter's
+ *    single `notify()` cannot distinguish that from "nothing landed". The two
+ *    cases need opposite user instructions, so this view separates them at the
+ *    only point where they are still distinguishable: a schema-invalid document
+ *    is rejected BEFORE `adapter.save` is called (nothing written, edit kept
+ *    pending — PRD F4-AC2), which leaves an actual `save()` rejection as the
+ *    I/O case, reported as "some actions may already have been written — save
+ *    again to finish, or revert". The adapter re-validates on its own; this
+ *    pre-check is a UX discriminator, not the gate.
+ */
+
+import { ItemView, setIcon, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+
+import type { ActionOutcome } from "../../executor/state.js";
+import type { Action, InstructionSet } from "../../schema/types.js";
+import { validate } from "../../schema/validator.js";
+import { Store } from "../../util/store.js";
+import type {
+	InstructionFixerModel,
+	InstructionSetDoc,
+} from "../../vault/InstructionSetDoc.js";
+import { ConfirmModal } from "../ConfirmModal.js";
+
+import type { FixerCardContext, FixerCardRenderer } from "./fixerContract.js";
+import { VIEW_TYPE_INSTRUCTION_FIXER } from "./index.js";
+import {
+	editGate,
+	NO_TRUSTED_SIGNAL,
+	type EditGateResult,
+	type OutcomeResolution,
+} from "./outcomeSource.js";
+
+export interface InstructionFixerViewDeps {
+	/** The only wire-aware collaborator — owns all JSON/vault I/O. */
+	readonly adapter: InstructionSetDoc;
+	/**
+	 * Vault-relative path of the `_instructions.json` document to open.
+	 * Optional — production leaves this unset and supplies the path later via
+	 * `setState` (the `registerView` factory signature is `(leaf) => View`, so
+	 * it cannot receive a per-open docPath).
+	 */
+	readonly docPath?: string;
+	/**
+	 * Phase-2 outcome resolution for the loaded set, pre-bound to its
+	 * `OutcomeSourceDeps` (`{ vault, getRunState, logFolder }` — `logFolder` is
+	 * `settings.tomoInboxFolder`). Injected as a function so the live setting is
+	 * read per call; see Decision 2.
+	 */
+	readonly resolveOutcomes: (
+		set: InstructionSet,
+		docPath: string,
+	) => Promise<OutcomeResolution>;
+	/** Card-body renderer (T3.2). Absent → cards render header-only. */
+	readonly card?: FixerCardRenderer;
+	/** Re-run bridge (T3.3). Absent → the Run/Re-run affordances are disabled. */
+	readonly rerun?: () => Promise<void>;
+}
+
+/** One rendered section: a gate bucket with its human label. */
+interface GateSection {
+	readonly gate: EditGateResult;
+	readonly label: string;
+}
+
+const GATE_SECTIONS: readonly GateSection[] = [
+	// Failed first — the whole point of the surface.
+	{ gate: "editable", label: "Needs repair" },
+	{ gate: "frozen-applied", label: "Applied" },
+	{ gate: "read-only-no-signal", label: "Not attempted" },
+];
+
+/** Per-card state tag, or null when the card needs none (it is editable). */
+const GATE_TAGS: Record<EditGateResult, string | null> = {
+	editable: null,
+	"frozen-applied": "frozen",
+	"read-only-no-signal": "read-only",
+};
+
+/** Narrow, defensive read of `state.docPath` — never throws on a malformed state. */
+function extractDocPath(state: unknown): string | null {
+	if (typeof state !== "object" || state === null) return null;
+	const docPath = (state as Record<string, unknown>).docPath;
+	return typeof docPath === "string" ? docPath : null;
+}
+
+/** The outcome's own `kind`, verbatim — no lookup table to drift out of sync. */
+function badgeText(outcome: ActionOutcome | null): string {
+	return outcome === null ? "—" : outcome.kind;
+}
+
+/** The one-line "why" beneath a card header, or null when there is nothing to say. */
+function outcomeReason(outcome: ActionOutcome | null): string | null {
+	if (outcome === null) return null;
+	if (outcome.kind === "failed") return outcome.reason === "" ? null : outcome.reason;
+	if (outcome.kind === "skipped-dependency") {
+		return outcome.dependsOn === "" ? null : `depends on ${outcome.dependsOn}`;
+	}
+	return null;
+}
+
+export class InstructionFixerView extends ItemView {
+	private store: Store<InstructionFixerModel> | null = null;
+	private unsubscribe: (() => void) | null = null;
+	private docPath: string;
+	// Resolved once per doc-load (Decision 1); the gate is re-derived from it on
+	// every render. Fail-closed default so a render that somehow precedes a
+	// resolution offers nothing editable.
+	private outcomes: OutcomeResolution = NO_TRUSTED_SIGNAL;
+	// Set once onOpen has run; lets setState() know whether a retarget should
+	// re-render immediately (leaf already open) or just record the path for the
+	// upcoming onOpen (leaf being freshly constructed).
+	private opened = false;
+
+	// DOM refs — captured in loadAndRender so render() can rebuild them on every
+	// store change.
+	private leafHeadEl: HTMLElement | null = null;
+	private bodyEl: HTMLElement | null = null;
+
+	// True while a Save is in flight — disables Save/Revert/Re-run so the user
+	// can't double-click Save or pull the document out from under it. Pairs with
+	// handleSave()'s store+model reference-identity guard.
+	private saving = false;
+
+	// Last Save failure, cleared on the next successful save and on every
+	// doc-load. `partial` distinguishes the two failure shapes (Decision 4).
+	private saveError: { readonly message: string; readonly partial: boolean } | null = null;
+
+	constructor(
+		leaf: WorkspaceLeaf,
+		private readonly deps: InstructionFixerViewDeps,
+	) {
+		super(leaf);
+		this.docPath = deps.docPath ?? "";
+	}
+
+	override getViewType(): string {
+		return VIEW_TYPE_INSTRUCTION_FIXER;
+	}
+
+	override getDisplayText(): string {
+		return "Instruction fixer";
+	}
+
+	override getIcon(): string {
+		return "wrench";
+	}
+
+	override async onOpen(): Promise<void> {
+		this.opened = true;
+		await this.loadAndRender();
+	}
+
+	override getState(): Record<string, unknown> {
+		return { docPath: this.docPath };
+	}
+
+	override async setState(state: unknown, _result: ViewStateResult): Promise<void> {
+		const docPath = extractDocPath(state);
+		if (docPath !== null) this.docPath = docPath;
+		// Only re-render if onOpen has already built the DOM — otherwise the
+		// upcoming onOpen call will pick up `this.docPath` on its own.
+		if (this.opened) await this.loadAndRender();
+	}
+
+	override async onClose(): Promise<void> {
+		this.opened = false;
+		if (this.unsubscribe !== null) {
+			this.unsubscribe();
+			this.unsubscribe = null;
+		}
+
+		const model = this.store?.get();
+		if (model !== undefined && model.dirty) {
+			new ConfirmModal(
+				this.app,
+				"Unsaved changes",
+				"This instruction set has unsaved repairs. Closing now discards them.",
+				async () => {
+					// Confirmed discard — ItemView's onClose cannot veto the leaf
+					// detach already in flight (same accepted gap as the other
+					// Tomo editors).
+				},
+			).open();
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Load
+	// -------------------------------------------------------------------------
+
+	private async loadAndRender(): Promise<void> {
+		// Tear down any previously-loaded doc's subscription first — setState can
+		// retarget an already-open leaf, and a stale subscription would keep
+		// notifying a discarded store. Revert reuses this same path.
+		if (this.unsubscribe !== null) {
+			this.unsubscribe();
+			this.unsubscribe = null;
+		}
+		this.store = null;
+		this.leafHeadEl = null;
+		this.bodyEl = null;
+		this.saveError = null;
+		this.outcomes = NO_TRUSTED_SIGNAL;
+
+		const root = this.contentEl;
+		root.empty();
+		root.addClass("hashi-instruction-fixer-view");
+		root.addClass("hashi-se-view");
+
+		if (this.docPath === "") {
+			this.renderNoDocument(root);
+			return;
+		}
+
+		let model: { doc: InstructionSet; dirty: false };
+		try {
+			model = await this.deps.adapter.load(this.docPath);
+		} catch (err) {
+			// Schema reject / bad JSON — never crash the view, and never enter an
+			// editable state over bad data (SDD Error Handling).
+			this.renderError(root, err);
+			return;
+		}
+
+		this.outcomes = await this.resolveOutcomesFailClosed(model.doc);
+		this.store = new Store<InstructionFixerModel>(model);
+
+		this.leafHeadEl = root.createDiv({ cls: "hashi-se-leaf-head" });
+		this.bodyEl = root.createDiv({ cls: "hashi-se-body" });
+
+		// Subscribe AFTER the skeleton is built — the store fires the listener
+		// immediately with the current model, and render() needs the refs.
+		this.unsubscribe = this.store.subscribe(() => {
+			this.render();
+		});
+	}
+
+	/**
+	 * Outcome resolution can only ever make the surface MORE permissive, so a
+	 * resolver failure must degrade to no signal rather than propagate — the
+	 * user gets the read-only banner and a Run button (ADR-4's asymmetric bias).
+	 */
+	private async resolveOutcomesFailClosed(set: InstructionSet): Promise<OutcomeResolution> {
+		try {
+			return await this.deps.resolveOutcomes(set, this.docPath);
+		} catch {
+			return NO_TRUSTED_SIGNAL;
+		}
+	}
+
+	private renderError(root: HTMLElement, err: unknown): void {
+		const message = err instanceof Error ? err.message : String(err);
+		root.createDiv({
+			cls: "hashi-se-error",
+			text: `Couldn't load instruction set: ${message}`,
+		});
+	}
+
+	private renderNoDocument(root: HTMLElement): void {
+		root.createDiv({
+			cls: "hashi-se-nodoc",
+			text: "Open a Tomo _instructions.json (or its .md) first.",
+		});
+	}
+
+	// -------------------------------------------------------------------------
+	// Render
+	// -------------------------------------------------------------------------
+
+	private render(): void {
+		if (this.store === null || this.leafHeadEl === null || this.bodyEl === null) return;
+		const model = this.store.get();
+		this.renderLeafHead(model);
+		this.renderBody(model);
+	}
+
+	private renderLeafHead(model: InstructionFixerModel): void {
+		const head = this.leafHeadEl;
+		if (head === null) return;
+		head.empty();
+
+		const title = head.createDiv({ cls: "hashi-se-leaf-title" });
+		const icon = title.createSpan();
+		setIcon(icon, "wrench");
+		const textWrap = title.createDiv();
+		textWrap.createEl("h3", { text: "Instruction fixer" });
+		const count = model.doc.actions.length;
+		textWrap.createDiv({
+			cls: "hashi-se-leaf-meta",
+			text: `profile ${model.doc.profile ?? "—"} · ${count} ${count === 1 ? "action" : "actions"}`,
+		});
+
+		const actions = head.createDiv({ cls: "hashi-se-leaf-actions" });
+		if (model.dirty) {
+			const dirty = actions.createSpan({ cls: "hashi-se-dirty" });
+			dirty.createEl("i");
+			dirty.createSpan({ text: "Edited" });
+		}
+
+		this.createButton(actions, "Re-run", ["hashi-se-btn", "hashi-se-subtle"], {
+			disabled: this.saving || this.deps.rerun === undefined,
+			onClick: () => {
+				void this.handleRerun();
+			},
+		});
+
+		this.createButton(actions, "Revert", ["hashi-se-btn", "hashi-se-subtle"], {
+			disabled: this.saving,
+			onClick: () => {
+				void this.loadAndRender();
+			},
+		});
+
+		this.createButton(actions, "Save", ["hashi-se-btn", "hashi-se-primary"], {
+			disabled: this.saving || !model.dirty,
+			onClick: () => {
+				void this.handleSave();
+			},
+		});
+	}
+
+	private createButton(
+		parent: HTMLElement,
+		text: string,
+		cls: readonly string[],
+		options: { readonly disabled: boolean; readonly onClick: () => void },
+	): HTMLButtonElement {
+		// `cls` is passed as an array — a space-separated string throws
+		// InvalidCharacterError under the obsidian test mock.
+		const btn = parent.createEl("button", { cls: [...cls], text });
+		btn.setAttr("type", "button");
+		btn.disabled = options.disabled;
+		btn.addEventListener("click", options.onClick);
+		return btn;
+	}
+
+	private renderBody(model: InstructionFixerModel): void {
+		const body = this.bodyEl;
+		if (body === null) return;
+		body.empty();
+
+		this.renderSaveError(body);
+
+		if (model.doc.actions.length === 0) {
+			body.createDiv({
+				cls: "hashi-se-empty",
+				text: "No actions in this instruction set.",
+			});
+			return;
+		}
+
+		if (this.outcomes === NO_TRUSTED_SIGNAL) {
+			this.renderNoSignalBanner(body);
+			this.renderSection(body, "All actions", model.doc.actions, "read-only");
+			return;
+		}
+
+		for (const section of GATE_SECTIONS) {
+			const actions = model.doc.actions.filter(
+				(action) => this.gateFor(action) === section.gate,
+			);
+			if (actions.length === 0) continue;
+			this.renderSection(body, section.label, actions, null);
+		}
+	}
+
+	/** The gate for ONE action, always paired with that same action's `applied`. */
+	private gateFor(action: Action): EditGateResult {
+		return editGate(action, this.outcomes, action.applied);
+	}
+
+	private outcomeFor(action: Action): ActionOutcome | null {
+		if (this.outcomes === NO_TRUSTED_SIGNAL) return null;
+		return this.outcomes.get(action.id) ?? null;
+	}
+
+	private renderSaveError(body: HTMLElement): void {
+		const error = this.saveError;
+		if (error === null) return;
+		const panel = body.createDiv({ cls: "hashi-if-save-error" });
+		panel.createDiv({ text: `Save failed: ${error.message}` });
+		panel.createDiv({
+			cls: "hashi-if-save-error-hint",
+			text: error.partial
+				? "Some actions may already have been written — the set is still valid, " +
+					"just partly repaired. Your edits are still pending: save again to finish, " +
+					"or revert to reload from disk."
+				: "Nothing was written. Your edits are still pending — fix the reported value " +
+					"and save again.",
+		});
+	}
+
+	private renderNoSignalBanner(body: HTMLElement): void {
+		const banner = body.createDiv({ cls: "hashi-if-banner" });
+		const text = banner.createDiv({ cls: "hashi-if-banner-text" });
+		text.createDiv({ text: "No trusted outcome for this set." });
+		text.createDiv({
+			cls: "hashi-if-banner-detail",
+			text: "Hashi can't tell which actions failed until it runs them.",
+		});
+		this.createButton(banner, "Run", ["hashi-se-btn", "hashi-se-primary"], {
+			disabled: this.saving || this.deps.rerun === undefined,
+			onClick: () => {
+				void this.handleRerun();
+			},
+		});
+	}
+
+	private renderSection(
+		body: HTMLElement,
+		label: string,
+		actions: readonly Action[],
+		tag: string | null,
+	): void {
+		const section = body.createDiv({ cls: "hashi-if-group" });
+		const header = section.createDiv({ cls: "hashi-if-group-header" });
+		header.createSpan({ cls: "hashi-if-group-label", text: label });
+		header.createSpan({ cls: "hashi-if-group-count", text: String(actions.length) });
+		if (tag !== null) header.createSpan({ cls: "hashi-if-group-tag", text: tag });
+
+		for (const action of actions) this.renderCard(section, action);
+	}
+
+	/**
+	 * The card SHELL — header (id · kind), outcome badge, state tag and failure
+	 * reason, all of it derived from the outcome/gate this view owns. The body
+	 * is delegated to the injected renderer (T3.2); see `fixerContract.ts` for
+	 * why the seam sits exactly here.
+	 */
+	private renderCard(section: HTMLElement, action: Action): void {
+		const gate = this.gateFor(action);
+		const outcome = this.outcomeFor(action);
+
+		const card = section.createDiv({ cls: "hashi-if-card" });
+		card.setAttr("data-action-id", action.id);
+		if (gate !== "editable") card.addClass("hashi-if-card--readonly");
+
+		const header = card.createDiv({ cls: "hashi-if-card-header" });
+		header.createSpan({
+			cls: "hashi-if-card-id",
+			text: `${action.id} · ${action.action}`,
+		});
+		header.createSpan({ cls: "hashi-if-badge", text: badgeText(outcome) });
+		const tag = GATE_TAGS[gate];
+		if (tag !== null) header.createSpan({ cls: "hashi-if-card-tag", text: tag });
+
+		const reason = outcomeReason(outcome);
+		if (reason !== null) {
+			card.createDiv({ cls: "hashi-if-card-reason", text: reason });
+		}
+
+		const cardBody = card.createDiv({ cls: "hashi-if-card-body" });
+		const ctx: FixerCardContext = {
+			app: this.app,
+			gate,
+			outcome,
+			apply: (transform) => {
+				if (this.store === null) return;
+				this.store.set(transform(this.store.get()));
+			},
+		};
+		this.deps.card?.render(cardBody, action, ctx);
+	}
+
+	// -------------------------------------------------------------------------
+	// Save / re-run
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Persists the current model via the adapter, then clears `dirty` on success.
+	 *
+	 * Reference-identity guard against two races (mirrors
+	 * `GardenAuditEditorView.handleSave` exactly): `savedStore`/`savedModel` are
+	 * captured BEFORE the `await`, not re-read from `this.store` after it.
+	 *   1. Edit-during-save: a synchronous `ctx.apply` can land a NEWER model
+	 *      while `adapter.save(savedModel)` is in flight. Clearing `dirty` on
+	 *      whatever `this.store` currently holds would mark those never-written
+	 *      edits as saved — silent data loss. `this.store.get() === savedModel`
+	 *      catches it.
+	 *   2. Revert/setState-during-save: `loadAndRender()` replaces `this.store`
+	 *      — possibly with `null` — mid-flight. `this.store === savedStore`
+	 *      catches a replaced/nulled store and skips the clear entirely.
+	 * The `saving` flag additionally disables Save/Revert/Re-run for the whole
+	 * in-flight window, narrowing what these checks have to guard.
+	 *
+	 * On the failure paths see Decision 4 in the class doc comment: the
+	 * pre-validation rejection means nothing was written, an `adapter.save`
+	 * rejection means some per-action patches may already have landed. Neither
+	 * discards the user's edit.
+	 */
+	private async handleSave(): Promise<void> {
+		const savedStore = this.store;
+		if (savedStore === null) return;
+		const savedModel = savedStore.get();
+		if (!savedModel.dirty) return;
+
+		const validation = validate(savedModel.doc);
+		if (!validation.ok) {
+			this.saveError = { message: validation.message, partial: false };
+			this.render();
+			return;
+		}
+
+		this.saving = true;
+		this.saveError = null;
+		this.render();
+		try {
+			await this.deps.adapter.save(savedModel);
+		} catch (err) {
+			this.saveError = {
+				message: err instanceof Error ? err.message : String(err),
+				partial: true,
+			};
+			return;
+		} finally {
+			this.saving = false;
+			this.render();
+		}
+
+		if (this.store === savedStore && this.store.get() === savedModel) {
+			this.store.set({ doc: savedModel.doc, dirty: false });
+		}
+	}
+
+	/**
+	 * Delegates to the injected re-run bridge (T3.3). Nothing here knows about
+	 * the executor — this view only owns the affordance and its disabled state.
+	 */
+	private async handleRerun(): Promise<void> {
+		const rerun = this.deps.rerun;
+		if (rerun === undefined) return;
+		await rerun();
+	}
+}

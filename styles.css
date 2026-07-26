@@ -1522,3 +1522,113 @@
 	overflow-x: auto;
 	white-space: pre-wrap;
 }
+
+/* ---- Instruction Fixer shell (spec-006, T3.1) ---------------------------
+   Reuses the --se-* custom properties defined on .hashi-se-view above — the
+   Instruction Fixer root carries both hashi-instruction-fixer-view and
+   hashi-se-view, so these vars are in scope. Card BODIES are T3.2; only the
+   banner, the gate-derived group sections and the card shell live here. */
+.hashi-if-save-error {
+	padding: 8px 12px;
+	margin-bottom: 14px;
+	border-radius: var(--se-r-sm);
+	background: var(--se-bg-alt);
+	color: var(--se-text);
+	border: 1px solid var(--se-red);
+	font-size: 12.5px;
+	line-height: 1.4;
+}
+.hashi-if-save-error-hint {
+	margin-top: 4px;
+	color: var(--se-text-muted);
+	font-size: 12px;
+}
+.hashi-if-banner {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	justify-content: space-between;
+	padding: 8px 12px;
+	margin-bottom: 14px;
+	border-radius: var(--se-r-sm);
+	background: var(--se-bg-alt);
+	color: var(--se-text);
+	border: 1px solid var(--se-border-strong);
+	font-size: 12.5px;
+	line-height: 1.4;
+}
+.hashi-if-banner-detail {
+	margin-top: 2px;
+	color: var(--se-text-muted);
+	font-size: 12px;
+}
+.hashi-if-group {
+	margin-bottom: 18px;
+}
+.hashi-if-group-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+.hashi-if-group-label {
+	font-size: 11.5px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	color: var(--se-text-muted);
+	text-transform: uppercase;
+}
+.hashi-if-group-count {
+	font-family: var(--se-mono);
+	font-size: 11px;
+	color: var(--se-text-faint);
+	background: var(--se-bg-alt);
+	border-radius: 999px;
+	padding: 1px 8px;
+}
+.hashi-if-group-tag {
+	font-size: 11px;
+	color: var(--se-text-faint);
+}
+.hashi-if-card {
+	padding: 9px 11px;
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r-sm);
+	background: var(--se-bg-elev);
+	margin-bottom: 6px;
+	font-size: 12.5px;
+}
+.hashi-if-card--readonly {
+	opacity: 0.72;
+}
+.hashi-if-card-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.hashi-if-card-id {
+	font-family: var(--se-mono);
+	font-size: 12px;
+	color: var(--se-text);
+	font-weight: 600;
+}
+.hashi-if-badge {
+	font-family: var(--se-mono);
+	font-size: 11px;
+	color: var(--se-text-muted);
+	background: var(--se-bg-alt);
+	border-radius: 4px;
+	padding: 1px 7px;
+}
+.hashi-if-card-tag {
+	font-size: 11px;
+	color: var(--se-text-faint);
+}
+.hashi-if-card-reason {
+	margin-top: 5px;
+	font-size: 12px;
+	color: var(--se-red);
+}
+.hashi-if-card-body:not(:empty) {
+	margin-top: 7px;
+}

@@ -72,6 +72,10 @@ import {
 	VIEW_TYPE_GARDEN_AUDIT_EDITOR,
 } from "../../src/ui/garden-audit-view/index";
 import {
+	InstructionFixerView,
+	VIEW_TYPE_INSTRUCTION_FIXER,
+} from "../../src/ui/instruction-fixer/index";
+import {
 	SuggestionsEditorView,
 	VIEW_TYPE_SUGGESTIONS_EDITOR,
 } from "../../src/ui/suggestions-view/index";
@@ -333,6 +337,29 @@ describe("TomoHashiPlugin integration (T5.3)", () => {
 				HOVER_LINK_SOURCE,
 				expect.objectContaining({ defaultMod: false }),
 			);
+		});
+	});
+
+	describe("Instruction Fixer registration (spec-006 T3.1)", () => {
+		it("registers VIEW_TYPE_INSTRUCTION_FIXER via plugin.registerView with a factory producing an InstructionFixerView", async () => {
+			await plugin.onload();
+
+			const call = vi
+				.mocked(plugin.registerView)
+				.mock.calls.find(([type]) => type === VIEW_TYPE_INSTRUCTION_FIXER);
+			expect(call).toBeDefined();
+
+			const factory = call?.[1] as (leaf: WorkspaceLeaf) => unknown;
+			const view = factory(new WorkspaceLeaf());
+			expect(view).toBeInstanceOf(InstructionFixerView);
+		});
+
+		it("still registers the 004/005 editor views — the 006 addition displaces neither", async () => {
+			await plugin.onload();
+
+			const types = vi.mocked(plugin.registerView).mock.calls.map(([type]) => type);
+			expect(types).toContain(VIEW_TYPE_SUGGESTIONS_EDITOR);
+			expect(types).toContain(VIEW_TYPE_GARDEN_AUDIT_EDITOR);
 		});
 	});
 

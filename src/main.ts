@@ -120,6 +120,12 @@ import {
 	TomoEditorDocPicker,
 	VIEW_TYPE_GARDEN_AUDIT_EDITOR,
 } from "./ui/garden-audit-view/index";
+import { ObsidianInstructionSetDoc } from "./instruction-fixer/ObsidianInstructionSetDoc";
+import {
+	InstructionFixerView,
+	resolveOutcomes,
+	VIEW_TYPE_INSTRUCTION_FIXER,
+} from "./ui/instruction-fixer/index";
 import { StatusBarIcon, copyAuthToken } from "./ui/status-bar/StatusBarIcon";
 import {
 	openSuggestionsEditor,
@@ -606,6 +612,39 @@ export default class TomoHashiPlugin extends Plugin {
 				new GardenAuditEditorView(leaf, {
 					adapter: new ObsidianGardenAuditDoc(vault),
 					vault,
+				}),
+		);
+
+		// =========================================================================
+		// 006 wiring (T3.1) — Instruction Fixer
+		// =========================================================================
+		//
+		// 16. InstructionFixerView registration. Same shape as 15. above:
+		//     `ObsidianInstructionSetDoc` is the ONE wire-aware adapter for
+		//     `_instructions.json`, one instance per leaf-open (it tracks its own
+		//     docPath, so each leaf's "one active doc" stays independent).
+		//
+		//     `resolveOutcomes` is bound HERE rather than inside the view so its
+		//     `logFolder` dep reads the LIVE `tomoInboxFolder` setting on every
+		//     call — a user changing it mid-session must not leave an open leaf
+		//     parsing run logs out of the old folder. `getRunState` likewise
+		//     closes over the module-level executionStore singleton so the view
+		//     never imports it (SDD ADR-4: the resolver is pure w.r.t. its deps).
+		//
+		//     `card` (T3.2) and `rerun` (T3.3) are deliberately unwired at T3.1:
+		//     the view renders card headers only and disables Run/Re-run until
+		//     those seams land.
+		this.registerView(
+			VIEW_TYPE_INSTRUCTION_FIXER,
+			(leaf: WorkspaceLeaf) =>
+				new InstructionFixerView(leaf, {
+					adapter: new ObsidianInstructionSetDoc(vault),
+					resolveOutcomes: (set, docPath) =>
+						resolveOutcomes(set, docPath, {
+							vault,
+							getRunState: () => executionStore.get(),
+							logFolder: this.settings.tomoInboxFolder,
+						}),
 				}),
 		);
 
