@@ -21,6 +21,17 @@
  * basename, prefix, case-insensitive or otherwise normalized match — and a log
  * we cannot fully understand is refused rather than mapped optimistically.
  *
+ * ONE policy covers every uncertainty about the newest log: if we cannot read
+ * a candidate, or cannot find this set's section in the one that matched, we
+ * do not know what the last run said — and an older log's outcomes may have
+ * been superseded by exactly the answer we failed to obtain (its `failed`
+ * unlocking an action the newer run already applied). Both branches therefore
+ * return no signal instead of reaching further back. The cost is bounded: the
+ * user runs the set, and the in-session summary outranks the run-log path
+ * anyway. Note the traversal is newest-first and stops at the first match, so
+ * only a candidate NEWER than the newest matching log can block resolution —
+ * a corrupt older log is never even opened.
+ *
  * Pure with respect to its injected `deps` (vault + run-state accessor), so it
  * is testable without an Obsidian runtime or the module-level store singleton.
  *
@@ -147,15 +158,17 @@ async function outcomesFromRunLog(
 		try {
 			raw = await deps.vault.read(candidate.path);
 		} catch {
-			// We never learned whether this one matched, so it cannot mask the
-			// older logs — keep looking rather than claiming "no signal".
-			continue;
+			// Unknown content on a candidate newer than anything left in the
+			// loop: it may be this set's last run, reporting `applied` where an
+			// older log still says `failed`. Refuse rather than hand back that
+			// older answer (shared uncertainty policy — see the file header).
+			return null;
 		}
 		if (!sourcesInclude(raw, sourcePath)) continue;
 
 		// The newest matching log IS the last word on this set. If its table
-		// cannot be located, refuse — falling back to an older log here would
-		// present superseded outcomes as current.
+		// cannot be located, refuse for the same reason — falling back to an
+		// older log would present superseded outcomes as current.
 		return parseSectionRows(raw, sourcePath, knownIds);
 	}
 
@@ -192,7 +205,11 @@ function basename(path: string): string {
  * log to this set, which is the one failure this whole module exists to avoid.
  */
 function sourcesInclude(raw: string, sourcePath: string): boolean {
-	const lines = raw.split("\n");
+	// Split on both endings: a CRLF log would otherwise leave a trailing `\r`
+	// that `.` (which never matches a line terminator) refuses to consume in
+	// the `sources:` item regex, silently costing every Windows user the
+	// run-log signal.
+	const lines = raw.split(/\r?\n/);
 	if (lines[0]?.trim() !== "---") return false;
 
 	let inSources = false;
@@ -223,7 +240,7 @@ function parseSectionRows(
 	sourcePath: string,
 	knownIds: ReadonlySet<ActionId>,
 ): ReadonlyMap<ActionId, ActionOutcome> | null {
-	const lines = raw.split("\n");
+	const lines = raw.split(/\r?\n/); // CRLF-tolerant, as in sourcesInclude
 	const heading = `## ${sourcePath}`;
 	let index = lines.findIndex(
 		(line) => line.trimEnd() === heading || line.trimEnd() === `${heading} (validation failed)`,

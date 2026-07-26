@@ -113,6 +113,42 @@ async function writeRunLog(
 	return path;
 }
 
+/**
+ * A hand-written log for shapes `RunLogWriter` cannot emit (a corrupted or
+ * externally rewritten file). Mirrors the writer's frontmatter + one-section
+ * table so only the deviation under test differs.
+ */
+function handWrittenLog(rows: readonly string[], sourcePath = SET_PATH): string {
+	return [
+		"---",
+		"log_format_version: 1",
+		"started: 2026-07-20T10:30:00",
+		"mode: confirm",
+		"sources:",
+		`  - ${sourcePath}`,
+		"---",
+		"# Hashi run log",
+		"",
+		`## ${sourcePath}`,
+		"",
+		"| I##  | kind | summary | outcome | error |",
+		"|------|------|---------|---------|-------|",
+		...rows,
+		"",
+	].join("\n");
+}
+
+/** The vault read side with one path faulted — an unreadable log candidate. */
+function withUnreadable(base: VaultFS, failPath: string): Pick<VaultFS, "list" | "read"> {
+	return {
+		list: (folder) => base.list(folder),
+		read: async (path) => {
+			if (path === failPath) throw new Error("EIO");
+			return base.read(path);
+		},
+	};
+}
+
 /** Narrowing helper — a resolution that must be a map, not the sentinel. */
 function asMap(
 	result: ReadonlyMap<string, ActionOutcome> | typeof NO_TRUSTED_SIGNAL,
@@ -389,30 +425,78 @@ describe("resolveOutcomes — run-log fallback (trusted source #2)", () => {
 		expect(map.has("I02")).toBe(false);
 	});
 
-	it("skips a log it cannot read and falls back to an older matching one", async () => {
+	it("is unaffected by an unreadable log older than the newest matching one", async () => {
+		// Bounds the cost of the fail-closed read policy: resolution stops at
+		// the newest match, so a corrupt older log is never even opened.
 		const set = setWithIds("I01");
 		const vault = new FakeVaultFS();
-		await writeRunLog(vault, {
+		const older = await writeRunLog(vault, {
 			startedAt: new Date(2026, 6, 20, 9, 0),
 			sources: [SET_PATH],
-			records: [record("I01", { kind: "failed", reason: "the readable one" })],
+			records: [record("I01", { kind: "failed", reason: "superseded" })],
 		});
-		const unreadable = await writeRunLog(vault, {
+		await writeRunLog(vault, {
 			startedAt: new Date(2026, 6, 20, 14, 5),
 			sources: [SET_PATH],
 			records: [record("I01", { kind: "applied" })],
 		});
-		const faulted: Pick<VaultFS, "list" | "read"> = {
-			list: (folder) => vault.list(folder),
-			read: async (path) => {
-				if (path === unreadable) throw new Error("EIO");
-				return vault.read(path);
-			},
-		};
+		const faulted = withUnreadable(vault, older);
 
 		const map = asMap(await resolveOutcomes(set, SET_PATH, deps(faulted)));
 
-		expect(map.get("I01")).toEqual({ kind: "failed", reason: "the readable one" });
+		expect(map.get("I01")).toEqual({ kind: "applied" });
+	});
+
+	it("orders same-minute collision suffixes numerically (_10 is newer than _9)", async () => {
+		// A lexical sort would rank `_9` above `_10` and return the 9th run's
+		// `failed` — the stale-outcome false positive this module must not make.
+		const set = setWithIds("I01");
+		const vault = new FakeVaultFS();
+		const startedAt = new Date(2026, 6, 20, 10, 30);
+		let newest = "";
+		for (let n = 1; n <= 10; n++) {
+			newest = await writeRunLog(vault, {
+				startedAt,
+				sources: [SET_PATH],
+				records: [
+					record(
+						"I01",
+						n === 10 ? { kind: "applied" } : { kind: "failed", reason: `run ${n}` },
+					),
+				],
+			});
+		}
+		expect(newest.endsWith("_10.md")).toBe(true);
+
+		const map = asMap(await resolveOutcomes(set, SET_PATH, deps(vault)));
+
+		expect(map.get("I01")).toEqual({ kind: "applied" });
+	});
+
+	it("maps a skipped-dependency row that carries no (dependsOn: …) note", async () => {
+		const set = setWithIds("I01");
+		const vault = new FakeVaultFS();
+		await vault.create(
+			`${INBOX}/tomo-hashi-run-log_2026-07-20T1030.md`,
+			handWrittenLog(["| I01 | skip | s | skipped-dependency |  |"]),
+		);
+
+		const map = asMap(await resolveOutcomes(set, SET_PATH, deps(vault)));
+
+		expect(map.get("I01")).toEqual({ kind: "skipped-dependency", dependsOn: "" });
+	});
+
+	it("parses a log written with CRLF line endings (Windows)", async () => {
+		const set = setWithIds("I01");
+		const vault = new FakeVaultFS();
+		await vault.create(
+			`${INBOX}/tomo-hashi-run-log_2026-07-20T1030.md`,
+			handWrittenLog(["| I01 | skip | s | failed | anchor not found |"]).replace(/\n/g, "\r\n"),
+		);
+
+		const map = asMap(await resolveOutcomes(set, SET_PATH, deps(vault)));
+
+		expect(map.get("I01")).toEqual({ kind: "failed", reason: "anchor not found" });
 	});
 
 	it("ignores files in the log folder that are not run logs", async () => {
@@ -482,6 +566,63 @@ describe("resolveOutcomes — fail closed (reject paths)", () => {
 			list: () => Promise.reject(new Error("folder not found")),
 			read: () => Promise.reject(new Error("folder not found")),
 		};
+
+		const result = await resolveOutcomes(set, SET_PATH, deps(vault));
+
+		expect(result).toBe(NO_TRUSTED_SIGNAL);
+	});
+
+	it("returns NO_TRUSTED_SIGNAL when a candidate newer than the match cannot be read", async () => {
+		// The concrete false positive this policy prevents: the newest log
+		// recorded the repaired action as `applied` but is transiently
+		// unreadable, while an older log still says `failed`. Handing back the
+		// older answer would unlock editing on an action that already succeeded.
+		const set = setWithIds("I01");
+		const vault = new FakeVaultFS();
+		await writeRunLog(vault, {
+			startedAt: new Date(2026, 6, 20, 9, 0),
+			sources: [SET_PATH],
+			records: [record("I01", { kind: "failed", reason: "superseded" })],
+		});
+		const newest = await writeRunLog(vault, {
+			startedAt: new Date(2026, 6, 20, 14, 5),
+			sources: [SET_PATH],
+			records: [record("I01", { kind: "applied" })],
+		});
+
+		const result = await resolveOutcomes(set, SET_PATH, deps(withUnreadable(vault, newest)));
+
+		expect(result).toBe(NO_TRUSTED_SIGNAL);
+	});
+
+	it("returns NO_TRUSTED_SIGNAL for an unreadable candidate that is not even a match", async () => {
+		// Accepted cost of the shared policy: an unrelated corrupt log newer
+		// than this set's own log blocks resolution until the user re-runs.
+		const set = setWithIds("I01");
+		const vault = new FakeVaultFS();
+		await writeRunLog(vault, {
+			startedAt: new Date(2026, 6, 20, 9, 0),
+			sources: [SET_PATH],
+			records: [record("I01", { kind: "failed", reason: "readable, matching" })],
+		});
+		const unrelated = await writeRunLog(vault, {
+			startedAt: new Date(2026, 6, 20, 14, 5),
+			sources: [OTHER_SET_PATH],
+			records: [record("I01", { kind: "applied" }, OTHER_SET_PATH)],
+		});
+
+		const result = await resolveOutcomes(set, SET_PATH, deps(withUnreadable(vault, unrelated)));
+
+		expect(result).toBe(NO_TRUSTED_SIGNAL);
+	});
+
+	it("returns NO_TRUSTED_SIGNAL for a truncated log whose frontmatter never closes", async () => {
+		const set = setWithIds("I01");
+		const vault = new FakeVaultFS();
+		await vault.create(
+			`${INBOX}/tomo-hashi-run-log_2026-07-20T1030.md`,
+			["---", "log_format_version: 1", "sources:", `  - ${SET_PATH}`].join("\n"),
+		);
 
 		const result = await resolveOutcomes(set, SET_PATH, deps(vault));
 
