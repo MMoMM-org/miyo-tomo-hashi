@@ -1,6 +1,6 @@
 ---
 title: "Phase 1: Data spine — port, adapter, atomic writer, transforms"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 1
 ---
@@ -35,6 +35,8 @@ Establishes the load/save/edit data spine the view builds on — everything test
   1. Prime: Read `src/vault/GardenAuditDoc.ts`, `src/garden-audit/ObsidianGardenAuditDoc.ts`, `src/schema/validator.ts` `[ref: SDD/Interface Specifications]`
   2. Test: `load` valid set → `{doc, dirty:false}`; `load` invalid/corrupt → throws with validator message; `save` dirty-gated (no-op when `dirty:false`); **verbatim round-trip** — load a fixture, save, assert byte-identical (all untouched fields incl. `tomo`, `applied`, unknown-but-schema-allowed ride along); `save` writes `_instructions.json` ONLY (never `.md`).
   3. Implement: `src/vault/InstructionSetDoc.ts` (port) + `src/instruction-fixer/ObsidianInstructionSetDoc.ts` (adapter over `VaultFS`, `validate` from `schema/validator.ts`, upsert write via `writeFile`).
+     > **Superseded by T1.5.** "Upsert write via `writeFile`" contradicted ADR-9 and produced the
+     > lost-update race; `save()` now writes per-action patches via `markActionFields`.
   4. Validate: unit tests pass; lint clean; `tsc` types check.
   - Success:
     - [x] Unedited load→save is a byte-identical no-op that re-validates clean `[ref: PRD/F4-AC3]` `[ref: SDD/ADR-1]`
@@ -65,7 +67,7 @@ Establishes the load/save/edit data spine the view builds on — everything test
   - Run all Phase 1 tests; `npm run build` (full tsc) + `npm run lint` clean. Confirm the per-kind
     whitelist matches the SDD ADR-5 roster exactly (drift guard for the fix-field set).
 
-- [ ] **T1.5 Route `save()` through `markActionFields` + validate before write** `[activity: backend-api]`
+- [x] **T1.5 Route `save()` through `markActionFields` + validate before write** `[activity: backend-api]`
 
   *Added after the T1.4 drift check found two HIGH findings (user-approved resolution: fix both now).*
 
@@ -81,6 +83,6 @@ Establishes the load/save/edit data spine the view builds on — everything test
      `markActionFields` instead of a whole-document `JSON.stringify` + `writeFile`.
   4. Validate: unit tests pass; full `npm run build` + `npm run lint` clean.
   - Success:
-    - [ ] No second writer — the Fixer's write goes through the executor's atomic path `[ref: SDD/ADR-9]`
-    - [ ] A concurrent executor `applied` flush is never reverted by a Fixer save `[ref: SDD/ADR-9]`
-    - [ ] Schema-invalid edits are rejected before write, not on next load `[ref: PRD/F4-AC2]`
+    - [x] No second writer — the Fixer's write goes through the executor's atomic path `[ref: SDD/ADR-9]`
+    - [x] A concurrent executor `applied` flush is never reverted by a Fixer save `[ref: SDD/ADR-9]`
+    - [x] Schema-invalid edits are rejected before write, not on next load `[ref: PRD/F4-AC2]`

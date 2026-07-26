@@ -24,6 +24,12 @@ phase: 3
   is the generalization vehicle.
 - Cards dispatch by `action.action`; the gate (Phase 2) decides editable vs read-only per card.
 - Re-run delegates to the existing `InstructionExecutor`; outcomes refresh in place.
+- **Carried from Phase 1 (T1.5 review):** `save()` writes one atomic `markActionFields` patch per
+  changed action, so atomicity is **per-action, not per-save**. A mid-loop failure leaves the set
+  partially repaired but always schema-valid, and recovers by re-saving the same model (`pristine`
+  is deliberately not advanced on the throw path) or by reloading. The adapter's single `notify()`
+  today cannot tell the user "nothing landed" from "some actions landed — retry to finish". The
+  view owns that distinction: surface it when wiring the Save button.
 
 **Dependencies**: Phase 1 (adapter/transforms), Phase 2 (outcome source + gate).
 
