@@ -1,6 +1,6 @@
 ---
 title: "Phase 3: The Fixer view — cards, gate wiring, re-run"
-status: in_progress
+status: completed
 version: "1.0"
 phase: 3
 ---
@@ -125,17 +125,17 @@ target-field controls, and re-runs. Testable against the obsidian mock (side-eff
     - [x] Editable only where the gate says so; target-field edit commits `[ref: PRD/F3]` `[ref: PRD/F4-AC1]`
     - [x] Note jump: open-beside + hover, inert on unresolved `[ref: PRD/F6]`
 
-- [ ] **T3.3 Re-run bridge + outcome refresh** `[activity: frontend-ui]`
+- [x] **T3.3 Re-run bridge + outcome refresh** `[activity: frontend-ui]`
 
   1. Prime: Read `src/executor/InstructionExecutor.ts` (entry, summary) + how the executor is invoked by the execute command `[ref: SDD/ADR-9]`
   2. Test: Re-run invokes `InstructionExecutor` on the saved set; already-`applied` actions skip (monotonic); the repaired action applies; outcomes **refresh in place** from the new summary; a now-applied action becomes `frozen-applied`; re-run uses the atomic write path (no second writer).
   3. Implement: a re-run action in the view that calls the executor and re-derives outcomes/gate on completion (re-`resolveOutcomes` from the fresh in-session summary).
   4. Validate: unit tests pass; lint clean; types check.
   - Success:
-    - [ ] Re-run is idempotent (applied skip) and refreshes outcomes `[ref: PRD/F7-AC1,AC2]` `[ref: SDD/ADR-9]`
-    - [ ] `.md` peer checkbox tick preserved; no `.md` content/`tomo.sources` write `[ref: PRD/F8-AC2]`
+    - [x] Re-run is idempotent (applied skip) and refreshes outcomes `[ref: PRD/F7-AC1,AC2]` `[ref: SDD/ADR-9]`
+    - [x] `.md` peer checkbox tick preserved; no `.md` content/`tomo.sources` write `[ref: PRD/F8-AC2]`
 
-- [ ] **T3.4 Phase Validation** `[activity: validate]`
+- [x] **T3.4 Phase Validation** `[activity: validate]`
 
   - Run all Phase 3 tests; `npm run build` + `npm run lint`. Verify CSS uses `hashi-se-*`/editor
     idioms and Obsidian CSS-lint rules (border-bottom over text-decoration); `createEl` multi-class

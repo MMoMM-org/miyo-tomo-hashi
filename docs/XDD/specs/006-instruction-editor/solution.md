@@ -234,6 +234,8 @@ src/
 │       ├── cards/
 │       │   ├── renderActionCard.ts            # NEW: dispatch by action.action → per-kind card
 │       │   └── targetFields.ts                # NEW: per-kind target-field descriptor map (7 kinds)
+│       ├── sections.ts                        # NEW (T3.2b): pure groupActionsByGate + labels/badges
+│       ├── renderFixerBody.ts                 # NEW (T3.3b): the view's DOM layer (leaf head + body)
 │       └── outcomeSource.ts                   # NEW: resolve per-I## outcome (summary | run-log) + gate
 ├── instruction-fixer/
 │   ├── ObsidianInstructionSetDoc.ts           # NEW: adapter (mirror ObsidianGardenAuditDoc)
@@ -383,6 +385,13 @@ sequenceDiagram
 3. **If found & mapped** → show those outcomes; failed/skipped unlock per the gate.
 4. **If not found / unmappable / stale** → `NO_TRUSTED_SIGNAL`: the whole set renders **read-only**
    and the view offers **"Run"** to produce fresh outcomes (fail closed — ADR-4).
+   - **Recorded interpretation (T3.3b):** the banner is suppressed when *every* action is already
+     `applied === true`. Reachable in `executionMode: "silent"` with `runLogRetention:
+     "only-after-failed"` and a zero-failure run — the store auto-idles and no log is written, so a
+     successful repair resolves to `NO_TRUSTED_SIGNAL`. Nothing is hidden: `editGate` step 1
+     (`applied === true`) precedes the no-signal branch, so those cards freeze either way; the
+     banner would only offer a "Run" with nothing left to run. Suppression is render-layer only —
+     `editGate` and `resolveOutcomes` are untouched and still fail closed.
 
 ### Error Handling
 - **Invalid edit at Save:** schema validation fails → reject the write, surface the validator
