@@ -53,7 +53,6 @@
 
 import { ItemView, setIcon, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 
-import type { ActionOutcome } from "../../executor/state.js";
 import type { Action, InstructionSet } from "../../schema/types.js";
 import { InstructionSetSaveError } from "../../instruction-fixer/ObsidianInstructionSetDoc.js";
 import { validate } from "../../schema/validator.js";
@@ -66,12 +65,15 @@ import { ConfirmModal } from "../ConfirmModal.js";
 
 import type { FixerCardContext, FixerCardRenderer } from "./fixerContract.js";
 import { VIEW_TYPE_INSTRUCTION_FIXER } from "./index.js";
+import { NO_TRUSTED_SIGNAL, type OutcomeResolution } from "./outcomeSource.js";
 import {
-	editGate,
-	NO_TRUSTED_SIGNAL,
-	type EditGateResult,
-	type OutcomeResolution,
-} from "./outcomeSource.js";
+	badgeText,
+	gateFor,
+	gateTag,
+	groupActionsByGate,
+	outcomeFor,
+	outcomeReason,
+} from "./sections.js";
 
 export interface InstructionFixerViewDeps {
 	/** The only wire-aware collaborator — owns all JSON/vault I/O. */
@@ -98,26 +100,6 @@ export interface InstructionFixerViewDeps {
 	/** Re-run bridge (T3.3). Absent → the Run/Re-run affordances are disabled. */
 	readonly rerun?: () => Promise<void>;
 }
-
-/** One rendered section: a gate bucket with its human label. */
-interface GateSection {
-	readonly gate: EditGateResult;
-	readonly label: string;
-}
-
-const GATE_SECTIONS: readonly GateSection[] = [
-	// Failed first — the whole point of the surface.
-	{ gate: "editable", label: "Needs repair" },
-	{ gate: "frozen-applied", label: "Applied" },
-	{ gate: "read-only-no-signal", label: "Not attempted" },
-];
-
-/** Per-card state tag, or null when the card needs none (it is editable). */
-const GATE_TAGS: Record<EditGateResult, string | null> = {
-	editable: null,
-	"frozen-applied": "frozen",
-	"read-only-no-signal": "read-only",
-};
 
 /**
  * A rejected Save, plus how much of it reached disk.
@@ -177,21 +159,6 @@ function extractDocPath(state: unknown): string | null {
 	if (typeof state !== "object" || state === null) return null;
 	const docPath = (state as Record<string, unknown>).docPath;
 	return typeof docPath === "string" ? docPath : null;
-}
-
-/** The outcome's own `kind`, verbatim — no lookup table to drift out of sync. */
-function badgeText(outcome: ActionOutcome | null): string {
-	return outcome === null ? "—" : outcome.kind;
-}
-
-/** The one-line "why" beneath a card header, or null when there is nothing to say. */
-function outcomeReason(outcome: ActionOutcome | null): string | null {
-	if (outcome === null) return null;
-	if (outcome.kind === "failed") return outcome.reason === "" ? null : outcome.reason;
-	if (outcome.kind === "skipped-dependency") {
-		return outcome.dependsOn === "" ? null : `depends on ${outcome.dependsOn}`;
-	}
-	return null;
 }
 
 export class InstructionFixerView extends ItemView {
@@ -447,27 +414,11 @@ export class InstructionFixerView extends ItemView {
 
 		if (this.outcomes === NO_TRUSTED_SIGNAL) {
 			this.renderNoSignalBanner(body);
-			this.renderSection(body, "All actions", model.doc.actions, "read-only");
-			return;
 		}
 
-		for (const section of GATE_SECTIONS) {
-			const actions = model.doc.actions.filter(
-				(action) => this.gateFor(action) === section.gate,
-			);
-			if (actions.length === 0) continue;
-			this.renderSection(body, section.label, actions, null);
+		for (const group of groupActionsByGate(model.doc.actions, this.outcomes)) {
+			this.renderSection(body, group.label, group.actions, group.tag);
 		}
-	}
-
-	/** The gate for ONE action, always paired with that same action's `applied`. */
-	private gateFor(action: Action): EditGateResult {
-		return editGate(action, this.outcomes, action.applied);
-	}
-
-	private outcomeFor(action: Action): ActionOutcome | null {
-		if (this.outcomes === NO_TRUSTED_SIGNAL) return null;
-		return this.outcomes.get(action.id) ?? null;
 	}
 
 	private renderSaveError(body: HTMLElement): void {
@@ -527,8 +478,8 @@ export class InstructionFixerView extends ItemView {
 	 * itself so the reason never silently disappears with the seam.
 	 */
 	private renderCard(section: HTMLElement, action: Action): void {
-		const gate = this.gateFor(action);
-		const outcome = this.outcomeFor(action);
+		const gate = gateFor(action, this.outcomes);
+		const outcome = outcomeFor(action, this.outcomes);
 
 		const card = section.createDiv({ cls: "hashi-if-card" });
 		card.setAttr("data-action-id", action.id);
@@ -540,7 +491,7 @@ export class InstructionFixerView extends ItemView {
 			text: `${action.id} · ${action.action}`,
 		});
 		header.createSpan({ cls: "hashi-if-badge", text: badgeText(outcome) });
-		const tag = GATE_TAGS[gate];
+		const tag = gateTag(gate);
 		if (tag !== null) header.createSpan({ cls: "hashi-if-card-tag", text: tag });
 
 		const reason = outcomeReason(outcome);
