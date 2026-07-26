@@ -21,6 +21,15 @@
  *   - Card BODIES are not this file's business — see `fixerContract.ts` for
  *     where the T3.2 seam sits and why.
  *
+ * DOM construction is not this file's business either: `renderFixerBody.ts`
+ * owns every element the leaf draws, as pure functions of a `FixerRenderContext`
+ * snapshot. What stays here is what only the leaf can own — the `ItemView`
+ * lifecycle, the adapter I/O in `loadAndRender`, and the mutable save/re-run
+ * state with the reference-identity guards that protect it. Those guards are
+ * deliberately NOT split across files: each one is a capture-before-await /
+ * compare-after-await pair, and a pair that spans a module boundary is a pair
+ * someone will eventually break.
+ *
  * --- Decisions ---
  *
  * 1. Outcomes are resolved once per DOC LOAD (`loadAndRender`), not per render:
@@ -75,9 +84,9 @@
  *    side: nothing can become dirty in the window the reload will overwrite.
  */
 
-import { ItemView, setIcon, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { ItemView, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 
-import type { Action, InstructionSet } from "../../schema/types.js";
+import type { InstructionSet } from "../../schema/types.js";
 import { InstructionSetSaveError } from "../../instruction-fixer/ObsidianInstructionSetDoc.js";
 import { validate } from "../../schema/validator.js";
 import { Store } from "../../util/store.js";
@@ -87,17 +96,16 @@ import type {
 } from "../../vault/InstructionSetDoc.js";
 import { ConfirmModal } from "../ConfirmModal.js";
 
-import type { FixerCardContext, FixerCardRenderer } from "./fixerContract.js";
+import type { FixerCardRenderer } from "./fixerContract.js";
 import { VIEW_TYPE_INSTRUCTION_FIXER } from "./index.js";
 import { NO_TRUSTED_SIGNAL, type OutcomeResolution } from "./outcomeSource.js";
 import {
-	badgeText,
-	gateFor,
-	gateTag,
-	groupActionsByGate,
-	outcomeFor,
-	outcomeReason,
-} from "./sections.js";
+	renderFixerBody,
+	renderFixerLeafHead,
+	renderFixerRerunError,
+	type FixerRenderContext,
+	type SaveFailure,
+} from "./renderFixerBody.js";
 
 export interface InstructionFixerViewDeps {
 	/** The only wire-aware collaborator — owns all JSON/vault I/O. */
@@ -132,59 +140,6 @@ export interface InstructionFixerViewDeps {
 	 * knows which document is on screen when the button is pressed.
 	 */
 	readonly rerun?: (docPath: string) => Promise<void>;
-}
-
-/**
- * A rejected Save, plus how much of it reached disk.
- *
- * `landed` is the load-bearing field, because the two failure shapes need
- * OPPOSITE instructions: nothing written → the retry is pointless until the
- * problem is fixed; some patches written → retrying is exactly the recovery.
- * It comes from the adapter (`InstructionSetSaveError`), which is the only
- * component that knows where in its per-action write loop it was. `null` means
- * the rejection carried no count — a foreign `InstructionSetDoc` implementation
- * or an unexpected throw — and is reported as genuinely unknown rather than
- * guessed in either direction.
- */
-interface SaveFailure {
-	readonly message: string;
-	readonly landed: number | null;
-	readonly total: number;
-}
-
-/**
- * The panel's headline — what happened to the document, in plain language.
- *
- * Deliberately NOT the error's own message: that string is written for a
- * developer reading a stack trace (class name, method name, "ADR-9",
- * "per-action field patches") and names things the reader cannot act on. It
- * stays on the error object for logs and tests, and is demoted to the detail
- * line below the recovery instruction.
- */
-function saveErrorHeadline(failure: SaveFailure): string {
-	if (failure.landed === null) return "Couldn't confirm whether your repairs were saved.";
-	if (failure.landed === 0) return "Couldn't save your repairs — nothing was written.";
-	return `Wrote ${failure.landed} of ${failure.total} repairs, then hit a problem.`;
-}
-
-/** The recovery instruction for a failed Save. See `SaveFailure`. */
-function saveErrorHint(failure: SaveFailure): string {
-	if (failure.landed === null) {
-		return (
-			"Your edits are still pending: save again to re-send every repair, or revert " +
-			"to reload from disk."
-		);
-	}
-	if (failure.landed === 0) {
-		return (
-			"The set on disk is unchanged and your edits are still pending. Check the " +
-			"details below, then save again."
-		);
-	}
-	return (
-		"The set is partly repaired and still valid. Your edits are still pending: save " +
-		"again to write the rest, or revert to reload from disk."
-	);
 }
 
 /** Narrow, defensive read of `state.docPath` — never throws on a malformed state. */
@@ -336,7 +291,7 @@ export class InstructionFixerView extends ItemView {
 			return;
 		}
 
-		this.outcomes = await this.resolveOutcomesFailClosed(model.doc);
+		this.outcomes = await this.resolveOutcomesFailClosed(model.doc, this.docPath);
 		this.store = new Store<InstructionFixerModel>(model);
 
 		this.leafHeadEl = root.createDiv({ cls: "hashi-se-leaf-head" });
@@ -354,9 +309,12 @@ export class InstructionFixerView extends ItemView {
 	 * resolver failure must degrade to no signal rather than propagate — the
 	 * user gets the read-only banner and a Run button (ADR-4's asymmetric bias).
 	 */
-	private async resolveOutcomesFailClosed(set: InstructionSet): Promise<OutcomeResolution> {
+	private async resolveOutcomesFailClosed(
+		set: InstructionSet,
+		docPath: string,
+	): Promise<OutcomeResolution> {
 		try {
-			return await this.deps.resolveOutcomes(set, this.docPath);
+			return await this.deps.resolveOutcomes(set, docPath);
 		} catch {
 			return NO_TRUSTED_SIGNAL;
 		}
@@ -366,7 +324,7 @@ export class InstructionFixerView extends ItemView {
 		// A re-run failure that was riding along into this load still gets said:
 		// "the run failed AND the set is now unreadable" is two facts, and the
 		// second one does not explain the first.
-		this.renderRerunError(root);
+		renderFixerRerunError(root, this.rerunError);
 		const message = err instanceof Error ? err.message : String(err);
 		root.createDiv({
 			cls: "hashi-se-error",
@@ -385,190 +343,32 @@ export class InstructionFixerView extends ItemView {
 	// Render
 	// -------------------------------------------------------------------------
 
-	private render(): void {
-		if (this.store === null || this.leafHeadEl === null || this.bodyEl === null) return;
-		const model = this.store.get();
-		this.renderLeafHead(model);
-		this.renderBody(model);
-	}
-
-	private renderLeafHead(model: InstructionFixerModel): void {
-		const head = this.leafHeadEl;
-		if (head === null) return;
-		head.empty();
-
-		const title = head.createDiv({ cls: "hashi-se-leaf-title" });
-		const icon = title.createSpan();
-		setIcon(icon, "wrench");
-		const textWrap = title.createDiv();
-		textWrap.createEl("h3", { text: "Instruction fixer" });
-		const count = model.doc.actions.length;
-		textWrap.createDiv({
-			cls: "hashi-se-leaf-meta",
-			text: `profile ${model.doc.profile ?? "—"} · ${count} ${count === 1 ? "action" : "actions"}`,
-		});
-
-		const actions = head.createDiv({ cls: "hashi-se-leaf-actions" });
-		if (model.dirty) {
-			const dirty = actions.createSpan({ cls: "hashi-se-dirty" });
-			dirty.createEl("i");
-			dirty.createSpan({ text: "Edited" });
-		}
-
-		this.createButton(actions, "Re-run", ["hashi-se-btn", "hashi-se-subtle"], {
-			disabled: this.saving || this.running || this.deps.rerun === undefined,
-			onClick: () => {
-				void this.handleRerun();
-			},
-		});
-
-		this.createButton(actions, "Revert", ["hashi-se-btn", "hashi-se-subtle"], {
-			disabled: this.saving || this.running,
-			onClick: () => {
-				void this.loadAndRender();
-			},
-		});
-
-		this.createButton(actions, "Save", ["hashi-se-btn", "hashi-se-primary"], {
-			disabled: this.saving || this.running || !model.dirty,
-			onClick: () => {
+	/**
+	 * A snapshot of everything the render layer may see, plus the callbacks its
+	 * buttons fire. Rebuilt per render so every field is current; the callbacks
+	 * close over `this` so a press always runs against LIVE state, never the
+	 * state as it was when the button was drawn.
+	 */
+	private renderContext(model: InstructionFixerModel): FixerRenderContext {
+		return {
+			app: this.app,
+			model,
+			outcomes: this.outcomes,
+			saveError: this.saveError,
+			rerunError: this.rerunError,
+			saving: this.saving,
+			running: this.running,
+			canRerun: this.deps.rerun !== undefined,
+			card: this.deps.card,
+			onSave: () => {
 				void this.handleSave();
 			},
-		});
-	}
-
-	private createButton(
-		parent: HTMLElement,
-		text: string,
-		cls: readonly string[],
-		options: { readonly disabled: boolean; readonly onClick: () => void },
-	): HTMLButtonElement {
-		// `cls` is passed as an array — a space-separated string throws
-		// InvalidCharacterError under the obsidian test mock.
-		const btn = parent.createEl("button", { cls: [...cls], text });
-		btn.setAttr("type", "button");
-		btn.disabled = options.disabled;
-		btn.addEventListener("click", options.onClick);
-		return btn;
-	}
-
-	private renderBody(model: InstructionFixerModel): void {
-		const body = this.bodyEl;
-		if (body === null) return;
-		body.empty();
-
-		this.renderSaveError(body);
-		this.renderRerunError(body);
-
-		if (model.doc.actions.length === 0) {
-			body.createDiv({
-				cls: "hashi-se-empty",
-				text: "No actions in this instruction set.",
-			});
-			return;
-		}
-
-		if (this.outcomes === NO_TRUSTED_SIGNAL) {
-			this.renderNoSignalBanner(body);
-		}
-
-		for (const group of groupActionsByGate(model.doc.actions, this.outcomes)) {
-			this.renderSection(body, group.label, group.actions, group.tag);
-		}
-	}
-
-	private renderSaveError(body: HTMLElement): void {
-		const error = this.saveError;
-		if (error === null) return;
-		const panel = body.createDiv({ cls: "hashi-if-save-error" });
-		panel.createDiv({ cls: "hashi-if-save-error-head", text: saveErrorHeadline(error) });
-		panel.createDiv({ cls: "hashi-if-save-error-hint", text: saveErrorHint(error) });
-		// The raw diagnostic, last and de-emphasised: it names the failing value
-		// or the underlying I/O error, which is worth showing, but it is not the
-		// sentence the user should read first.
-		panel.createDiv({ cls: "hashi-if-save-error-detail", text: error.message });
-	}
-
-	/**
-	 * Why the last Re-run press produced no run. One line, no recovery hint:
-	 * unlike a failed Save there is nothing pending and nothing partly written
-	 * — either the user saves and presses again, or the run's own error already
-	 * says what went wrong.
-	 */
-	private renderRerunError(body: HTMLElement): void {
-		const message = this.rerunError;
-		if (message === null) return;
-		body.createDiv({ cls: "hashi-if-rerun-error", text: message });
-	}
-
-	private renderNoSignalBanner(body: HTMLElement): void {
-		const banner = body.createDiv({ cls: "hashi-if-banner" });
-		const text = banner.createDiv({ cls: "hashi-if-banner-text" });
-		text.createDiv({ text: "No trusted outcome for this set." });
-		text.createDiv({
-			cls: "hashi-if-banner-detail",
-			text: "Hashi can't tell which actions failed until it runs them.",
-		});
-		this.createButton(banner, "Run", ["hashi-se-btn", "hashi-se-primary"], {
-			disabled: this.saving || this.running || this.deps.rerun === undefined,
-			onClick: () => {
+			onRevert: () => {
+				void this.loadAndRender();
+			},
+			onRerun: () => {
 				void this.handleRerun();
 			},
-		});
-	}
-
-	private renderSection(
-		body: HTMLElement,
-		label: string,
-		actions: readonly Action[],
-		tag: string | null,
-	): void {
-		const section = body.createDiv({ cls: "hashi-if-group" });
-		const header = section.createDiv({ cls: "hashi-if-group-header" });
-		header.createSpan({ cls: "hashi-if-group-label", text: label });
-		header.createSpan({ cls: "hashi-if-group-count", text: String(actions.length) });
-		if (tag !== null) header.createSpan({ cls: "hashi-if-group-tag", text: tag });
-
-		for (const action of actions) this.renderCard(section, action);
-	}
-
-	/**
-	 * The card SHELL — header (id · kind), outcome badge and state tag, all of
-	 * it derived from the outcome/gate this view owns. The body is delegated to
-	 * the injected renderer (T3.2); see `fixerContract.ts` for why the seam sits
-	 * exactly here.
-	 *
-	 * The failure reason is DERIVED here (one `outcomeReason`, never re-derived
-	 * downstream) but RENDERED by the card, which is the only collaborator that
-	 * can place it where the binding layout puts it — between the intent line it
-	 * explains and the target fields. With no card renderer wired (the T3.1
-	 * shell, and the view's own tests), the view renders it into the body
-	 * itself so the reason never silently disappears with the seam.
-	 */
-	private renderCard(section: HTMLElement, action: Action): void {
-		const gate = gateFor(action, this.outcomes);
-		const outcome = outcomeFor(action, this.outcomes);
-
-		const card = section.createDiv({ cls: "hashi-if-card" });
-		card.setAttr("data-action-id", action.id);
-		if (gate !== "editable") card.addClass("hashi-if-card--readonly");
-
-		const header = card.createDiv({ cls: "hashi-if-card-header" });
-		header.createSpan({
-			cls: "hashi-if-card-id",
-			text: `${action.id} · ${action.action}`,
-		});
-		header.createSpan({ cls: "hashi-if-badge", text: badgeText(outcome) });
-		const tag = gateTag(gate);
-		if (tag !== null) header.createSpan({ cls: "hashi-if-card-tag", text: tag });
-
-		const reason = outcomeReason(outcome);
-		const cardBody = card.createDiv({ cls: "hashi-if-card-body" });
-		const ctx: FixerCardContext = {
-			app: this.app,
-			gate,
-			outcome,
-			reason,
 			apply: (transform) => {
 				if (this.store === null) return;
 				// Frozen for the duration of a run (Decision 6): the executor is
@@ -578,14 +378,13 @@ export class InstructionFixerView extends ItemView {
 				this.store.set(transform(this.store.get()));
 			},
 		};
+	}
 
-		if (this.deps.card !== undefined) {
-			this.deps.card.render(cardBody, action, ctx);
-			return;
-		}
-		if (reason !== null) {
-			cardBody.createDiv({ cls: "hashi-if-card-reason", text: reason });
-		}
+	private render(): void {
+		if (this.store === null || this.leafHeadEl === null || this.bodyEl === null) return;
+		const ctx = this.renderContext(this.store.get());
+		renderFixerLeafHead(this.leafHeadEl, ctx);
+		renderFixerBody(this.bodyEl, ctx);
 	}
 
 	// -------------------------------------------------------------------------
