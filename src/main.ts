@@ -635,8 +635,17 @@ export default class TomoHashiPlugin extends Plugin {
 		//     `card` (T3.2) renders each card's body — intent line, per-kind
 		//     repair fields, note link. It is a stateless module-level renderer
 		//     (every per-card input arrives through `FixerCardContext`), so one
-		//     shared instance serves every leaf. `rerun` (T3.3) stays unwired:
-		//     Run/Re-run remain disabled until that seam lands.
+		//     shared instance serves every leaf.
+		//
+		//     `rerun` (T3.3) is the SAME `InstructionExecutor` singleton the
+		//     execute command drives (10. above), invoked with the same
+		//     `single-file` invocation — SDD ADR-9: one executor, one atomic
+		//     write path, no second writer racing the applied-flag flush. It is
+		//     read off `this.executor` per call rather than captured, because
+		//     `onunload` nulls it; and the existing ExecutionModal glue (12.)
+		//     picks the run up off `executionStore` exactly as it does for a
+		//     command-initiated run, so a Fixer re-run gets the same preview /
+		//     progress / summary surface for free.
 		this.registerView(
 			VIEW_TYPE_INSTRUCTION_FIXER,
 			(leaf: WorkspaceLeaf) =>
@@ -649,6 +658,13 @@ export default class TomoHashiPlugin extends Plugin {
 							logFolder: this.settings.tomoInboxFolder,
 						}),
 					card: actionCardRenderer,
+					rerun: async (docPath: string) => {
+						const executor = this.executor;
+						if (executor === null) {
+							throw new Error("Hashi is still loading — try again in a moment.");
+						}
+						await executor.execute({ kind: "single-file", sourcePath: docPath });
+					},
 				}),
 		);
 

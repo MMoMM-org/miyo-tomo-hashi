@@ -49,6 +49,28 @@
  *    is an `InstructionSetSaveError` carrying `landedPatchCount` (T3.1 review).
  *    `SaveFailure`/`saveErrorHint` below render from that number, and report
  *    "unknown" rather than guess when a rejection carries none.
+ * 5. A re-run (T3.3) reconciles by RELOADING the document, not by re-resolving
+ *    outcomes alone. The run rewrites the very file this leaf holds open — the
+ *    executor flushes `applied: true` through its own atomic path — so when it
+ *    finishes, both the in-memory model AND the adapter's save baseline
+ *    (`ActiveDoc.pristine`, captured at `load()`) describe a file that no
+ *    longer exists. Refreshing only the outcomes would fix the badges while
+ *    leaving the model claiming `applied:false` for actions that just applied,
+ *    and would leave the next Save diffing against a superseded baseline.
+ *    `loadAndRender()` re-establishes model, baseline and outcomes from disk in
+ *    one step — and re-resolving outcomes is exactly what it already does, so
+ *    the reload IS the "refresh in place" (PRD F7-AC2). It is lossless because
+ *    of Decision 6.
+ * 6. Re-run is REFUSED while the model is dirty, and the document is frozen for
+ *    the duration of a run (no card edits, no Save/Revert/Re-run). The executor
+ *    reads the set FROM DISK, so a dirty model's repairs would not be part of
+ *    the run at all — the user would watch the same action fail again for a fix
+ *    they had already made — and Decision 5's reload would then discard them.
+ *    Of the three defensible options (block / save-then-run / run-and-preserve)
+ *    this is the only one that neither writes on the user's behalf nor loses
+ *    their work, and it matches PRD F7-AC1's framing ("given a SAVED edited
+ *    set"). Freezing edits during the run closes the same hole from the other
+ *    side: nothing can become dirty in the window the reload will overwrite.
  */
 
 import { ItemView, setIcon, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
@@ -97,8 +119,17 @@ export interface InstructionFixerViewDeps {
 	) => Promise<OutcomeResolution>;
 	/** Card-body renderer (T3.2). Absent → cards render header-only. */
 	readonly card?: FixerCardRenderer;
-	/** Re-run bridge (T3.3). Absent → the Run/Re-run affordances are disabled. */
-	readonly rerun?: () => Promise<void>;
+	/**
+	 * Re-run bridge (T3.3) — runs the set at `docPath` through the existing
+	 * `InstructionExecutor` and resolves when the run is over (ADR-9: one
+	 * executor, one write path, no second writer). Absent → the Run/Re-run
+	 * affordances are disabled.
+	 *
+	 * It takes the path rather than closing over one because the leaf can be
+	 * retargeted (`setState`) at any time: the view is the only component that
+	 * knows which document is on screen when the button is pressed.
+	 */
+	readonly rerun?: (docPath: string) => Promise<void>;
 }
 
 /**
@@ -188,6 +219,15 @@ export class InstructionFixerView extends ItemView {
 	// doc-load. See `SaveFailure` for how the recovery copy is chosen.
 	private saveError: SaveFailure | null = null;
 
+	// True while a re-run is in flight. Freezes the whole document — Save,
+	// Revert, Re-run AND card edits — because the executor is rewriting the file
+	// underneath and the reload that follows replaces the model (Decisions 5/6).
+	private running = false;
+
+	// Why the last re-run didn't happen (unsaved repairs) or didn't finish (the
+	// run threw). Cleared when a run starts and on every doc-load.
+	private rerunError: string | null = null;
+
 	constructor(
 		leaf: WorkspaceLeaf,
 		private readonly deps: InstructionFixerViewDeps,
@@ -263,6 +303,7 @@ export class InstructionFixerView extends ItemView {
 		this.leafHeadEl = null;
 		this.bodyEl = null;
 		this.saveError = null;
+		this.rerunError = null;
 		this.outcomes = NO_TRUSTED_SIGNAL;
 
 		const root = this.contentEl;
@@ -361,21 +402,21 @@ export class InstructionFixerView extends ItemView {
 		}
 
 		this.createButton(actions, "Re-run", ["hashi-se-btn", "hashi-se-subtle"], {
-			disabled: this.saving || this.deps.rerun === undefined,
+			disabled: this.saving || this.running || this.deps.rerun === undefined,
 			onClick: () => {
 				void this.handleRerun();
 			},
 		});
 
 		this.createButton(actions, "Revert", ["hashi-se-btn", "hashi-se-subtle"], {
-			disabled: this.saving,
+			disabled: this.saving || this.running,
 			onClick: () => {
 				void this.loadAndRender();
 			},
 		});
 
 		this.createButton(actions, "Save", ["hashi-se-btn", "hashi-se-primary"], {
-			disabled: this.saving || !model.dirty,
+			disabled: this.saving || this.running || !model.dirty,
 			onClick: () => {
 				void this.handleSave();
 			},
@@ -403,6 +444,7 @@ export class InstructionFixerView extends ItemView {
 		body.empty();
 
 		this.renderSaveError(body);
+		this.renderRerunError(body);
 
 		if (model.doc.actions.length === 0) {
 			body.createDiv({
@@ -433,6 +475,18 @@ export class InstructionFixerView extends ItemView {
 		panel.createDiv({ cls: "hashi-if-save-error-detail", text: error.message });
 	}
 
+	/**
+	 * Why the last Re-run press produced no run. One line, no recovery hint:
+	 * unlike a failed Save there is nothing pending and nothing partly written
+	 * — either the user saves and presses again, or the run's own error already
+	 * says what went wrong.
+	 */
+	private renderRerunError(body: HTMLElement): void {
+		const message = this.rerunError;
+		if (message === null) return;
+		body.createDiv({ cls: "hashi-if-rerun-error", text: message });
+	}
+
 	private renderNoSignalBanner(body: HTMLElement): void {
 		const banner = body.createDiv({ cls: "hashi-if-banner" });
 		const text = banner.createDiv({ cls: "hashi-if-banner-text" });
@@ -442,7 +496,7 @@ export class InstructionFixerView extends ItemView {
 			text: "Hashi can't tell which actions failed until it runs them.",
 		});
 		this.createButton(banner, "Run", ["hashi-se-btn", "hashi-se-primary"], {
-			disabled: this.saving || this.deps.rerun === undefined,
+			disabled: this.saving || this.running || this.deps.rerun === undefined,
 			onClick: () => {
 				void this.handleRerun();
 			},
@@ -503,6 +557,10 @@ export class InstructionFixerView extends ItemView {
 			reason,
 			apply: (transform) => {
 				if (this.store === null) return;
+				// Frozen for the duration of a run (Decision 6): the executor is
+				// rewriting this file and the reload that follows replaces the
+				// model, so an edit accepted here would be silently discarded.
+				if (this.running) return;
 				this.store.set(transform(this.store.get()));
 			},
 		};
@@ -556,6 +614,9 @@ export class InstructionFixerView extends ItemView {
 
 		this.saving = true;
 		this.saveError = null;
+		// A pending "save your repairs before re-running" is being answered right
+		// now, so it must not outlive the press that answers it.
+		this.rerunError = null;
 		this.render();
 		try {
 			await this.deps.adapter.save(savedModel);
@@ -592,12 +653,58 @@ export class InstructionFixerView extends ItemView {
 	}
 
 	/**
-	 * Delegates to the injected re-run bridge (T3.3). Nothing here knows about
-	 * the executor — this view only owns the affordance and its disabled state.
+	 * Runs the set through the injected bridge, then reconciles this leaf with
+	 * the file the run just rewrote (T3.3). Nothing here knows about the
+	 * executor — the view owns the affordance, the freeze, and the reconcile.
+	 *
+	 * Three things this method is responsible for, in order:
+	 *
+	 * 1. REFUSING a run over unsaved repairs (Decision 6). The executor reads
+	 *    the set off disk, so pending edits simply would not be in the run.
+	 * 2. FREEZING the document while the run is in flight — every write
+	 *    affordance and `ctx.apply` — so step 3 cannot destroy anything.
+	 * 3. RECONCILING by reloading (Decision 5), which re-establishes the model,
+	 *    the adapter's save baseline and the outcomes from disk at once.
+	 *
+	 * Reference-identity discipline, exactly as in `handleSave` and for the same
+	 * reason: `savedStore` is captured BEFORE the await. `setState` can retarget
+	 * the leaf mid-run (it is not gated by `running` — it calls `loadAndRender`
+	 * directly), and a stale run must then touch nothing: not the new document's
+	 * baseline (a reload of a document this run never executed would be a lie
+	 * about what is on disk), and not its error state. The `finally` re-render
+	 * is deliberately unconditional — `running` is leaf state, so whichever
+	 * document is on screen has to see it cleared or its buttons stay dead.
 	 */
 	private async handleRerun(): Promise<void> {
 		const rerun = this.deps.rerun;
 		if (rerun === undefined) return;
-		await rerun();
+		const savedStore = this.store;
+		if (savedStore === null) return;
+		if (this.saving || this.running) return;
+
+		if (savedStore.get().dirty) {
+			this.rerunError =
+				"Save your repairs before re-running — the run reads the set from disk.";
+			this.render();
+			return;
+		}
+
+		const docPath = this.docPath;
+		this.running = true;
+		this.rerunError = null;
+		this.render();
+		try {
+			await rerun(docPath);
+		} catch (err) {
+			if (this.store !== savedStore) return;
+			this.rerunError = `Re-run failed: ${err instanceof Error ? err.message : String(err)}`;
+			return;
+		} finally {
+			this.running = false;
+			this.render();
+		}
+
+		if (this.store !== savedStore) return;
+		await this.loadAndRender();
 	}
 }

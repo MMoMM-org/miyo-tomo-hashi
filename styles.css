@@ -1559,6 +1559,19 @@
 	overflow-x: auto;
 	white-space: pre-wrap;
 }
+/* Re-run notice (T3.3) — one line: either "save first" or the run's own
+   failure. Warning-weighted rather than error-weighted: nothing was written
+   and nothing is pending, unlike .hashi-if-save-error above. */
+.hashi-if-rerun-error {
+	padding: 8px 12px;
+	margin-bottom: 14px;
+	border-radius: var(--se-r-sm);
+	background: var(--se-bg-alt);
+	color: var(--se-text);
+	border: 1px solid var(--se-amber);
+	font-size: 12.5px;
+	line-height: 1.4;
+}
 .hashi-if-banner {
 	display: flex;
 	align-items: center;

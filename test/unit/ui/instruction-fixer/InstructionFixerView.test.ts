@@ -150,7 +150,7 @@ interface ViewOptions {
 		docPath: string,
 	) => Promise<OutcomeResolution>;
 	readonly card?: FixerCardRenderer;
-	readonly rerun?: () => Promise<void>;
+	readonly rerun?: (docPath: string) => Promise<void>;
 }
 
 function makeView(adapter: InstructionSetDoc, options: ViewOptions = {}): InstructionFixerView {
@@ -258,6 +258,11 @@ function savePanel(view: InstructionFixerView): {
 		hint: panel.querySelector(".hashi-if-save-error-hint")?.textContent ?? "",
 		detail: panel.querySelector(".hashi-if-save-error-detail")?.textContent ?? "",
 	};
+}
+
+/** The re-run notice line (blocked or failed run), or null when there is none. */
+function rerunNotice(view: InstructionFixerView): string | null {
+	return view.contentEl.querySelector(".hashi-if-rerun-error")?.textContent ?? null;
 }
 
 function clickBodyButton(view: InstructionFixerView, text: string): void {
@@ -850,6 +855,260 @@ describe("InstructionFixerView — save/dirty race guard", () => {
 
 		// The post-revert edit survives the stale save's completion.
 		expect(dirtyBadge(view)).not.toBeNull();
+	});
+});
+
+describe("InstructionFixerView — re-run bridge (T3.3)", () => {
+	it("hands the bridge the loaded set's docPath", async () => {
+		const rerun = vi.fn<(docPath: string) => Promise<void>>(async () => {});
+		const view = makeView(makeSpyAdapter(), { rerun });
+		await view.onOpen();
+
+		findActionButton(view, "Re-run").click();
+		await flushAsyncHandler();
+
+		expect(rerun).toHaveBeenCalledWith(DOC_PATH);
+	});
+
+	it("the no-signal banner's Run uses the same bridge and docPath", async () => {
+		const rerun = vi.fn<(docPath: string) => Promise<void>>(async () => {});
+		const view = makeView(makeSpyAdapter(), { outcomes: NO_TRUSTED_SIGNAL, rerun });
+		await view.onOpen();
+
+		view.contentEl.querySelector<HTMLButtonElement>(".hashi-if-banner button")?.click();
+		await flushAsyncHandler();
+
+		expect(rerun).toHaveBeenCalledWith(DOC_PATH);
+	});
+
+	it("reloads the set through the adapter once the run completes", async () => {
+		// The run rewrites the very file this leaf holds open (applied-flag
+		// flush), so the in-memory model AND the adapter's save baseline are
+		// both stale the moment it finishes. Reloading is the reconciliation.
+		const adapter = makeSpyAdapter();
+		const view = makeView(adapter, { rerun: async () => {} });
+		await view.onOpen();
+		expect(adapter.load).toHaveBeenCalledTimes(1);
+
+		findActionButton(view, "Re-run").click();
+		await flushAsyncHandler();
+
+		expect(adapter.load).toHaveBeenCalledTimes(2);
+		expect(adapter.load).toHaveBeenLastCalledWith(DOC_PATH);
+	});
+
+	it("refreshes outcomes in place — a now-applied action moves to Applied and freezes", async () => {
+		let ran = false;
+		const adapter = makeSpyAdapter();
+		adapter.load.mockImplementation(async () => ({
+			doc: ran ? makeSet([{ ...I07, applied: true }, I09, I12]) : makeSet(),
+			dirty: false,
+		}));
+		const view = makeView(adapter, {
+			resolveOutcomes: async () =>
+				ran
+					? new Map<string, ActionOutcome>([
+							["I07", { kind: "applied" }],
+							["I09", { kind: "applied" }],
+						])
+					: tracedOutcomes(),
+			rerun: async () => {
+				ran = true;
+			},
+		});
+		await view.onOpen();
+		expect(groups(view).map((g) => g.label)).toEqual([
+			"Needs repair",
+			"Applied",
+			"Not attempted",
+		]);
+
+		findActionButton(view, "Re-run").click();
+		await flushAsyncHandler();
+
+		expect(groups(view)).toEqual([
+			{
+				label: "Applied",
+				count: "2",
+				ids: ["I07 · link_to_moc", "I09 · edit_note_text"],
+			},
+			{ label: "Not attempted", count: "1", ids: ["I12 · move_note"] },
+		]);
+		expect(cardEl(view, "I07")?.querySelector(".hashi-if-badge")?.textContent).toBe("applied");
+		expect(cardEl(view, "I07")?.querySelector(".hashi-if-card-tag")?.textContent).toBe("frozen");
+	});
+
+	it("refuses to run with unsaved repairs and keeps the edit pending", async () => {
+		// The executor reads the set FROM DISK, so a dirty model's repairs would
+		// not be in the run at all — and the post-run reload would then discard
+		// them. Blocking is the only option that neither lies nor loses work.
+		const rerun = vi.fn<(docPath: string) => Promise<void>>(async () => {});
+		const adapter = makeSpyAdapter();
+		const view = makeView(adapter, { card: makeDirtyingCard(), rerun });
+		await view.onOpen();
+		clickBodyButton(view, "dirty I07");
+
+		findActionButton(view, "Re-run").click();
+		await flushAsyncHandler();
+
+		expect(rerun).not.toHaveBeenCalled();
+		expect(rerunNotice(view)).toContain("Save your repairs before re-running");
+		expect(adapter.load).toHaveBeenCalledTimes(1);
+		expect(dirtyBadge(view)).not.toBeNull();
+		expect(findActionButton(view, "Save").disabled).toBe(false);
+	});
+
+	it("runs once the pending repairs are saved, clearing the blocked notice", async () => {
+		const rerun = vi.fn<(docPath: string) => Promise<void>>(async () => {});
+		const view = makeView(makeSpyAdapter(), { card: makeDirtyingCard(), rerun });
+		await view.onOpen();
+		clickBodyButton(view, "dirty I07");
+		findActionButton(view, "Re-run").click();
+		await flushAsyncHandler();
+		expect(rerunNotice(view)).not.toBeNull();
+
+		findActionButton(view, "Save").click();
+		await flushAsyncHandler();
+		// Saving answers the block, so the notice must not outlive that press.
+		expect(rerunNotice(view)).toBeNull();
+
+		findActionButton(view, "Re-run").click();
+		await flushAsyncHandler();
+
+		expect(rerun).toHaveBeenCalledWith(DOC_PATH);
+		expect(rerunNotice(view)).toBeNull();
+	});
+
+	it("surfaces a failed run without reloading or disturbing the loaded document", async () => {
+		const adapter = makeSpyAdapter();
+		const view = makeView(adapter, {
+			rerun: async () => {
+				throw new Error("Execution already in progress");
+			},
+		});
+		await view.onOpen();
+
+		findActionButton(view, "Re-run").click();
+		await flushAsyncHandler();
+
+		expect(rerunNotice(view)).toContain("Execution already in progress");
+		expect(adapter.load).toHaveBeenCalledTimes(1);
+		expect(findActionButton(view, "Re-run").disabled).toBe(false);
+		expect(groups(view).map((g) => g.label)).toEqual([
+			"Needs repair",
+			"Applied",
+			"Not attempted",
+		]);
+	});
+
+	it("freezes Revert and Re-run while a run is in flight, then restores them", async () => {
+		let resolveRun: () => void = () => {};
+		const pending = new Promise<void>((resolve) => {
+			resolveRun = resolve;
+		});
+		const view = makeView(makeSpyAdapter(), { rerun: () => pending });
+		await view.onOpen();
+
+		findActionButton(view, "Re-run").click();
+		await Promise.resolve();
+		expect(findActionButton(view, "Re-run").disabled).toBe(true);
+		expect(findActionButton(view, "Revert").disabled).toBe(true);
+
+		resolveRun();
+		await flushAsyncHandler();
+
+		expect(findActionButton(view, "Re-run").disabled).toBe(false);
+		expect(findActionButton(view, "Revert").disabled).toBe(false);
+	});
+
+	it("refuses card edits while a run is in flight, so the reload discards nothing", async () => {
+		// The whole document is frozen for the duration of the run: the executor
+		// is rewriting the file, and the post-run reload replaces the model. An
+		// edit accepted in that window would be silently thrown away.
+		let resolveRun: () => void = () => {};
+		const pending = new Promise<void>((resolve) => {
+			resolveRun = resolve;
+		});
+		const view = makeView(makeSpyAdapter(), {
+			card: makeDirtyingCard(),
+			rerun: () => pending,
+		});
+		await view.onOpen();
+
+		findActionButton(view, "Re-run").click();
+		await Promise.resolve();
+		clickBodyButton(view, "dirty I07");
+		expect(dirtyBadge(view)).toBeNull();
+
+		resolveRun();
+		await flushAsyncHandler();
+
+		expect(dirtyBadge(view)).toBeNull();
+	});
+
+	it("a run completing after a retarget does not reload the newly-loaded document", async () => {
+		let resolveRun: () => void = () => {};
+		const pending = new Promise<void>((resolve) => {
+			resolveRun = resolve;
+		});
+		const adapter = makeSpyAdapter();
+		const view = makeView(adapter, { rerun: () => pending });
+		await view.onOpen();
+		findActionButton(view, "Re-run").click();
+		await Promise.resolve();
+
+		const otherPath = "100 Inbox/2026-07-21_0900_instructions.json";
+		await view.setState({ docPath: otherPath }, { history: false });
+		expect(adapter.load).toHaveBeenCalledTimes(2);
+
+		resolveRun();
+		await flushAsyncHandler();
+
+		// No third load: the stale run must not re-baseline a document it never ran.
+		expect(adapter.load).toHaveBeenCalledTimes(2);
+		expect(adapter.load).toHaveBeenLastCalledWith(otherPath);
+		expect(view.getState()).toEqual({ docPath: otherPath });
+		// The freshly-loaded document is clean and fully usable.
+		expect(findActionButton(view, "Re-run").disabled).toBe(false);
+		expect(findActionButton(view, "Revert").disabled).toBe(false);
+		expect(dirtyBadge(view)).toBeNull();
+	});
+
+	it("a run that FAILS after a retarget does not blame the newly-loaded document", async () => {
+		let rejectRun: (err: Error) => void = () => {};
+		const pending = new Promise<void>((_resolve, reject) => {
+			rejectRun = reject;
+		});
+		const adapter = makeSpyAdapter();
+		const view = makeView(adapter, { rerun: () => pending });
+		await view.onOpen();
+		findActionButton(view, "Re-run").click();
+		await Promise.resolve();
+
+		const otherPath = "100 Inbox/2026-07-21_0900_instructions.json";
+		await view.setState({ docPath: otherPath }, { history: false });
+
+		rejectRun(new Error("run aborted"));
+		await flushAsyncHandler();
+
+		expect(rerunNotice(view)).toBeNull();
+		expect(view.getState()).toEqual({ docPath: otherPath });
+		expect(findActionButton(view, "Re-run").disabled).toBe(false);
+	});
+
+	it("a load failure during the post-run reload surfaces as a load error, not a crash", async () => {
+		const adapter = makeSpyAdapter();
+		adapter.load.mockImplementationOnce(async () => ({ doc: makeSet(), dirty: false }));
+		adapter.load.mockImplementationOnce(async () => {
+			throw new Error("invalid JSON — Unexpected token");
+		});
+		const view = makeView(adapter, { rerun: async () => {} });
+		await view.onOpen();
+
+		findActionButton(view, "Re-run").click();
+		await flushAsyncHandler();
+
+		expect(bodyText(view)).toContain("Couldn't load instruction set: invalid JSON");
 	});
 });
 
