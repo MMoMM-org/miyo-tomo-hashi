@@ -104,7 +104,7 @@ HASHI_DEPLOY_VAULT=1 npm run build   # deploy into test/Hashi for manual QA
 Each phase is a separate file. Tasks follow red-green-refactor: **Prime** → **Test** (red) →
 **Implement** (green) → **Validate** (refactor + verify).
 
-- [ ] [Phase 1: Data spine — port, adapter, atomic writer, transforms](phase-1.md)
+- [x] [Phase 1: Data spine — port, adapter, atomic writer, transforms](phase-1.md)
 - [ ] [Phase 2: Outcome source + fail-closed edit gate](phase-2.md)
 - [ ] [Phase 3: The Fixer view — cards, gate wiring, re-run](phase-3.md)
 - [ ] [Phase 4: Entry points + run-log change](phase-4.md)
