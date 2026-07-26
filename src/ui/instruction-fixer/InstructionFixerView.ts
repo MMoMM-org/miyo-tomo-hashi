@@ -60,7 +60,9 @@
  *    `loadAndRender()` re-establishes model, baseline and outcomes from disk in
  *    one step — and re-resolving outcomes is exactly what it already does, so
  *    the reload IS the "refresh in place" (PRD F7-AC2). It is lossless because
- *    of Decision 6.
+ *    of Decision 6, and it therefore happens UNCONDITIONALLY: a rejected run is
+ *    not a promise that nothing landed (see `handleRerun`), so the failure path
+ *    needs the refresh at least as much as the success path does.
  * 6. Re-run is REFUSED while the model is dirty, and the document is frozen for
  *    the duration of a run (no card edits, no Save/Revert/Re-run). The executor
  *    reads the set FROM DISK, so a dirty model's repairs would not be part of
@@ -291,7 +293,15 @@ export class InstructionFixerView extends ItemView {
 	// Load
 	// -------------------------------------------------------------------------
 
-	private async loadAndRender(): Promise<void> {
+	/**
+	 * `rerunError` carries a re-run failure ACROSS the reload it triggers, which
+	 * is why it is a parameter rather than something the caller assigns
+	 * afterwards. A post-await assignment would need its own staleness guard
+	 * (another `setState` can land while this load is in flight); passing it in
+	 * makes the notice part of the state this load installs, so the next load —
+	 * a retarget, a Revert — clears it by defaulting to null, as before.
+	 */
+	private async loadAndRender(rerunError: string | null = null): Promise<void> {
 		// Tear down any previously-loaded doc's subscription first — setState can
 		// retarget an already-open leaf, and a stale subscription would keep
 		// notifying a discarded store. Revert reuses this same path.
@@ -303,7 +313,7 @@ export class InstructionFixerView extends ItemView {
 		this.leafHeadEl = null;
 		this.bodyEl = null;
 		this.saveError = null;
-		this.rerunError = null;
+		this.rerunError = rerunError;
 		this.outcomes = NO_TRUSTED_SIGNAL;
 
 		const root = this.contentEl;
@@ -353,6 +363,10 @@ export class InstructionFixerView extends ItemView {
 	}
 
 	private renderError(root: HTMLElement, err: unknown): void {
+		// A re-run failure that was riding along into this load still gets said:
+		// "the run failed AND the set is now unreadable" is two facts, and the
+		// second one does not explain the first.
+		this.renderRerunError(root);
 		const message = err instanceof Error ? err.message : String(err);
 		root.createDiv({
 			cls: "hashi-se-error",
@@ -690,21 +704,36 @@ export class InstructionFixerView extends ItemView {
 		}
 
 		const docPath = this.docPath;
+		let failure: string | null = null;
 		this.running = true;
 		this.rerunError = null;
 		this.render();
 		try {
 			await rerun(docPath);
 		} catch (err) {
-			if (this.store !== savedStore) return;
-			this.rerunError = `Re-run failed: ${err instanceof Error ? err.message : String(err)}`;
-			return;
+			failure = `Re-run failed: ${err instanceof Error ? err.message : String(err)}`;
 		} finally {
 			this.running = false;
 			this.render();
 		}
 
+		// Stale: a retarget owns the leaf now. Reloading would re-baseline a
+		// document this run never executed, and the failure belongs to the model
+		// that retarget already discarded — so neither may be applied here.
 		if (this.store !== savedStore) return;
-		await this.loadAndRender();
+
+		// Reload on BOTH paths — a rejected run does NOT mean nothing landed.
+		// The executor's applied-flag flush and the peer-checkbox tick are
+		// separate awaited steps of one try block, so a throw on the tick leaves
+		// `applied: true` already durable; likewise a handler throwing for action
+		// k leaves actions 1..k-1's vault changes in place while the batched
+		// applied write never runs. Keeping the pre-run model on the failure path
+		// would show "failed / needs repair" for an action that is now applied on
+		// disk — precisely the lie this surface exists to prevent. The freeze
+		// above guarantees nothing became dirty, so the reload is lossless
+		// whatever the outcome, and the failure rides INTO the refreshed state
+		// rather than replacing it: the user needs both "why it failed" and
+		// "what the set looks like now".
+		await this.loadAndRender(failure);
 	}
 }

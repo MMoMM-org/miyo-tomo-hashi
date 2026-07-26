@@ -64,6 +64,7 @@ vi.mock("dockerode", () => {
 // Lazy-imports under test (after mocks are in place). main.ts pulls in
 // TomoConnection which pulls in docker.ts which pulls in dockerode.
 import { TomoConnection } from "../../src/connection/TomoConnection";
+import { InstructionExecutor } from "../../src/executor/InstructionExecutor";
 import TomoHashiPlugin from "../../src/main";
 import { VIEW_TYPE_TOMO_CHAT } from "../../src/ui/chat-view/index";
 import {
@@ -352,6 +353,57 @@ describe("TomoHashiPlugin integration (T5.3)", () => {
 			const factory = call?.[1] as (leaf: WorkspaceLeaf) => unknown;
 			const view = factory(new WorkspaceLeaf());
 			expect(view).toBeInstanceOf(InstructionFixerView);
+		});
+
+		/**
+		 * The `rerun` dep is a closure main.ts builds around the executor
+		 * singleton, so it is reachable only through the view it was handed to.
+		 * `deps` is TypeScript-private, not runtime-private; reading it here is
+		 * the same escape hatch main.test.ts uses for `Store.listeners`, and it
+		 * beats standing up a whole vault + doc just to click the button.
+		 */
+		function rerunDepOf(plugin: TomoHashiPlugin): (docPath: string) => Promise<void> {
+			const call = vi
+				.mocked(plugin.registerView)
+				.mock.calls.find(([type]) => type === VIEW_TYPE_INSTRUCTION_FIXER);
+			const factory = call?.[1] as (leaf: WorkspaceLeaf) => InstructionFixerView;
+			const view = factory(new WorkspaceLeaf());
+			const rerun = (view as unknown as { deps: { rerun?: (p: string) => Promise<void> } })
+				.deps.rerun;
+			if (rerun === undefined) throw new Error("no rerun dep wired into the Fixer view");
+			return rerun;
+		}
+
+		it("wires rerun to the executor singleton, as a single-file run of the leaf's docPath", async () => {
+			await plugin.onload();
+			// The SAME executor the execute command drives (ADR-9: one executor,
+			// one atomic write path) — spied on the prototype so no real run happens.
+			const execute = vi
+				.spyOn(InstructionExecutor.prototype, "execute")
+				.mockResolvedValue({} as never);
+
+			await rerunDepOf(plugin)("100 Inbox/2026-07-20_1015_instructions.json");
+
+			expect(execute).toHaveBeenCalledWith({
+				kind: "single-file",
+				sourcePath: "100 Inbox/2026-07-20_1015_instructions.json",
+			});
+			execute.mockRestore();
+		});
+
+		it("rerun rejects rather than null-dereferencing once the plugin has unloaded", async () => {
+			await plugin.onload();
+			const rerun = rerunDepOf(plugin);
+			const execute = vi
+				.spyOn(InstructionExecutor.prototype, "execute")
+				.mockResolvedValue({} as never);
+			plugin.onunload();
+
+			await expect(rerun("100 Inbox/whatever_instructions.json")).rejects.toThrow(
+				"Hashi is still loading",
+			);
+			expect(execute).not.toHaveBeenCalled();
+			execute.mockRestore();
 		});
 
 		it("still registers the 004/005 editor views — the 006 addition displaces neither", async () => {

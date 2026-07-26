@@ -21,6 +21,7 @@ import { App, WorkspaceLeaf } from "obsidian";
 import { describe, expect, it, vi } from "vitest";
 
 import { InstructionExecutor } from "../../../../src/executor/InstructionExecutor";
+import { markActionsApplied } from "../../../../src/executor/jsonAppliedWriter";
 import type { RunCounts, RunState } from "../../../../src/executor/state";
 import { ObsidianInstructionSetDoc } from "../../../../src/instruction-fixer/ObsidianInstructionSetDoc";
 import { setTargetField } from "../../../../src/instruction-fixer/transforms";
@@ -158,6 +159,27 @@ const REPAIR_CARD: FixerCardRenderer = {
 	},
 };
 
+function makeView(
+	vault: FakeVaultFS,
+	runStore: Store<RunState>,
+	rerun: (docPath: string) => Promise<void>,
+): InstructionFixerView {
+	const view = new InstructionFixerView(new WorkspaceLeaf(), {
+		adapter: new ObsidianInstructionSetDoc(vault, vi.fn()),
+		docPath: SET_PATH,
+		resolveOutcomes: (set, docPath) =>
+			resolveOutcomes(set, docPath, {
+				vault,
+				getRunState: () => runStore.get(),
+				logFolder: INBOX,
+			}),
+		card: REPAIR_CARD,
+		rerun,
+	});
+	view.app = new App();
+	return view;
+}
+
 function clickButton(view: InstructionFixerView, text: string): void {
 	const btn = Array.from(view.contentEl.querySelectorAll("button")).find(
 		(b) => b.textContent === text,
@@ -206,21 +228,9 @@ describe("Instruction Fixer — repair, re-run, refresh (end to end)", () => {
 		expect(first.applied).toBe(0);
 
 		const runs: RunCounts[] = [];
-		const view = new InstructionFixerView(new WorkspaceLeaf(), {
-			adapter: new ObsidianInstructionSetDoc(vault, vi.fn()),
-			docPath: SET_PATH,
-			resolveOutcomes: (set, docPath) =>
-				resolveOutcomes(set, docPath, {
-					vault,
-					getRunState: () => runStore.get(),
-					logFolder: INBOX,
-				}),
-			card: REPAIR_CARD,
-			rerun: async (docPath) => {
-				runs.push(await executor.execute({ kind: "single-file", sourcePath: docPath }));
-			},
+		const view = makeView(vault, runStore, async (docPath) => {
+			runs.push(await executor.execute({ kind: "single-file", sourcePath: docPath }));
 		});
-		view.app = new App();
 
 		await view.onOpen();
 
@@ -271,5 +281,39 @@ describe("Instruction Fixer — repair, re-run, refresh (end to end)", () => {
 		// only line that differs anywhere in the peer is I02's checkbox.
 		expect(peer.startsWith(PEER_FRONTMATTER)).toBe(true);
 		expect(peer).toBe(PEER_MD.replace("### I02 — link_to_moc\n- [ ] Applied", "### I02 — link_to_moc\n- [x] Applied"));
+	});
+
+	it("reloads after a run that threw AFTER writing, showing the error and the new state", async () => {
+		// A rejected run is NOT a promise that nothing landed: the executor's
+		// applied-flag flush and the peer-checkbox tick are separate awaited
+		// steps of one try block, and a batch's earlier files flush before a
+		// later one can throw. So the stub below does what that leaves behind —
+		// it drives the flag through the executor's OWN writer (no second
+		// writer), then aborts. A view that kept its pre-run model would go on
+		// offering I02 for repair when it is already applied on disk.
+		const vault = await seedVault();
+		const runStore = new Store<RunState>({ kind: "idle" });
+		const executor = makeExecutor(vault, runStore);
+		await executor.execute({ kind: "single-file", sourcePath: SET_PATH });
+
+		const view = makeView(vault, runStore, async (docPath) => {
+			await markActionsApplied(vault, docPath, ["I02"]);
+			throw new Error("run aborted: peer checkbox write failed");
+		});
+		await view.onOpen();
+		expect(groupLabels(view)).toEqual(["Needs repair", "Applied"]);
+
+		clickButton(view, "Re-run");
+		await settle();
+
+		// Both facts, together: why the run failed …
+		expect(view.contentEl.querySelector(".hashi-if-rerun-error")?.textContent).toContain(
+			"run aborted: peer checkbox write failed",
+		);
+		// … and what the set actually looks like now. I02 is no longer offered
+		// for repair, because the flag that landed says it was applied.
+		expect(groupLabels(view)).toEqual(["Applied"]);
+		expect(cardEl(view, "I02")?.querySelector(".hashi-if-card-tag")?.textContent).toBe("frozen");
+		expect((await vault.readJSON<InstructionSet>(SET_PATH)).actions[1]?.applied).toBe(true);
 	});
 });

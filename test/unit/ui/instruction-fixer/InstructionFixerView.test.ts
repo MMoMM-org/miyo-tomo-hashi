@@ -979,7 +979,10 @@ describe("InstructionFixerView — re-run bridge (T3.3)", () => {
 		expect(rerunNotice(view)).toBeNull();
 	});
 
-	it("surfaces a failed run without reloading or disturbing the loaded document", async () => {
+	it("surfaces a failed run AND still refreshes the document from disk", async () => {
+		// A rejected run is not a promise that nothing landed, so the failure
+		// path reloads too — and the failure rides along INTO the refreshed
+		// state rather than replacing it.
 		const adapter = makeSpyAdapter();
 		const view = makeView(adapter, {
 			rerun: async () => {
@@ -992,13 +995,51 @@ describe("InstructionFixerView — re-run bridge (T3.3)", () => {
 		await flushAsyncHandler();
 
 		expect(rerunNotice(view)).toContain("Execution already in progress");
-		expect(adapter.load).toHaveBeenCalledTimes(1);
+		expect(adapter.load).toHaveBeenCalledTimes(2);
+		expect(adapter.load).toHaveBeenLastCalledWith(DOC_PATH);
 		expect(findActionButton(view, "Re-run").disabled).toBe(false);
 		expect(groups(view).map((g) => g.label)).toEqual([
 			"Needs repair",
 			"Applied",
 			"Not attempted",
 		]);
+	});
+
+	it("the run failure survives the reload it triggers, and a later Revert clears it", async () => {
+		const view = makeView(makeSpyAdapter(), {
+			rerun: async () => {
+				throw new Error("run aborted");
+			},
+		});
+		await view.onOpen();
+		findActionButton(view, "Re-run").click();
+		await flushAsyncHandler();
+		expect(rerunNotice(view)).toContain("run aborted");
+
+		findActionButton(view, "Revert").click();
+		await flushAsyncHandler();
+
+		expect(rerunNotice(view)).toBeNull();
+	});
+
+	it("says BOTH why the run failed and why the reload failed", async () => {
+		const adapter = makeSpyAdapter();
+		adapter.load.mockImplementationOnce(async () => ({ doc: makeSet(), dirty: false }));
+		adapter.load.mockImplementationOnce(async () => {
+			throw new Error("invalid JSON — Unexpected token");
+		});
+		const view = makeView(adapter, {
+			rerun: async () => {
+				throw new Error("run aborted");
+			},
+		});
+		await view.onOpen();
+
+		findActionButton(view, "Re-run").click();
+		await flushAsyncHandler();
+
+		expect(rerunNotice(view)).toContain("run aborted");
+		expect(bodyText(view)).toContain("Couldn't load instruction set: invalid JSON");
 	});
 
 	it("freezes Revert and Re-run while a run is in flight, then restores them", async () => {
