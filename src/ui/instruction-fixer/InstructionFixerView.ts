@@ -185,6 +185,14 @@ export class InstructionFixerView extends ItemView {
 	// run threw). Cleared when a run starts and on every doc-load.
 	private rerunError: string | null = null;
 
+	// Monotonic per-load token. Bumped by every `loadAndRender` entry and
+	// re-checked after each await, so a superseded load abandons quietly instead
+	// of appending a second head/body to the same root or leaking a store
+	// subscription. Same discipline as handleSave/handleRerun's
+	// capture-before-await guards, and as `TomoConnection`'s epoch counter
+	// (docs/ai/memory/decisions.md). See `loadAndRender`.
+	private loadEpoch = 0;
+
 	constructor(
 		leaf: WorkspaceLeaf,
 		private readonly deps: InstructionFixerViewDeps,
@@ -255,8 +263,25 @@ export class InstructionFixerView extends ItemView {
 	 * (another `setState` can land while this load is in flight); passing it in
 	 * makes the notice part of the state this load installs, so the next load —
 	 * a retarget, a Revert — clears it by defaulting to null, as before.
+	 *
+	 * REENTRANCY: this method can be in flight more than once — `setState`,
+	 * Revert and the post-run reconcile all call it, and none of them is gated
+	 * by `saving`/`running`. Without a guard, two overlapping loads would each
+	 * `createDiv` a head and a body onto the same root (the later one empties
+	 * only what existed when IT started) and each install a subscription over
+	 * its own store — so whichever resolved first is left orphaned in the DOM
+	 * and still subscribed to a discarded store. `loadEpoch` is captured on
+	 * entry and re-checked after every await: a superseded load renders
+	 * nothing, subscribes to nothing, and touches no view state past that
+	 * point. The winner's synchronous prelude has already torn down the
+	 * previous subscription and emptied the root, so exactly one skeleton
+	 * survives. Error TEXT was never misattributed (every entry resets
+	 * `saveError`/`rerunError` synchronously) — this is about DOM and
+	 * subscription integrity.
 	 */
 	private async loadAndRender(rerunError: string | null = null): Promise<void> {
+		const epoch = ++this.loadEpoch;
+
 		// Tear down any previously-loaded doc's subscription first — setState can
 		// retarget an already-open leaf, and a stale subscription would keep
 		// notifying a discarded store. Revert reuses this same path.
@@ -276,22 +301,32 @@ export class InstructionFixerView extends ItemView {
 		root.addClass("hashi-instruction-fixer-view");
 		root.addClass("hashi-se-view");
 
-		if (this.docPath === "") {
+		// Pinned for the whole load: a retarget landing mid-flight must not make
+		// this load resolve outcomes against a path it never read from.
+		const docPath = this.docPath;
+		if (docPath === "") {
 			this.renderNoDocument(root);
 			return;
 		}
 
 		let model: { doc: InstructionSet; dirty: false };
 		try {
-			model = await this.deps.adapter.load(this.docPath);
+			model = await this.deps.adapter.load(docPath);
 		} catch (err) {
+			// A superseded load's failure belongs to a document that is no longer
+			// on screen — the load that replaced it owns the root now.
+			if (this.loadEpoch !== epoch) return;
 			// Schema reject / bad JSON — never crash the view, and never enter an
 			// editable state over bad data (SDD Error Handling).
 			this.renderError(root, err);
 			return;
 		}
+		if (this.loadEpoch !== epoch) return;
 
-		this.outcomes = await this.resolveOutcomesFailClosed(model.doc, this.docPath);
+		const outcomes = await this.resolveOutcomesFailClosed(model.doc, docPath);
+		if (this.loadEpoch !== epoch) return;
+
+		this.outcomes = outcomes;
 		this.store = new Store<InstructionFixerModel>(model);
 
 		this.leafHeadEl = root.createDiv({ cls: "hashi-se-leaf-head" });

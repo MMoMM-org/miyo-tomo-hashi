@@ -29,6 +29,7 @@ import {
 	NO_TRUSTED_SIGNAL,
 	type OutcomeResolution,
 } from "../../../../src/ui/instruction-fixer/outcomeSource";
+import { Store } from "../../../../src/util/store";
 import { FakeVaultFS } from "../../../../src/vault/FakeVaultFS";
 import type {
 	InstructionFixerModel,
@@ -514,6 +515,60 @@ describe("InstructionFixerView — no-trusted-signal state", () => {
 		await flushAsyncHandler();
 
 		expect(rerun).toHaveBeenCalledTimes(1);
+	});
+
+	/** The banner offers Run and explains that outcomes are unknown until the
+	 * set runs. Both halves are vacuous when every action is already applied —
+	 * and that state is reachable from a SUCCESSFUL repair: `executionMode:
+	 * "silent"` auto-idles the execution store, and `runLogRetention:
+	 * "only-after-failed"` writes no log for a zero-failure run, so
+	 * `resolveOutcomes` legitimately returns no signal right afterwards. */
+	it("suppresses the banner when every action is already applied (nothing to run)", async () => {
+		const applied = makeSet([
+			{ ...I07, applied: true },
+			I09,
+			{ ...I12, applied: true },
+		]);
+		const view = makeView(makeSpyAdapter(applied), {
+			outcomes: NO_TRUSTED_SIGNAL,
+			rerun: async () => {},
+		});
+
+		await view.onOpen();
+
+		expect(view.contentEl.querySelector(".hashi-if-banner")).toBeNull();
+		// The sections are untouched — the gate still fails closed, every card
+		// still renders, and each one still reads as applied-and-frozen.
+		expect(groups(view)).toEqual([
+			{
+				label: "All actions",
+				count: "3",
+				ids: ["I07 · link_to_moc", "I09 · edit_note_text", "I12 · move_note"],
+			},
+		]);
+		for (const id of ["I07", "I09", "I12"]) {
+			expect(cardEl(view, id)?.querySelector(".hashi-if-card-tag")?.textContent).toBe(
+				"frozen",
+			);
+			expect(cardEl(view, id)?.classList.contains("hashi-if-card--readonly")).toBe(true);
+		}
+	});
+
+	it("still shows the banner when even ONE action is not yet applied", async () => {
+		// The other direction: the offer is real as long as anything could run,
+		// so suppression must not weaken the fail-closed no-signal state.
+		const partly = makeSet([{ ...I07, applied: true }, I09, I12]);
+		const view = makeView(makeSpyAdapter(partly), {
+			outcomes: NO_TRUSTED_SIGNAL,
+			rerun: async () => {},
+		});
+
+		await view.onOpen();
+
+		expect(view.contentEl.querySelector(".hashi-if-banner")?.textContent).toContain(
+			"No trusted outcome for this set.",
+		);
+		expect(groups(view).map((g) => g.label)).toEqual(["All actions"]);
 	});
 
 	it("disables Run and Re-run when no re-run seam is wired (T3.3 not landed)", async () => {
@@ -1150,6 +1205,127 @@ describe("InstructionFixerView — re-run bridge (T3.3)", () => {
 		await flushAsyncHandler();
 
 		expect(bodyText(view)).toContain("Couldn't load instruction set: invalid JSON");
+	});
+});
+
+describe("InstructionFixerView — loadAndRender reentrancy guard", () => {
+	const PATH_A = "100 Inbox/2026-07-21_0900_instructions.json";
+	const PATH_B = "100 Inbox/2026-07-22_1100_instructions.json";
+
+	/** Every unsubscribe function the view has been handed, in creation order,
+	 * so a test can assert BOTH that no superseded load subscribed and that the
+	 * one it replaced was torn down. */
+	let unsubscribes: Array<Mock<() => void>> = [];
+
+	function trackSubscriptions(): void {
+		const real = Store.prototype.subscribe;
+		vi.spyOn(Store.prototype, "subscribe").mockImplementation(function (
+			this: Store<unknown>,
+			listener: (value: unknown) => void,
+		): () => void {
+			const off = vi.fn(real.call(this, listener));
+			unsubscribes.push(off);
+			return off;
+		});
+	}
+
+	/** An adapter whose loads hang until the test releases them by path. */
+	function gatedAdapter(): {
+		adapter: SpyAdapter;
+		release: (docPath: string, actions: readonly Action[]) => void;
+	} {
+		const adapter = makeSpyAdapter();
+		const gates = new Map<string, (actions: readonly Action[]) => void>();
+		adapter.load.mockImplementation(
+			(docPath: string) =>
+				new Promise<{ doc: InstructionSet; dirty: false }>((resolve) => {
+					gates.set(docPath, (actions) => {
+						resolve({ doc: makeSet(actions), dirty: false });
+					});
+				}),
+		);
+		return {
+			adapter,
+			release: (docPath, actions) => {
+				const gate = gates.get(docPath);
+				if (gate === undefined) throw new Error(`no pending load for ${docPath}`);
+				gate(actions);
+			},
+		};
+	}
+
+	beforeEach(() => {
+		unsubscribes = [];
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("a superseded load renders no second head/body and installs no subscription", async () => {
+		// Two retargets overlap over a gated load, and the FIRST one resolves
+		// last. Without a per-call token it would createDiv a second head and a
+		// second body onto a root it never emptied (the winner emptied only what
+		// existed when it started) and overwrite `unsubscribe`, orphaning the
+		// live subscription along with the DOM it renders into.
+		trackSubscriptions();
+		const { adapter, release } = gatedAdapter();
+		const view = makeView(adapter);
+		// The gate registers synchronously inside adapter.load, so the initial
+		// load has to be in flight before it can be released.
+		const opened = view.onOpen();
+		release(DOC_PATH, [I07, I09, I12]);
+		await opened;
+		expect(unsubscribes).toHaveLength(1);
+
+		const loadA = view.setState({ docPath: PATH_A }, { history: false });
+		const loadB = view.setState({ docPath: PATH_B }, { history: false });
+		release(PATH_B, [I07, I09]);
+		await flushAsyncHandler();
+		release(PATH_A, [I07]);
+		await Promise.all([loadA, loadB]);
+		await flushAsyncHandler();
+
+		expect(view.contentEl.querySelectorAll(".hashi-se-leaf-head")).toHaveLength(1);
+		expect(view.contentEl.querySelectorAll(".hashi-se-body")).toHaveLength(1);
+		// The winner owns the leaf: its document, its state, its subscription.
+		expect(view.getState()).toEqual({ docPath: PATH_B });
+		expect(leafMeta(view)).toBe("profile default · 2 actions");
+		// One subscription per load that finished — the superseded load made
+		// none — and the one it replaced was torn down.
+		expect(unsubscribes).toHaveLength(2);
+		expect(unsubscribes[0]).toHaveBeenCalled();
+		expect(unsubscribes[1]).not.toHaveBeenCalled();
+	});
+
+	it("a superseded load that FAILS does not render its error over the winner", async () => {
+		const adapter = makeSpyAdapter();
+		const gates = new Map<string, (err: Error) => void>();
+		adapter.load.mockImplementationOnce(async () => ({ doc: makeSet(), dirty: false }));
+		adapter.load.mockImplementation(
+			(docPath: string) =>
+				new Promise<{ doc: InstructionSet; dirty: false }>((resolve, reject) => {
+					if (docPath === PATH_B) {
+						resolve({ doc: makeSet([I07, I09]), dirty: false });
+						return;
+					}
+					gates.set(docPath, reject);
+				}),
+		);
+		const view = makeView(adapter);
+		await view.onOpen();
+
+		const loadA = view.setState({ docPath: PATH_A }, { history: false });
+		const loadB = view.setState({ docPath: PATH_B }, { history: false });
+		await flushAsyncHandler();
+		gates.get(PATH_A)?.(new Error("invalid JSON — Unexpected token"));
+		await Promise.all([loadA, loadB]);
+		await flushAsyncHandler();
+
+		expect(view.contentEl.querySelector(".hashi-se-error")).toBeNull();
+		expect(bodyText(view)).not.toContain("Couldn't load instruction set");
+		expect(leafMeta(view)).toBe("profile default · 2 actions");
+		expect(view.contentEl.querySelectorAll(".hashi-se-body")).toHaveLength(1);
 	});
 });
 

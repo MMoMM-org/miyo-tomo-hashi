@@ -203,7 +203,7 @@ export function renderFixerBody(body: HTMLElement, ctx: FixerRenderContext): voi
 		return;
 	}
 
-	if (ctx.outcomes === NO_TRUSTED_SIGNAL) {
+	if (ctx.outcomes === NO_TRUSTED_SIGNAL && hasRunnableAction(actions)) {
 		renderNoSignalBanner(body, ctx);
 	}
 
@@ -236,6 +236,32 @@ function renderSaveError(body: HTMLElement, error: SaveFailure | null): void {
 	// or the underlying I/O error, which is worth showing, but it is not the
 	// sentence the user should read first.
 	panel.createDiv({ cls: "hashi-if-save-error-detail", text: error.message });
+}
+
+/**
+ * Whether the no-signal banner still has anything to offer.
+ *
+ * The banner states "Hashi can't tell which actions failed until it runs them"
+ * and offers Run. Both halves go vacuous once EVERY action carries
+ * `applied: true`: there is nothing left to run, and `editGate` step 1
+ * (`applied === true` → `frozen-applied`) already precedes the no-signal
+ * branch, so the missing signal changes nothing about how those cards render
+ * — they group and freeze as "Applied" either way.
+ *
+ * That combination is reachable from a SUCCESSFUL repair, not just from an
+ * exotic setting: under `executionMode: "silent"` the executor auto-idles the
+ * execution store the moment it finishes, and under `runLogRetention:
+ * "only-after-failed"` a run with zero failures writes no log — so
+ * `resolveOutcomes` legitimately returns `NO_TRUSTED_SIGNAL` right after the
+ * run that applied everything. Rendering the banner there tells the user the
+ * opposite of what just happened, over a set with nothing left to run.
+ *
+ * This is a RENDER-layer suppression only: `editGate` and `resolveOutcomes`
+ * are untouched and still fail closed. A single not-yet-applied action makes
+ * the offer real again, and the banner comes back.
+ */
+function hasRunnableAction(actions: readonly Action[]): boolean {
+	return actions.some((action) => action.applied !== true);
 }
 
 function renderNoSignalBanner(body: HTMLElement, ctx: FixerRenderContext): void {
