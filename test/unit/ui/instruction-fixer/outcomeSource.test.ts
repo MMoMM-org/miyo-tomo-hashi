@@ -27,8 +27,10 @@ import type { InstructionSet } from "../../../../src/schema/types.js";
 import { FakeVaultFS } from "../../../../src/vault/FakeVaultFS.js";
 import type { VaultFS } from "../../../../src/vault/VaultFS.js";
 import {
+	editGate,
 	NO_TRUSTED_SIGNAL,
 	resolveOutcomes,
+	type EditGateResult,
 	type OutcomeSourceDeps,
 } from "../../../../src/ui/instruction-fixer/outcomeSource.js";
 
@@ -557,5 +559,120 @@ describe("resolveOutcomes — fail closed (reject paths)", () => {
 		const result = await resolveOutcomes(set, SET_PATH, deps(vault));
 
 		expect(result).toBe(NO_TRUSTED_SIGNAL);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// editGate (spec-006 T2.2) — the fail-closed per-action editability decision.
+// Exhaustive over {appliedFlag} x {outcome-source-shape}: every cell below is
+// asserted by construction, not sampled, per Constitution Testing L1.
+// ---------------------------------------------------------------------------
+
+describe("editGate — per-action editability (T2.2)", () => {
+	const ACTION_ID = "I01";
+	const ACTION = { id: ACTION_ID };
+	const EMPTY_MAP: ReadonlyMap<string, ActionOutcome> = new Map();
+
+	function outcomeMap(outcome: ActionOutcome): ReadonlyMap<string, ActionOutcome> {
+		return new Map([[ACTION_ID, outcome]]);
+	}
+
+	// [appliedLabel, appliedFlag, outcomeLabel, outcomeResult, expected]
+	const CELLS: ReadonlyArray<
+		readonly [
+			string,
+			boolean | undefined,
+			string,
+			ReadonlyMap<string, ActionOutcome> | typeof NO_TRUSTED_SIGNAL,
+			EditGateResult,
+		]
+	> = [
+		// appliedFlag = true -> frozen-applied regardless of outcome (step 1 short-circuits)
+		["true", true, "NO_TRUSTED_SIGNAL", NO_TRUSTED_SIGNAL, "frozen-applied"],
+		["true", true, "absent from map", EMPTY_MAP, "frozen-applied"],
+		["true", true, "applied", outcomeMap({ kind: "applied" }), "frozen-applied"],
+		["true", true, "skipped-already", outcomeMap({ kind: "skipped-already" }), "frozen-applied"],
+		[
+			"true",
+			true,
+			"skipped-dependency",
+			outcomeMap({ kind: "skipped-dependency", dependsOn: "I00" }),
+			"frozen-applied",
+		],
+		["true", true, "skipped-cancelled", outcomeMap({ kind: "skipped-cancelled" }), "frozen-applied"],
+		["true", true, "failed", outcomeMap({ kind: "failed", reason: "boom" }), "frozen-applied"],
+
+		// appliedFlag = false
+		["false", false, "NO_TRUSTED_SIGNAL", NO_TRUSTED_SIGNAL, "read-only-no-signal"],
+		["false", false, "absent from map", EMPTY_MAP, "read-only-no-signal"],
+		["false", false, "applied", outcomeMap({ kind: "applied" }), "frozen-applied"],
+		["false", false, "skipped-already", outcomeMap({ kind: "skipped-already" }), "editable"],
+		[
+			"false",
+			false,
+			"skipped-dependency",
+			outcomeMap({ kind: "skipped-dependency", dependsOn: "I00" }),
+			"editable",
+		],
+		["false", false, "skipped-cancelled", outcomeMap({ kind: "skipped-cancelled" }), "editable"],
+		["false", false, "failed", outcomeMap({ kind: "failed", reason: "boom" }), "editable"],
+
+		// appliedFlag = undefined (Action.applied never set)
+		["undefined", undefined, "NO_TRUSTED_SIGNAL", NO_TRUSTED_SIGNAL, "read-only-no-signal"],
+		["undefined", undefined, "absent from map", EMPTY_MAP, "read-only-no-signal"],
+		["undefined", undefined, "applied", outcomeMap({ kind: "applied" }), "frozen-applied"],
+		["undefined", undefined, "skipped-already", outcomeMap({ kind: "skipped-already" }), "editable"],
+		[
+			"undefined",
+			undefined,
+			"skipped-dependency",
+			outcomeMap({ kind: "skipped-dependency", dependsOn: "I00" }),
+			"editable",
+		],
+		["undefined", undefined, "skipped-cancelled", outcomeMap({ kind: "skipped-cancelled" }), "editable"],
+		["undefined", undefined, "failed", outcomeMap({ kind: "failed", reason: "boom" }), "editable"],
+	];
+
+	it.each(CELLS)(
+		"appliedFlag=%s, outcome=%s -> %s",
+		(_appliedLabel, appliedFlag, _outcomeLabel, outcomeResult, expected) => {
+			expect(editGate(ACTION, outcomeResult, appliedFlag)).toBe(expected);
+		},
+	);
+
+	// -------------------------------------------------------------------------
+	// SDD traced walkthrough: I07 failed(anchor not found), I09 applied, I12
+	// never reached.
+	// -------------------------------------------------------------------------
+
+	it("traced walkthrough — opened from the apply modal (summary present)", () => {
+		const map = new Map<string, ActionOutcome>([
+			["I07", { kind: "failed", reason: "anchor not found" }],
+			["I09", { kind: "applied" }],
+			// I12 absent: never reached by the run.
+		]);
+
+		expect(editGate({ id: "I07" }, map, false)).toBe("editable");
+		expect(editGate({ id: "I09" }, map, true)).toBe("frozen-applied");
+		expect(editGate({ id: "I12" }, map, undefined)).toBe("read-only-no-signal");
+	});
+
+	it("traced walkthrough — opened cold with no run-log: all read-only (offer run)", () => {
+		expect(editGate({ id: "I07" }, NO_TRUSTED_SIGNAL, false)).toBe("read-only-no-signal");
+		expect(editGate({ id: "I09" }, NO_TRUSTED_SIGNAL, false)).toBe("read-only-no-signal");
+		expect(editGate({ id: "I12" }, NO_TRUSTED_SIGNAL, false)).toBe("read-only-no-signal");
+	});
+
+	// -------------------------------------------------------------------------
+	// Defensive step 6: outcome `applied` without a true appliedFlag is treated
+	// as frozen, not editable — a false positive here would unlock editing on
+	// an action the executor actually applied.
+	// -------------------------------------------------------------------------
+
+	it("defensive: outcome 'applied' with a falsy appliedFlag stays frozen, never editable", () => {
+		const map = outcomeMap({ kind: "applied" });
+
+		expect(editGate(ACTION, map, false)).toBe("frozen-applied");
+		expect(editGate(ACTION, map, undefined)).toBe("frozen-applied");
 	});
 });

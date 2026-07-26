@@ -29,7 +29,7 @@
  */
 
 import type { ActionOutcome, RunState } from "../../executor/state.js";
-import type { InstructionSet } from "../../schema/types.js";
+import type { Action, InstructionSet } from "../../schema/types.js";
 import type { VaultFS } from "../../vault/VaultFS.js";
 
 /** Action id as it appears in the set and the run log (`I01`, `I12`, …). */
@@ -293,4 +293,59 @@ function parseOutcome(outcomeCell: string, errorCell: string): ActionOutcome | n
 
 	// `pending` and anything unrecognised carry no trustworthy signal.
 	return null;
+}
+
+// ---------------------------------------------------------------------------
+// editGate — the fail-closed per-action editability decision (T2.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * The three states an action's edit affordance can be in. `editable` is the
+ * ONLY state that unlocks the target-field controls; everything else renders
+ * read-only (with `frozen-applied` vs. `read-only-no-signal` only changing
+ * the explanatory copy, never the write permission).
+ */
+export type EditGateResult = "editable" | "frozen-applied" | "read-only-no-signal";
+
+/**
+ * `editGate(action, outcomeMapResult, appliedFlag)` — SDD "Runtime View /
+ * Complex Logic — the fail-closed edit gate", matched line for line:
+ *
+ * 1. `appliedFlag === true`                     → `frozen-applied` (nothing to repair)
+ * 2. `outcomeMapResult === NO_TRUSTED_SIGNAL`    → `read-only-no-signal` (offer to run)
+ * 3. `o = outcomeMapResult.get(action.id)`
+ * 4. `o` undefined (never-attempted; `pending` is this absence, not a real
+ *    `ActionOutcome` variant)                    → `read-only-no-signal`
+ * 5. `o.kind === "failed"` or a `skipped-*` kind → `editable`
+ * 6. otherwise (`o.kind === "applied"` without `appliedFlag`; defensive)
+ *                                                → `frozen-applied`
+ *
+ * Step 5 is an exhaustive switch over `ActionOutcome["kind"]` rather than a
+ * string-prefix test: TypeScript's `noImplicitReturns` then turns a future
+ * 6th `ActionOutcome` variant into a compile error here instead of a silent
+ * fall-through to `editable`.
+ *
+ * The bias is the same as `resolveOutcomes`': every branch that is not
+ * provably a trusted `failed`/`skipped-*` on `!applied` returns read-only.
+ */
+export function editGate(
+	action: Pick<Action, "id">,
+	outcomeMapResult: OutcomeResolution,
+	appliedFlag: boolean | undefined,
+): EditGateResult {
+	if (appliedFlag === true) return "frozen-applied";
+	if (outcomeMapResult === NO_TRUSTED_SIGNAL) return "read-only-no-signal";
+
+	const o = outcomeMapResult.get(action.id);
+	if (o === undefined) return "read-only-no-signal";
+
+	switch (o.kind) {
+		case "failed":
+		case "skipped-already":
+		case "skipped-dependency":
+		case "skipped-cancelled":
+			return "editable";
+		case "applied":
+			return "frozen-applied";
+	}
 }
