@@ -16,6 +16,19 @@ phase: 5
 - `[ref: PRD/Success Metrics]` quality gates (verbatim round-trip, no `.md`/`tomo.sources` mutation)
 - `[ref: SDD/Risks and Technical Debt]` gotchas to assert against
 
+**Carried from Phase 3 — re-evaluate here:**
+- **`InstructionFixerView.ts` is 603 LOC**, over the Constitution L2 "~300–500 LOC of dense logic"
+  guideline. T3.2b already extracted the pure gate-section grouping into `sections.ts` (100 LOC,
+  DOM-free, 17 unit tests). The remainder is view rendering + leaf lifecycle + save handling, which
+  is one coherent responsibility; splitting it further mid-phase would fragment DOM construction
+  across files for no legibility gain. **Explicit L2 rationale, to be re-checked once T3.3 lands**
+  — if the re-run bridge pushes it materially past ~650, split the render methods out.
+- **Bundle ceiling was raised 850 → 900 KB at T3.1** (user-approved) because wiring the Fixer into
+  `main.ts` made the previously tree-shaken Phase 1–2 modules reachable. Currently 868.3 KB. The
+  documented next levers if it tightens: ajv standalone code-gen, then lazy-loading xterm.js (only
+  the spec-001 chat path needs it). Measure the finished feature here and decide whether to apply a
+  lever or re-lower the ceiling.
+
 **Key Decisions**:
 - The end-to-end loop is the real proof: execute (with a failure) → open Fixer → repair target field
   → save (verbatim) → re-run → applied. Assert the `.md`/`tomo.sources` invariants explicitly.

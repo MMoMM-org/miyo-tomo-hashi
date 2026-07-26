@@ -114,16 +114,16 @@ target-field controls, and re-runs. Testable against the obsidian mock (side-eff
     - [x] Command/opener opens the Fixer on a set and reuses one leaf `[ref: PRD/F1-AC1,AC5]`
     - [x] Save writes verbatim JSON only, guarded against races `[ref: PRD/F8-AC1]` `[ref: SDD/ADR-2]`
 
-- [ ] **T3.2 Per-kind target-field cards + gate wiring + note nav** `[activity: frontend-ui]`
+- [x] **T3.2 Per-kind target-field cards + gate wiring + note nav** `[activity: frontend-ui]`
 
   1. Prime: Read `src/ui/garden-audit-view/{tabs/GardenAuditTab,TargetControl,noteNavigation}.ts` `[ref: SDD/ADR-5]` `[ref: SDD/User Interface & UX]`
   2. Test: each of the 7 repair kinds renders its correct target field(s) via `TargetControl`; view-only kinds render read-only (no control); **failed/skipped ordered first**; each card shows `I##`, kind, **plain-text intent** (no deep-link), outcome + error; a card whose gate is `editable` commits edits through `setTargetField` (Phase 1) and activates Save; `frozen-applied`/`read-only-no-signal` cards expose no editable control; note link opens-beside + hover-preview, inert on unresolved.
   3. Implement: `src/ui/instruction-fixer/cards/{renderActionCard.ts,targetFields.ts}` — dispatch by `action.action`; `targetFields` descriptor map (7 kinds ↔ fields ↔ control config) that also supplies the per-field caption set, **generalizing** `TargetControl` off garden-audit's `FindingCheck` coupling (decouple its `Record<FindingCheck,string>` empty-caption maps to a caller-supplied key set, or wrap the plain-function widget core); consume the gate result to render editable vs read-only; reuse `renderNavigableNoteLink` + `HOVER_LINK_SOURCE` verbatim.
   4. Validate: unit tests pass; lint clean; types check.
   - Success:
-    - [ ] Cards show intent + outcome, failed-first, no deep-link `[ref: PRD/F2-AC1]` `[ref: PRD/F2-AC4]`
-    - [ ] Editable only where the gate says so; target-field edit commits `[ref: PRD/F3]` `[ref: PRD/F4-AC1]`
-    - [ ] Note jump: open-beside + hover, inert on unresolved `[ref: PRD/F6]`
+    - [x] Cards show intent + outcome, failed-first, no deep-link `[ref: PRD/F2-AC1]` `[ref: PRD/F2-AC4]`
+    - [x] Editable only where the gate says so; target-field edit commits `[ref: PRD/F3]` `[ref: PRD/F4-AC1]`
+    - [x] Note jump: open-beside + hover, inert on unresolved `[ref: PRD/F6]`
 
 - [ ] **T3.3 Re-run bridge + outcome refresh** `[activity: frontend-ui]`
 
