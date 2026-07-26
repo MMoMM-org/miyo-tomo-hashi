@@ -718,65 +718,172 @@ describe("editGate — per-action editability (T2.2)", () => {
 		return new Map([[ACTION_ID, outcome]]);
 	}
 
-	// [appliedLabel, appliedFlag, outcomeLabel, outcomeResult, expected]
-	const CELLS: ReadonlyArray<
-		readonly [
-			string,
-			boolean | undefined,
-			string,
-			ReadonlyMap<string, ActionOutcome> | typeof NO_TRUSTED_SIGNAL,
-			EditGateResult,
-		]
-	> = [
+	interface GateCell {
+		readonly appliedLabel: string;
+		readonly appliedFlag: boolean | undefined;
+		readonly outcomeLabel: string;
+		readonly outcomeResult: ReadonlyMap<string, ActionOutcome> | typeof NO_TRUSTED_SIGNAL;
+		readonly expected: EditGateResult;
+	}
+
+	const CELLS: readonly GateCell[] = [
 		// appliedFlag = true -> frozen-applied regardless of outcome (step 1 short-circuits)
-		["true", true, "NO_TRUSTED_SIGNAL", NO_TRUSTED_SIGNAL, "frozen-applied"],
-		["true", true, "absent from map", EMPTY_MAP, "frozen-applied"],
-		["true", true, "applied", outcomeMap({ kind: "applied" }), "frozen-applied"],
-		["true", true, "skipped-already", outcomeMap({ kind: "skipped-already" }), "frozen-applied"],
-		[
-			"true",
-			true,
-			"skipped-dependency",
-			outcomeMap({ kind: "skipped-dependency", dependsOn: "I00" }),
-			"frozen-applied",
-		],
-		["true", true, "skipped-cancelled", outcomeMap({ kind: "skipped-cancelled" }), "frozen-applied"],
-		["true", true, "failed", outcomeMap({ kind: "failed", reason: "boom" }), "frozen-applied"],
+		{
+			appliedLabel: "true",
+			appliedFlag: true,
+			outcomeLabel: "NO_TRUSTED_SIGNAL",
+			outcomeResult: NO_TRUSTED_SIGNAL,
+			expected: "frozen-applied",
+		},
+		{
+			appliedLabel: "true",
+			appliedFlag: true,
+			outcomeLabel: "absent from map",
+			outcomeResult: EMPTY_MAP,
+			expected: "frozen-applied",
+		},
+		{
+			appliedLabel: "true",
+			appliedFlag: true,
+			outcomeLabel: "applied",
+			outcomeResult: outcomeMap({ kind: "applied" }),
+			expected: "frozen-applied",
+		},
+		{
+			appliedLabel: "true",
+			appliedFlag: true,
+			outcomeLabel: "skipped-already",
+			outcomeResult: outcomeMap({ kind: "skipped-already" }),
+			expected: "frozen-applied",
+		},
+		{
+			appliedLabel: "true",
+			appliedFlag: true,
+			outcomeLabel: "skipped-dependency",
+			outcomeResult: outcomeMap({ kind: "skipped-dependency", dependsOn: "I00" }),
+			expected: "frozen-applied",
+		},
+		{
+			appliedLabel: "true",
+			appliedFlag: true,
+			outcomeLabel: "skipped-cancelled",
+			outcomeResult: outcomeMap({ kind: "skipped-cancelled" }),
+			expected: "frozen-applied",
+		},
+		{
+			appliedLabel: "true",
+			appliedFlag: true,
+			outcomeLabel: "failed",
+			outcomeResult: outcomeMap({ kind: "failed", reason: "boom" }),
+			expected: "frozen-applied",
+		},
 
 		// appliedFlag = false
-		["false", false, "NO_TRUSTED_SIGNAL", NO_TRUSTED_SIGNAL, "read-only-no-signal"],
-		["false", false, "absent from map", EMPTY_MAP, "read-only-no-signal"],
-		["false", false, "applied", outcomeMap({ kind: "applied" }), "frozen-applied"],
-		["false", false, "skipped-already", outcomeMap({ kind: "skipped-already" }), "editable"],
-		[
-			"false",
-			false,
-			"skipped-dependency",
-			outcomeMap({ kind: "skipped-dependency", dependsOn: "I00" }),
-			"editable",
-		],
-		["false", false, "skipped-cancelled", outcomeMap({ kind: "skipped-cancelled" }), "editable"],
-		["false", false, "failed", outcomeMap({ kind: "failed", reason: "boom" }), "editable"],
+		{
+			appliedLabel: "false",
+			appliedFlag: false,
+			outcomeLabel: "NO_TRUSTED_SIGNAL",
+			outcomeResult: NO_TRUSTED_SIGNAL,
+			expected: "read-only-no-signal",
+		},
+		{
+			appliedLabel: "false",
+			appliedFlag: false,
+			outcomeLabel: "absent from map",
+			outcomeResult: EMPTY_MAP,
+			expected: "read-only-no-signal",
+		},
+		{
+			appliedLabel: "false",
+			appliedFlag: false,
+			outcomeLabel: "applied",
+			outcomeResult: outcomeMap({ kind: "applied" }),
+			expected: "frozen-applied",
+		},
+		{
+			appliedLabel: "false",
+			appliedFlag: false,
+			outcomeLabel: "skipped-already",
+			outcomeResult: outcomeMap({ kind: "skipped-already" }),
+			expected: "editable",
+		},
+		{
+			appliedLabel: "false",
+			appliedFlag: false,
+			outcomeLabel: "skipped-dependency",
+			outcomeResult: outcomeMap({ kind: "skipped-dependency", dependsOn: "I00" }),
+			expected: "editable",
+		},
+		{
+			appliedLabel: "false",
+			appliedFlag: false,
+			outcomeLabel: "skipped-cancelled",
+			outcomeResult: outcomeMap({ kind: "skipped-cancelled" }),
+			expected: "editable",
+		},
+		{
+			appliedLabel: "false",
+			appliedFlag: false,
+			outcomeLabel: "failed",
+			outcomeResult: outcomeMap({ kind: "failed", reason: "boom" }),
+			expected: "editable",
+		},
 
 		// appliedFlag = undefined (Action.applied never set)
-		["undefined", undefined, "NO_TRUSTED_SIGNAL", NO_TRUSTED_SIGNAL, "read-only-no-signal"],
-		["undefined", undefined, "absent from map", EMPTY_MAP, "read-only-no-signal"],
-		["undefined", undefined, "applied", outcomeMap({ kind: "applied" }), "frozen-applied"],
-		["undefined", undefined, "skipped-already", outcomeMap({ kind: "skipped-already" }), "editable"],
-		[
-			"undefined",
-			undefined,
-			"skipped-dependency",
-			outcomeMap({ kind: "skipped-dependency", dependsOn: "I00" }),
-			"editable",
-		],
-		["undefined", undefined, "skipped-cancelled", outcomeMap({ kind: "skipped-cancelled" }), "editable"],
-		["undefined", undefined, "failed", outcomeMap({ kind: "failed", reason: "boom" }), "editable"],
+		{
+			appliedLabel: "undefined",
+			appliedFlag: undefined,
+			outcomeLabel: "NO_TRUSTED_SIGNAL",
+			outcomeResult: NO_TRUSTED_SIGNAL,
+			expected: "read-only-no-signal",
+		},
+		{
+			appliedLabel: "undefined",
+			appliedFlag: undefined,
+			outcomeLabel: "absent from map",
+			outcomeResult: EMPTY_MAP,
+			expected: "read-only-no-signal",
+		},
+		{
+			appliedLabel: "undefined",
+			appliedFlag: undefined,
+			outcomeLabel: "applied",
+			outcomeResult: outcomeMap({ kind: "applied" }),
+			expected: "frozen-applied",
+		},
+		{
+			appliedLabel: "undefined",
+			appliedFlag: undefined,
+			outcomeLabel: "skipped-already",
+			outcomeResult: outcomeMap({ kind: "skipped-already" }),
+			expected: "editable",
+		},
+		{
+			appliedLabel: "undefined",
+			appliedFlag: undefined,
+			outcomeLabel: "skipped-dependency",
+			outcomeResult: outcomeMap({ kind: "skipped-dependency", dependsOn: "I00" }),
+			expected: "editable",
+		},
+		{
+			appliedLabel: "undefined",
+			appliedFlag: undefined,
+			outcomeLabel: "skipped-cancelled",
+			outcomeResult: outcomeMap({ kind: "skipped-cancelled" }),
+			expected: "editable",
+		},
+		{
+			appliedLabel: "undefined",
+			appliedFlag: undefined,
+			outcomeLabel: "failed",
+			outcomeResult: outcomeMap({ kind: "failed", reason: "boom" }),
+			expected: "editable",
+		},
 	];
 
 	it.each(CELLS)(
-		"appliedFlag=%s, outcome=%s -> %s",
-		(_appliedLabel, appliedFlag, _outcomeLabel, outcomeResult, expected) => {
+		"appliedFlag=$appliedLabel, outcome=$outcomeLabel -> $expected",
+		({ appliedFlag, outcomeResult, expected }) => {
 			expect(editGate(ACTION, outcomeResult, appliedFlag)).toBe(expected);
 		},
 	);
