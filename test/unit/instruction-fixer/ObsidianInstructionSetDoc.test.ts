@@ -17,9 +17,11 @@ import { resolve } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
+import { markActionApplied } from "../../../src/executor/jsonAppliedWriter.js";
 import { ObsidianInstructionSetDoc } from "../../../src/instruction-fixer/ObsidianInstructionSetDoc.js";
+import { setTargetField } from "../../../src/instruction-fixer/transforms.js";
 import type { InstructionFixerModel } from "../../../src/vault/InstructionSetDoc.js";
-import type { InstructionSet } from "../../../src/schema/types.js";
+import type { Action, InstructionSet } from "../../../src/schema/types.js";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import type { VaultFS } from "../../../src/vault/VaultFS.js";
 import rawFixture from "../../fixtures/instructions/current-set.json";
@@ -27,7 +29,12 @@ import rawFixture from "../../fixtures/instructions/current-set.json";
 const DOC_PATH = "100 Inbox/2026-07-20_1015_instructions.json";
 const MD_PEER_PATH = "100 Inbox/2026-07-20_1015_instructions.md";
 
-/** A VaultFS whose process()/create() reject for one specific path — drives the save() failure path. */
+/**
+ * A VaultFS whose write primitives reject for one specific path — drives the
+ * save() failure path. `processJSON` has to fail independently of `process`:
+ * FakeVaultFS.processJSON calls its OWN `this.process`, so wrapping `process`
+ * alone would never be seen by the markActionFields write path.
+ */
 function withFailingWrite(base: VaultFS, failPath: string): VaultFS {
 	return {
 		read: (path) => base.read(path),
@@ -39,7 +46,10 @@ function withFailingWrite(base: VaultFS, failPath: string): VaultFS {
 			if (path === failPath) throw new Error("disk full");
 			await base.process(path, transform);
 		},
-		processJSON: (path, transform) => base.processJSON(path, transform),
+		processJSON: async (path, transform) => {
+			if (path === failPath) throw new Error("disk full");
+			await base.processJSON(path, transform);
+		},
 		rename: (from, to) => base.rename(from, to),
 		createFolder: (path) => base.createFolder(path),
 		trash: (path) => base.trash(path),
@@ -63,6 +73,27 @@ const FIXTURE_JSON_ON_DISK = readFileSync(
 	resolve(__dirname, "../../fixtures/instructions/current-set.json"),
 	"utf8",
 );
+
+// The one edit the Fixer UI can actually make against this fixture (ADR-5's
+// whitelist): repoint I01's MOC path. Used wherever a test needs "a dirty
+// model" — going through setTargetField keeps the tests honest about what
+// save() has to support.
+const I01_PATH_BEFORE = "Atlas/200 Maps/Hobbies (MOC).md";
+const I01_PATH_AFTER = "Atlas/200 Maps/Hobbies (MOC) v2.md";
+
+function repointI01(model: InstructionFixerModel): InstructionFixerModel {
+	return setTargetField(model, "I01", "target_moc_path", I01_PATH_AFTER);
+}
+
+function findAction(set: InstructionSet, id: string): Action | undefined {
+	return set.actions.find((a) => a.id === id);
+}
+
+function fieldOf(action: Action | undefined, key: string): unknown {
+	return action === undefined
+		? undefined
+		: (action as unknown as Record<string, unknown>)[key];
+}
 
 async function seededVault(): Promise<FakeVaultFS> {
 	const vault = new FakeVaultFS();
@@ -186,15 +217,12 @@ describe("ObsidianInstructionSetDoc.save()", () => {
 		const createSpy = vi.spyOn(vault, "create");
 		const adapter = new ObsidianInstructionSetDoc(vault);
 		const model = await adapter.load(DOC_PATH);
-		const edited: InstructionFixerModel = {
-			doc: { ...model.doc, profile: "edited-profile" },
-			dirty: true,
-		};
 
-		await adapter.save(edited);
+		await adapter.save(repointI01(model));
 
 		for (const call of processSpy.mock.calls) expect(call[0]).toBe(DOC_PATH);
 		for (const call of createSpy.mock.calls) expect(call[0]).toBe(DOC_PATH);
+		expect(processSpy).toHaveBeenCalled(); // the write really happened
 		expect(await vault.read(MD_PEER_PATH)).toBe("# Instructions\n\n- [x] Approved\n");
 	});
 
@@ -204,10 +232,7 @@ describe("ObsidianInstructionSetDoc.save()", () => {
 		const notify = vi.fn();
 		const adapter = new ObsidianInstructionSetDoc(failingVault, notify);
 		const model = await adapter.load(DOC_PATH);
-		const edited: InstructionFixerModel = {
-			doc: { ...model.doc, profile: "will-not-be-saved" },
-			dirty: true,
-		};
+		const edited = repointI01(model);
 		const snapshotBefore = JSON.parse(JSON.stringify(edited)) as InstructionFixerModel;
 
 		await expect(adapter.save(edited)).rejects.toThrow("disk full");
@@ -224,5 +249,173 @@ describe("ObsidianInstructionSetDoc.save()", () => {
 		const model: InstructionFixerModel = { doc: rawFixture as InstructionSet, dirty: true };
 
 		await expect(adapter.save(model)).rejects.toThrow(/load\(\)/);
+	});
+
+	it("serializes an edited save byte-identically to the on-disk fixture, changing only the edited value", async () => {
+		// Guards the verbatim contract on the WRITING path (the unedited
+		// round-trip above only proves the no-write case once save() patches
+		// per-action): routing through processJSON must not reindent, reorder
+		// or drop anything outside the one edited field.
+		const vault = new FakeVaultFS();
+		await vault.create(DOC_PATH, FIXTURE_JSON_ON_DISK);
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		await adapter.save(repointI01(model));
+
+		expect(await vault.read(DOC_PATH)).toBe(
+			FIXTURE_JSON_ON_DISK.replace(`"${I01_PATH_BEFORE}"`, `"${I01_PATH_AFTER}"`),
+		);
+	});
+});
+
+describe("ObsidianInstructionSetDoc.save() — ADR-9 single-writer discipline", () => {
+	it("does not revert a concurrent executor applied-flush on a different action (lost-update regression)", async () => {
+		const vault = await seededVault();
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		// The executor flushes `applied: true` for I03 through its own atomic
+		// path AFTER the Fixer loaded the set — exactly the window ADR-9 calls
+		// out. A whole-document save from the Fixer's stale snapshot would
+		// silently push I03 back to `applied: false`, and the action would run
+		// a second time on the next execute (duplicate MOC/move).
+		await markActionApplied(vault, DOC_PATH, "I03");
+
+		await adapter.save(repointI01(model));
+
+		const written = JSON.parse(await vault.read(DOC_PATH)) as InstructionSet;
+		expect(findAction(written, "I03")?.applied).toBe(true);
+		expect(findAction(written, "I02")?.applied).toBe(true);
+		expect(fieldOf(findAction(written, "I01"), "target_moc_path")).toBe(I01_PATH_AFTER);
+	});
+
+	it("does not revert a concurrent applied-flush on the very action being edited", async () => {
+		const vault = await seededVault();
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		await markActionApplied(vault, DOC_PATH, "I01");
+
+		await adapter.save(repointI01(model));
+
+		const written = JSON.parse(await vault.read(DOC_PATH)) as InstructionSet;
+		// markActionFields is monotonic — the patch may repoint the field but
+		// can never move `applied` off true.
+		expect(findAction(written, "I01")?.applied).toBe(true);
+		expect(fieldOf(findAction(written, "I01"), "target_moc_path")).toBe(I01_PATH_AFTER);
+	});
+
+	it("leaves every other action's fields byte-untouched — it patches only the edited action", async () => {
+		const vault = await seededVault();
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		// Out-of-band edit to a DIFFERENT action's own target field, as if
+		// another writer had repaired it between load() and save().
+		await vault.processJSON<InstructionSet>(DOC_PATH, (set) => ({
+			...set,
+			actions: set.actions.map((a) =>
+				a.id === "I02" ? ({ ...a, replace: "[[Found Note]]" } as Action) : a,
+			),
+		}));
+
+		await adapter.save(repointI01(model));
+
+		const written = JSON.parse(await vault.read(DOC_PATH)) as InstructionSet;
+		expect(fieldOf(findAction(written, "I02"), "replace")).toBe("[[Found Note]]");
+	});
+
+	it("rejects a structural edit the per-action patch path cannot express, rather than dropping it", async () => {
+		const vault = await seededVault();
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		// Nothing in the Fixer's edit surface (ADR-5/ADR-6) can produce this —
+		// but a save that silently succeeded while losing the change would be
+		// worse than a loud failure.
+		const topLevelEdit: InstructionFixerModel = {
+			doc: { ...model.doc, profile: "edited-profile" },
+			dirty: true,
+		};
+
+		await expect(adapter.save(topLevelEdit)).rejects.toThrow(/unsupported edit/);
+		expect(await vault.read(DOC_PATH)).toBe(FIXTURE_JSON);
+	});
+
+	it("rejects an added or removed action rather than dropping it", async () => {
+		const vault = await seededVault();
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		const truncated: InstructionFixerModel = {
+			doc: { ...model.doc, actions: model.doc.actions.slice(0, 2) },
+			dirty: true,
+		};
+
+		await expect(adapter.save(truncated)).rejects.toThrow(/unsupported edit/);
+		expect(await vault.read(DOC_PATH)).toBe(FIXTURE_JSON);
+	});
+});
+
+describe("ObsidianInstructionSetDoc.save() — schema validation before write (PRD F4-AC2)", () => {
+	const INSERT_ACTION = {
+		id: "I04",
+		action: "insert_under_marker",
+		target_path: "Atlas/202 Notes/Existing.md",
+		anchor: { type: "heading", value: "Log" },
+		placement: "inside",
+		content: "- an entry\n",
+		applied: false,
+	};
+
+	async function vaultWithInsertAction(): Promise<{ vault: FakeVaultFS; seeded: string }> {
+		const vault = new FakeVaultFS();
+		const doc = {
+			...(rawFixture as unknown as InstructionSet),
+			action_count: 4,
+			actions: [...rawFixture.actions, INSERT_ACTION],
+		};
+		const seeded = JSON.stringify(doc, null, 2) + "\n";
+		await vault.create(DOC_PATH, seeded);
+		return { vault, seeded };
+	}
+
+	it("rejects a schema-invalid edit with a message and writes nothing", async () => {
+		const { vault, seeded } = await vaultWithInsertAction();
+		const notify = vi.fn();
+		const adapter = new ObsidianInstructionSetDoc(vault, notify);
+		const model = await adapter.load(DOC_PATH);
+
+		// `target_path` carries minLength:1 — setTargetField accepts "" verbatim
+		// (it never coerces), so the schema is the only thing standing between
+		// an empty target and the file.
+		const edited = setTargetField(model, "I04", "target_path", "");
+		expect(edited.dirty).toBe(true);
+
+		await expect(adapter.save(edited)).rejects.toThrow(
+			/ObsidianInstructionSetDoc\.save/,
+		);
+		expect(await vault.read(DOC_PATH)).toBe(seeded); // not written, not partially written
+		// The validator message is a caller-visible rejection the view renders
+		// itself — the adapter's Notice is reserved for I/O failures.
+		expect(notify).not.toHaveBeenCalled();
+	});
+
+	it("leaves the rejected edit pending — a corrected re-save then writes", async () => {
+		const { vault } = await vaultWithInsertAction();
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		const broken = setTargetField(model, "I04", "target_path", "");
+		await expect(adapter.save(broken)).rejects.toThrow();
+
+		const fixed = setTargetField(broken, "I04", "target_path", "Atlas/202 Notes/Other.md");
+		await adapter.save(fixed);
+
+		const written = JSON.parse(await vault.read(DOC_PATH)) as InstructionSet;
+		expect(fieldOf(findAction(written, "I04"), "target_path")).toBe(
+			"Atlas/202 Notes/Other.md",
+		);
 	});
 });
