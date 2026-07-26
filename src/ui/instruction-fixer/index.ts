@@ -12,6 +12,11 @@ export {
 	type InstructionFixerViewDeps,
 } from "./InstructionFixerView.js";
 export type { FixerCardContext, FixerCardRenderer } from "./fixerContract.js";
+export {
+	actionCardRenderer,
+	actionIntent,
+	renderActionCard,
+} from "./cards/renderActionCard.js";
 export { openInstructionFixer } from "./openInstructionFixer.js";
 export {
 	editGate,

@@ -1648,3 +1648,53 @@
 .hashi-if-card-body:not(:empty) {
 	margin-top: 7px;
 }
+
+/* ---- Instruction Fixer card bodies (spec-006, T3.2) ---------------------
+   Intent line, the per-kind repair fields, and the note link. The field
+   control itself is the shared TargetControl widget (.hashi-ga-target*
+   above) — only the label/value column and the row rhythm live here. */
+.hashi-if-intent {
+	color: var(--se-text);
+	line-height: 1.45;
+}
+.hashi-if-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	margin-top: 7px;
+}
+.hashi-if-field {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.hashi-if-field label {
+	flex: 0 0 106px;
+	font-size: 10px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--se-text-faint);
+}
+.hashi-if-field .hashi-ga-target {
+	flex: 1;
+	min-width: 0;
+}
+/* Read-only mirror of the input's value (no control at all — see
+   renderActionCard Decision 2). Monospace so a path or a literal match string
+   reads exactly as it is stored, incl. leading/trailing spaces. */
+.hashi-if-field-value {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--se-mono);
+	font-size: 11.5px;
+	color: var(--se-text-muted);
+	overflow-x: auto;
+	white-space: pre-wrap;
+}
+.hashi-if-note {
+	margin-top: 7px;
+	font-size: 12px;
+}
+.hashi-if-note-arrow {
+	color: var(--se-text-faint);
+}

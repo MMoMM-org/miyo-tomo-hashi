@@ -122,6 +122,7 @@ import {
 } from "./ui/garden-audit-view/index";
 import { ObsidianInstructionSetDoc } from "./instruction-fixer/ObsidianInstructionSetDoc";
 import {
+	actionCardRenderer,
 	InstructionFixerView,
 	resolveOutcomes,
 	VIEW_TYPE_INSTRUCTION_FIXER,
@@ -631,9 +632,11 @@ export default class TomoHashiPlugin extends Plugin {
 		//     closes over the module-level executionStore singleton so the view
 		//     never imports it (SDD ADR-4: the resolver is pure w.r.t. its deps).
 		//
-		//     `card` (T3.2) and `rerun` (T3.3) are deliberately unwired at T3.1:
-		//     the view renders card headers only and disables Run/Re-run until
-		//     those seams land.
+		//     `card` (T3.2) renders each card's body — intent line, per-kind
+		//     repair fields, note link. It is a stateless module-level renderer
+		//     (every per-card input arrives through `FixerCardContext`), so one
+		//     shared instance serves every leaf. `rerun` (T3.3) stays unwired:
+		//     Run/Re-run remain disabled until that seam lands.
 		this.registerView(
 			VIEW_TYPE_INSTRUCTION_FIXER,
 			(leaf: WorkspaceLeaf) =>
@@ -645,6 +648,7 @@ export default class TomoHashiPlugin extends Plugin {
 							getRunState: () => executionStore.get(),
 							logFolder: this.settings.tomoInboxFolder,
 						}),
+					card: actionCardRenderer,
 				}),
 		);
 
