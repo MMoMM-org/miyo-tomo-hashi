@@ -112,6 +112,18 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 			// touches a handful of actions, and it keeps the Fixer on the
 			// executor's single write path (ADR-9) instead of forking a
 			// batched variant.
+			//
+			// Atomicity is therefore per ACTION, not per save: if patch #k
+			// throws, patches 1..k-1 have already landed. That leaves the
+			// document schema-valid but only partially repaired — never
+			// corrupt — and it is deliberately recoverable rather than
+			// rolled back: `pristine` is NOT advanced below on the throw
+			// path, so it still describes the state the pending edits were
+			// computed against. Re-saving the same (still-dirty) model
+			// re-derives ALL patches; the ones that already landed rewrite
+			// identical values and the failed one finally applies, so a
+			// retry converges. Reloading recovers just as cleanly, since
+			// load() re-baselines `pristine` on what is actually on disk.
 			for (const { actionId, patch } of patches) {
 				await markActionFields(this.vault, docPath, actionId, patch);
 			}

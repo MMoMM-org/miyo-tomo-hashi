@@ -30,34 +30,60 @@ const DOC_PATH = "100 Inbox/2026-07-20_1015_instructions.json";
 const MD_PEER_PATH = "100 Inbox/2026-07-20_1015_instructions.md";
 
 /**
- * A VaultFS whose write primitives reject for one specific path — drives the
- * save() failure path. `processJSON` has to fail independently of `process`:
- * FakeVaultFS.processJSON calls its OWN `this.process`, so wrapping `process`
- * alone would never be seen by the markActionFields write path.
+ * Explicit delegating wrapper around a VaultFS, with per-method overrides.
+ * Written out method-by-method rather than spread: `FakeVaultFS`'s methods
+ * live on the prototype, so `{ ...base }` would produce an empty object.
  */
-function withFailingWrite(base: VaultFS, failPath: string): VaultFS {
+function delegating(base: VaultFS, overrides: Partial<VaultFS>): VaultFS {
 	return {
 		read: (path) => base.read(path),
 		cachedRead: (path) => base.cachedRead(path),
 		readJSON: (path) => base.readJSON(path),
 		exists: (path) => base.exists(path),
 		list: (folder) => base.list(folder),
-		process: async (path, transform) => {
-			if (path === failPath) throw new Error("disk full");
-			await base.process(path, transform);
-		},
+		process: (path, transform) => base.process(path, transform),
+		processJSON: (path, transform) => base.processJSON(path, transform),
+		rename: (from, to) => base.rename(from, to),
+		createFolder: (path) => base.createFolder(path),
+		trash: (path) => base.trash(path),
+		create: (path, content) => base.create(path, content),
+		...overrides,
+	};
+}
+
+/**
+ * A VaultFS whose writes to one path reject — drives the save() failure path.
+ * Only `processJSON` is faulted: since T1.5 `save()` writes exclusively through
+ * `markActionFields`, so `process`/`create` are no longer on the save path at
+ * all (and faulting `process` would be invisible anyway — FakeVaultFS.processJSON
+ * calls its OWN `this.process`, not the wrapper's).
+ */
+function withFailingWrite(base: VaultFS, failPath: string): VaultFS {
+	return delegating(base, {
 		processJSON: async (path, transform) => {
 			if (path === failPath) throw new Error("disk full");
 			await base.processJSON(path, transform);
 		},
-		rename: (from, to) => base.rename(from, to),
-		createFolder: (path) => base.createFolder(path),
-		trash: (path) => base.trash(path),
-		create: async (path, content) => {
-			if (path === failPath) throw new Error("disk full");
-			await base.create(path, content);
+	});
+}
+
+/**
+ * A VaultFS that lets the first `failOnCall - 1` writes to `failPath` through
+ * and rejects exactly the `failOnCall`-th — the multi-patch partial-failure
+ * window. Counts across ALL save() calls on the same adapter, so a later retry
+ * runs clean and can be asserted on.
+ */
+function withNthWriteFailing(base: VaultFS, failPath: string, failOnCall: number): VaultFS {
+	let seen = 0;
+	return delegating(base, {
+		processJSON: async (path, transform) => {
+			if (path === failPath) {
+				seen += 1;
+				if (seen === failOnCall) throw new Error(`disk full on write ${seen}`);
+			}
+			await base.processJSON(path, transform);
 		},
-	};
+	});
 }
 
 const FIXTURE_JSON = JSON.stringify(rawFixture, null, 2) + "\n";
@@ -81,8 +107,15 @@ const FIXTURE_JSON_ON_DISK = readFileSync(
 const I01_PATH_BEFORE = "Atlas/200 Maps/Hobbies (MOC).md";
 const I01_PATH_AFTER = "Atlas/200 Maps/Hobbies (MOC) v2.md";
 
+const I02_REPLACE_AFTER = "[[Recovered Note]]";
+
 function repointI01(model: InstructionFixerModel): InstructionFixerModel {
 	return setTargetField(model, "I01", "target_moc_path", I01_PATH_AFTER);
+}
+
+/** A second, independent action edit — used to drive multi-patch saves. */
+function repairI02(model: InstructionFixerModel): InstructionFixerModel {
+	return setTargetField(model, "I02", "replace", I02_REPLACE_AFTER);
 }
 
 function findAction(set: InstructionSet, id: string): Action | undefined {
@@ -355,6 +388,108 @@ describe("ObsidianInstructionSetDoc.save() — ADR-9 single-writer discipline", 
 
 		await expect(adapter.save(truncated)).rejects.toThrow(/unsupported edit/);
 		expect(await vault.read(DOC_PATH)).toBe(FIXTURE_JSON);
+	});
+});
+
+describe("ObsidianInstructionSetDoc.save() — multi-patch saves", () => {
+	it("applies every changed action in one save, one atomic write each", async () => {
+		const vault = await seededVault();
+		const processJSONSpy = vi.spyOn(vault, "processJSON");
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		await adapter.save(repairI02(repointI01(model)));
+
+		expect(processJSONSpy).toHaveBeenCalledTimes(2); // one per changed action
+		const written = JSON.parse(await vault.read(DOC_PATH)) as InstructionSet;
+		expect(fieldOf(findAction(written, "I01"), "target_moc_path")).toBe(I01_PATH_AFTER);
+		expect(fieldOf(findAction(written, "I02"), "replace")).toBe(I02_REPLACE_AFTER);
+		// The untouched third action keeps every field, including `applied`.
+		expect(findAction(written, "I03")).toEqual(rawFixture.actions[2]);
+	});
+
+	it("only re-writes what changed since the last successful save (pristine advances)", async () => {
+		const vault = await seededVault();
+		const adapter = new ObsidianInstructionSetDoc(vault);
+		const model = await adapter.load(DOC_PATH);
+
+		const afterFirstEdit = repointI01(model);
+		await adapter.save(afterFirstEdit);
+
+		// A third party repoints I01 again after the Fixer's save landed. The
+		// Fixer's SECOND save must not resurrect its own now-superseded value:
+		// I01 is no longer a pending edit once it has been written.
+		await vault.processJSON<InstructionSet>(DOC_PATH, (set) => ({
+			...set,
+			actions: set.actions.map((a) =>
+				a.id === "I01" ? ({ ...a, target_moc_path: "Atlas/200 Maps/Elsewhere.md" } as Action) : a,
+			),
+		}));
+
+		const processJSONSpy = vi.spyOn(vault, "processJSON");
+		await adapter.save(repairI02(afterFirstEdit));
+
+		expect(processJSONSpy).toHaveBeenCalledTimes(1); // I02 only
+		const written = JSON.parse(await vault.read(DOC_PATH)) as InstructionSet;
+		expect(fieldOf(findAction(written, "I01"), "target_moc_path")).toBe(
+			"Atlas/200 Maps/Elsewhere.md",
+		);
+		expect(fieldOf(findAction(written, "I02"), "replace")).toBe(I02_REPLACE_AFTER);
+	});
+
+	it("leaves a partially-applied save recoverable: the same model re-saved converges", async () => {
+		// The write is atomic PER ACTION, not per save — N patches are N
+		// processJSON cycles. If the 2nd fails, the 1st has already landed.
+		// The contract: `pristine` is NOT advanced on failure, so it still
+		// describes the last state the user's edits were computed against, and
+		// re-saving the same (still dirty) model re-derives BOTH patches. Patch
+		// #1 is a no-op rewrite of the value already on disk, patch #2 finally
+		// lands — so retry converges instead of losing the second edit.
+		const vault = await seededVault();
+		const failing = withNthWriteFailing(vault, DOC_PATH, 2);
+		const notify = vi.fn();
+		const adapter = new ObsidianInstructionSetDoc(failing, notify);
+		const model = await adapter.load(DOC_PATH);
+		const edited = repairI02(repointI01(model));
+		const snapshotBefore = JSON.parse(JSON.stringify(edited)) as InstructionFixerModel;
+
+		await expect(adapter.save(edited)).rejects.toThrow("disk full on write 2");
+
+		// Partial state: patch #1 landed, patch #2 did not. No corruption — the
+		// document is still schema-valid, it just holds one of the two repairs.
+		const afterFailure = JSON.parse(await vault.read(DOC_PATH)) as InstructionSet;
+		expect(fieldOf(findAction(afterFailure, "I01"), "target_moc_path")).toBe(I01_PATH_AFTER);
+		expect(fieldOf(findAction(afterFailure, "I02"), "replace")).toBe("");
+		expect(notify).toHaveBeenCalledTimes(1);
+		expect(edited).toEqual(snapshotBefore); // model untouched — still dirty, still retryable
+
+		// Retry the very same model: both patches are re-derived and re-sent.
+		await adapter.save(edited);
+
+		const afterRetry = JSON.parse(await vault.read(DOC_PATH)) as InstructionSet;
+		expect(fieldOf(findAction(afterRetry, "I01"), "target_moc_path")).toBe(I01_PATH_AFTER);
+		expect(fieldOf(findAction(afterRetry, "I02"), "replace")).toBe(I02_REPLACE_AFTER);
+		expect(findAction(afterRetry, "I03")).toEqual(rawFixture.actions[2]);
+	});
+
+	it("a partially-applied save is also recoverable by reloading — no phantom pending edits", async () => {
+		const vault = await seededVault();
+		const failing = withNthWriteFailing(vault, DOC_PATH, 2);
+		const adapter = new ObsidianInstructionSetDoc(failing, vi.fn());
+		const model = await adapter.load(DOC_PATH);
+
+		await expect(adapter.save(repairI02(repointI01(model)))).rejects.toThrow("disk full");
+
+		// load() re-reads the partially-written document and re-baselines
+		// `pristine` on it, so the already-landed I01 repair is not re-offered
+		// as a pending change and a fresh unedited save is a genuine no-op.
+		const reloaded = await adapter.load(DOC_PATH);
+		expect(fieldOf(findAction(reloaded.doc, "I01"), "target_moc_path")).toBe(I01_PATH_AFTER);
+
+		const processJSONSpy = vi.spyOn(vault, "processJSON");
+		await adapter.save({ doc: reloaded.doc, dirty: true });
+
+		expect(processJSONSpy).not.toHaveBeenCalled();
 	});
 });
 

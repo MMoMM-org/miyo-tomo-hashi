@@ -55,9 +55,20 @@ export interface InstructionSetDoc {
 	load(docPath: string): Promise<{ doc: InstructionSet; dirty: false }>;
 
 	/**
-	 * Persist the WHOLE model as JSON only (ADR-7 — no sibling `.md` write,
+	 * Persist the model as JSON only (ADR-7 — no sibling `.md` write,
 	 * `tomo.sources` untouched). Dirty-gated: a no-op when `model.dirty` is
-	 * false. Writes `model.doc` VERBATIM.
+	 * false.
+	 *
+	 * ADR-9 — NOT a whole-document write: the implementation validates the
+	 * whole edited document, then derives per-action field patches (edited
+	 * model vs. the load-time state) and merges each onto whatever is
+	 * CURRENTLY on disk, through the executor's own atomic write path. So
+	 * fields the user didn't touch — including an `applied: true` the executor
+	 * flushed since `load()` — are preserved by construction rather than
+	 * replayed from a possibly-stale in-memory snapshot. Rejects (writing
+	 * nothing) when the edited document fails schema validation, and when a
+	 * change can't be expressed as a per-action field patch. See the ADR-9
+	 * block comment in `src/instruction-fixer/ObsidianInstructionSetDoc.ts`.
 	 */
 	save(model: InstructionFixerModel): Promise<void>;
 }
