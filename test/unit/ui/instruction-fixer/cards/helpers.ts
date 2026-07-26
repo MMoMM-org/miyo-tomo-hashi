@@ -10,8 +10,7 @@
 
 import { TARGET_FIELD_WHITELIST } from "../../../../../src/instruction-fixer/transforms";
 import type { Action, ActionKind, InstructionSet } from "../../../../../src/schema/types";
-
-export type RepairKind = keyof typeof TARGET_FIELD_WHITELIST;
+import type { RepairKind } from "../../../../../src/ui/instruction-fixer/cards/targetFields";
 
 /** The 7 repair kinds, read off the whitelist so the sweep cannot drift. */
 export function repairKinds(): readonly RepairKind[] {

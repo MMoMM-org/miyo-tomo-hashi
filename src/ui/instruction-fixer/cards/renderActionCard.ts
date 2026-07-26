@@ -70,11 +70,23 @@ function anchorText(value: string | null): string {
  * all. Unlike the run log's `buildSummary`, this may name note content: it is
  * rendered locally into the user's own editor and never persisted anywhere
  * (Constitution Privacy L2 governs audit traces, not on-screen text).
+ *
+ * Quoting rule: LITERAL text — a title, a line to write, a match/replace
+ * string, an anchor's or marker's match text — is quoted, because whitespace
+ * and emptiness are part of its meaning and only quotes make that visible.
+ * Paths and bare stems are identifiers and stay unquoted.
+ *
+ * Every path the action names appears here, including ones the card offers no
+ * field for. `create_moc` is the case that forced the rule: it is mechanically
+ * a move (`source` → `destination`), it carries no repair field, its note link
+ * points at the destination — and its most common failure, "Source missing —
+ * nothing to move", interpolates no path at all. Without `source` in this
+ * sentence the user could not tell which file went missing.
  */
 export function actionIntent(action: Action): string {
 	switch (action.action) {
 		case "create_moc":
-			return `Create MOC ${quote(action.title)} at ${action.destination}`;
+			return `Create MOC ${quote(action.title)} at ${action.destination} (from ${action.source})`;
 		case "move_note":
 			return `Move ${action.source} → ${action.destination}`;
 		case "link_to_moc":
@@ -84,7 +96,7 @@ export function actionIntent(action: Action): string {
 		case "replace_section":
 			return `Replace section ${anchorText(action.anchor.value)} in ${action.target_path}`;
 		case "add_relationship":
-			return `Add ${quote(action.line)} under ${action.marker} in ${action.target_moc_path}`;
+			return `Add ${quote(action.line)} under ${quote(action.marker)} in ${action.target_moc_path}`;
 		case "edit_note_text":
 			return action.replace === ""
 				? `Delete ${quote(action.match)} in ${action.path} (${action.occurrence ?? "first"})`

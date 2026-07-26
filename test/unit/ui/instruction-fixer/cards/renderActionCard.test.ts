@@ -22,13 +22,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ActionOutcome } from "../../../../../src/executor/state";
 import { TARGET_FIELD_WHITELIST } from "../../../../../src/instruction-fixer/transforms";
-import type { Action, InstructionSet } from "../../../../../src/schema/types";
+import type { Action, ActionKind, InstructionSet } from "../../../../../src/schema/types";
 import {
 	actionIntent,
 	affectedNotePath,
 	renderActionCard,
 } from "../../../../../src/ui/instruction-fixer/cards/renderActionCard";
-import { targetFieldsFor } from "../../../../../src/ui/instruction-fixer/cards/targetFields";
+import {
+	readTargetFieldValue,
+	targetFieldsFor,
+} from "../../../../../src/ui/instruction-fixer/cards/targetFields";
 import type { FixerCardContext } from "../../../../../src/ui/instruction-fixer/fixerContract";
 import { InstructionFixerView } from "../../../../../src/ui/instruction-fixer/InstructionFixerView";
 import type { EditGateResult } from "../../../../../src/ui/instruction-fixer/outcomeSource";
@@ -149,6 +152,25 @@ describe("intent line (PRD F2-AC1, F2-AC4)", () => {
 		expect(intent?.querySelector(".hashi-se-wlink")).toBeNull();
 	});
 
+	/**
+	 * `create_moc` has no repair field and its note link points at the
+	 * destination, so the intent is the ONLY place its `source` can appear —
+	 * and "Source missing — nothing to move" (createMoc.ts:64) names no path
+	 * itself. Without this the failure's subject is unnameable on the card.
+	 */
+	it("names both paths of a create_moc — its most common failure names neither", () => {
+		expect(actionIntent(SAMPLES.create_moc)).toBe(
+			'Create MOC "Systems" at Atlas/200 Maps/Systems (MOC).md (from 100 Inbox/Kanban.md)',
+		);
+	});
+
+	it("quotes literal match text and leaves paths and stems unquoted", () => {
+		// `marker` is match text like an anchor, so it quotes; the MOC path does not.
+		expect(actionIntent(SAMPLES.add_relationship)).toBe(
+			'Add "- [[Kanban]]" under "down::" in Atlas/200 Maps/Systems (MOC).md',
+		);
+	});
+
 	it("has an intent for every wire kind", () => {
 		for (const action of Object.values(SAMPLES) as Action[]) {
 			expect(actionIntent(action).length).toBeGreaterThan(0);
@@ -244,6 +266,11 @@ describe("target fields — the 7 repair kinds, driven off TARGET_FIELD_WHITELIS
 					? (edited as { anchor: { value: string | null } }).anchor.value
 					: (edited as unknown as Record<string, unknown>)[field.key],
 			).toBe(`repaired-${field.key}`);
+			// Drift guard: the card READS a field through `readTargetFieldValue`
+			// and WRITES it through `setTargetField`, two independent handlers of
+			// `anchor`'s nested shape. Reading back what the write landed proves
+			// they still agree — for every whitelisted field, not just `anchor`.
+			expect(readTargetFieldValue(edited, field.key)).toBe(`repaired-${field.key}`);
 		});
 	});
 
@@ -359,11 +386,45 @@ describe("edit gate (PRD F3)", () => {
 // --- note navigation ---------------------------------------------------------
 
 describe("note link (PRD F6)", () => {
-	it("names the note each kind actually touches", () => {
-		expect(affectedNotePath(SAMPLES.edit_note_text)).toBe("Atlas/202 Notes/Existing.md");
-		expect(affectedNotePath(SAMPLES.link_to_moc)).toBe("Atlas/200 Maps/Systems (MOC).md");
-		expect(affectedNotePath(SAMPLES.move_note)).toBe("Atlas/202 Notes/Kanban.md");
-		expect(affectedNotePath(SAMPLES.update_log_entry)).toBe("300 Journal/2026-07-26.md");
+	/**
+	 * Every kind's expected link target, checked against the handler that
+	 * actually performs it (`src/actions/*.ts`) — a `Record<ActionKind, …>` so
+	 * a new wire kind cannot be added without stating what its card links to,
+	 * and a swapped field in any of the 14 branches fails here.
+	 */
+	const EXPECTED_NOTE: Record<ActionKind, string | null> = {
+		// createMoc.ts moves source → destination; the destination is the note
+		// the action is trying to produce (the source is named in the intent).
+		create_moc: "Atlas/200 Maps/Systems (MOC).md",
+		move_note: "Atlas/202 Notes/Kanban.md",
+		// linkToMoc.ts:60 resolves `target_moc_path ?? target_moc` — same order.
+		link_to_moc: "Atlas/200 Maps/Systems (MOC).md",
+		insert_under_marker: "Atlas/202 Notes/Board.md",
+		replace_section: "Atlas/202 Notes/Board.md",
+		// addRelationship.ts:43 reads/writes target_moc_path.
+		add_relationship: "Atlas/200 Maps/Systems (MOC).md",
+		edit_note_text: "Atlas/202 Notes/Existing.md",
+		remove_up_link: "Atlas/202 Notes/Existing.md",
+		resolve_dead_link: "Atlas/202 Notes/Existing.md",
+		// The update_* kinds all write into the daily note, never the stem they
+		// mention (updateLogLink.ts:32 — target_stem is link TEXT, not a target).
+		update_tracker: "300 Journal/2026-07-26.md",
+		update_log_entry: "300 Journal/2026-07-26.md",
+		update_log_link: "300 Journal/2026-07-26.md",
+		// deleteSource.ts:33 trashes source_path.
+		delete_source: "100 Inbox/Kanban.md",
+		skip: "100 Inbox/Unclear.md",
+	};
+
+	it.each(Object.keys(SAMPLES) as ActionKind[])(
+		"%s links to the note that kind actually touches",
+		(kind) => {
+			expect(affectedNotePath(SAMPLES[kind])).toBe(EXPECTED_NOTE[kind]);
+		},
+	);
+
+	it("carries no note target when `skip` names no source", () => {
+		expect(affectedNotePath({ id: "I20", action: "skip", source_path: null })).toBeNull();
 	});
 
 	it("opens the note BESIDE the editor on click", () => {
