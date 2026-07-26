@@ -137,24 +137,38 @@ interface SaveFailure {
 	readonly total: number;
 }
 
+/**
+ * The panel's headline — what happened to the document, in plain language.
+ *
+ * Deliberately NOT the error's own message: that string is written for a
+ * developer reading a stack trace (class name, method name, "ADR-9",
+ * "per-action field patches") and names things the reader cannot act on. It
+ * stays on the error object for logs and tests, and is demoted to the detail
+ * line below the recovery instruction.
+ */
+function saveErrorHeadline(failure: SaveFailure): string {
+	if (failure.landed === null) return "Couldn't confirm whether your repairs were saved.";
+	if (failure.landed === 0) return "Couldn't save your repairs — nothing was written.";
+	return `Wrote ${failure.landed} of ${failure.total} repairs, then hit a problem.`;
+}
+
 /** The recovery instruction for a failed Save. See `SaveFailure`. */
 function saveErrorHint(failure: SaveFailure): string {
 	if (failure.landed === null) {
 		return (
-			"Hashi couldn't tell how much of this save was written. Your edits are still " +
-			"pending: save again to re-send every repair, or revert to reload from disk."
+			"Your edits are still pending: save again to re-send every repair, or revert " +
+			"to reload from disk."
 		);
 	}
 	if (failure.landed === 0) {
 		return (
-			"Nothing was written — the set on disk is unchanged. Your edits are still " +
-			"pending: fix the problem above and save again."
+			"The set on disk is unchanged and your edits are still pending. Check the " +
+			"details below, then save again."
 		);
 	}
 	return (
-		`${failure.landed} of ${failure.total} repaired actions were written before the ` +
-		"failure, so the set is partly repaired (and still valid). Your edits are still " +
-		"pending: save again to write the rest, or revert to reload from disk."
+		"The set is partly repaired and still valid. Your edits are still pending: save " +
+		"again to write the rest, or revert to reload from disk."
 	);
 }
 
@@ -460,8 +474,12 @@ export class InstructionFixerView extends ItemView {
 		const error = this.saveError;
 		if (error === null) return;
 		const panel = body.createDiv({ cls: "hashi-if-save-error" });
-		panel.createDiv({ text: `Save failed: ${error.message}` });
+		panel.createDiv({ cls: "hashi-if-save-error-head", text: saveErrorHeadline(error) });
 		panel.createDiv({ cls: "hashi-if-save-error-hint", text: saveErrorHint(error) });
+		// The raw diagnostic, last and de-emphasised: it names the failing value
+		// or the underlying I/O error, which is worth showing, but it is not the
+		// sentence the user should read first.
+		panel.createDiv({ cls: "hashi-if-save-error-detail", text: error.message });
 	}
 
 	private renderNoSignalBanner(body: HTMLElement): void {
@@ -580,6 +598,17 @@ export class InstructionFixerView extends ItemView {
 		try {
 			await this.deps.adapter.save(savedModel);
 		} catch (err) {
+			// Same reference-identity discipline as the success path below, and
+			// for the same reason. `setState` — re-invoking the opener on another
+			// set — is NOT gated by `saving` the way Revert is: it calls
+			// loadAndRender() directly, which swaps in a new store and docPath and
+			// clears saveError. A stale save rejecting after that must not
+			// repopulate an error against the document now on screen, which was
+			// never written to. The failure dies with the model it belonged to:
+			// the retarget already discarded those edits, so there is nothing left
+			// to retry or revert, and the adapter has surfaced its own Notice for
+			// the I/O case regardless.
+			if (this.store !== savedStore) return;
 			this.saveError = {
 				message: err instanceof Error ? err.message : String(err),
 				// The adapter is the only component that knows how far its

@@ -1538,10 +1538,21 @@
 	font-size: 12.5px;
 	line-height: 1.4;
 }
+.hashi-if-save-error-head {
+	font-weight: 600;
+}
 .hashi-if-save-error-hint {
 	margin-top: 4px;
 	color: var(--se-text-muted);
 	font-size: 12px;
+}
+.hashi-if-save-error-detail {
+	margin-top: 6px;
+	font-family: var(--se-mono);
+	font-size: 11px;
+	color: var(--se-text-faint);
+	overflow-x: auto;
+	white-space: pre-wrap;
 }
 .hashi-if-banner {
 	display: flex;

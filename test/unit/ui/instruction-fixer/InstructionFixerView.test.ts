@@ -246,6 +246,20 @@ function cardEl(view: InstructionFixerView, id: string): HTMLElement | null {
 	return view.contentEl.querySelector(`.hashi-if-card[data-action-id="${id}"]`);
 }
 
+function savePanel(view: InstructionFixerView): {
+	head: string;
+	hint: string;
+	detail: string;
+} | null {
+	const panel = view.contentEl.querySelector(".hashi-if-save-error");
+	if (panel === null) return null;
+	return {
+		head: panel.querySelector(".hashi-if-save-error-head")?.textContent ?? "",
+		hint: panel.querySelector(".hashi-if-save-error-hint")?.textContent ?? "",
+		detail: panel.querySelector(".hashi-if-save-error-detail")?.textContent ?? "",
+	};
+}
+
 function clickBodyButton(view: InstructionFixerView, text: string): void {
 	const btn = Array.from(bodyEl(view)?.querySelectorAll("button") ?? []).find(
 		(b) => b.textContent === text,
@@ -584,11 +598,12 @@ describe("InstructionFixerView — Save affordance", () => {
 		findActionButton(view, "Save").click();
 		await flushAsyncHandler();
 
-		const panel = view.contentEl.querySelector(".hashi-if-save-error");
-		expect(panel?.textContent).toContain("disk full");
-		expect(panel?.textContent).toContain("couldn't tell how much of this save was written");
-		// Neither of the two confident claims may be made on an untagged error.
-		expect(panel?.textContent).not.toContain("Nothing was written");
+		const panel = savePanel(view);
+		expect(panel?.head).toBe("Couldn't confirm whether your repairs were saved.");
+		expect(panel?.detail).toContain("disk full");
+		// Neither confident claim may be made on an untagged error.
+		expect(panel?.head).not.toContain("nothing was written");
+		expect(panel?.hint).not.toContain("partly repaired");
 		expect(dirtyBadge(view)).not.toBeNull();
 		expect(findActionButton(view, "Save").disabled).toBe(false);
 	});
@@ -617,10 +632,11 @@ describe("InstructionFixerView — Save affordance", () => {
 		await flushAsyncHandler();
 
 		expect(adapter.save).not.toHaveBeenCalled();
-		const panel = view.contentEl.querySelector(".hashi-if-save-error");
-		expect(panel?.textContent).toContain("Save failed");
-		expect(panel?.textContent).toContain("Nothing was written");
-		expect(panel?.textContent).not.toContain("Some actions may already have been written");
+		const panel = savePanel(view);
+		expect(panel?.head).toBe("Couldn't save your repairs — nothing was written.");
+		expect(panel?.hint).toContain("The set on disk is unchanged");
+		// The validator's own message survives, as the de-emphasised detail line.
+		expect(panel?.detail).not.toBe("");
 		// The edit stays pending — the user's work is never discarded.
 		expect(dirtyBadge(view)).not.toBeNull();
 		expect(findActionButton(view, "Save").disabled).toBe(false);
@@ -646,10 +662,16 @@ describe("InstructionFixerView — Save affordance", () => {
 		findActionButton(view, "Save").click();
 		await flushAsyncHandler();
 
-		const panel = view.contentEl.querySelector(".hashi-if-save-error");
-		expect(panel?.textContent).toContain("unsupported edit");
-		expect(panel?.textContent).toContain("Nothing was written");
-		expect(panel?.textContent).not.toContain("may already have been written");
+		const panel = savePanel(view);
+		expect(panel?.head).toBe("Couldn't save your repairs — nothing was written.");
+		expect(panel?.hint).not.toContain("write the rest");
+		expect(panel?.detail).toContain("unsupported edit");
+		// The headline and the recovery instruction stay free of internals the
+		// reader cannot act on; only the detail line carries the raw diagnostic.
+		for (const jargon of ["ObsidianInstructionSetDoc", "ADR-9", "field patches"]) {
+			expect(panel?.head).not.toContain(jargon);
+			expect(panel?.hint).not.toContain(jargon);
+		}
 		expect(dirtyBadge(view)).not.toBeNull();
 	});
 
@@ -665,10 +687,10 @@ describe("InstructionFixerView — Save affordance", () => {
 		findActionButton(view, "Save").click();
 		await flushAsyncHandler();
 
-		const panel = view.contentEl.querySelector(".hashi-if-save-error");
-		expect(panel?.textContent).toContain("disk full on write 2");
-		expect(panel?.textContent).toContain("1 of 3");
-		expect(panel?.textContent).toContain("save again to write the rest");
+		const panel = savePanel(view);
+		expect(panel?.head).toBe("Wrote 1 of 3 repairs, then hit a problem.");
+		expect(panel?.hint).toContain("save again to write the rest");
+		expect(panel?.detail).toBe("disk full on write 2");
 		expect(dirtyBadge(view)).not.toBeNull();
 	});
 
@@ -739,6 +761,40 @@ describe("InstructionFixerView — save/dirty race guard", () => {
 		expect(findActionButton(view, "Revert").disabled).toBe(false);
 		expect(dirtyBadge(view)?.textContent).toContain("Edited");
 		expect(findActionButton(view, "Save").disabled).toBe(false);
+	});
+
+	it("a save that FAILS after a retarget does not blame the newly-loaded document", async () => {
+		// The mirror image of the success-path guard: `setState` (re-invoking the
+		// opener on another set) is not gated by `saving` the way Revert is, so a
+		// stale save can reject after the leaf already shows a different, clean
+		// document. Its error belongs to the model that was being written — never
+		// to the one now on screen.
+		let rejectSave: (err: Error) => void = () => {};
+		const pendingSave = new Promise<void>((_resolve, reject) => {
+			rejectSave = reject;
+		});
+		const adapter = makeSpyAdapter();
+		adapter.save.mockImplementation(() => pendingSave);
+		const view = makeView(adapter, { card: makeDirtyingCard() });
+		await view.onOpen();
+		clickBodyButton(view, "dirty I07");
+
+		findActionButton(view, "Save").click();
+		await Promise.resolve();
+		expect(adapter.save).toHaveBeenCalledTimes(1);
+
+		const otherPath = "100 Inbox/2026-07-21_0900_instructions.json";
+		await view.setState({ docPath: otherPath }, { history: false });
+
+		rejectSave(new Error("disk full"));
+		await flushAsyncHandler();
+
+		expect(view.contentEl.querySelector(".hashi-if-save-error")).toBeNull();
+		expect(view.getState()).toEqual({ docPath: otherPath });
+		// The freshly-loaded document is clean and fully usable.
+		expect(dirtyBadge(view)).toBeNull();
+		expect(findActionButton(view, "Save").disabled).toBe(true);
+		expect(findActionButton(view, "Revert").disabled).toBe(false);
 	});
 
 	it("a revert that lands while a save is in flight does not clear the reloaded store's state", async () => {
