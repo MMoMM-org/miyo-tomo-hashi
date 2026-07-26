@@ -56,9 +56,9 @@ interface ActionPatch {
  * Adapter-private on purpose — the SDD pins `InstructionFixerModel` to
  * `{doc, dirty}`, so change tracking cannot live on the model. `pristine`
  * advances in place after each successful save (a second save then only writes
- * what changed since the first) while the TOKEN ITSELF stays put for the whole
- * life of one `load()`, which is what makes reference identity a reliable
- * answer to "is this still the document that save started on?".
+ * what changed since the first), while the TOKEN ITSELF stays put for the whole
+ * life of one `load()` — so holding a reference to it is the same thing as
+ * holding onto that particular load.
  */
 interface ActiveDoc {
 	readonly docPath: string;
@@ -105,14 +105,15 @@ export class InstructionSetSaveError extends Error {
 
 export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 	/**
-	 * The one active document, replaced wholesale by every `load()`.
+	 * The one active document, replaced wholesale by every `load()` — never
+	 * mutated in place, which is what makes the replacement observable.
 	 *
-	 * The OBJECT is the document's identity (T3.1 review). `save()` captures it
-	 * at entry and compares by reference before advancing the baseline, so a
-	 * save still in flight when the view retargets the leaf cannot write its
-	 * result through to the document the adapter has since moved on to. A path
-	 * string would not do: a retarget can legitimately land back on the same
-	 * path, and that reload is still a different baseline.
+	 * `save()` captures this token at entry and works through the capture for
+	 * the rest of its run, so a save still in flight when the view retargets
+	 * the leaf can neither write to the new document nor advance its baseline:
+	 * the token it holds is simply no longer anyone's (T3.1 review). This is
+	 * per-LOAD, not per-path — a retarget can legitimately land back on the
+	 * same `docPath`, and that reload is still a different baseline.
 	 */
 	private active: ActiveDoc | null = null;
 
@@ -204,16 +205,15 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 			throw new InstructionSetSaveError(reason, landed, patches.length, err);
 		}
 
-		// Advance the baseline ONLY while this is still the active document. The
-		// write above targeted `docPath` correctly either way, but a `load()`
-		// that landed mid-save has already installed a new token with its own
-		// baseline — writing this document's snapshot into it would leave the
-		// NEW document diffing against the OLD one's content, which derives
-		// patches for fields the user never edited (or, more often, rejects
-		// every further save as an "unsupported edit" until a reload). There is
-		// simply no longer a baseline for this document to advance, so skipping
-		// is the whole fix: the stale save's own document is gone.
-		if (this.active === active) active.pristine = deepCopy(model.doc);
+		// Advance the baseline through the token captured at entry, never through
+		// `this` — that is the whole invariant. A `load()` landing mid-save
+		// replaces `this.active` wholesale, which orphans this token, so the
+		// advance is then inert by construction and the newly-loaded document
+		// keeps the baseline its own `load()` installed. Assigning to
+		// `this.pristine` instead would leave the NEW document diffing against
+		// the OLD one's content — deriving patches for fields the user never
+		// edited, or rejecting every further save until a reload.
+		active.pristine = deepCopy(model.doc);
 	}
 
 	/**
@@ -254,9 +254,9 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 	}
 
 	/**
-	 * The active document's token — path, baseline AND identity in one object,
-	 * so a caller that captures it can later ask "is this still the document I
-	 * started on?" with `===` rather than by comparing paths.
+	 * The active document's token — path and baseline in one object, so a
+	 * caller binds both at once and cannot later drift onto a different
+	 * document's state by reading `this` again.
 	 */
 	private requireActiveDoc(): ActiveDoc {
 		const active = this.active;

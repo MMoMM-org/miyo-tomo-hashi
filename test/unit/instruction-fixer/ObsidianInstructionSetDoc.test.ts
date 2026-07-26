@@ -723,4 +723,47 @@ describe("ObsidianInstructionSetDoc.save() — a retarget mid-save", () => {
 		expect(fieldOf(findAction(writtenB, "I02"), "replace")).toBe(I02_REPLACE_AFTER);
 		expect(fieldOf(findAction(writtenB, "I01"), "target_moc_path")).toBe(I01_PATH_BEFORE);
 	});
+
+	it("does not clobber a RELOAD of the same path either — identity is per load, not per path", async () => {
+		// The case a `docPath` comparison cannot see: the retarget lands back on
+		// the document already open, but the file changed underneath (a third
+		// party edited it between the two loads), so the second load's baseline
+		// is genuinely different from the first's.
+		const base = await seededVault();
+		const thirdParty = JSON.parse(JSON.stringify(rawFixture)) as InstructionSet;
+		const { vault, release, entered } = withGatedWrite(base, DOC_PATH);
+		const adapter = new ObsidianInstructionSetDoc(vault, vi.fn());
+
+		const modelA = await adapter.load(DOC_PATH);
+		const savingA = adapter.save(repointI01(modelA));
+		await entered;
+
+		// Someone else rewrites the file, and the leaf reloads the same path.
+		const edited = {
+			...thirdParty,
+			actions: thirdParty.actions.map((a) =>
+				a.id === "I02" ? { ...a, replace: "[[Third Party]]" } : a,
+			),
+		};
+		await base.process(DOC_PATH, () => `${JSON.stringify(edited, null, 2)}\n`);
+		const modelB = await adapter.load(DOC_PATH);
+		expect(fieldOf(findAction(modelB.doc, "I02"), "replace")).toBe("[[Third Party]]");
+
+		release();
+		await savingA;
+
+		// The reload's baseline is intact: an unedited save writes nothing, even
+		// though the stale save has since changed the file.
+		const onDisk = await base.read(DOC_PATH);
+		await adapter.save({ doc: modelB.doc, dirty: true });
+		expect(await base.read(DOC_PATH)).toBe(onDisk);
+
+		// ...and an edited save patches only what the user actually changed —
+		// I01 keeps the stale save's value rather than being reverted to the
+		// first load's snapshot.
+		await adapter.save(repairI02(modelB));
+		const written = JSON.parse(await base.read(DOC_PATH)) as InstructionSet;
+		expect(fieldOf(findAction(written, "I02"), "replace")).toBe(I02_REPLACE_AFTER);
+		expect(fieldOf(findAction(written, "I01"), "target_moc_path")).toBe(I01_PATH_AFTER);
+	});
 });
