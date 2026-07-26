@@ -12,6 +12,9 @@
  * peer or its `tomo.sources` block.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
 
 import { ObsidianInstructionSetDoc } from "../../../src/instruction-fixer/ObsidianInstructionSetDoc.js";
@@ -48,6 +51,18 @@ function withFailingWrite(base: VaultFS, failPath: string): VaultFS {
 }
 
 const FIXTURE_JSON = JSON.stringify(rawFixture, null, 2) + "\n";
+
+// Real on-disk oracle — the fixture's LITERAL bytes, independent of any
+// re-derivation through JSON.stringify(rawFixture, ...). The round-trip
+// test below seeds with and asserts against THIS constant, not FIXTURE_JSON,
+// so it can actually detect a fixture whose on-disk formatting diverges from
+// canonical `JSON.stringify(x, null, 2) + "\n"` (different indentation,
+// CRLF, hand-edited key order) — the exact failure mode "verbatim
+// round-trip" exists to catch (additionalProperties:false everywhere).
+const FIXTURE_JSON_ON_DISK = readFileSync(
+	resolve(__dirname, "../../fixtures/instructions/current-set.json"),
+	"utf8",
+);
 
 async function seededVault(): Promise<FakeVaultFS> {
 	const vault = new FakeVaultFS();
@@ -114,8 +129,11 @@ describe("ObsidianInstructionSetDoc.save()", () => {
 		expect(await vault.read(DOC_PATH)).toBe(FIXTURE_JSON);
 	});
 
-	it("verbatim round-trip: an unedited load -> save is byte-identical and re-validates clean", async () => {
-		const vault = await seededVault();
+	it("verbatim round-trip: an unedited load -> save is byte-identical to the fixture ON DISK and re-validates clean", async () => {
+		// Seed with the fixture's literal file bytes (not a JSON.stringify
+		// re-derivation) — the real on-disk oracle.
+		const vault = new FakeVaultFS();
+		await vault.create(DOC_PATH, FIXTURE_JSON_ON_DISK);
 		const adapter = new ObsidianInstructionSetDoc(vault);
 		const model = await adapter.load(DOC_PATH);
 
@@ -125,7 +143,7 @@ describe("ObsidianInstructionSetDoc.save()", () => {
 		await adapter.save(dirtyButUnedited);
 
 		const written = await vault.read(DOC_PATH);
-		expect(written).toBe(FIXTURE_JSON);
+		expect(written).toBe(FIXTURE_JSON_ON_DISK);
 
 		// Re-load must re-validate clean — proves no field was dropped.
 		const reloaded = await adapter.load(DOC_PATH);
