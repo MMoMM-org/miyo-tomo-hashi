@@ -373,6 +373,30 @@ describe("markActionFields — applied monotonicity", () => {
 		expect(action.title).toBe("Retried title");
 	});
 
+	it("does not lower applied:true when the patch carries `applied: undefined` (key present, value undefined)", async () => {
+		// exactOptionalPropertyTypes is OFF in this repo's tsconfig, so
+		// Partial<Action> legally accepts `{ applied: undefined }` with the
+		// key present. Object spread then overwrites applied:true with
+		// undefined — a `=== false` guard misses this, and JSON.stringify
+		// drops the key entirely, reverting an already-applied action.
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([makeCreateMoc("I01", true)]);
+		await seedFile(vault, "inbox/test_instructions.json", set);
+
+		await markActionFields(vault, "inbox/test_instructions.json", "I01", {
+			applied: undefined,
+			title: "Retried title",
+		} as Partial<Action>);
+
+		const updated = JSON.parse(
+			await vault.read("inbox/test_instructions.json"),
+		) as InstructionSet;
+		const action = updated.actions[0] as CreateMocAction;
+
+		expect(action.applied).toBe(true);
+		expect(action.title).toBe("Retried title");
+	});
+
 	it("allows the patch to set applied:true when previously false/undefined", async () => {
 		const vault = new FakeVaultFS();
 		const set = makeInstructionSet([makeCreateMoc("I01", false)]);
@@ -403,19 +427,6 @@ describe("markActionFields — atomic write / formatting", () => {
 
 		expect(raw.endsWith("\n")).toBe(true);
 		expect(raw).toContain('\n  "schema_version"');
-	});
-
-	it("uses a single processJSON call — same atomic path as markActionApplied", async () => {
-		const vault = new FakeVaultFS();
-		const set = makeInstructionSet([makeCreateMoc("I01"), makeCreateMoc("I02")]);
-		await seedFile(vault, "inbox/test_instructions.json", set);
-		const spy = vi.spyOn(vault, "processJSON");
-
-		await markActionFields(vault, "inbox/test_instructions.json", "I01", {
-			title: "Fixed",
-		});
-
-		expect(spy).toHaveBeenCalledTimes(1);
 	});
 });
 

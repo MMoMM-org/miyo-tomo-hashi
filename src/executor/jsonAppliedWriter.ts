@@ -2,6 +2,9 @@
  * JsonAppliedWriter — atomic, monotonic applied-flag writer.
  *
  * Writes `applied: true` for a single action in a _instructions.json file.
+ * Also home to markActionFields (spec 006, T1.2) — the Instruction Fixer's
+ * generic whitelisted-field patch writer, kept as a sibling so it reuses
+ * the same atomic write path rather than racing this module's applied flush.
  * Uses vault.processJSON to ensure:
  *   - Atomic read-transform-write (concurrent calls serialize via per-path queue)
  *   - 2-space indent + trailing newline on output
@@ -66,8 +69,11 @@ export async function markActionsApplied(
  * fixer never races the executor's own applied-flag flush (ADR-9).
  *
  * Monotonic like markActionApplied/markActionsApplied: if the target action
- * already has `applied: true`, the patch is not allowed to set it back to
- * `false` — other patched fields in the same call still apply.
+ * already has `applied: true`, the patch is not allowed to move it off
+ * `true` — not to `false`, and not to `undefined` (which drops the key
+ * entirely on serialization; exactOptionalPropertyTypes is off in this
+ * repo, so `{ applied: undefined }` is a legal Partial<Action> value with
+ * the key present). Other patched fields in the same call still apply.
  *
  * Other actions in the set, and non-action fields on the instruction set,
  * are left untouched.
@@ -87,7 +93,7 @@ export async function markActionFields(
 			// only valid when they belong to `a`'s own variant) — the cast
 			// documents that this stays within the same Action variant.
 			const patched = { ...a, ...patch } as Action;
-			if (a.applied === true && patched.applied === false) {
+			if (a.applied === true && patched.applied !== true) {
 				return { ...patched, applied: true };
 			}
 			return patched;
