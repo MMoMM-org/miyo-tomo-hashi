@@ -72,6 +72,16 @@ cards with no title and no Save button.)
 Group membership is derived from the Phase 2 gate, not re-derived independently:
 `editable` → "Needs repair" · `frozen-applied` → "Applied" · `read-only-no-signal` → "Not attempted".
 
+**Correction (T3.2):** the one-line Applied / Not-attempted rows above are an illustrative
+abbreviation, not the contract. **PRD F2-AC1 governs and applies to every action**: *"each action
+shows its `I##`, kind, a human intent line, and its key fields"* — so non-editable cards render
+their intent and target-field values too, as read-only text. PRD §Viewing reinforces it: a user may
+open a set purely "to read intent and fields", and viewing is unrestricted and distinct from
+editing. Only the *editability* of the fields varies by gate, never their visibility.
+
+**Card body order (binding):** intent line → failure reason → target fields → note link. The
+reason belongs under the intent it explains.
+
 **No-trusted-signal state — banner + Run, all cards dimmed.** State the reason ONCE at the top,
 not per card. Cards still render: viewing is unrestricted and is a distinct capability from
 editing (ADR-027 Tightening ①).
@@ -94,15 +104,15 @@ editing (ADR-027 Tightening ①).
 Delivers the visible Fixer: a view that loads a set, shows failed actions first with their outcome +
 target-field controls, and re-runs. Testable against the obsidian mock (side-effect `import "obsidian"`).
 
-- [ ] **T3.1 `InstructionFixerView` + opener + registration** `[activity: frontend-ui]`
+- [x] **T3.1 `InstructionFixerView` + opener + registration** `[activity: frontend-ui]`
 
   1. Prime: Read `src/ui/garden-audit-view/{GardenAuditEditorView,openGardenAuditEditor,index}.ts`, `src/main.ts` (registerView triad, HOVER_LINK_SOURCE) `[ref: SDD/ADR-2]`
   2. Test: `VIEW_TYPE_INSTRUCTION_FIXER` registered; `setState({docPath})` loads + renders; `openInstructionFixer` reveals-or-creates one leaf (one active doc); empty/load-error states; save/dirty race guard (edit-during-save, revert-during-save) mirrors the garden-audit guard.
   3. Implement: `src/ui/instruction-fixer/{index.ts,InstructionFixerView.ts,openInstructionFixer.ts,fixerContract.ts}`; wire `Store<InstructionFixerModel>`, adapter (Phase 1), outcomeSource (Phase 2); register in `main.ts`.
   4. Validate: unit tests pass; lint clean; types check.
   - Success:
-    - [ ] Command/opener opens the Fixer on a set and reuses one leaf `[ref: PRD/F1-AC1,AC5]`
-    - [ ] Save writes verbatim JSON only, guarded against races `[ref: PRD/F8-AC1]` `[ref: SDD/ADR-2]`
+    - [x] Command/opener opens the Fixer on a set and reuses one leaf `[ref: PRD/F1-AC1,AC5]`
+    - [x] Save writes verbatim JSON only, guarded against races `[ref: PRD/F8-AC1]` `[ref: SDD/ADR-2]`
 
 - [ ] **T3.2 Per-kind target-field cards + gate wiring + note nav** `[activity: frontend-ui]`
 
