@@ -210,7 +210,7 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 		// replaces `this.active` wholesale, which orphans this token, so the
 		// advance is then inert by construction and the newly-loaded document
 		// keeps the baseline its own `load()` installed. Assigning to
-		// `this.pristine` instead would leave the NEW document diffing against
+		// `this.active.pristine` instead would leave the NEW document diffing against
 		// the OLD one's content — deriving patches for fields the user never
 		// edited, or rejecting every further save until a reload.
 		active.pristine = deepCopy(model.doc);
