@@ -446,3 +446,39 @@ describe("markActionFields — no-op patch", () => {
 		expect(after).toBe(before);
 	});
 });
+
+describe("markActionFields — failure/denial paths", () => {
+	it("rejects when the underlying vault operation fails (unparsable content)", async () => {
+		// FakeVaultFS.process treats a missing path as empty content ("")
+		// rather than throwing — so processJSON's own JSON.parse is what
+		// fails here. The point under test is that markActionFields has no
+		// try/catch of its own: any vault-level failure propagates to the
+		// caller rather than being swallowed as a silent success.
+		const vault = new FakeVaultFS();
+
+		await expect(
+			markActionFields(vault, "inbox/does_not_exist.json", "I01", {
+				title: "Fixed",
+			}),
+		).rejects.toThrow(SyntaxError);
+	});
+
+	it("rejects when actionId matches no action in the set, and does not rewrite the file", async () => {
+		// Design decision: a stale/typo'd actionId must fail loudly, not
+		// silently no-op. A silent no-op would let a Phase 3 UI bug look
+		// like a successful save while nothing was written.
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([makeCreateMoc("I01"), makeCreateMoc("I02")]);
+		await seedFile(vault, "inbox/test_instructions.json", set);
+		const before = await vault.read("inbox/test_instructions.json");
+
+		await expect(
+			markActionFields(vault, "inbox/test_instructions.json", "I99", {
+				title: "Fixed",
+			}),
+		).rejects.toThrow(/no action with id "I99"/);
+
+		const after = await vault.read("inbox/test_instructions.json");
+		expect(after).toBe(before);
+	});
+});

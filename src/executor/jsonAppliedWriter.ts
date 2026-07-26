@@ -77,6 +77,13 @@ export async function markActionsApplied(
  *
  * Other actions in the set, and non-action fields on the instruction set,
  * are left untouched.
+ *
+ * Rejects — rather than silently no-op-ing — when `actionId` matches no
+ * action in the set. This is the Instruction Fixer's targeted repair path:
+ * a stale or typo'd id (e.g. the UI's model drifted from the on-disk set)
+ * must surface as a failed save, not as a save that reports success while
+ * writing nothing. Reject before writing so the file is never rewritten on
+ * a no-match call.
  */
 export async function markActionFields(
 	vault: VaultFS,
@@ -84,10 +91,11 @@ export async function markActionFields(
 	actionId: string,
 	patch: Partial<Action>,
 ): Promise<void> {
-	await vault.processJSON<InstructionSet>(sourcePath, (set) => ({
-		...set,
-		actions: set.actions.map((a): Action => {
+	await vault.processJSON<InstructionSet>(sourcePath, (set) => {
+		let matched = false;
+		const actions = set.actions.map((a): Action => {
 			if (a.id !== actionId) return a;
+			matched = true;
 			// `patch` only carries the fields the caller intends to change
 			// (id/applied always shared across variants; other keys are
 			// only valid when they belong to `a`'s own variant) — the cast
@@ -97,6 +105,12 @@ export async function markActionFields(
 				return { ...patched, applied: true };
 			}
 			return patched;
-		}),
-	}));
+		});
+		if (!matched) {
+			throw new Error(
+				`markActionFields: no action with id "${actionId}" in ${sourcePath}`,
+			);
+		}
+		return { ...set, actions };
+	});
 }
