@@ -514,10 +514,17 @@ export class InstructionFixerView extends ItemView {
 	}
 
 	/**
-	 * The card SHELL — header (id · kind), outcome badge, state tag and failure
-	 * reason, all of it derived from the outcome/gate this view owns. The body
-	 * is delegated to the injected renderer (T3.2); see `fixerContract.ts` for
-	 * why the seam sits exactly here.
+	 * The card SHELL — header (id · kind), outcome badge and state tag, all of
+	 * it derived from the outcome/gate this view owns. The body is delegated to
+	 * the injected renderer (T3.2); see `fixerContract.ts` for why the seam sits
+	 * exactly here.
+	 *
+	 * The failure reason is DERIVED here (one `outcomeReason`, never re-derived
+	 * downstream) but RENDERED by the card, which is the only collaborator that
+	 * can place it where the binding layout puts it — between the intent line it
+	 * explains and the target fields. With no card renderer wired (the T3.1
+	 * shell, and the view's own tests), the view renders it into the body
+	 * itself so the reason never silently disappears with the seam.
 	 */
 	private renderCard(section: HTMLElement, action: Action): void {
 		const gate = this.gateFor(action);
@@ -537,21 +544,25 @@ export class InstructionFixerView extends ItemView {
 		if (tag !== null) header.createSpan({ cls: "hashi-if-card-tag", text: tag });
 
 		const reason = outcomeReason(outcome);
-		if (reason !== null) {
-			card.createDiv({ cls: "hashi-if-card-reason", text: reason });
-		}
-
 		const cardBody = card.createDiv({ cls: "hashi-if-card-body" });
 		const ctx: FixerCardContext = {
 			app: this.app,
 			gate,
 			outcome,
+			reason,
 			apply: (transform) => {
 				if (this.store === null) return;
 				this.store.set(transform(this.store.get()));
 			},
 		};
-		this.deps.card?.render(cardBody, action, ctx);
+
+		if (this.deps.card !== undefined) {
+			this.deps.card.render(cardBody, action, ctx);
+			return;
+		}
+		if (reason !== null) {
+			cardBody.createDiv({ cls: "hashi-if-card-reason", text: reason });
+		}
 	}
 
 	// -------------------------------------------------------------------------

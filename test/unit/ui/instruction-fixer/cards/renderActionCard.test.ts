@@ -74,6 +74,7 @@ function render(
 	action: Action,
 	gate: EditGateResult = "editable",
 	outcome: ActionOutcome | null = null,
+	reason: string | null = null,
 ): Rendered {
 	const body = document.createElement("div");
 	const transforms: Array<(model: InstructionFixerModel) => InstructionFixerModel> = [];
@@ -82,12 +83,18 @@ function render(
 		app,
 		gate,
 		outcome,
+		reason,
 		apply: (transform) => {
 			transforms.push(transform);
 		},
 	};
 	renderActionCard(body, action, ctx);
 	return { body, transforms, app };
+}
+
+/** The card body's own children, by their leading class — the rendered order. */
+function bodyOrder(body: HTMLElement): string[] {
+	return Array.from(body.children).map((el) => el.classList.item(0) ?? "");
 }
 
 function inputs(body: HTMLElement): HTMLInputElement[] {
@@ -146,6 +153,51 @@ describe("intent line (PRD F2-AC1, F2-AC4)", () => {
 		for (const action of Object.values(SAMPLES) as Action[]) {
 			expect(actionIntent(action).length).toBeGreaterThan(0);
 		}
+	});
+});
+
+// --- body order --------------------------------------------------------------
+
+describe("card body order (binding layout: intent → reason → fields → note)", () => {
+	it("renders the failure reason directly under the intent it explains", () => {
+		const { body } = render(
+			SAMPLES.link_to_moc,
+			"editable",
+			{ kind: "failed", reason: "anchor not found: ## Tools" },
+			"anchor not found: ## Tools",
+		);
+
+		expect(bodyOrder(body)).toEqual([
+			"hashi-if-intent",
+			"hashi-if-card-reason",
+			"hashi-if-fields",
+			"hashi-if-note",
+		]);
+		expect(body.querySelector(".hashi-if-card-reason")?.textContent).toBe(
+			"anchor not found: ## Tools",
+		);
+	});
+
+	it("renders no reason line when the outcome has nothing to explain", () => {
+		const { body } = render(SAMPLES.link_to_moc, "frozen-applied", { kind: "applied" }, null);
+
+		expect(body.querySelector(".hashi-if-card-reason")).toBeNull();
+		expect(bodyOrder(body)).toEqual(["hashi-if-intent", "hashi-if-fields", "hashi-if-note"]);
+	});
+
+	it("keeps the reason in place on a read-only card too", () => {
+		const { body } = render(
+			SAMPLES.move_note,
+			"read-only-no-signal",
+			null,
+			"depends on I03",
+		);
+
+		expect(bodyOrder(body)).toEqual([
+			"hashi-if-intent",
+			"hashi-if-card-reason",
+			"hashi-if-note",
+		]);
 	});
 });
 
@@ -349,6 +401,7 @@ describe("note link (PRD F6)", () => {
 			app,
 			gate: "editable",
 			outcome: null,
+			reason: null,
 			apply: () => {},
 		});
 
@@ -416,6 +469,28 @@ describe("wired into InstructionFixerView", () => {
 		expect(failedCard?.querySelectorAll("input").length).toBeGreaterThan(0);
 		expect(appliedCard?.querySelectorAll("input")).toHaveLength(0);
 		expect(pendingCard?.querySelectorAll("input")).toHaveLength(0);
+	});
+
+	it("places the view-derived failure reason under the intent, not above it", async () => {
+		const view = await openView();
+		const failedBody = view.contentEl.querySelector(
+			'.hashi-if-card[data-action-id="I07"] .hashi-if-card-body',
+		);
+
+		expect(
+			Array.from(failedBody?.children ?? []).map((el) => el.classList.item(0)),
+		).toEqual([
+			"hashi-if-intent",
+			"hashi-if-card-reason",
+			"hashi-if-fields",
+			"hashi-if-note",
+		]);
+		// …and the shell no longer renders a second copy of it as a sibling.
+		expect(
+			view.contentEl.querySelectorAll(
+				'.hashi-if-card[data-action-id="I07"] > .hashi-if-card-reason',
+			),
+		).toHaveLength(0);
 	});
 
 	it("activates Save when a target-field edit is committed on the failed card", async () => {

@@ -8,11 +8,20 @@
  *
  *   - `InstructionFixerView` renders the section grouping, each card's shell
  *     and header (`I07 · link_to_moc`, the outcome badge, the frozen/read-only
- *     tag) and the outcome's failure reason. All of that is derived from the
- *     Phase-2 outcome resolution + gate, which only the view holds.
+ *     tag). All of that is derived from the Phase-2 outcome resolution + gate,
+ *     which only the view holds.
  *   - The `FixerCardRenderer` (T3.2) fills the card BODY: the plain-text intent
  *     line, the per-kind `TargetControl` fields, and the note link. All of that
  *     is derived from `action.action`, which only the card dispatcher knows.
+ *
+ * The failure reason straddles that line, and `reason` below is where it
+ * landed (T3.2 review). The binding card layout is intent → reason → fields →
+ * note link: the reason explains the intent, so it belongs directly under it.
+ * The view still DERIVES the text (it owns the outcome; there is one
+ * `outcomeReason` and the card never re-derives it), but only the body
+ * renderer can place a line between two lines it owns. So the view passes the
+ * finished string and the card decides where it sits — ownership of meaning
+ * stays with the view, ownership of body layout stays with the card.
  *
  * There is exactly ONE renderer for every kind (dispatch happens inside it),
  * so this is a single injected collaborator rather than a registry — the same
@@ -45,6 +54,13 @@ export interface FixerCardContext {
 	 * detail it wants to add.
 	 */
 	readonly outcome: ActionOutcome | null;
+	/**
+	 * The one-line "why" for this action's outcome — a `failed` reason or a
+	 * `skipped-dependency`'s blocker — or `null` when the outcome has nothing
+	 * to explain (applied, no outcome at all, or an empty reason string). Ready
+	 * to render verbatim: the card must not re-derive it from `outcome`.
+	 */
+	readonly reason: string | null;
 	/**
 	 * Dispatches a domain transform through the view's
 	 * `Store<InstructionFixerModel>`. A transform returning the SAME model

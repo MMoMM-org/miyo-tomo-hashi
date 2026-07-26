@@ -549,6 +549,32 @@ describe("InstructionFixerView — card render seam (T3.2 contract)", () => {
 		expect(typeof i07?.ctx.apply).toBe("function");
 	});
 
+	/** T3.2: the reason's TEXT stays the view's (one `outcomeReason`); only its
+	 * placement moved into the body, which is the card's to lay out. */
+	it("hands the card a ready-to-render failure reason and renders no copy of its own", async () => {
+		const card = makeRecordingCard();
+		const view = makeView(makeSpyAdapter(), { card });
+
+		await view.onOpen();
+
+		expect(card.calls.find((c) => c.id === "I07")?.ctx.reason).toBe(
+			"anchor not found: ## Tools",
+		);
+		expect(card.calls.find((c) => c.id === "I09")?.ctx.reason).toBeNull();
+		expect(cardEl(view, "I07")?.querySelector(".hashi-if-card-reason")).toBeNull();
+	});
+
+	it("renders the reason itself when no card renderer is wired (shell fallback)", async () => {
+		const view = makeView(makeSpyAdapter());
+
+		await view.onOpen();
+
+		expect(
+			cardEl(view, "I07")?.querySelector(".hashi-if-card-body .hashi-if-card-reason")
+				?.textContent,
+		).toBe("anchor not found: ## Tools");
+	});
+
 	it("an apply() from a card dirties the model and re-renders", async () => {
 		const view = makeView(makeSpyAdapter(), { card: makeDirtyingCard() });
 		await view.onOpen();

@@ -180,8 +180,11 @@ function renderField(
 }
 
 /**
- * Renders one action's card body into `body`: intent, repair fields (editable
- * only where the gate says so), then the note link.
+ * Renders one action's card body into `body`, in the binding order: intent →
+ * failure reason → repair fields (editable only where the gate says so) → note
+ * link. The reason sits directly under the intent it explains; its text is
+ * derived by the view and arrives ready to render on `ctx.reason` (see
+ * `fixerContract.ts` on why placement is the card's and meaning is the view's).
  */
 export function renderActionCard(
 	body: HTMLElement,
@@ -189,6 +192,10 @@ export function renderActionCard(
 	ctx: FixerCardContext,
 ): void {
 	body.createDiv({ cls: "hashi-if-intent", text: actionIntent(action) });
+
+	if (ctx.reason !== null) {
+		body.createDiv({ cls: "hashi-if-card-reason", text: ctx.reason });
+	}
 
 	const fields = targetFieldsFor(action);
 	if (fields.length > 0) {
