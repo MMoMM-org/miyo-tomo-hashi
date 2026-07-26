@@ -12,7 +12,7 @@
  * [ref: PRD/F5; SDD/Atomic JSON Applied-Flag Write]
  */
 
-import type { InstructionSet } from "../schema/types.js";
+import type { Action, InstructionSet } from "../schema/types.js";
 import type { VaultFS } from "../vault/VaultFS.js";
 
 /**
@@ -56,5 +56,41 @@ export async function markActionsApplied(
 		actions: set.actions.map((a) =>
 			ids.has(a.id) ? { ...a, applied: true } : a,
 		),
+	}));
+}
+
+/**
+ * Sibling atomic writer for the Instruction Fixer (spec 006, T1.2): patch
+ * arbitrary whitelisted fields on the action identified by `actionId`,
+ * reusing this module's single processJSON transform + serialization so the
+ * fixer never races the executor's own applied-flag flush (ADR-9).
+ *
+ * Monotonic like markActionApplied/markActionsApplied: if the target action
+ * already has `applied: true`, the patch is not allowed to set it back to
+ * `false` — other patched fields in the same call still apply.
+ *
+ * Other actions in the set, and non-action fields on the instruction set,
+ * are left untouched.
+ */
+export async function markActionFields(
+	vault: VaultFS,
+	sourcePath: string,
+	actionId: string,
+	patch: Partial<Action>,
+): Promise<void> {
+	await vault.processJSON<InstructionSet>(sourcePath, (set) => ({
+		...set,
+		actions: set.actions.map((a): Action => {
+			if (a.id !== actionId) return a;
+			// `patch` only carries the fields the caller intends to change
+			// (id/applied always shared across variants; other keys are
+			// only valid when they belong to `a`'s own variant) — the cast
+			// documents that this stays within the same Action variant.
+			const patched = { ...a, ...patch } as Action;
+			if (a.applied === true && patched.applied === false) {
+				return { ...patched, applied: true };
+			}
+			return patched;
+		}),
 	}));
 }

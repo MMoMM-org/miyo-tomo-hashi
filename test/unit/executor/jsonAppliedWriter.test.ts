@@ -16,6 +16,7 @@ import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import {
 	markActionApplied,
 	markActionsApplied,
+	markActionFields,
 } from "../../../src/executor/jsonAppliedWriter.js";
 import type { InstructionSet, Action, CreateMocAction, MoveNoteAction } from "../../../src/schema/types.js";
 
@@ -275,5 +276,162 @@ describe("markActionApplied — atomicity", () => {
 
 		const updated = JSON.parse(await vault.read("inbox/test_instructions.json")) as InstructionSet;
 		expect(updated.actions[0]?.applied).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// markActionFields — T1.2 (Instruction Fixer atomic writer)
+// [ref: SDD/ADR-9; PRD/F4]
+// ---------------------------------------------------------------------------
+
+describe("markActionFields — patches only the matching id", () => {
+	it("patches the target action; other actions are byte-identical", async () => {
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([
+			makeCreateMoc("I01"),
+			makeCreateMoc("I02"),
+			makeCreateMoc("I03"),
+		]);
+		await seedFile(vault, "inbox/test_instructions.json", set);
+
+		await markActionFields(vault, "inbox/test_instructions.json", "I02", {
+			title: "Fixed title",
+		});
+
+		const updated = JSON.parse(
+			await vault.read("inbox/test_instructions.json"),
+		) as InstructionSet;
+		const i01 = updated.actions.find((a) => a.id === "I01") as CreateMocAction;
+		const i02 = updated.actions.find((a) => a.id === "I02") as CreateMocAction;
+		const i03 = updated.actions.find((a) => a.id === "I03") as CreateMocAction;
+
+		expect(i02.title).toBe("Fixed title");
+		expect(i01).toEqual(makeCreateMoc("I01"));
+		expect(i03).toEqual(makeCreateMoc("I03"));
+	});
+
+	it("merges only the given patch fields — untouched fields on the target keep their original value", async () => {
+		const vault = new FakeVaultFS();
+		const original = makeMoveNote("I01");
+		const set = makeInstructionSet([original]);
+		await seedFile(vault, "inbox/test_instructions.json", set);
+
+		await markActionFields(vault, "inbox/test_instructions.json", "I01", {
+			destination: "notes/I01-renamed.md",
+		});
+
+		const updated = JSON.parse(
+			await vault.read("inbox/test_instructions.json"),
+		) as InstructionSet;
+		const action = updated.actions[0] as MoveNoteAction;
+
+		expect(action.destination).toBe("notes/I01-renamed.md");
+		expect(action.id).toBe(original.id);
+		expect(action.action).toBe(original.action);
+		expect(action.source).toBe(original.source);
+		expect(action.title).toBe(original.title);
+	});
+
+	it("preserves non-action fields on the instruction set", async () => {
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([makeCreateMoc("I01")]);
+		await seedFile(vault, "inbox/test_instructions.json", set);
+
+		await markActionFields(vault, "inbox/test_instructions.json", "I01", {
+			title: "Fixed",
+		});
+
+		const updated = JSON.parse(
+			await vault.read("inbox/test_instructions.json"),
+		) as InstructionSet;
+
+		expect(updated.schema_version).toBe("2");
+		expect(updated.type).toBe("tomo-instructions");
+		expect(updated.generated).toBe("2026-04-28T10:00:00Z");
+		expect(updated.profile).toBeNull();
+	});
+});
+
+describe("markActionFields — applied monotonicity", () => {
+	it("does not lower applied:true back to false via the patch", async () => {
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([makeCreateMoc("I01", true)]);
+		await seedFile(vault, "inbox/test_instructions.json", set);
+
+		await markActionFields(vault, "inbox/test_instructions.json", "I01", {
+			applied: false,
+			title: "Retried title",
+		} as Partial<Action>);
+
+		const updated = JSON.parse(
+			await vault.read("inbox/test_instructions.json"),
+		) as InstructionSet;
+		const action = updated.actions[0] as CreateMocAction;
+
+		expect(action.applied).toBe(true);
+		// Non-monotonic field in the same patch still applies.
+		expect(action.title).toBe("Retried title");
+	});
+
+	it("allows the patch to set applied:true when previously false/undefined", async () => {
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([makeCreateMoc("I01", false)]);
+		await seedFile(vault, "inbox/test_instructions.json", set);
+
+		await markActionFields(vault, "inbox/test_instructions.json", "I01", {
+			applied: true,
+		});
+
+		const updated = JSON.parse(
+			await vault.read("inbox/test_instructions.json"),
+		) as InstructionSet;
+		expect(updated.actions[0]?.applied).toBe(true);
+	});
+});
+
+describe("markActionFields — atomic write / formatting", () => {
+	it("writes 2-space indented JSON with a trailing newline", async () => {
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([makeCreateMoc("I01")]);
+		await seedFile(vault, "inbox/test_instructions.json", set);
+
+		await markActionFields(vault, "inbox/test_instructions.json", "I01", {
+			title: "Fixed",
+		});
+
+		const raw = await vault.read("inbox/test_instructions.json");
+
+		expect(raw.endsWith("\n")).toBe(true);
+		expect(raw).toContain('\n  "schema_version"');
+	});
+
+	it("uses a single processJSON call — same atomic path as markActionApplied", async () => {
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([makeCreateMoc("I01"), makeCreateMoc("I02")]);
+		await seedFile(vault, "inbox/test_instructions.json", set);
+		const spy = vi.spyOn(vault, "processJSON");
+
+		await markActionFields(vault, "inbox/test_instructions.json", "I01", {
+			title: "Fixed",
+		});
+
+		expect(spy).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("markActionFields — no-op patch", () => {
+	it("leaves the file byte-for-byte unchanged when the patch is empty", async () => {
+		const vault = new FakeVaultFS();
+		const set = makeInstructionSet([
+			makeCreateMoc("I01"),
+			makeMoveNote("I02"),
+		]);
+		await seedFile(vault, "inbox/test_instructions.json", set);
+		const before = await vault.read("inbox/test_instructions.json");
+
+		await markActionFields(vault, "inbox/test_instructions.json", "I01", {});
+
+		const after = await vault.read("inbox/test_instructions.json");
+		expect(after).toBe(before);
 	});
 });
