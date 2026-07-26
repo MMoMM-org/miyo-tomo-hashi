@@ -1,6 +1,6 @@
 ---
 title: "Phase 3: The Fixer view — cards, gate wiring, re-run"
-status: pending
+status: in_progress
 version: "1.0"
 phase: 3
 ---
@@ -37,6 +37,55 @@ phase: 3
   action it passes as the first argument — `editGate(a, res, a.applied)`, never from a sibling.
 
 **Dependencies**: Phase 1 (adapter/transforms), Phase 2 (outcome source + gate).
+
+---
+
+## Agreed UI structure (user-confirmed 2026-07-26 — build from THIS, not from a field list)
+
+No `mockups/*.html` exists for spec-006. This ASCII structure is the agreed substitute and is
+binding for T3.1/T3.2: card title, badges, and the Save/Re-run affordances are part of the spec,
+not implementer discretion. (Repo lesson: driving UI tasks off SDD field-lists previously shipped
+cards with no title and no Save button.)
+
+**Normal state — grouped sections, failed first**, mirroring garden-audit's tier sections
+(header + count). Grouping is what makes the fail-closed state legible.
+
+```
+┌─ Needs repair (2) ──────────────────────┐
+│ ┌─────────────────────────────────────┐ │
+│ │ I07 · link_to_moc          [failed] │ │
+│ │ Link "Kanban" under MOC anchor      │ │   ← plain-text intent, NO deep-link
+│ │ ⚠ anchor not found: ## Tools        │ │   ← outcome error reason
+│ │ target_moc      [Systems MOC     ▾] │ │   ← TargetControl per whitelisted field
+│ │ anchor          [## Tools        ▾] │ │
+│ │ → Kanban.md                         │ │   ← renderNavigableNoteLink (open-beside + hover)
+│ └─────────────────────────────────────┘ │
+└─────────────────────────────────────────┘
+┌─ Applied (1) ───────────────────────────┐
+│ I09 · edit_note_text  [applied] (frozen)│
+└─────────────────────────────────────────┘
+┌─ Not attempted (1) ─────────────────────┐
+│ I12 · move_note      [—] (read-only)    │
+└─────────────────────────────────────────┘
+```
+
+Group membership is derived from the Phase 2 gate, not re-derived independently:
+`editable` → "Needs repair" · `frozen-applied` → "Applied" · `read-only-no-signal` → "Not attempted".
+
+**No-trusted-signal state — banner + Run, all cards dimmed.** State the reason ONCE at the top,
+not per card. Cards still render: viewing is unrestricted and is a distinct capability from
+editing (ADR-027 Tightening ①).
+
+```
+┌───────────────────────────────────────────┐
+│ ⓘ No trusted outcome for this set.        │
+│   Hashi can't tell which actions failed   │
+│   until it runs them.        [ Run ]      │
+└───────────────────────────────────────────┘
+┌─ All actions (4) ── read-only ────────────┐
+│ I07 · link_to_moc                     [—] │
+│ I09 · edit_note_text                  [—] │
+```
 
 ---
 
