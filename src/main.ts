@@ -84,11 +84,12 @@ import { EditorView } from "@codemirror/view";
 import { Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 
 import {
+	listGardenAuditDocs,
+	listSuggestionsDocs,
 	registerCommands,
 	registerExecutorCommands,
 	registerIdeBridgeCommand,
-	registerSuggestionsEditorCommand,
-	SUGGESTIONS_JSON_RE,
+	registerOpenTomoEditorCommand,
 } from "./commands/registerCommands";
 import { registerFileMenu, registerExecutorFileMenu } from "./commands/fileMenu";
 import { TomoConnection } from "./connection/TomoConnection";
@@ -102,6 +103,7 @@ import { HookDisclosureModal } from "./hooks/HookDisclosureModal";
 import { HookRunner } from "./hooks/HookRunner";
 import type { HookLogger } from "./hooks/HookContext";
 import { validate } from "./schema/validator";
+import { ObsidianGardenAuditDoc } from "./garden-audit/ObsidianGardenAuditDoc";
 import { SettingsTab } from "./settings/SettingsTab";
 import { ObsidianSuggestionsDoc } from "./suggestions/ObsidianSuggestionsDoc";
 import {
@@ -111,10 +113,16 @@ import {
 } from "./types/index";
 import { TomoChatView, VIEW_TYPE_TOMO_CHAT } from "./ui/chat-view/index";
 import { showChatWindow } from "./ui/chat-view/showChatWindow";
+import {
+	GardenAuditEditorView,
+	HOVER_LINK_SOURCE,
+	openGardenAuditEditor,
+	TomoEditorDocPicker,
+	VIEW_TYPE_GARDEN_AUDIT_EDITOR,
+} from "./ui/garden-audit-view/index";
 import { StatusBarIcon, copyAuthToken } from "./ui/status-bar/StatusBarIcon";
 import {
 	openSuggestionsEditor,
-	SuggestionsDocPicker,
 	SuggestionsEditorView,
 	VIEW_TYPE_SUGGESTIONS_EDITOR,
 } from "./ui/suggestions-view/index";
@@ -583,18 +591,48 @@ export default class TomoHashiPlugin extends Plugin {
 					}),
 				}),
 		);
-		registerSuggestionsEditorCommand(this, {
+
+		// =========================================================================
+		// 005 wiring (T3.2/T3.3) — Garden-Audit Editor suffix-dispatch (ADR-6)
+		// =========================================================================
+		//
+		// 15. GardenAuditEditorView registration (T3.3 wiring; the real
+		//     Phase-4 view). Reuses the same `vault` (7.) via
+		//     `ObsidianGardenAuditDoc`, the ONE wire-aware adapter for
+		//     `_garden-audit.json` (mirrors ObsidianSuggestionsDoc's role).
+		this.registerView(
+			VIEW_TYPE_GARDEN_AUDIT_EDITOR,
+			(leaf: WorkspaceLeaf) =>
+				new GardenAuditEditorView(leaf, {
+					adapter: new ObsidianGardenAuditDoc(vault),
+					vault,
+				}),
+		);
+
+		// Registers Hashi's `hover-link` source (T6.2 note navigation, PRD F9)
+		// with Obsidian's Page Preview core plugin — without this, Page Preview
+		// has no settings entry for Hashi and hovering a note link falls back to
+		// the Mod-key-gated default instead of the always-on preview the
+		// navigation contract wants (`defaultMod: false`).
+		this.registerHoverLinkSource(HOVER_LINK_SOURCE, {
+			display: "Tomo editor",
+			defaultMod: false,
+		});
+
+		// The "Open Tomo editor" command (registered once, below) now
+		// suffix-dispatches to EITHER editor.
+		registerOpenTomoEditorCommand(this, {
 			getActiveFilePath: () => this.app.workspace.getActiveFile()?.path ?? null,
 			listSuggestionsDocs: () =>
-				this.app.vault
-					.getFiles()
-					.map((file) => file.path)
-					.filter((path) => SUGGESTIONS_JSON_RE.test(path))
-					.sort(),
-			pickSuggestionsDoc: (docs, onPick) =>
-				new SuggestionsDocPicker(this.app, docs, onPick).open(),
+				listSuggestionsDocs(this.app.vault.getFiles().map((file) => file.path)),
+			listGardenAuditDocs: () =>
+				listGardenAuditDocs(this.app.vault.getFiles().map((file) => file.path)),
+			pickEditorDoc: (docs, onPick) =>
+				new TomoEditorDocPicker(this.app, docs, onPick).open(),
 			openSuggestionsEditor: (docPath: string) =>
 				openSuggestionsEditor(this.app, docPath),
+			openGardenAuditEditor: (docPath: string) =>
+				openGardenAuditEditor(this.app, docPath),
 		});
 	}
 

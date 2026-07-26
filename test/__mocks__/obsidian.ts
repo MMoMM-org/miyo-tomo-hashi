@@ -204,14 +204,33 @@ export class App {
 		}),
 		getLeavesOfType: vi.fn(() => [] as WorkspaceLeaf[]),
 		getRightLeaf: vi.fn(() => new WorkspaceLeaf()),
-		openLinkText: vi.fn<(linktext: string, sourcePath: string, newLeaf?: boolean) => Promise<void>>(async () => {}),
+		// `newLeaf` mirrors real Obsidian's `PaneType | boolean` union (a bare
+		// `boolean` for replace/new-tab, or `"split"`/`"tab"`/`"window"` for a
+		// `PaneType`) — typed with a local literal union instead of importing the
+		// real `PaneType`.
+		openLinkText: vi.fn<
+			(linktext: string, sourcePath: string, newLeaf?: boolean | "tab" | "split" | "window") => Promise<void>
+		>(async () => {}),
 		getLeaf: vi.fn(() => new WorkspaceLeaf()),
 		revealLeaf: vi.fn(),
 		setActiveLeaf: vi.fn(),
+		// Real Obsidian's page-preview core plugin listens for this to show
+		// hover previews (garden-audit T6.2, PRD F9). A plain vi.fn — tests
+		// assert the call, nothing subscribes to it here.
+		trigger: vi.fn(),
 	};
 	metadataCache = {
 		getFileCache: vi.fn<(file: TFile) => { headings: unknown[]; sections: unknown[] }>(
 			() => ({ headings: [], sections: [] }),
+		),
+		// Resolves a link target to a `TFile` (or `null` if it doesn't exist) —
+		// the standard Obsidian idiom for "does this link resolve" at render
+		// time. Defaults to resolving (a fresh TFile) so existing tests that
+		// don't care about the missing-target path keep passing unchanged;
+		// tests exercising T6.2's "note not found" degrade override this to
+		// return `null`.
+		getFirstLinkpathDest: vi.fn<(linkpath: string, sourcePath: string) => TFile | null>(
+			() => new TFile(),
 		),
 		on: vi.fn(),
 	};
@@ -266,6 +285,10 @@ export class Plugin extends Component {
 	addCommand = vi.fn();
 	addSettingTab = vi.fn();
 	registerView = vi.fn();
+	// Page Preview integration (spec-005 Phase 6, T6.2) — registers a hover-link
+	// source so it appears in Obsidian's Page Preview settings. Assertion-only:
+	// the mock never simulates the settings UI itself.
+	registerHoverLinkSource = vi.fn();
 	register = vi.fn();
 	removeCommand = vi.fn();
 	// CM6 editor extension registration (T4.5 — IDE Bridge selection tracking).

@@ -67,6 +67,11 @@ import { TomoConnection } from "../../src/connection/TomoConnection";
 import TomoHashiPlugin from "../../src/main";
 import { VIEW_TYPE_TOMO_CHAT } from "../../src/ui/chat-view/index";
 import {
+	GardenAuditEditorView,
+	HOVER_LINK_SOURCE,
+	VIEW_TYPE_GARDEN_AUDIT_EDITOR,
+} from "../../src/ui/garden-audit-view/index";
+import {
 	SuggestionsEditorView,
 	VIEW_TYPE_SUGGESTIONS_EDITOR,
 } from "../../src/ui/suggestions-view/index";
@@ -285,9 +290,76 @@ describe("TomoHashiPlugin integration (T5.3)", () => {
 			await Promise.resolve();
 
 			expect(vi.mocked(Notice)).toHaveBeenCalledWith(
-				"Open a Tomo _suggestions.json (or its .md) first",
+				"No Tomo runs found — open a _suggestions.json or _garden-audit.json (or its .md) first",
 			);
 			expect(plugin.app.workspace.getLeaf).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("Garden-Audit Editor registration (spec-005 T3.3)", () => {
+		it("registers VIEW_TYPE_GARDEN_AUDIT_EDITOR via plugin.registerView with a factory producing a GardenAuditEditorView", async () => {
+			await plugin.onload();
+
+			const call = vi
+				.mocked(plugin.registerView)
+				.mock.calls.find(([type]) => type === VIEW_TYPE_GARDEN_AUDIT_EDITOR);
+			expect(call).toBeDefined();
+
+			const factory = call?.[1] as (leaf: WorkspaceLeaf) => unknown;
+			const leaf = new WorkspaceLeaf();
+			const view = factory(leaf);
+			expect(view).toBeInstanceOf(GardenAuditEditorView);
+		});
+
+		it("still registers VIEW_TYPE_SUGGESTIONS_EDITOR — the 005 addition does not displace 004's view (no regression)", async () => {
+			await plugin.onload();
+
+			const call = vi
+				.mocked(plugin.registerView)
+				.mock.calls.find(([type]) => type === VIEW_TYPE_SUGGESTIONS_EDITOR);
+			expect(call).toBeDefined();
+		});
+
+		it("still registers the unified 'open-suggestions-editor' command (no regression)", async () => {
+			await plugin.onload();
+			expect(findCommand(plugin, OPEN_SUGGESTIONS_EDITOR_ID)).toBeDefined();
+		});
+
+		it("registers the garden-audit hover-link source so Page Preview has a settings entry", async () => {
+			await plugin.onload();
+
+			expect(plugin.registerHoverLinkSource).toHaveBeenCalledTimes(1);
+			expect(plugin.registerHoverLinkSource).toHaveBeenCalledWith(
+				HOVER_LINK_SOURCE,
+				expect.objectContaining({ defaultMod: false }),
+			);
+		});
+	});
+
+	describe("Open Tomo editor command — garden-audit dispatch (spec-005 T3.2/T3.3)", () => {
+		it("active _garden-audit.json → opens a new split leaf with the resolved docPath", async () => {
+			await plugin.onload();
+			const docPath = "100 Inbox/run-editor-001_garden-audit.json";
+			const activeFile = new TFile();
+			activeFile.path = docPath;
+			vi.mocked(plugin.app.workspace.getActiveFile).mockReturnValue(
+				activeFile,
+			);
+			vi.mocked(plugin.app.workspace.getLeavesOfType).mockReturnValue([]);
+			const newLeaf = new WorkspaceLeaf();
+			vi.mocked(plugin.app.workspace.getLeaf).mockReturnValue(newLeaf);
+
+			const cmd = findCommand(plugin, OPEN_SUGGESTIONS_EDITOR_ID);
+			expect(cmd).toBeDefined();
+			cmd?.callback?.();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(newLeaf.setViewState).toHaveBeenCalledWith({
+				type: VIEW_TYPE_GARDEN_AUDIT_EDITOR,
+				active: true,
+				state: { docPath },
+			});
 		});
 	});
 });

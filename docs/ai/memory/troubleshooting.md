@@ -19,8 +19,18 @@ or `vendored-schema.test.ts` fails (it asserts every `oneOf` variant references 
 `computeRemaining` test asserting the new kind appears in its canonical-order slot — that's the
 only test that proves it's actually planned. Several `*.test.ts` files also hard-code the kind
 **count** (types.test.ts `toHaveLength` + literal union, actions/index.test.ts key list) — bump
-those too. (Landed with `insert_under_marker` PR #73; re-confirmed end-to-end adding
-`replace_section`, the 11th kind, 2026-06-25.)
+those too, AND the count is also restated in prose across docs (README twice, action-reference.md
+intro, hooks.md's inline kind list, troubleshooting.md's "one of the N kinds") — grep for the old
+count word after any kind change, it drifts independently of the enforced test sites. (Landed with
+`insert_under_marker` PR #73; re-confirmed end-to-end adding `replace_section`, the 11th kind,
+2026-06-25; `edit_note_text` landed as the 12th 2026-07-21; `remove_up_link` landed as the 13th
+2026-07-23 — a field-preserving sibling to `edit_note_text` for multi-link `up::` lines that the
+whole-line action couldn't safely edit; `resolve_dead_link` landed as the 14th 2026-07-25 (Tomo
+commit 4251618) — alias-aware unlink/repoint superseding `edit_note_text` for dead-link fixes,
+which silently no-oped on aliased links since it only matched the whole `[[…]]` text verbatim.
+Also re-vendor the schema first (ADR-7 full re-vendor, `git show <tomo-branch>:tomo/schemas/
+hashi-instructions.schema.json`) rather than hand-editing — confirm byte-parity + `$defs` count
+before touching TS.)
 
 ## Run log written as bare placeholder (`totals: {}`, empty body)
 **Symptom:** a run produces a run-log file whose frontmatter has `totals: {}` and no action table.

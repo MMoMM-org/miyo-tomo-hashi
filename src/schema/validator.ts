@@ -9,6 +9,65 @@ const ajv = new Ajv2020({ allErrors: true, allowUnionTypes: true });
 /** Compiled ajv validator for the vendored Tomo instruction-set schema (ADR-1, ADR-2). */
 export const validateInstructionSet = ajv.compile(schema);
 
+// ---------------------------------------------------------------------------
+// Known action kinds — derived from the schema's actions/items/oneOf refs,
+// each resolved to its $def's `action.const`. Used to give a clear message
+// when an instruction set carries an action kind this Hashi build doesn't
+// know (e.g. it targets a newer Tomo schema) — Ajv's own error for that case
+// picks an arbitrary oneOf branch (usually the first) and reports a missing
+// field belonging to THAT branch, which is misleading (see formatErrors).
+// ---------------------------------------------------------------------------
+
+interface ActionDefRef {
+	readonly $ref: string;
+}
+
+interface SchemaShape {
+	readonly properties: {
+		readonly actions: {
+			readonly items: {
+				readonly oneOf: readonly ActionDefRef[];
+			};
+		};
+	};
+	readonly $defs: Record<string, { properties?: { action?: { const?: string } } }>;
+}
+
+function buildKnownActionKinds(schemaShape: SchemaShape): ReadonlySet<string> {
+	const kinds = new Set<string>();
+	for (const ref of schemaShape.properties.actions.items.oneOf) {
+		const defName = ref.$ref.replace("#/$defs/", "");
+		const kind = schemaShape.$defs[defName]?.properties?.action?.const;
+		if (typeof kind === "string") kinds.add(kind);
+	}
+	return kinds;
+}
+
+const KNOWN_ACTION_KINDS = buildKnownActionKinds(schema as unknown as SchemaShape);
+
+/**
+ * Scan the raw (pre-validation) input for the earliest action whose `action`
+ * field is a string not present in KNOWN_ACTION_KINDS. Returns null when
+ * `raw` isn't shaped like `{ actions: [...] }` or every action kind present
+ * is known (the failure is for some other reason — missing field, wrong
+ * type, etc. — on a known action kind).
+ */
+function findUnknownActionKind(raw: unknown): { index: number; kind: string } | null {
+	if (raw === null || typeof raw !== "object") return null;
+	const actions = (raw as { actions?: unknown }).actions;
+	if (!Array.isArray(actions)) return null;
+
+	for (let i = 0; i < actions.length; i++) {
+		const entry: unknown = actions[i];
+		if (entry === null || typeof entry !== "object") continue;
+		const kind = (entry as { action?: unknown }).action;
+		if (typeof kind === "string" && !KNOWN_ACTION_KINDS.has(kind)) {
+			return { index: i, kind };
+		}
+	}
+	return null;
+}
+
 /**
  * Validates a parsed JSON value against the bundled Tomo instruction-set
  * schema. Returns a discriminated outcome with the validated InstructionSet
@@ -51,6 +110,22 @@ function formatErrors(errors: ErrorObject[], raw: unknown): string {
 			?.schema_version;
 		const actual = stringifyScalar(actualRaw, "undefined");
 		return `Schema version mismatch — expected ${expected}, got ${actual}`;
+	}
+
+	// Unknown action kind: Ajv's oneOf reports a sub-error against an
+	// arbitrary (usually the first) branch — e.g. "/actions/0 must have
+	// required property 'source'" for a kind that isn't move_note/create_moc
+	// at all. Give the earliest genuinely-unknown kind a clear message
+	// instead of surfacing that misleading sub-schema diagnostic.
+	//
+	// Deliberate: an unknown kind ANYWHERE takes priority over an Ajv error on
+	// an earlier known-kind action. A newer-schema instruction set is the
+	// load-bearing diagnosis ("update Hashi") — other errors are likely the
+	// same skew's artifacts, so the unknown-kind message is the actionable one
+	// to surface even if it isn't the numerically-earliest failing index.
+	const unknownKind = findUnknownActionKind(raw);
+	if (unknownKind !== null) {
+		return `/actions/${unknownKind.index}: unknown action kind '${unknownKind.kind}' — the instruction set may target a newer Tomo schema than this Hashi build`;
 	}
 
 	const path = first.instancePath || "(root)";

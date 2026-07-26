@@ -1,3 +1,45 @@
+## [0.18.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.17.2...0.18.0) (2026-07-25)
+
+### Features
+
+* **actions:** add edit_note_text action for garden-audit link fixes ([911e79e](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/911e79e20169e987c54bc368affb50a75f84190a))
+* **actions:** remove_up_link action for garden-audit broken_up removal ([4ee6d40](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/4ee6d40008cca628aeabeb08126bb7f961855c06))
+* **actions:** resolve_dead_link — alias-aware dead-link resolution (14th kind) ([a18577c](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/a18577c24ae4568195dd322bcacea53bd8bd4c10))
+* **garden-audit:** advisory read-only cards (T5.5) ([abcab75](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/abcab758c8f71156c4aa4827486672c28270c104))
+* **garden-audit:** Ajv2020 wire validator with accept/reject coverage (T1.2) ([681556c](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/681556c4ec5fa082b821758b380740f28255c22b))
+* **garden-audit:** async cached dead-link context (T6.1) ([b225c24](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/b225c24b130fb893d3ba379d4266e1bfdaa61626))
+* **garden-audit:** candidate chip click auto-selects Apply ([e353be1](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/e353be1739893e9adad9143048b8b12cfdeaed08))
+* **garden-audit:** candidate chips — display-only, click-to-pick (T5.3) ([c770a06](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/c770a06710622ef588d1fafb5cb07d72ac0dd06a))
+* **garden-audit:** composite TargetControl widget (T5.1) ([0bcc19f](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/0bcc19f568481c1ffb6a330340d556aeb22e5e39))
+* **garden-audit:** discovery regex + resolver (disjoint from suggestions) (T3.1) ([45e6e67](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/45e6e67139ce5f51b786af23d1dc229bdc60a55e))
+* **garden-audit:** editor view lifecycle + leaf-head (T4.1) ([a683114](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/a683114af1a53b504bcd29756f40bcacb3c7feba))
+* **garden-audit:** empty & error states (T4.4) ([cf72f9a](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/cf72f9a6ffb4a479bea7d14e5909ef7f54a16935))
+* **garden-audit:** empty-state tooltips + no-scan-candidate hint ([c66c21e](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/c66c21e079863d301688e511eb42dd49357aaa4a))
+* **garden-audit:** fixable per-check cards (T5.2) ([196098a](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/196098a0d105c434cbf8fa9104742639e2231603))
+* **garden-audit:** GardenAuditDoc port + adapter (JSON-only verbatim write, ADR-6) (T2.1) ([3be2f6d](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/3be2f6d16ff3abf658d12f1627ea7625560cc330))
+* **garden-audit:** open-beside + hover-preview note navigation (T6.2) ([2679c42](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/2679c42c2c86e5e41c5b892d7b3f89ce57b2f7df))
+* **garden-audit:** per-tier "X of Y" apply-progress count ([f507fdf](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/f507fdfff37398e6de31aaea56fbe031d82b8610))
+* **garden-audit:** pure apply-decision transforms with ADR-5 action rule (T2.2) ([556313a](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/556313aa4340df963e360c716a877f74f6fd06e4))
+* **garden-audit:** register view type + wire opener into main (T3.3) ([ac5570c](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/ac5570c6d5e1df601fc582e121b4abfab9b7a05d))
+* **garden-audit:** save/revert/dirty affordance with concurrent-change guard (T4.3) ([aeec04f](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/aeec04f0b9980dc9fa7f76a2b12f125ec20784fc))
+* **garden-audit:** suffix-dispatch open command to both editors (T3.2) ([1b44a28](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/1b44a285119f0e92a227764e7e81b03da44c7940))
+* **garden-audit:** suggest_pending gate + two-run banner & highlight ([7a630f0](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/7a630f0ce3b4691f300f9a0796a0982bfd7a39c5))
+* **garden-audit:** suggest-targets toggle + two-run hints (T5.4) ([c33e770](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/c33e770b775136c66a1eedf940add0cbc7224ced))
+* **garden-audit:** target edit on skipped finding auto-selects apply ([080f173](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/080f173604c1d2a0f20f8018913fa5f68d4e2b6b))
+* **garden-audit:** tier-grouped tab shell (T4.2) ([3640c72](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/3640c726d2bac5a0ba2d6aea93582645c7523931))
+* **garden-audit:** vendor wire schema + hand-aligned types (T1.1) ([bb4f7a5](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/bb4f7a52adcbd63ba46faee172f0eb01a4162941))
+
+### Bug Fixes
+
+* **garden-audit:** address Phase 3 spec review (T3.x) ([098b3ee](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/098b3ee0bb34d3c93c8f437a205cfc3a9a119d50))
+* **garden-audit:** flip broken_up remove tooltip to link-only wording ([5e8d0cb](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/5e8d0cb3941f45d23b0fed256245011964c70e76))
+* **garden-audit:** move no-scan-candidate hint to the detail-line slot ([bf020e0](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/bf020e0e2d2975312491bcd2c0f07598b109e0b8))
+* **garden-audit:** normalize broken_up action on save — ADR-5 apply-only gap ([f7a43c2](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/f7a43c269853012d0231cf09f79399724365d92f))
+* **garden-audit:** register hover-link source + context edge polish (P6 validation) ([25ae89f](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/25ae89f4e3741cd7300eefe1a18016eecdb2e2f5)), closes [#tag](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/tag)
+* **garden-audit:** reset dead-link context cache per doc load (T6.1 review) ([a28f534](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/a28f534884c189cfd6b95ebc5d0a2b9017bef840))
+* **garden-audit:** singular-aware aria-label for single-finding tier count ([ebd04ea](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/ebd04ea5a4ee98115db68b2d26756f0ceb269cae))
+* **schema:** clear validator error for unknown action kind (was misleading 'source') ([7287867](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/7287867b3a8ec64fd82778c793efb95bc612d47c))
+
 ## [0.17.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.17.1...0.17.2) (2026-07-13)
 
 ### Bug Fixes

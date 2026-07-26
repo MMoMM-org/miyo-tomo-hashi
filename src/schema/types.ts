@@ -138,6 +138,67 @@ export interface AddRelationshipAction extends ActionBase {
 	readonly source_note_title?: string | null;
 }
 
+/**
+ * EditNoteTextAction — literal find-and-replace inside a note's BODY (never
+ * frontmatter). Introduced by Tomo spec 030 (garden-audit) / ADR-3 to repoint
+ * or remove dead `[[wikilinks]]` and strip broken inline `up::` lines.
+ *
+ * `match` is a literal substring (not regex/glob); `replace: ""` deletes it
+ * (whole-line matches collapse the empty line). `occurrence` defaults to
+ * "first". Match-not-found is a no-op success, not a failure.
+ * [ref: Tomo handoff 2026-07-21 garden-audit-edit-note-text]
+ */
+export interface EditNoteTextAction extends ActionBase {
+	readonly action: "edit_note_text";
+	readonly path: string;
+	readonly match: string;
+	readonly replace: string;
+	readonly occurrence?: "first" | "all";
+}
+
+/**
+ * RemoveUpLinkAction — remove ONE link from a note's `up::` line, preserving
+ * the field itself. Introduced by garden-audit's `broken_up` cleanup
+ * (user decision 2026-07-23): the earlier whole-line `edit_note_text`
+ * construction silently no-oped on multi-link `up::` lines, since it could
+ * only match/replace the WHOLE line verbatim.
+ *
+ * Hashi locates the `up::` line with the same marker/callout/bullet locator
+ * `add_relationship` uses, then removes the `[[link]]` occurrence on that
+ * line including a dangling separator (whitespace-tolerant around commas).
+ * When the removed link was the only one, the line becomes an empty
+ * `up::` — the field is NEVER deleted (it is a required structural field;
+ * an emptied `up::` correctly resurfaces the note as unparented next scan).
+ *
+ * [ref: Tomo hashi-instructions.schema.json (feat/garden-audit-brainstorm);
+ * tomo-to-hashi handoff 2026-07-23 remove_up_link]
+ */
+export interface RemoveUpLinkAction extends ActionBase {
+	readonly action: "remove_up_link";
+	readonly path: string;
+	readonly link: string;
+}
+
+/**
+ * ResolveDeadLinkAction — resolve a dead wikilink in a note BODY, alias-aware
+ * (unlink or repoint). Supersedes `edit_note_text` for dead_link fixes: that
+ * literal construction silently no-oped on ALIASED links, since it could
+ * only match/replace the whole `[[…]]` text verbatim. Tomo cannot build
+ * these edits as literal strings itself — it never sees the note body or
+ * its display text — so the resolution is delegated to Hashi, which locates
+ * every occurrence of `target` across all wikilink forms (bare, aliased,
+ * embed) and unlinks (`replace: ""`, keeping display text) or repoints
+ * (`replace: "[[New]]"`, preserving display) every one.
+ *
+ * [ref: Tomo commit 4251618; src/actions/resolveDeadLink.ts]
+ */
+export interface ResolveDeadLinkAction extends ActionBase {
+	readonly action: "resolve_dead_link";
+	readonly path: string;
+	readonly target: string;
+	readonly replace: string;
+}
+
 export interface UpdateTrackerAction extends ActionBase {
 	readonly action: "update_tracker";
 	readonly daily_note_path: string;
@@ -198,6 +259,9 @@ export type Action =
 	| InsertUnderMarkerAction
 	| ReplaceSectionAction
 	| AddRelationshipAction
+	| EditNoteTextAction
+	| RemoveUpLinkAction
+	| ResolveDeadLinkAction
 	| UpdateTrackerAction
 	| UpdateLogEntryAction
 	| UpdateLogLinkAction

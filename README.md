@@ -66,7 +66,7 @@ A way to let Tomo know what you're working on — which note is open, which text
 
 ### C — Instruction executor
 
-Delegate the tedious work — moving, renaming, and editing notes from your Inbox to the right place — *after* you've approved the suggestion document. Hashi does the same steps you would, plus a few more via extensible hooks:
+Delegate the tedious work — moving, renaming, and editing notes from your Inbox to the right place — *after* you've approved the suggestion document. Hashi does the same steps you would, plus a few more via extensible hooks. Approval happens in one of two review surfaces — the Suggestions Editor for `/inbox` runs, or the Garden-Audit Editor for `/garden-audit` vault-health scans — both opened by the same **Open Tomo editor** command:
 
 - Alias needs reconfiguring after a rename? → a hook does it.
 - A different note needs updating after a delete? → a hook.
@@ -82,7 +82,7 @@ Cut down on the busywork — with the peace of mind that Hashi does only what yo
 - **Path safety** — `.obsidian/`, `.git/`, `.trash/`, hooks dir, and traversal-escape paths are denied
 - **Optional hooks** — `.cjs` files in your vault, full plugin privilege, with an ask-mode disclosure modal
 - **Schema validation** — vendored Tomo schema, ajv-compiled at module load
-- **11 action kinds** — create_moc, move_note, link_to_moc, insert_under_marker, replace_section, add_relationship, update_tracker, update_log_entry, update_log_link, delete_source, skip
+- **14 action kinds** — create_moc, move_note, link_to_moc, insert_under_marker, replace_section, add_relationship, edit_note_text, remove_up_link, resolve_dead_link, update_tracker, update_log_entry, update_log_link, delete_source, skip
 
 ## Documentation
 
@@ -95,8 +95,9 @@ Cut down on the busywork — with the peace of mind that Hashi does only what yo
 | [Chat](docs/chat.md) | Tomo users | Picker, reconnect schedule, status bar 友 — branch A |
 | [Context](docs/context.md) | Tomo users | Enable + Tomo wiring, auth token, connection troubleshooting — branch B |
 | [Suggestions Editor](docs/suggestions-editor.md) | Tomo users | Tabbed review of `_suggestions.json`, worthy/suppressed cards, MOC placement, Save = approve — branch C |
+| [Garden-Audit Editor](docs/garden-audit-editor.md) | Tomo users | Tier-grouped review of `_garden-audit.json`, apply/skip targets, candidate chips, Save = approve — branch C |
 | [Instruction Executor](docs/instruction-executor.md) | Tomo users | Modal stages, modes, partial-resume, status bar 橋 — branch C |
-| [Action Reference](docs/action-reference.md) | Tomo users | All 11 action kinds with idempotency rules — branch C |
+| [Action Reference](docs/action-reference.md) | Tomo users | All 14 action kinds with idempotency rules — branch C |
 | [Hooks](docs/hooks.md) | Power users | `.cjs` hook authoring, policy, disclosure modal — branch C |
 | [Run Log](docs/run-log.md) | Vault owners | Log format, retention, hook output — branch C |
 | [Development](docs/development.md) | Contributors | Build, test, lint, architecture, test vault |

@@ -365,65 +365,106 @@ async function toggleIdeBridge(deps: IdeBridgeCommandDeps): Promise<void> {
 //    touching real workspace leaves.
 
 const OPEN_SUGGESTIONS_EDITOR_ID = "open-suggestions-editor";
-const OPEN_SUGGESTIONS_EDITOR_LABEL = "Open suggestions editor";
-const NO_SUGGESTIONS_DOC_NOTICE =
-	"Open a Tomo _suggestions.json (or its .md) first";
+// ADR-6: the command id above is UNCHANGED (user hotkeys bind to it) — only
+// the label changed, from "Open suggestions editor" to reflect that this one
+// command now suffix-dispatches to EITHER editor.
+const OPEN_TOMO_EDITOR_LABEL = "Open Tomo editor";
+// Covers BOTH doc families (spec-005 fix pass) — the prior 004-only wording
+// ("Open a Tomo _suggestions.json...") went stale once the empty-vault
+// fallback started merging garden-audit runs in too (T3.2).
+const NO_TOMO_DOC_NOTICE =
+	"No Tomo runs found — open a _suggestions.json or _garden-audit.json (or its .md) first";
 
-export interface SuggestionsEditorCommandDeps {
+/**
+ * Deps for the unified "Open Tomo editor" command (ADR-6) — dispatches to
+ * both the Suggestions Editor and the Garden-Audit Editor. `pickEditorDoc`
+ * is named generically (not `pickSuggestionsDoc`) because the combined-
+ * picker fallback below shows BOTH doc families in one merged list.
+ */
+export interface OpenTomoEditorCommandDeps {
 	/** Vault-relative path of the active file, or null if none is open. */
 	readonly getActiveFilePath: () => string | null;
 	/**
-	 * Every `*_suggestions.json` run in the vault (sorted). Used only when the
-	 * active file is not itself a suggestions doc — the command then offers a
-	 * picker instead of failing with a Notice.
+	 * Every `*_suggestions.json` run in the vault (sorted). Merged with
+	 * `listGardenAuditDocs()` for the combined-picker fallback.
 	 */
 	readonly listSuggestionsDocs: () => string[];
 	/**
-	 * Opens a fuzzy picker over `docs`, invoking `onPick` with the chosen path.
-	 * Injected (rather than importing the Obsidian picker here) so this module
-	 * stays testable without a real `FuzzySuggestModal`.
+	 * Every `*_garden-audit.json` run in the vault (sorted). Merged with
+	 * `listSuggestionsDocs()` for the combined-picker fallback.
 	 */
-	readonly pickSuggestionsDoc: (docs: string[], onPick: (docPath: string) => void) => void;
+	readonly listGardenAuditDocs: () => string[];
+	/**
+	 * Opens a fuzzy picker over `docs` (the MERGED, sorted list of both doc
+	 * families), invoking `onPick` with the chosen path. Injected (rather than
+	 * importing the Obsidian picker here) so this module stays testable
+	 * without a real `FuzzySuggestModal`. The dispatcher below routes the
+	 * chosen path to the right opener by suffix (`GARDEN_AUDIT_JSON_RE`).
+	 */
+	readonly pickEditorDoc: (docs: string[], onPick: (docPath: string) => void) => void;
 	/** Opens (or retargets/reveals) the Suggestions Editor leaf for docPath. */
 	readonly openSuggestionsEditor: (docPath: string) => Promise<void>;
+	/** Opens (or retargets/reveals) the Garden-Audit Editor leaf for docPath. */
+	readonly openGardenAuditEditor: (docPath: string) => Promise<void>;
 }
 
 /**
- * Register the 004 "Open suggestions editor" palette command. Called
- * separately from the 001/002/003 registrars so 004 wiring stays decoupled —
- * main.ts calls it after constructing the vault-backed `openSuggestionsEditor`.
+ * Register the unified "Open Tomo editor" palette command (ADR-6). Called
+ * separately from the 001/002/003 registrars so 004/005 wiring stays
+ * decoupled — main.ts calls it after constructing the vault-backed openers.
  */
-export function registerSuggestionsEditorCommand(
+export function registerOpenTomoEditorCommand(
 	plugin: Plugin,
-	deps: SuggestionsEditorCommandDeps,
+	deps: OpenTomoEditorCommandDeps,
 ): void {
 	plugin.addCommand({
 		id: OPEN_SUGGESTIONS_EDITOR_ID,
-		name: OPEN_SUGGESTIONS_EDITOR_LABEL,
+		name: OPEN_TOMO_EDITOR_LABEL,
 		callback: () => {
 			void dispatchOpenSuggestionsEditor(deps);
 		},
 	});
 }
 
+/**
+ * Suffix-dispatch (ADR-6): the active file decides which editor opens.
+ * Garden-audit is checked first — the two resolvers are disjoint by
+ * construction (T3.1), so the order only matters when NEITHER matches and the
+ * active file is unrelated to both. Falls through to a combined picker over
+ * every run of either kind, and only then to the Notice.
+ */
 async function dispatchOpenSuggestionsEditor(
-	deps: SuggestionsEditorCommandDeps,
+	deps: OpenTomoEditorCommandDeps,
 ): Promise<void> {
-	const activeDocPath = resolveSuggestionsDocPath(deps.getActiveFilePath());
-	if (activeDocPath !== null) {
-		await deps.openSuggestionsEditor(activeDocPath);
+	const activePath = deps.getActiveFilePath();
+
+	const activeGardenAuditPath = resolveGardenAuditDocPath(activePath);
+	if (activeGardenAuditPath !== null) {
+		await deps.openGardenAuditEditor(activeGardenAuditPath);
 		return;
 	}
-	// No suggestions doc is active — offer a picker over every run in the
-	// vault (owner UX refinement), falling back to the Notice only when the
-	// vault has none at all.
-	const docs = deps.listSuggestionsDocs();
+
+	const activeSuggestionsPath = resolveSuggestionsDocPath(activePath);
+	if (activeSuggestionsPath !== null) {
+		await deps.openSuggestionsEditor(activeSuggestionsPath);
+		return;
+	}
+
+	// Neither editor's doc is active — offer a combined picker over every run
+	// in the vault (owner UX refinement, extended in 005 to merge both doc
+	// families), falling back to the Notice only when the vault has none of
+	// either at all.
+	const docs = [...deps.listGardenAuditDocs(), ...deps.listSuggestionsDocs()].sort();
 	if (docs.length === 0) {
-		new Notice(NO_SUGGESTIONS_DOC_NOTICE);
+		new Notice(NO_TOMO_DOC_NOTICE);
 		return;
 	}
-	deps.pickSuggestionsDoc(docs, (chosen) => {
-		void deps.openSuggestionsEditor(chosen);
+	deps.pickEditorDoc(docs, (chosen) => {
+		if (GARDEN_AUDIT_JSON_RE.test(chosen)) {
+			void deps.openGardenAuditEditor(chosen);
+		} else {
+			void deps.openSuggestionsEditor(chosen);
+		}
 	});
 }
 
@@ -452,4 +493,55 @@ export function resolveSuggestionsDocPath(
 		return activePath.slice(0, -".md".length) + ".json";
 	}
 	return null;
+}
+
+/**
+ * Pure filter+sort over a flat list of vault paths (e.g.
+ * `app.vault.getFiles().map(f => f.path)`) to every `*_suggestions.json` run.
+ * Extracted (spec-005 Phase 3 fix pass) so discovery is unit-testable without
+ * a real vault — main.ts supplies the paths, this function owns the rule.
+ */
+export function listSuggestionsDocs(paths: readonly string[]): string[] {
+	return paths.filter((path) => SUGGESTIONS_JSON_RE.test(path)).sort();
+}
+
+// ---------------------------------------------------------------------------
+// 005 spec — garden-audit discovery resolver (T3.1)
+// ---------------------------------------------------------------------------
+//
+// Spec refs: spec-005 SDD ADR-6; plan/phase-3.md T3.1. Disjoint from the 004
+// suggestions resolver above by construction — a `_garden-audit.json` never
+// matches SUGGESTIONS_JSON_RE and a `_suggestions.json` never matches
+// GARDEN_AUDIT_JSON_RE — so the unified open command (T3.2 below) can check
+// each resolver in turn without an ambiguous double-match.
+
+export const GARDEN_AUDIT_JSON_RE = /_garden-audit\.json$/;
+const GARDEN_AUDIT_MD_RE = /_garden-audit\.md$/;
+
+/**
+ * Map the active file path to the `_garden-audit.json` doc to open:
+ *   - `<stem>_garden-audit.json` → itself.
+ *   - `<stem>_garden-audit.md` → the `.json` sibling.
+ *   - anything else (no active file, unrelated note, a suggestions doc) →
+ *     null; the caller falls through to the next resolver / picker / Notice.
+ */
+export function resolveGardenAuditDocPath(
+	activePath: string | null,
+): string | null {
+	if (activePath === null) return null;
+	if (GARDEN_AUDIT_JSON_RE.test(activePath)) return activePath;
+	if (GARDEN_AUDIT_MD_RE.test(activePath)) {
+		return activePath.slice(0, -".md".length) + ".json";
+	}
+	return null;
+}
+
+/**
+ * Pure filter+sort over a flat list of vault paths to every
+ * `*_garden-audit.json` run. Parity with `listSuggestionsDocs` above —
+ * extracted (spec-005 Phase 3 fix pass) so discovery is unit-testable
+ * without a real vault.
+ */
+export function listGardenAuditDocs(paths: readonly string[]): string[] {
+	return paths.filter((path) => GARDEN_AUDIT_JSON_RE.test(path)).sort();
 }

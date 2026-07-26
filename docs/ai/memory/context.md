@@ -1,5 +1,102 @@
 # Context Memory
 
+## resolve_dead_link — 14th executor kind (2026-07-25)
+
+User's garden-audit apply failed with a misleading `/actions/0 must have required property
+'source'`. Root cause: **version skew** — Tomo shipped `resolve_dead_link` (commit 4251618,
+alias/embed-aware dead-link fix, supersedes edit_note_text for dead_link because edit_note_text
+no-opped on aliased `[[t|display]]` links) AFTER Hashi's last vendor. Ajv couldn't match the
+unknown kind and reported the wrong oneOf branch's error. Fix (`a18577c`+`7287867`): full
+re-vendor (byte-parity w/ Tomo, 14 defs) + `resolveDeadLink.ts` handler (regex-escaped
+whole-target matcher over bare/aliased/embed forms; replace="" unlinks keeping display,
+"[[New]]" repoints preserving display; skipped-already/no-match, failed/missing) + full 13→14
+enumeration surface + a validator improvement: unknown action kind now emits
+`unknown action kind 'X'` instead of the misleading required-field error. 1966 tests, deployed
+`…-1010`. **Lesson:** an unfamiliar Ajv `required`-property error on an instruction set often
+means an unknown (newer-Tomo) action kind, not a genuinely missing field — check the action's
+`action` value against the vendored schema's oneOf consts first.
+
+## suggest_pending gate + two-run UX (2026-07-24)
+
+Two-run garden-audit gate shipped on `feat/garden-audit-editor` (`7a630f0`, 1935 tests):
+a Save with a pending Suggest must NOT approve for /inbox (else Tomo processes a half-finished
+review — the mixed-edit footgun: an apply edit changes the digest → JSON authoritative, while a
+suggest-requested finding still has no target). Parts:
+- Additive top-level `suggest_pending?: boolean` (vendored ahead of Tomo's push — **reconcile-vendor
+  when Tomo lands their authoritative schema**, ADR-7); `GardenAuditWire.suggest_pending`.
+- Save gate (ADR-2, view-owned): `ObsidianGardenAuditDoc.save` now writes `model.doc` VERBATIM
+  (dropped the hardcoded `approved:true`); `handleSave` applies `applyApprovalGate` +
+  `normalizeBrokenUpActions` before the reference-identity baseline. pending → `approved:false,
+  suggest_pending:true`; else → `approved:true, suggest_pending:false`. Both gate fields are
+  digest-excluded (e2e proves emit_digest + apply fields byte-identical under a suggest-only save).
+- UX: two-state header banner (`GardenAuditBanner.ts`) + accent border/"New" badge on fresh
+  findings (`suggested && candidates>0`); single shared `isFreshFinding` predicate.
+- **The actual /inbox enforcement is 100% Tomo-side** (triage gates on `approved AND NOT
+  suggest_pending`); Hashi only signals. Handoff sent (`2026-07-24_hashi-to-tomo_garden-audit-
+  suggest-pending-gate.md`) with a **push-back**: the field is derivable from `suggest_requested &&
+  !suggested` (both shipped) — asked Tomo keep-explicit-field vs derive. **Open: Tomo's answer.**
+
+**Follow-up debt:** `GardenAuditTab.ts` is ~620 LOC, over the 500 L2 soft band — extract
+`renderCandidateChips`/`renderChipRow` (and/or card renderers) into a sibling; banner + suggest +
+target + note-nav already extracted, tab still over budget.
+
+## Garden-Audit executor actions + QA polish landed (2026-07-23)
+
+After Phase 7's core (T7.1/T7.2 done), a QA + Tomo-round-trip burst on `feat/garden-audit-editor`:
+- **Editor UX (spec-005):** skip+target-edit auto-selects Apply (`080f173`); empty-state
+  aria-label tooltips + "no scan candidate" detail-line hint (`c66c21e`→`bd51b05`);
+  broken_up remove tooltip flipped to link-only wording (`5e8d0cb`).
+- **Executor actions (spec-002, needed for garden-audit apply end-to-end):**
+  cherry-picked the finished-but-unmerged **`edit_note_text`** action (`feat/edit-note-text-action`
+  8492b19 → clean, no conflicts: executor namespace `src/actions`+`src/schema/types.ts` is
+  disjoint from the garden-audit-editor namespace `src/garden-audit`+`src/ui/garden-audit-view`),
+  then added **`remove_up_link`** (13th kind, `4ee6d40`+`8ecdc27`): removes one `[[link]]` from
+  the `up::` line, KEEPS the field (empty `up:: ` when last link, never delete — up:: is
+  structural, resurfaces as unparented next scan), whole-stem `indexOf` match (not substring),
+  callout/bullet prefix preserved, skip-and-report on no-match. Reuses `addRelationship`'s locator.
+- **ADR-7 full re-vendor** of `instructions.schema.json` from Tomo's `hashi-instructions.schema.json`
+  (`cc24db3`): vendored copy had drifted (terser descriptions + `minLength:1` on
+  insert_under_marker.target_path); now byte-identical to Tomo.
+- **Withdrawn by Tomo mid-flight:** advisory `ack` wire field (Correction 2 → pushback is
+  Tomo-internal, T5.5 read-only stays correct); `decision.selected` now defaults false at scan
+  (no Hashi change — editor renders from wire; skip+target-edit→apply complements it).
+- Adding an executor action kind touches ~20 sites; the Explore scout's checklist + memory
+  `troubleshooting_adding_action_kind_test_enumeration_sites` caught them all. KIND_ORDER is the
+  silent-drop trap (only the planner.test.ts slot assertion guards it).
+- 3 Tomo handoffs closed `done`; branch pushed. 1923 tests green at `5e8d0cb`.
+
+## Garden-Audit Editor Phases 5+6 — COMPLETE (2026-07-23), Phase 7 next
+
+Phase 6 (dead-link context + note navigation) shipped same day: async cached extractor
+(`deadLinkContext.ts`, per-doc-load cache after review fix), card wiring with
+stale-render guard (`DeadLinkContextView.ts`), side-split + hover-preview navigation
+(`noteNavigation.ts` — additive sibling, spec-004 `openNote.ts` untouched),
+`registerHoverLinkSource` wired in onload (boundary-validation catch — the mock can't
+see Page Preview registration). 1850 tests / build / lint green at `052af85`.
+**Phase 7 (final): integration, styles & polish.** Carried-in polish list: extract
+`renderCandidateChips`/`renderChipRow` from `GardenAuditTab.ts` (~535 LOC); code-fence
+heading edge in deadLinkContext; `deadTarget === undefined` branch test; optional
+hover-preview for the suggestions editor (display name "Tomo editor" already umbrella);
+lock the registerHoverLinkSource display string in the main.integration test.
+
+## Garden-Audit Editor Phase 5 — COMPLETE (2026-07-23)
+
+**Phase 5 shipped same-day after the Tomo round-trip resolved.** Tomo adopted Hashi's
+`decision.suggested` ran-marker proposal as-is (+ fixed the S.4 wire re-upload AND a
+third self-found Gap C: the `enriched N` count stopping zero-candidate runs). Schema
+re-vendored (ADR-7), T5.4 shipped (`SuggestControl.ts`: toggle + pending /
+"no suggestions found" hint precedence per the reply handoff), Phase 5 fully validated
+(1818 tests, build, lint; drift-checked). Handoff pair closed `done` both ways. Next:
+Phase 6 (dead-link context T6.1, open-beside/hover T6.2), then Phase 7 (integration,
+styles, polish — carry-over item: extract `renderCandidateChips`/`renderChipRow` from
+`GardenAuditTab.ts` (~525 LOC, over the 500 soft band)).
+
+Wire-gap history (short): T5.4 was blocked half a day because "suggest pending" vs
+"ran-and-empty" were wire-identical and `decision` is `additionalProperties:false` — the
+handoff pair `2026-07-23_*garden-audit-suggest*` (outbox/inbox, both `done`) carries the
+full analysis. Also fixed en route: the ADR-5 apply-only/approve-only gap
+(`normalizeBrokenUpActions` on the save path, `f7a43c2`).
+
 ## Suggestions Editor (ADR-026) — ABSORBED, BLOCKED on Tomo (2026-07-03)
 
 Kokoro ADR-026 (Draft) amends Hashi's charter (ADR-009): Hashi gains a **Suggestions Editor** — a structured, editable view of Tomo's Pass-1 `suggestions.json` with four deterministic ops (re-point to MOC / pick spot in MOC / merge-rename proposed MOCs / change lifecycle state). Decision + open points recorded in `decisions.md` (2026-07-03). **Not started — gated on Tomo:** the `suggestions.json` schema + change-signal are Tomo-owned and not yet defined (paired Kokoro→Tomo handoff issued same day). Next steps once Tomo's contract lands: scaffold `docs/XDD/specs/NNN-suggestions-editor/` via `tcs-workflow:xdd`, do the ADR-026 §0 capability-mapping (four ops → existing executor contracts ADR-016/023/024) in the SDD, push back on any op that duplicates Tomo. Inbound handoff (absorbed, ack'd): `_inbox/from-kokoro/2026-07-03_kokoro-to-hashi_suggestions-editor-charter.md`.

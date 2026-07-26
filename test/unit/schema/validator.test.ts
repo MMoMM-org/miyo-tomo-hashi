@@ -370,3 +370,267 @@ describe("validate", () => {
 		expect(typeof mod.validateInstructionSet).toBe("function");
 	});
 });
+
+// ---------------------------------------------------------------------------
+// Unknown action kind — clear message, not a misleading sub-schema error
+// ---------------------------------------------------------------------------
+
+describe("validate — unknown action kind", () => {
+	it("reports a clear 'unknown action kind' message instead of a misleading oneOf sub-error", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{ id: "I01", action: "totally_unknown_action", path: "a.md" },
+			],
+		};
+
+		const result = validate(fixture);
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.message).toContain("unknown action kind 'totally_unknown_action'");
+			expect(result.message).not.toContain("must have required property");
+		}
+	});
+
+	it("identifies the earliest failing action index among multiple actions", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			actions: [
+				{ id: "I01", action: "skip", source_path: "a.md" },
+				{ id: "I02", action: "another_unknown_kind" },
+			],
+		};
+
+		const result = validate(fixture);
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.message).toContain("/actions/1");
+			expect(result.message).toContain("unknown action kind 'another_unknown_kind'");
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// edit_note_text — spec 030 garden-audit / ADR-3
+// ---------------------------------------------------------------------------
+
+describe("validate — edit_note_text", () => {
+	const editAction = {
+		id: "I01",
+		action: "edit_note_text" as const,
+		path: "020 Active MOC.md",
+		match: "[[023 Sparks MOC]]",
+		replace: "[[023 Sparks (MOC)]]",
+		occurrence: "all" as const,
+	};
+
+	it("accepts an edit_note_text action", () => {
+		const result = validate({ ...VALID_FIXTURE, actions: [editAction] });
+		expect(result.ok).toBe(true);
+	});
+
+	it("accepts edit_note_text with occurrence omitted (defaults to first)", () => {
+		const { occurrence: _omit, ...withoutOccurrence } = editAction;
+		const result = validate({ ...VALID_FIXTURE, actions: [withoutOccurrence] });
+		expect(result.ok).toBe(true);
+	});
+
+	it("rejects edit_note_text missing a required field (match)", () => {
+		const { match: _drop, ...missingMatch } = editAction;
+		expect(validate({ ...VALID_FIXTURE, actions: [missingMatch] }).ok).toBe(false);
+	});
+
+	it("rejects an invalid occurrence enum value", () => {
+		const bad = { ...editAction, occurrence: "second" };
+		expect(validate({ ...VALID_FIXTURE, actions: [bad] }).ok).toBe(false);
+	});
+
+	it("rejects an unknown extra field (additionalProperties: false)", () => {
+		const bad = { ...editAction, regex: true };
+		expect(validate({ ...VALID_FIXTURE, actions: [bad] }).ok).toBe(false);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// remove_up_link — tomo-to-hashi handoff 2026-07-23
+// ---------------------------------------------------------------------------
+
+describe("validate — remove_up_link", () => {
+	const removeUpLinkAction = {
+		id: "I01",
+		action: "remove_up_link" as const,
+		path: "022 Placeholders MOC.md",
+		link: "021 Fleeting MOC",
+	};
+
+	it("accepts a remove_up_link action", () => {
+		const result = validate({ ...VALID_FIXTURE, actions: [removeUpLinkAction] });
+		expect(result.ok).toBe(true);
+	});
+
+	it("accepts a remove_up_link action with the optional applied field", () => {
+		const result = validate({
+			...VALID_FIXTURE,
+			actions: [{ ...removeUpLinkAction, applied: false }],
+		});
+		expect(result.ok).toBe(true);
+	});
+
+	it("rejects remove_up_link missing a required field (link)", () => {
+		const { link: _drop, ...missingLink } = removeUpLinkAction;
+		expect(validate({ ...VALID_FIXTURE, actions: [missingLink] }).ok).toBe(false);
+	});
+
+	it("rejects remove_up_link missing a required field (path)", () => {
+		const { path: _drop, ...missingPath } = removeUpLinkAction;
+		expect(validate({ ...VALID_FIXTURE, actions: [missingPath] }).ok).toBe(false);
+	});
+
+	it("rejects an unknown extra field (additionalProperties: false)", () => {
+		const bad = { ...removeUpLinkAction, marker: "up::" };
+		expect(validate({ ...VALID_FIXTURE, actions: [bad] }).ok).toBe(false);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// resolve_dead_link — Tomo commit 4251618
+// ---------------------------------------------------------------------------
+
+describe("validate — resolve_dead_link", () => {
+	const resolveDeadLinkAction = {
+		id: "I01",
+		action: "resolve_dead_link" as const,
+		path: "020 Active MOC.md",
+		target: "023 Sparks MOC",
+		replace: "[[023 Sparks (MOC)]]",
+	};
+
+	it("accepts a resolve_dead_link action", () => {
+		const result = validate({ ...VALID_FIXTURE, actions: [resolveDeadLinkAction] });
+		expect(result.ok).toBe(true);
+	});
+
+	it("accepts a resolve_dead_link unlink (replace: '')", () => {
+		const result = validate({
+			...VALID_FIXTURE,
+			actions: [{ ...resolveDeadLinkAction, replace: "" }],
+		});
+		expect(result.ok).toBe(true);
+	});
+
+	it("accepts a resolve_dead_link action with the optional applied field", () => {
+		const result = validate({
+			...VALID_FIXTURE,
+			actions: [{ ...resolveDeadLinkAction, applied: false }],
+		});
+		expect(result.ok).toBe(true);
+	});
+
+	it("rejects resolve_dead_link missing a required field (target)", () => {
+		const { target: _drop, ...missingTarget } = resolveDeadLinkAction;
+		expect(validate({ ...VALID_FIXTURE, actions: [missingTarget] }).ok).toBe(false);
+	});
+
+	it("rejects resolve_dead_link missing a required field (replace)", () => {
+		const { replace: _drop, ...missingReplace } = resolveDeadLinkAction;
+		expect(validate({ ...VALID_FIXTURE, actions: [missingReplace] }).ok).toBe(false);
+	});
+
+	it("rejects an unknown extra field (additionalProperties: false)", () => {
+		const bad = { ...resolveDeadLinkAction, marker: "up::" };
+		expect(validate({ ...VALID_FIXTURE, actions: [bad] }).ok).toBe(false);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Tomo↔Hashi drift guard — the REAL, Tomo-validated garden-audit instruction
+// set from the tomo-to-hashi 2026-07-21 handoff (§6). Generated by Tomo's
+// scripts/gen-garden-audit-hashi-example.py and asserted valid against Tomo's
+// authoritative hashi-instructions.schema.json. It must also validate against
+// Hashi's vendored copy — if this fails, the two schemas have drifted.
+// ---------------------------------------------------------------------------
+
+describe("validate — real garden-audit instruction set (drift guard)", () => {
+	const GARDEN_AUDIT_EXAMPLE = {
+		schema_version: "2",
+		type: "tomo-instructions",
+		source_suggestions: "garden-audit-report",
+		generated: "2026-07-21T18:16:19Z",
+		profile: "miyo",
+		tomo_version: null,
+		action_count: 6,
+		md_peer: "2026-07-21_1738_garden-audit",
+		actions: [
+			{
+				id: "I01",
+				action: "edit_note_text",
+				path: "020 Active MOC.md",
+				match: "[[023 Sparks MOC]]",
+				replace: "[[023 Sparks (MOC)]]",
+				occurrence: "all",
+				applied: false,
+			},
+			{
+				id: "I02",
+				action: "edit_note_text",
+				path: "020 Active MOC.md",
+				match: "[[024 Thinking About MOC]]",
+				replace: "",
+				occurrence: "all",
+				applied: false,
+			},
+			{
+				id: "I03",
+				action: "add_relationship",
+				target_moc: null,
+				target_moc_path: "021 Fleeting MOC.md",
+				marker: "up::",
+				line: "up:: [[020 Active MOC]]",
+				source_note_title: null,
+				applied: false,
+			},
+			{
+				id: "I04",
+				action: "edit_note_text",
+				path: "022 Placeholders MOC.md",
+				match: "up:: [[021 Fleeting MOC]]",
+				replace: "",
+				occurrence: "first",
+				applied: false,
+			},
+			{
+				id: "I05",
+				action: "link_to_moc",
+				target_moc: "000 Home MOC",
+				target_moc_path: null,
+				anchor: { type: "callout", value: null },
+				placement: "after",
+				line_to_add: "- [[005 Important Links]]",
+				source_note_title: "005 Important Links",
+				applied: false,
+			},
+			{
+				id: "I06",
+				action: "add_relationship",
+				target_moc: "000 Home MOC",
+				target_moc_path: "005 Important Links.md",
+				marker: "up::",
+				line: "up:: [[000 Home MOC]]",
+				source_note_title: null,
+				applied: false,
+			},
+		],
+		tomo: {
+			doc_type: "garden-audit",
+			state: "pending-apply",
+			run_id: "41c6cd18-63b2-4e5b-86b7-da55aa3298e5",
+		},
+	};
+
+	it("validates the real garden-audit instruction set against the vendored schema", () => {
+		const result = validate(GARDEN_AUDIT_EXAMPLE);
+		expect(result.ok).toBe(true);
+	});
+});

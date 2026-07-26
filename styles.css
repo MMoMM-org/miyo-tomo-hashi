@@ -577,6 +577,311 @@
 	color: var(--se-text-faint);
 }
 
+/* ---- garden-audit header banner (2026-07-24, suggest_pending gate) -------
+   Rendered at the top of GardenAuditTab, before the tier sections — the
+   --pending variant is the blocking state (Saving now would park the run),
+   the --fresh variant is purely informational (points at the highlighted
+   cards below). Mutually exclusive by precedence (GardenAuditBanner.ts). */
+.hashi-ga-banner {
+	padding: 8px 12px;
+	margin-bottom: 14px;
+	border-radius: var(--se-r-sm);
+	font-size: 12.5px;
+	line-height: 1.4;
+}
+.hashi-ga-banner--pending {
+	background: var(--se-bg-alt);
+	color: var(--se-text);
+	border: 1px solid var(--se-border-strong);
+}
+.hashi-ga-banner--fresh {
+	background: var(--se-accent-soft);
+	color: var(--se-text);
+	border: 1px solid var(--se-accent);
+}
+
+/* ---- garden-audit tier shell (spec-005, T4.2) ----------------------------
+   Reuses the --se-* custom properties defined on .hashi-se-view above — the
+   Garden-Audit Editor root carries both hashi-garden-audit-editor-view and
+   hashi-se-view, so these vars are in scope. Card bodies are Phase 5; only
+   the tier header + placeholder finding row are styled here. */
+.hashi-ga-nothing-to-apply {
+	padding: 8px 12px;
+	margin-bottom: 14px;
+	border-radius: var(--se-r-sm);
+	background: var(--se-bg-alt);
+	color: var(--se-text-muted);
+	font-size: 12.5px;
+}
+.hashi-ga-tier {
+	margin-bottom: 18px;
+}
+.hashi-ga-tier-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+.hashi-ga-tier-label {
+	font-size: 11.5px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	color: var(--se-text-muted);
+	text-transform: uppercase;
+}
+.hashi-ga-tier-count {
+	font-family: var(--se-mono);
+	font-size: 11px;
+	color: var(--se-text-faint);
+	background: var(--se-bg-alt);
+	border-radius: 999px;
+	padding: 1px 8px;
+}
+.hashi-ga-finding-row {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 8px 10px;
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r-sm);
+	background: var(--se-bg-elev);
+	margin-bottom: 6px;
+	font-size: 12.5px;
+}
+
+/* ---- TargetControl (spec-005, T5.1 — ADR-3 composite target widget) ----- */
+.hashi-ga-target {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+.hashi-ga-target-inp {
+	flex: 1;
+	min-width: 120px;
+}
+.hashi-ga-target-hint {
+	font-size: 11px;
+	color: var(--se-text-faint);
+	white-space: nowrap;
+}
+
+/* ---- fixable finding cards (spec-005, T5.2) -------------------------------
+   `.hashi-ga-finding-row` is the sole flex child here, so `flex:1` fills the
+   row's full width regardless of the row's own (horizontal) flex axis; the
+   card lays its own header/detail/target lines out in a column. Apply/Skip
+   and target-input styling is intentionally REUSED from the Suggestions
+   Editor (.hashi-se-decision/-approve/-skip, .hashi-se-inp/-mini-pick) —
+   same dual-class idiom TargetControl already uses — rather than duplicating
+   those rules under a ga- prefix. */
+.hashi-ga-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+}
+.hashi-ga-card-header {
+	display: flex;
+	align-items: baseline;
+	gap: 4px;
+	flex-wrap: wrap;
+	font-weight: 600;
+	color: var(--se-text);
+}
+.hashi-ga-card-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.hashi-ga-card-detail {
+	color: var(--se-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* Pushes Apply/Skip to the row's right edge whether or not a detail line
+   precedes it (e.g. orphan/unparented cards have no left-side detail text). */
+.hashi-ga-card-row .hashi-ga-decision {
+	margin-left: auto;
+}
+/* ---- dead-link context (spec-005, T6.1) -----------------------------------
+   Async, cached snippet(s) rendered beneath the dead_link card's detail row
+   (SDD ADR-4) — "Loading context…" swaps for the resolved line(s), or a
+   "Note not found." message when the affected note is missing/moved. */
+.hashi-ga-context {
+	font-size: 12px;
+	color: var(--se-text-muted);
+	font-style: italic;
+}
+.hashi-ga-context-line {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.hashi-ga-context-missing {
+	color: var(--se-text-faint);
+}
+
+.hashi-ga-target-field {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.hashi-ga-target-field label {
+	font-size: 10px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--se-text-faint);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+/* ---- no-scan-candidate hint (2026-07-23, user QA; repositioned same day) --
+   unparented/orphan only — states plainly that an empty target has no
+   fallback here, when `detail.candidate_mocs` is empty/absent. Rendered in
+   the card's detail-line slot (see `renderFileUnderCard`) paired with
+   `.hashi-ga-card-detail`, so it reads at the same normal prominence as the
+   broken_up/dead_link detail lines rather than the earlier faint treatment.
+   This class is a bare marker for querying/testing, with no styling of its own. */
+
+/* ---- candidate chips (spec-005, T5.3) -------------------------------------
+   Display-only, click-to-pick — a chip commits its stem into the card's
+   target field (never `decision.selected`); the LLM row (`--llm`) and the
+   scan row (`--scan`) get distinct left-border accents so two rows on the
+   same card (unparented/orphan) read as separate sources at a glance. */
+.hashi-ga-chip-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+	padding-left: 8px;
+	border-left: 2px solid var(--se-border);
+}
+.hashi-ga-chip-row--llm {
+	border-left-color: var(--se-accent);
+}
+.hashi-ga-chip-row--scan {
+	border-left-color: var(--se-border-strong);
+}
+.hashi-ga-chip-row-label {
+	font-size: 10px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--se-text-faint);
+	font-weight: 600;
+	white-space: nowrap;
+}
+.hashi-ga-chip {
+	font-family: var(--se-mono);
+	font-size: 11.5px;
+	padding: 2px 8px;
+	border: 1px solid var(--se-border);
+	border-radius: 999px;
+	background: var(--se-bg-alt);
+	color: var(--se-text-muted);
+	cursor: pointer;
+}
+.hashi-ga-chip:hover {
+	border-color: var(--se-border-strong);
+	color: var(--se-text);
+}
+.hashi-ga-chip.is-active {
+	border-color: var(--se-accent);
+	background: var(--se-accent-soft);
+	color: var(--se-text);
+}
+
+/* ---- advisory read-only card (spec-005, T5.5) -----------------------------
+   `duplicate_stem`/`stale_moc` findings never carry a `decision` — this
+   modifier is the visual half of that guarantee (dimmed; only the header's
+   note link stays full-opacity/interactive, matching every other -- row
+   modifier in this block: --llm/--scan above). */
+.hashi-ga-card--advisory {
+	opacity: 0.7;
+}
+.hashi-ga-card--advisory .hashi-se-wlink {
+	opacity: 1;
+}
+.hashi-ga-card-readonly-tag {
+	font-size: 10px;
+	color: var(--se-text-faint);
+	font-weight: 400;
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+/* ---- fresh-suggestion highlight (2026-07-24, suggest_pending gate) --------
+   A fixable finding whose `--suggest` run just left ≥1 display-only
+   candidate (transforms.isFreshFinding) — accent left-border + a small
+   badge, everything else on the card renders unchanged (user-approved: no
+   dimming of the rest of the deck). Advisory cards never get this modifier
+   (renderCardHeader guards on !readOnly). */
+.hashi-ga-card--fresh {
+	border-left: 2px solid var(--se-accent);
+	padding-left: 8px;
+}
+.hashi-ga-fresh-badge {
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--se-accent);
+	background: var(--se-accent-soft);
+	border-radius: 999px;
+	padding: 1px 7px;
+}
+
+/* ---- note-reference navigation (spec-005, T6.2) ---------------------------
+   A finding's target note whose link no longer resolves (moved/deleted since
+   the audit ran) degrades to plain text — no accent color, no pointer, no
+   hover underline (contrast .hashi-se-wlink above). */
+.hashi-ga-note-missing {
+	color: var(--se-text);
+}
+.hashi-ga-note-missing-tag {
+	color: var(--se-text-faint);
+	font-size: 10px;
+}
+.hashi-ga-advisory-dupes {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding-left: 8px;
+	border-left: 2px solid var(--se-border);
+}
+.hashi-ga-advisory-dupe {
+	font-family: var(--se-mono);
+	font-size: 11.5px;
+	color: var(--se-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ---- suggest-targets toggle + two-run hints (spec-005, T5.4) --------------
+   The checkbox rides on `.hashi-se-cbx` (reused — see the Apply/Skip
+   precedent above); `.hashi-ga-suggest-toggle` itself carries no rules,
+   matching the `.hashi-ga-apply`/`.hashi-ga-skip` unstyled-test-hook idiom.
+   The two hint states are mutually exclusive (SuggestControl.ts's
+   `resolveSuggestHint`) so only ever one `--pending`/`--empty` variant
+   renders at a time. */
+.hashi-ga-suggest {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.hashi-ga-suggest-hint {
+	font-size: 11px;
+	color: var(--se-text-faint);
+}
+.hashi-ga-suggest-hint--pending {
+	color: var(--se-text-muted);
+}
+.hashi-ga-suggest-hint--empty {
+	font-style: italic;
+}
+
 /* ---- generic card -------------------------------------------------------- */
 .hashi-se-card {
 	border: 1px solid var(--se-border);
