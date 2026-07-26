@@ -646,3 +646,81 @@ describe("ObsidianInstructionSetDoc.save() — failures report how much landed",
 		expect(err.totalPatchCount).toBe(2);
 	});
 });
+
+/**
+ * T3.1 review: the adapter is stateful ("one active doc"), and a `save()` can
+ * still be in flight when the view retargets the leaf and calls `load()` on a
+ * DIFFERENT set. The write itself is safe — `save()` binds its target at entry
+ * — but advancing the diff baseline afterwards must not write through to
+ * whatever document the adapter has moved on to.
+ */
+describe("ObsidianInstructionSetDoc.save() — a retarget mid-save", () => {
+	const OTHER_PATH = "100 Inbox/2026-07-21_0900_instructions.json";
+
+	/** The fixture minus its last action — a genuinely different set, so a
+	 * baseline mix-up cannot pass unnoticed. */
+	function otherSet(): InstructionSet {
+		const set = JSON.parse(JSON.stringify(rawFixture)) as InstructionSet;
+		return { ...set, action_count: 2, actions: set.actions.slice(0, 2) };
+	}
+
+	/** A VaultFS whose writes to `gatePath` block until the returned release. */
+	function withGatedWrite(
+		base: VaultFS,
+		gatePath: string,
+	): { vault: VaultFS; release: () => void; entered: Promise<void> } {
+		let release: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let markEntered: () => void = () => {};
+		const entered = new Promise<void>((resolve) => {
+			markEntered = resolve;
+		});
+		const vault = delegating(base, {
+			processJSON: async (path, transform) => {
+				if (path === gatePath) {
+					markEntered();
+					await gate;
+				}
+				await base.processJSON(path, transform);
+			},
+		});
+		return { vault, release, entered };
+	}
+
+	it("does not clobber the newly-loaded document's baseline when the stale save completes", async () => {
+		const base = await seededVault();
+		await base.create(OTHER_PATH, `${JSON.stringify(otherSet(), null, 2)}\n`);
+		const { vault, release, entered } = withGatedWrite(base, DOC_PATH);
+		const adapter = new ObsidianInstructionSetDoc(vault, vi.fn());
+
+		// Save doc A, and hold it inside its write loop.
+		const modelA = await adapter.load(DOC_PATH);
+		const savingA = adapter.save(repointI01(modelA));
+		await entered;
+
+		// The leaf retargets to doc B while that save is still in flight.
+		const modelB = await adapter.load(OTHER_PATH);
+
+		release();
+		await savingA;
+
+		// Doc A's write still stands — it was requested, and save() bound its
+		// target at entry.
+		const writtenA = JSON.parse(await base.read(DOC_PATH)) as InstructionSet;
+		expect(fieldOf(findAction(writtenA, "I01"), "target_moc_path")).toBe(I01_PATH_AFTER);
+
+		// Doc B's baseline is intact: an unedited save is still a no-op...
+		const otherJson = await base.read(OTHER_PATH);
+		await adapter.save({ doc: modelB.doc, dirty: true });
+		expect(await base.read(OTHER_PATH)).toBe(otherJson);
+
+		// ...and an edited save derives exactly doc B's changed action.
+		await adapter.save(repairI02(modelB));
+		const writtenB = JSON.parse(await base.read(OTHER_PATH)) as InstructionSet;
+		expect(writtenB.actions).toHaveLength(2);
+		expect(fieldOf(findAction(writtenB, "I02"), "replace")).toBe(I02_REPLACE_AFTER);
+		expect(fieldOf(findAction(writtenB, "I01"), "target_moc_path")).toBe(I01_PATH_BEFORE);
+	});
+});

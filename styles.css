@@ -1546,6 +1546,11 @@
 	color: var(--se-text-muted);
 	font-size: 12px;
 }
+/* pre-wrap wraps at whitespace; overflow-x guards what it cannot break — the
+   diagnostic embeds a vault path and a validator JSON pointer
+   (`/actions/0/anchor`), either of which can be one long spaceless token in a
+   narrow leaf. Same pairing as .hashi-se-th-preview above, for the same
+   reason. */
 .hashi-if-save-error-detail {
 	margin-top: 6px;
 	font-family: var(--se-mono);

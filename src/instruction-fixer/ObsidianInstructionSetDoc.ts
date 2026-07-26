@@ -50,6 +50,22 @@ interface ActionPatch {
 }
 
 /**
+ * One loaded document: where it lives, and the pristine deep copy `save()`
+ * diffs against to derive its field patches.
+ *
+ * Adapter-private on purpose — the SDD pins `InstructionFixerModel` to
+ * `{doc, dirty}`, so change tracking cannot live on the model. `pristine`
+ * advances in place after each successful save (a second save then only writes
+ * what changed since the first) while the TOKEN ITSELF stays put for the whole
+ * life of one `load()`, which is what makes reference identity a reliable
+ * answer to "is this still the document that save started on?".
+ */
+interface ActiveDoc {
+	readonly docPath: string;
+	pristine: InstructionSet;
+}
+
+/**
  * Every rejection `save()` produces, carrying HOW MUCH of the save landed
  * (spec-006 T3.1 review).
  *
@@ -88,16 +104,17 @@ export class InstructionSetSaveError extends Error {
 }
 
 export class ObsidianInstructionSetDoc implements InstructionSetDoc {
-	// Stateful — one active doc at a time. Set by load(), read by save() so
-	// the caller never has to re-pass the path.
-	private docPath: string | null = null;
-
-	// Pristine deep copy of the document as loaded — the baseline save()
-	// diffs against to derive its field patches. Adapter-private on purpose:
-	// the SDD pins `InstructionFixerModel` to `{doc, dirty}`, so change
-	// tracking cannot live on the model. Advanced after every successful
-	// save so a second save only writes what changed since the first.
-	private pristine: InstructionSet | null = null;
+	/**
+	 * The one active document, replaced wholesale by every `load()`.
+	 *
+	 * The OBJECT is the document's identity (T3.1 review). `save()` captures it
+	 * at entry and compares by reference before advancing the baseline, so a
+	 * save still in flight when the view retargets the leaf cannot write its
+	 * result through to the document the adapter has since moved on to. A path
+	 * string would not do: a retarget can legitimately land back on the same
+	 * path, and that reload is still a different baseline.
+	 */
+	private active: ActiveDoc | null = null;
 
 	constructor(
 		private readonly vault: VaultFS,
@@ -115,8 +132,10 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 			// wire schema.
 			throw new Error(`ObsidianInstructionSetDoc.load(${docPath}): ${result.message}`);
 		}
-		this.docPath = docPath;
-		this.pristine = deepCopy(result.data);
+		// A FRESH token per load — never a mutation of the previous one, so an
+		// in-flight save still holds (and can still recognise) the document it
+		// was started against.
+		this.active = { docPath, pristine: deepCopy(result.data) };
 		return { doc: result.data, dirty: false };
 	}
 
@@ -125,7 +144,10 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 		// assigns to `model` on any path, success or failure — "rebuild-and-
 		// replace" is free.
 		if (!model.dirty) return;
-		const { docPath, pristine } = this.requireActiveDoc();
+		// Bound at entry: everything below targets THIS document, whatever the
+		// adapter is pointed at by the time the awaits resolve.
+		const active = this.requireActiveDoc();
+		const { docPath, pristine } = active;
 
 		// PRD F4-AC2 / SDD "Error Handling": validate the WHOLE edited document
 		// before touching the file, so an invalid edit is rejected with the
@@ -182,7 +204,16 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 			throw new InstructionSetSaveError(reason, landed, patches.length, err);
 		}
 
-		this.pristine = deepCopy(model.doc);
+		// Advance the baseline ONLY while this is still the active document. The
+		// write above targeted `docPath` correctly either way, but a `load()`
+		// that landed mid-save has already installed a new token with its own
+		// baseline — writing this document's snapshot into it would leave the
+		// NEW document diffing against the OLD one's content, which derives
+		// patches for fields the user never edited (or, more often, rejects
+		// every further save as an "unsupported edit" until a reload). There is
+		// simply no longer a baseline for this document to advance, so skipping
+		// is the whole fix: the stale save's own document is gone.
+		if (this.active === active) active.pristine = deepCopy(model.doc);
 	}
 
 	/**
@@ -222,16 +253,21 @@ export class ObsidianInstructionSetDoc implements InstructionSetDoc {
 		return patches;
 	}
 
-	/** `docPath` + `pristine` are always set together by load(), so one guard covers both. */
-	private requireActiveDoc(): { docPath: string; pristine: InstructionSet } {
-		if (this.docPath === null || this.pristine === null) {
+	/**
+	 * The active document's token — path, baseline AND identity in one object,
+	 * so a caller that captures it can later ask "is this still the document I
+	 * started on?" with `===` rather than by comparing paths.
+	 */
+	private requireActiveDoc(): ActiveDoc {
+		const active = this.active;
+		if (active === null) {
 			throw new InstructionSetSaveError(
 				"ObsidianInstructionSetDoc.save(): no active document — call load() first",
 				0,
 				0,
 			);
 		}
-		return { docPath: this.docPath, pristine: this.pristine };
+		return active;
 	}
 
 	private async readAndParse(docPath: string): Promise<unknown> {
