@@ -46,6 +46,16 @@
 
 ## Follow-ups (non-blocking)
 
+- **`docs/run-log.md`'s "Structure" example block is stale** (found by the T5.3 doc-accuracy
+  review; **pre-dates spec-006**, only its H1 was touched here). The example shows a
+  frontmatter-free "Field | Value" table, a `## Counts` section, an `## Actions` heading, and
+  glyph outcomes in Title-Case columns. `runLog.ts` actually emits YAML frontmatter
+  (`started:`/`ended:`/`totals:`), then one `## <sourcePath>` section per source with a lowercase
+  `| I## | kind | summary | outcome | error |` table and textual outcome strings.
+  Spec-006 made this more visible rather than causing it: `docs/instruction-fixer.md` now
+  cross-links `run-log.md` as "the outcome table the Fixer parses", so a reader following that
+  link lands on an example that doesn't match reality. Worth its own small doc fix.
+
 - **Report back to Kokoro:** Tomo confirm #2 = **NO** → ADR-027 Decision ④ (`.md` untouched) divergence is a free trade; Kokoro asked to reconcile ADR-027 §"Open" on this answer. Send a short `_outbox/for-kokoro/` handoff.
 
 ## Open Questions (from charter — resolve in SDD)

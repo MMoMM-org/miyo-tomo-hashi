@@ -1,6 +1,6 @@
 ---
 title: "Phase 5: Integration, E2E & full-suite gate"
-status: pending
+status: completed
 version: "1.0"
 phase: 5
 ---
@@ -57,6 +57,32 @@ Every sibling editor has a page; this one has none. Owed:
   the spec-001 chat path needs it). Measure the finished feature here and decide whether to apply a
   lever or re-lower the ceiling.
 
+## Re-evaluation results (T5.4, 2026-07-27) — the three items Phase 5 was told to judge
+
+1. **`InstructionFixerView.ts` — RESOLVED, no further action.** Now **573 LOC** (~252 non-comment).
+   It peaked at 739 after T3.3; the two ordered extractions (`sections.ts` 100 LOC pure/DOM-free,
+   `renderFixerBody.ts` 348 LOC render layer) brought it back down, both verified as pure moves with
+   existing tests passing unmodified. The remainder is leaf lifecycle + load/save/rerun orchestration
+   and the reference-identity race guards, which must NOT be split across files. The L2 threshold
+   condition I set ("split if T3.3 pushes it materially past ~650") was met, acted on, and closed.
+
+2. **`registerCommands.ts` (664 LOC) + three duplicated resolver quadruples — DEFERRED, deliberately,
+   out of spec-006's remit.** This file hosts five command families across specs 001/002/003/004/006
+   and was already 547 LOC *before* spec-006 added its 117. Splitting it, or extracting a
+   `makeDocFamilyResolver` factory, means refactoring four other specs' code from inside this one —
+   scope creep in the opposite direction, and it would touch the exact file where all three Phase 4
+   tasks already collided. The factory is additionally blocked on a genuinely divergent fourth
+   variant (`resolveActiveInvocation`: async, `vault.exists`-checked, `.endsWith` not regex).
+   **Recommendation: raise as its own tech-debt task**, sized across the owning specs, not folded
+   into a feature branch. L2 rationale is explicit and dated per the Constitution's requirement.
+
+3. **Bundle — RESOLVED, keep 900 KB.** Final measured size with the feature complete: **870.9 KB**,
+   i.e. 29 KB (3.2%) of headroom. That is workable — the problem with the old 850 ceiling was that it
+   left ~2 KB, so no wiring of this feature could fit at all. The authoritative constraint is spec-001
+   SDD CON-7 (≤1000 KB), which 900 stays comfortably under. The documented next levers if it ever
+   tightens remain: ajv standalone code-gen, then lazy-loading xterm.js (only the spec-001 chat path
+   needs it). No lever applied; no re-lowering.
+
 **Key Decisions**:
 - The end-to-end loop is the real proof: execute (with a failure) → open Fixer → repair target field
   → save (verbatim) → re-run → applied. Assert the `.md`/`tomo.sources` invariants explicitly.
@@ -70,26 +96,26 @@ Every sibling editor has a page; this one has none. Owed:
 
 Proves the whole feature works together and locks the invariants against regression.
 
-- [ ] **T5.1 End-to-end repair loop (integration test)** `[activity: integration-testing]`
+- [x] **T5.1 End-to-end repair loop (integration test)** `[activity: integration-testing]`
 
   1. Prime: Read `test/integration/garden-audit-e2e.test.ts` (the sibling E2E shape) + `test/__mocks__/{obsidian,FakeVaultFS}` `[ref: SDD/Runtime View/Primary Flow]`
   2. Test (against FakeVaultFS + obsidian mock): seed an instruction set whose one action fails (e.g. `link_to_moc` anchor/target missing); run the executor → summary has 1 `failed`; open the Fixer → the failed card is `editable`, applied ones `frozen`; repoint the target field → Save → assert the JSON changed ONLY that field and the `.md` peer content + `tomo.sources` are byte-unchanged; re-run → the repaired action now `applied`, refreshed in place; assert an unedited round-trip elsewhere is a no-op.
   3. Implement: `test/integration/instruction-fixer-e2e.test.ts`. Vendor a **real** (anonymized) instruction-set fixture with a genuine failed action as the drift guard.
   4. Validate: integration test passes; lint clean; types check.
   - Success:
-    - [ ] Full loop: execute → fix → save → re-run → applied `[ref: PRD/F7]` `[ref: SDD/Acceptance Criteria]`
-    - [ ] `.md` content + `tomo.sources` never mutated across the loop `[ref: PRD/F8-AC1,AC2]`
+    - [x] Full loop: execute → fix → save → re-run → applied `[ref: PRD/F7]` `[ref: SDD/Acceptance Criteria]`
+    - [x] `.md` content + `tomo.sources` never mutated across the loop `[ref: PRD/F8-AC1,AC2]`
 
-- [ ] **T5.2 Fail-closed integration + cold-open** `[activity: integration-testing]` `[parallel: true]`
+- [x] **T5.2 Fail-closed integration + cold-open** `[activity: integration-testing]` `[parallel: true]`
 
   1. Prime: `[ref: SDD/Runtime View/Secondary Flow]` cold open · `[ref: SDD/ADR-4]`
   2. Test: open the Fixer on a set with **no run this session and no matching run-log** → every action `read-only-no-signal`, the view offers "Run"; a stale/other-set run-log present → still `NO_TRUSTED_SIGNAL` (no optimistic mapping); after "Run", failed actions unlock.
   3. Implement: extend the E2E suite with the cold-open + stale-log scenarios.
   4. Validate: integration test passes.
   - Success:
-    - [ ] Cold open with no trusted signal edits nothing until Run `[ref: PRD/F3-AC3]` `[ref: SDD/ADR-4]`
+    - [x] Cold open with no trusted signal edits nothing until Run `[ref: PRD/F3-AC3]` `[ref: SDD/ADR-4]`
 
-- [ ] **T5.3 Docs + full-suite gate** `[activity: validate]`
+- [x] **T5.3 Docs + full-suite gate** `[activity: validate]`
 
   1. Prime: grep results from T4.4 (run-log/`I##`/deep-link doc references)
   2. Test/Do: update user docs (README + any action-reference/hooks/troubleshooting sites) for the
@@ -99,5 +125,5 @@ Proves the whole feature works together and locks the invariants against regress
   4. Validate: whole suite green; lint clean; build clean; docs consistent (run `/validate` for
      PRD↔SDD↔Plan drift).
   - Success:
-    - [ ] Full build + suite + lint green; docs updated; spec/ADR-027 referenced `[ref: PRD/Success Metrics]`
-    - [ ] Manual-QA note: deploy via `HASHI_DEPLOY_VAULT=1 npm run build` into `test/Hashi` for the user's snapshot baseline
+    - [x] Full build + suite + lint green; docs updated; spec/ADR-027 referenced `[ref: PRD/Success Metrics]`
+    - [x] Manual-QA note: deploy via `HASHI_DEPLOY_VAULT=1 npm run build` into `test/Hashi` for the user's snapshot baseline

@@ -108,7 +108,7 @@ Each phase is a separate file. Tasks follow red-green-refactor: **Prime** → **
 - [x] [Phase 2: Outcome source + fail-closed edit gate](phase-2.md)
 - [x] [Phase 3: The Fixer view — cards, gate wiring, re-run](phase-3.md)
 - [x] [Phase 4: Entry points + run-log change](phase-4.md)
-- [ ] [Phase 5: Integration, E2E & full-suite gate](phase-5.md)
+- [x] [Phase 5: Integration, E2E & full-suite gate](phase-5.md)
 
 ---
 
