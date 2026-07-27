@@ -221,29 +221,15 @@ describe("computeMarkerSpots", () => {
 	});
 
 	/**
-	 * `line` is the seed the card writes into the wire's `line` field alongside
-	 * `marker` (2026-07-27 manual-QA follow-up) — it exists because picking a
-	 * new marker while an unrelated `line` sits untouched lets `add_relationship`
-	 * silently overwrite a line that has nothing to do with the one just picked.
-	 * For a field-opener spot this is the CURRENT full line, minus the same
-	 * callout/bullet prefixes `marker` itself is stripped of; for a whole-line
-	 * spot `line` equals `value` (picking that spot verbatim is then a no-op on
-	 * disk, the handler's own `skipped-already`).
+	 * `detail` is DISPLAY ONLY — it must never leak into a write. An earlier
+	 * version of this module wrote `detail`'s stripped form into the wire's
+	 * `line` field on every pick (reverted 2026-07-27); this guards against a
+	 * regression back to that, which would turn every fresh placement into a
+	 * no-op (the handler "replacing" a line with the text already there).
 	 */
-	it("seeds a safe starting `line`, prefix-stripped like the marker itself", () => {
-		const spots = computeMarkerSpots(MARKER_NOTE);
-
-		const field = spots.find((s) => s.value === "up::");
-		expect(field?.line).toBe("up:: [[Atlas (MOC)]]");
-
-		const wholeLine = spots.find((s) => s.value === "up:: [[Atlas (MOC)]]");
-		expect(wholeLine?.line).toBe(wholeLine?.value);
-	});
-
-	it("never leaves the callout/bullet prefix in `line` — the handler re-adds its own", () => {
+	it("MarkerSpot carries no line field — a pick must never seed the payload", () => {
 		for (const spot of computeMarkerSpots(MARKER_NOTE)) {
-			expect(spot.line.startsWith(">")).toBe(false);
-			expect(spot.line.startsWith("- ")).toBe(false);
+			expect(Object.keys(spot)).not.toContain("line");
 		}
 	});
 
@@ -282,35 +268,6 @@ describe("computeMarkerSpots", () => {
 			});
 
 			expect(outcome.kind, `marker ${spot.value}`).not.toBe("failed");
-		}
-	});
-
-	/**
-	 * The third cross-check, specific to the manual-QA follow-up: writing a
-	 * spot's `marker` AND its OWN `line` unmodified must be a true no-op on
-	 * disk (`skipped-already`) — proof that `line` really is prefix-stripped
-	 * the same way the handler reconstructs it, not merely non-`failed`.
-	 */
-	it("marker + its own seeded line round-trips as skipped-already, not a rewrite", async () => {
-		const path = "Atlas/200 Maps/Systems (MOC).md";
-
-		for (const spot of computeMarkerSpots(MARKER_NOTE)) {
-			const vault = new FakeVaultFS();
-			await vault.create(path, MARKER_NOTE);
-			const action: AddRelationshipAction = {
-				action: "add_relationship",
-				id: "I01",
-				target_moc_path: path,
-				marker: spot.value,
-				line: spot.line,
-			};
-
-			const outcome = await addRelationship(action, {
-				vault,
-				clock: { now: () => new Date("2026-07-27T10:00:00Z") },
-			});
-
-			expect(outcome.kind, `marker ${spot.value}`).toBe("skipped-already");
 		}
 	});
 });

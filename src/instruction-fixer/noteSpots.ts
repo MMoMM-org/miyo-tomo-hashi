@@ -184,31 +184,33 @@ export function computeAnchorSpots(content: string, kind: AnchorSpotKind): reado
 // Marker spots (add_relationship)
 // ---------------------------------------------------------------------------
 
-/** One choosable `add_relationship.marker`, paired with a safe starting `line`. */
+/**
+ * One choosable `add_relationship.marker`.
+ *
+ * Deliberately carries no `line` field, despite an earlier version of this
+ * picker seeding one (reverted 2026-07-27, wrong on the merits — see the user
+ * correction on that change). `marker` answers WHERE to write; `line` is the
+ * relationship being established there, e.g. `up:: [[@]]` — and the two are
+ * chosen independently ON PURPOSE: repositioning to a different anchor (the
+ * usual reason to pick a new marker at all — a template placeholder like "No
+ * parent map yet — this note is floating." rather than an existing `up::`
+ * field) must NOT touch what gets written, or the action stops establishing
+ * any relationship at all. Auto-filling `line` from the picked spot's own
+ * current content made every fresh placement a no-op: the handler would find
+ * the line and "replace" it with the text already there.
+ */
 export interface MarkerSpot {
 	/** The value written to the wire's `marker` field. */
 	readonly value: string;
 	readonly label: string;
-	/** The source line it was read from, for display context in the picker row. */
-	readonly detail: string;
 	/**
-	 * A safe STARTING value for the wire's `line` field: the located line's
-	 * content with the callout prefix and list bullet already stripped — the
-	 * same structural stripping the handler re-applies on write
-	 * (`addRelationship.ts`'s `newLine = prefix + bullet + line`). Writing this
-	 * verbatim into `line` unchanged is an idempotent no-op relative to what's
-	 * on disk today (the handler's own `skipped-already` case); the caller is
-	 * expected to edit it into the NEW content actually meant to replace it.
-	 *
-	 * This exists because `marker` and `line` are independent wire fields
-	 * (ADR-5) that are NOT independent in meaning: the handler overwrites
-	 * whatever line `marker` matches with `line` verbatim, so picking a new
-	 * marker while an unrelated `line` sits untouched can silently clobber a
-	 * line that has nothing to do with the one just picked. Seeding `line`
-	 * alongside `marker` on every pick is what keeps that combination from
-	 * being buildable through the picker.
+	 * The full current line, prefix-stripped, shown as the picker row's
+	 * secondary text — what a pick is ABOUT TO MATCH (and, once saved and
+	 * re-run, overwrite). Display-only: never written to the wire. Seeing the
+	 * current content before picking is the actual safeguard against picking
+	 * the wrong line, not a silent auto-fill.
 	 */
-	readonly line: string;
+	readonly detail: string;
 }
 
 // Both mirror `actions/addRelationship.ts`'s locator, which strips an optional
@@ -253,15 +255,11 @@ export function computeMarkerSpots(content: string): readonly MarkerSpot[] {
 		const field = FIELD_PREFIX_RE.exec(stripped);
 		if (field !== null && !seen.has(field[1]!)) {
 			seen.add(field[1]!);
-			fields.push({ value: field[1]!, label: field[1]!, detail: stripped, line: stripped });
+			fields.push({ value: field[1]!, label: field[1]!, detail: stripped });
 		}
 		if (!seen.has(stripped)) {
 			seen.add(stripped);
-			// `line` is `stripped` here too, NOT `raw.trim()` (which `detail`
-			// uses for display) — `raw` still carries the callout `>`/bullet the
-			// handler reconstructs on its own, and seeding `line` with those
-			// prefixes already in it would double them up on write.
-			wholeLines.push({ value: stripped, label: stripped, detail: raw.trim(), line: stripped });
+			wholeLines.push({ value: stripped, label: stripped, detail: raw.trim() });
 		}
 	}
 
