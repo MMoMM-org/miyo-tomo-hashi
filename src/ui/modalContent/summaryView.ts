@@ -2,7 +2,7 @@
  * summaryView — pure DOM render for summary and validation-failed states.
  *
  * Summary: stats line "✓ A · ⊘ S · ✗ F (Xs)" + View errors (when failed > 0)
- * + Open Instruction Fixer (one per failing source, when ≥1 failed/skipped
+ * + Open instruction fixer (one per failing source, when ≥1 failed/skipped
  * action) + Close. Validation-failed: tabular per-file errors + Close.
  *
  * [ref: PRD/F1-AC2, F3, F7; SDD/ADR-3, ADR-5]
@@ -169,21 +169,24 @@ function countBasenames(paths: readonly string[]): Map<string, number> {
 }
 
 /**
- * `"Open Instruction Fixer"` when it's the only failing source; otherwise
- * `"Open Instruction Fixer: <name>"`, where `<name>` is the basename UNLESS
+ * `"Open instruction fixer"` when it's the only failing source; otherwise
+ * `"Open instruction fixer: <name>"`, where `<name>` is the basename UNLESS
  * it collides with another failing source's basename, in which case the full
  * path is used instead — two buttons must never read identically on the
- * screen whose job is "pick the set you want to repair".
+ * screen whose job is "pick the set you want to repair". Sentence case to
+ * match every other button on this surface ("View errors", "Cancel",
+ * "Execute", "Close") and the command-palette entry point of the same
+ * action (`registerCommands.ts`'s `OPEN_INSTRUCTION_FIXER_LABEL`).
  */
 function fixerButtonLabel(
 	sourcePath: string,
 	sourceCount: number,
 	basenameCounts: ReadonlyMap<string, number>,
 ): string {
-	if (sourceCount === 1) return "Open Instruction Fixer";
+	if (sourceCount === 1) return "Open instruction fixer";
 	const name = basename(sourcePath);
 	const disambiguated = (basenameCounts.get(name) ?? 0) > 1 ? sourcePath : name;
-	return `Open Instruction Fixer: ${disambiguated}`;
+	return `Open instruction fixer: ${disambiguated}`;
 }
 
 /**

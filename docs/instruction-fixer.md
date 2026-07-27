@@ -19,16 +19,15 @@ Three entry points (no click-to-open, no `obsidian://` handler):
 |---|---|
 | Command palette → **"Open instruction fixer"**, with an `_instructions.json` (or its `.md` peer) active | Opens that set directly |
 | Command palette → **"Open instruction fixer"**, with nothing relevant active | Opens a picker over every `_instructions.json` in the vault. Empty vault shows *"No instruction sets found — open a _instructions.json (or its .md) first"* |
-| Execute-result surface → **"Open Instruction Fixer"** button, shown once a run finishes with ≥1 failed/skipped action | Opens the Fixer on that run's source, with the run's outcomes still fresh in-session. A multi-source run shows one button per failing source, labelled `Open Instruction Fixer: <name>` |
+| Execute-result surface → **"Open instruction fixer"** button, shown once a run finishes with ≥1 failed/skipped action | Opens the Fixer on that run's source, with the run's outcomes still fresh in-session. A multi-source run shows one button per failing source, labelled `Open instruction fixer: <name>` |
 | Run log | An informational pointer line only — *"Errors can be viewed and repaired in the Instruction Fixer (command: 'Open instruction fixer')."* No link, nothing clickable |
 
 The editor is a **singleton leaf** — reopening it (from any entry point) retargets the
 existing leaf to the newly resolved set rather than spawning a duplicate.
 
-> The command palette entry is labelled **"Open instruction fixer"** (sentence case); the
-> execute-result button is labelled **"Open Instruction Fixer"** (Title Case). This is a
-> genuine inconsistency between the two shipped UI strings, not a typo in this page — each
-> is documented here exactly as it renders.
+All three entry points name the same action **"Open instruction fixer"** (sentence case),
+matching every other button on the execute-result surface ("View errors", "Cancel",
+"Execute", "Close").
 
 ## The fail-closed edit gate
 

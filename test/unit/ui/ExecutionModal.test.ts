@@ -876,7 +876,7 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		expect(onViewErrorsCb).toHaveBeenCalledWith(null);
 	});
 
-	it('"Open Instruction Fixer" button is present (alongside View errors) when failed > 0', () => {
+	it('"Open instruction fixer" button is present (alongside View errors) when failed > 0', () => {
 		const exec = makeExecutor();
 		const modal = new ExecutionModal(app, exec, {});
 		modal.onOpen();
@@ -896,12 +896,12 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 
 		const buttons = modal.contentEl.querySelectorAll("button");
 		const labels = Array.from(buttons).map((b) => b.textContent ?? "");
-		expect(labels).toContain("Open Instruction Fixer");
+		expect(labels).toContain("Open instruction fixer");
 		expect(labels).toContain("View errors");
 		expect(labels).toContain("Close");
 	});
 
-	it("clicking Open Instruction Fixer invokes onOpenInstructionFixer with the source's fileId", () => {
+	it("clicking Open instruction fixer invokes onOpenInstructionFixer with the source's fileId", () => {
 		const onOpenInstructionFixerCb = vi.fn();
 		const exec = makeExecutor();
 		const modal = new ExecutionModal(app, exec, {
@@ -924,14 +924,14 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 
 		const buttons = modal.contentEl.querySelectorAll("button");
 		const fixerBtn = Array.from(buttons).find(
-			(b) => (b.textContent ?? "") === "Open Instruction Fixer",
+			(b) => (b.textContent ?? "") === "Open instruction fixer",
 		);
 		expect(fixerBtn).toBeDefined();
 		fixerBtn!.dispatchEvent(new Event("click"));
 		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("alpha.json");
 	});
 
-	it('"Open Instruction Fixer" is offered for a skipped-only run (failed == 0, skipped > 0)', () => {
+	it('"Open instruction fixer" is offered for a skipped-only run (failed == 0, skipped > 0)', () => {
 		const onOpenInstructionFixerCb = vi.fn();
 		const exec = makeExecutor();
 		const modal = new ExecutionModal(app, exec, {
@@ -954,10 +954,10 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 
 		const buttons = modal.contentEl.querySelectorAll("button");
 		const labels = Array.from(buttons).map((b) => b.textContent ?? "");
-		expect(labels).toContain("Open Instruction Fixer");
+		expect(labels).toContain("Open instruction fixer");
 	});
 
-	it('"Open Instruction Fixer" offers one option per failing source on a multi-source run, and omits a fully-applied third source (W3)', () => {
+	it('"Open instruction fixer" offers one option per failing source on a multi-source run, and omits a fully-applied third source (W3)', () => {
 		const onOpenInstructionFixerCb = vi.fn();
 		const exec = makeExecutor();
 		const modal = new ExecutionModal(app, exec, {
@@ -999,7 +999,7 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 
 		const buttons = modal.contentEl.querySelectorAll("button");
 		const fixerBtns = Array.from(buttons).filter((b) =>
-			(b.textContent ?? "").startsWith("Open Instruction Fixer"),
+			(b.textContent ?? "").startsWith("Open instruction fixer"),
 		);
 		expect(fixerBtns).toHaveLength(2);
 		const labels = fixerBtns.map((b) => b.textContent ?? "");
@@ -1022,7 +1022,7 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("100 Inbox/beta.json");
 	});
 
-	it('"Open Instruction Fixer" labels stay distinct when two failing sources share a basename', () => {
+	it('"Open instruction fixer" labels stay distinct when two failing sources share a basename', () => {
 		// Vaults repeat filenames across folders. A basename-only label would
 		// render two buttons reading the IDENTICAL text — distinguishable only
 		// by hovering for the `title` tooltip — on the screen whose whole job
@@ -1055,7 +1055,7 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 
 		const buttons = modal.contentEl.querySelectorAll("button");
 		const fixerBtns = Array.from(buttons).filter((b) =>
-			(b.textContent ?? "").startsWith("Open Instruction Fixer"),
+			(b.textContent ?? "").startsWith("Open instruction fixer"),
 		);
 		expect(fixerBtns).toHaveLength(2);
 		const labels = fixerBtns.map((b) => b.textContent ?? "");
@@ -1063,8 +1063,8 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		// The two labels must be distinct from each other...
 		expect(labels[0]).not.toBe(labels[1]);
 		// ...by falling back to the full (distinguishing) path for both.
-		expect(labels).toContain("Open Instruction Fixer: 100 Inbox/x_instructions.json");
-		expect(labels).toContain("Open Instruction Fixer: 200 Archive/x_instructions.json");
+		expect(labels).toContain("Open instruction fixer: 100 Inbox/x_instructions.json");
+		expect(labels).toContain("Open instruction fixer: 200 Archive/x_instructions.json");
 
 		const inboxBtn = fixerBtns.find((b) => (b.textContent ?? "").includes("100 Inbox/"));
 		inboxBtn!.dispatchEvent(new Event("click"));
@@ -1075,7 +1075,7 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("200 Archive/x_instructions.json");
 	});
 
-	it('"Open Instruction Fixer" is absent on a zero-failure run', () => {
+	it('"Open instruction fixer" is absent on a zero-failure run', () => {
 		const exec = makeExecutor();
 		const modal = new ExecutionModal(app, exec, {});
 		modal.onOpen();
@@ -1090,7 +1090,7 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		const buttons = modal.contentEl.querySelectorAll("button");
 		const labels = Array.from(buttons).map((b) => b.textContent ?? "");
 		expect(labels).not.toContain("View errors");
-		expect(labels.some((l) => l.startsWith("Open Instruction Fixer"))).toBe(false);
+		expect(labels.some((l) => l.startsWith("Open instruction fixer"))).toBe(false);
 		expect(labels).toContain("Close");
 	});
 

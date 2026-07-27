@@ -68,7 +68,7 @@ Every log carries one informational line right below the `# Hashi run log` headi
 fixer')."* It's a pointer, not a link — the log stays a plain-text artifact, and there's no
 click-to-open into the [Instruction Fixer](instruction-fixer.md) from here or from any `ID`
 cell in the Actions table. Open the Fixer from the command palette, or from the execute
-modal's **Open Instruction Fixer** button while the run summary is still on screen.
+modal's **Open instruction fixer** button while the run summary is still on screen.
 
 ## Retention
 

@@ -22,7 +22,7 @@ export interface ModalCallbacks {
 	 */
 	onViewErrors?: (logFilePath: string | null) => void;
 	/**
-	 * Fired when the user clicks "Open Instruction Fixer" on the summary view.
+	 * Fired when the user clicks "Open instruction fixer" on the summary view.
 	 * Receives the failing source's vault-relative path (`ActionRecord.fileId`
 	 * — the same value `openInstructionFixer(app, docPath)` expects). Rendered
 	 * once per distinct source among the run's failed/skipped-* records: a

@@ -74,7 +74,7 @@ The progress view uses a **fast-path renderer** for `running → running` transi
 - Stats line: `✓ <applied> · ⊘ <skipped> · ✗ <failed> (<elapsed>s)`
 - Run log filename + path
 - **View errors** (only when `failed > 0`) opens the run log in the active leaf and closes the modal
-- **Open Instruction Fixer** — one button per source with ≥1 failed/skipped action, opening the [Instruction Fixer](instruction-fixer.md) on that source with the run's outcomes still fresh. Labelled `Open Instruction Fixer` when only one source failed, or `Open Instruction Fixer: <name>` per source when a batch run left more than one behind
+- **Open instruction fixer** — one button per source with ≥1 failed/skipped action, opening the [Instruction Fixer](instruction-fixer.md) on that source with the run's outcomes still fresh. Labelled `Open instruction fixer` when only one source failed, or `Open instruction fixer: <name>` per source when a batch run left more than one behind
 - **Close** dismisses the modal and resets executor state to idle
 
 ### 3'. Validation failed (alternative to Summary)
