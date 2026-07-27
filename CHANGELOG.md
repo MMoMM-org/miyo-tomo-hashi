@@ -1,3 +1,41 @@
+## [0.19.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.18.0...0.19.0) (2026-07-27)
+
+### Features
+
+* **006:** "Open Instruction Fixer" option on the execute-result surface (T4.2) ([af779bd](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/af779bdf20c6e3828ad1b4be4c926f06495851b3))
+* **006:** add "Open instruction fixer" command (T4.1) ([bebdb1d](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/bebdb1d9027d6a6cc97783a2bc46320c0079f307))
+* **executor:** add markActionFields atomic writer (spec-006 T1.2) ([525c07c](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/525c07c46c5c0b9ff38bcdb01abce0cdd35c245a))
+* **instruction-fixer:** add editGate fail-closed edit gate (spec-006 T2.2) ([92401c6](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/92401c651fa76b8e756fe5972f8ce0e2f6c07180))
+* **instruction-fixer:** per-kind repair cards, gate wiring, note nav (T3.2) ([3fc0a41](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/3fc0a41f7d302b19c45096e7869aadceb8e0fafa))
+* **instruction-fixer:** pick anchors and markers from the target note ([b215fe7](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/b215fe78732711719f8f0286fbbc940a51cc1ea6))
+* **instruction-fixer:** re-run bridge + post-run reconcile (spec-006 T3.3) ([b6f6637](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/b6f6637a3fdbc5c3bb3b9ccd63980b6ede35aace))
+* **instruction-fixer:** resolveOutcomes trusted-outcome source (spec-006 T2.1) ([e4c6a95](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/e4c6a95b457123a64ba885de85abca1501886112))
+* **instruction-fixer:** view shell — leaf, gate grouping, save guard (spec-006 T3.1) ([1585c0d](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/1585c0dd0ab1229e41ab1c435cdbcb84ab785a9c))
+* **spec-006:** instruction-fixer setTargetField transform (T1.3) ([9b8098e](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/9b8098e12d9c814346bf9d87b58226b85d1a4381))
+* **spec-006:** InstructionSetDoc port + ObsidianInstructionSetDoc adapter ([5652563](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/5652563424c72137303984569e509f620080f72d))
+
+### Bug Fixes
+
+* **006:** address T4.2 review — testable fixer-idle order, wrapped buttons ([39697a8](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/39697a8359ad53afa9d3dcc951805efbd15327b9))
+* **006:** disambiguate fixer labels when basenames collide (T4.2 review) ([2cf9bea](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/2cf9bea2b2f340fbc5f7af6a1921c9183ab4cc16))
+* **006:** sentence-case the "Open instruction fixer" button label ([41cbf86](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/41cbf86f39576e2e04bfa74bc098e11402c05d36))
+* **executor:** close applied-monotonicity gap in markActionFields patch ([0dd56c2](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/0dd56c2517def906988b0166bbc9dcd6cc1e879e))
+* **executor:** drop run-log I## deep-link, add Fixer pointer line (spec-006 T4.3) ([bd9d1d3](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/bd9d1d3194042a22705d695caaa0cab97523d5e6))
+* **instruction-fixer:** don't let a stale save advance the new doc's baseline (spec-006) ([a9a8fa6](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/a9a8fa6d1a13c08a579093f8f3e2c975e67b679a))
+* **instruction-fixer:** fail closed on an unreadable newer run log (spec-006 T2.1) ([1c9791a](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/1c9791aac0a010138aebd519e1f038a33dd86592))
+* **instruction-fixer:** guard stale save errors, plain-language save panel (spec-006 T3.1) ([b691417](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/b691417bc342a74a672fa9d777af8c766a9e4d6f))
+* **instruction-fixer:** marker pick seeds line, closing a silent-clobber trap ([51eb524](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/51eb5240db6a90f26d670788e9be3a9b30403050))
+* **instruction-fixer:** marker pick swaps line's prefix, keeps the payload ([ab1dc5b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/ab1dc5b352bee27feb27a826a4d9578e30b5e243))
+* **instruction-fixer:** name create_moc's source, sweep affectedNotePath over all 14 kinds ([3c42308](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/3c423089303c9fa3bb940a5d35ddc7c076b420cc))
+* **instruction-fixer:** name editGate table titles by scenario, not row order ([81519f6](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/81519f613f18c1ff830a7e7ff06232f875452479))
+* **instruction-fixer:** put the failure reason under the intent it explains (T3.2) ([9e86b8b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/9e86b8b6cb6601b2090201b34edca92e61965209))
+* **instruction-fixer:** reload after a failed re-run too (spec-006 T3.3 review) ([08c35f0](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/08c35f03865ce50071f730321c0da1cefcced13d))
+* **instruction-fixer:** report how much of a failed save landed (spec-006 T3.1) ([9eb0d0f](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/9eb0d0febffcdbcad07cb77789d8403a4f109576))
+* **instruction-fixer:** revert marker-pick line seed — wrong on the merits ([47f6a2e](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/47f6a2e3e972ff01ee4ac4c742029fbc56e7a0e6))
+* **instruction-fixer:** route save() through markActionFields + validate (spec-006 T1.5) ([a8dd5ab](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/a8dd5ab30242f6d32ab6ec60ae756e6b78847feb))
+* **instruction-fixer:** suppress vacuous no-signal banner, guard load reentrancy ([5e7835c](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/5e7835c800a9b4d6b35aed06f4a30fc382c20c01))
+* **spec-006:** collapse target-field dispatch, cover unresolved fields (T1.3) ([8672c73](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/8672c731fcac972f347e1c6efccea10cc0076c5f))
+
 ## [0.18.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.17.2...0.18.0) (2026-07-25)
 
 ### Features
