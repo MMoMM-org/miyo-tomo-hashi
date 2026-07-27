@@ -21,4 +21,15 @@ export interface ModalCallbacks {
 	 * null in degraded scenarios).
 	 */
 	onViewErrors?: (logFilePath: string | null) => void;
+	/**
+	 * Fired when the user clicks "Open Instruction Fixer" on the summary view.
+	 * Receives the failing source's vault-relative path (`ActionRecord.fileId`
+	 * — the same value `openInstructionFixer(app, docPath)` expects). Rendered
+	 * once per distinct source among the run's failed/skipped-* records: a
+	 * single-source run gets one button, a multi-source run gets one button per
+	 * failing source rather than one ambiguous option (the Fixer scopes to one
+	 * set per view — v1, OQ4). Absent (button not rendered) when the run had no
+	 * failed/skipped action.
+	 */
+	onOpenInstructionFixer?: (sourcePath: string) => void;
 }

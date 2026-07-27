@@ -530,6 +530,30 @@ export default class TomoHashiPlugin extends Plugin {
 						exec.state.set({ kind: "idle" });
 						modal.close();
 					},
+					// User clicked "Open Instruction Fixer" on the summary (spec-006
+					// T4.2 / ADR-3a) → close the modal so the newly revealed Fixer
+					// leaf isn't hidden behind it, THEN reveal the Fixer, and only
+					// AFTER that idle the store. Order matters: outcomeSource reads
+					// `executionStore` live when the Fixer view loads, and this is
+					// the one entry point where that read finding the terminal
+					// "summary" state is what unlocks editing (a cold open falls
+					// back to run-log parsing, fail-closed if none matches).
+					// Idling before the view has read it would downgrade this
+					// primary flow to that cold-open path. `openInstructionFixer`'s
+					// promise resolves only once the view's onOpen/setState (and
+					// therefore its outcome resolution) has completed, so awaiting
+					// it — and idling in `finally` so a rejected open still frees
+					// the store for the next run — is what makes this safe.
+					onOpenInstructionFixer: (sourcePath: string) => {
+						modal.close();
+						void (async () => {
+							try {
+								await openInstructionFixer(app, sourcePath);
+							} finally {
+								exec.state.set({ kind: "idle" });
+							}
+						})();
+					},
 				});
 				activeModal = modal;
 				modal.open();

@@ -2,12 +2,13 @@
  * summaryView — pure DOM render for summary and validation-failed states.
  *
  * Summary: stats line "✓ A · ⊘ S · ✗ F (Xs)" + View errors (when failed > 0)
- * + Close. Validation-failed: tabular per-file errors + Close.
+ * + Open Instruction Fixer (one per failing source, when ≥1 failed/skipped
+ * action) + Close. Validation-failed: tabular per-file errors + Close.
  *
- * [ref: PRD/F3, F7; SDD/ADR-5]
+ * [ref: PRD/F1-AC2, F3, F7; SDD/ADR-3, ADR-5]
  */
 
-import type { RunState } from "../../executor/state";
+import type { ActionOutcome, ActionRecord, RunState } from "../../executor/state";
 
 import type { ModalCallbacks } from "./types";
 import {
@@ -16,6 +17,7 @@ import {
 	GLYPH_APPLIED,
 	GLYPH_FAILED,
 	GLYPH_SKIPPED,
+	groupByFile,
 } from "./shared";
 
 export function renderSummaryView(
@@ -82,6 +84,22 @@ function renderSummary(
 		});
 	}
 
+	// [ref: SDD/ADR-3a, PRD/F1-AC2] one option per source that has ≥1
+	// failed/skipped-* action — derived straight from the records, so a
+	// zero-failure run naturally offers nothing (no separate flag to drift
+	// out of sync with the data).
+	const fixerSources = failingSourcePaths(state.records);
+	for (const sourcePath of fixerSources) {
+		const label =
+			fixerSources.length === 1
+				? "Open Instruction Fixer"
+				: `Open Instruction Fixer: ${sourcePath}`;
+		const fixerBtn = btnRow.createEl("button", { text: label });
+		fixerBtn.addEventListener("click", () => {
+			callbacks.onOpenInstructionFixer?.(sourcePath);
+		});
+	}
+
 	const closeBtn = btnRow.createEl("button", { text: "Close" });
 	closeBtn.addClass("mod-cta");
 	closeBtn.addEventListener("click", () => {
@@ -117,4 +135,37 @@ function renderValidationFailed(
 	closeBtn.addEventListener("click", () => {
 		callbacks.onClose?.();
 	});
+}
+
+/**
+ * Distinct `fileId`s (source paths) that carry at least one failed/skipped-*
+ * outcome, in first-seen order. Reuses `groupByFile` rather than a bespoke
+ * Set scan so this stays consistent with how previewView/progressView already
+ * group records by source.
+ */
+function failingSourcePaths(records: readonly ActionRecord[]): string[] {
+	const result: string[] = [];
+	for (const [fileId, fileRecords] of groupByFile(records)) {
+		if (fileRecords.some((r) => r.outcome !== null && isFailedOrSkipped(r.outcome))) {
+			result.push(fileId);
+		}
+	}
+	return result;
+}
+
+/**
+ * Exhaustive switch (not a string-prefix test) so a future 6th
+ * `ActionOutcome` variant is a compile error here, not a silent
+ * fall-through — same discipline as `editGate` (outcomeSource.ts).
+ */
+function isFailedOrSkipped(outcome: ActionOutcome): boolean {
+	switch (outcome.kind) {
+		case "failed":
+		case "skipped-already":
+		case "skipped-dependency":
+		case "skipped-cancelled":
+			return true;
+		case "applied":
+			return false;
+	}
 }

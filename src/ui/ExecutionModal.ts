@@ -191,6 +191,9 @@ export class ExecutionModal extends Modal {
 			onViewErrors: (logFilePath: string | null) => {
 				this.callbacks.onViewErrors?.(logFilePath);
 			},
+			onOpenInstructionFixer: (sourcePath: string) => {
+				this.callbacks.onOpenInstructionFixer?.(sourcePath);
+			},
 		};
 	}
 

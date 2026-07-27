@@ -876,7 +876,137 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		expect(onViewErrorsCb).toHaveBeenCalledWith(null);
 	});
 
-	it("View errors button is absent when failed == 0", () => {
+	it('"Open Instruction Fixer" button is present (alongside View errors) when failed > 0', () => {
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [
+				record({
+					fileId: "alpha.json",
+					id: "I01",
+					outcome: { kind: "failed", reason: "x" },
+				}),
+			],
+			counts: counts({ failed: 1, durationMs: 100 }),
+			logFilePath: null,
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const labels = Array.from(buttons).map((b) => b.textContent ?? "");
+		expect(labels).toContain("Open Instruction Fixer");
+		expect(labels).toContain("View errors");
+		expect(labels).toContain("Close");
+	});
+
+	it("clicking Open Instruction Fixer invokes onOpenInstructionFixer with the source's fileId", () => {
+		const onOpenInstructionFixerCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {
+			onOpenInstructionFixer: onOpenInstructionFixerCb,
+		});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [
+				record({
+					fileId: "alpha.json",
+					id: "I01",
+					outcome: { kind: "failed", reason: "x" },
+				}),
+			],
+			counts: counts({ failed: 1, durationMs: 100 }),
+			logFilePath: null,
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const fixerBtn = Array.from(buttons).find(
+			(b) => (b.textContent ?? "") === "Open Instruction Fixer",
+		);
+		expect(fixerBtn).toBeDefined();
+		fixerBtn!.dispatchEvent(new Event("click"));
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("alpha.json");
+	});
+
+	it('"Open Instruction Fixer" is offered for a skipped-only run (failed == 0, skipped > 0)', () => {
+		const onOpenInstructionFixerCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {
+			onOpenInstructionFixer: onOpenInstructionFixerCb,
+		});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [
+				record({
+					fileId: "alpha.json",
+					id: "I01",
+					outcome: { kind: "skipped-dependency", dependsOn: "I00" },
+				}),
+			],
+			counts: counts({ "skipped-dependency": 1, durationMs: 100 }),
+			logFilePath: null,
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const labels = Array.from(buttons).map((b) => b.textContent ?? "");
+		expect(labels).toContain("Open Instruction Fixer");
+	});
+
+	it('"Open Instruction Fixer" offers one option per failing source on a multi-source run', () => {
+		const onOpenInstructionFixerCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {
+			onOpenInstructionFixer: onOpenInstructionFixerCb,
+		});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [
+				record({
+					fileId: "alpha.json",
+					id: "I01",
+					outcome: { kind: "failed", reason: "boom" },
+				}),
+				record({
+					fileId: "alpha.json",
+					id: "I02",
+					outcome: { kind: "applied" },
+				}),
+				record({
+					fileId: "beta.json",
+					id: "I01",
+					outcome: { kind: "skipped-already" },
+				}),
+			],
+			counts: counts({ applied: 1, "skipped-already": 1, failed: 1, durationMs: 100 }),
+			logFilePath: null,
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const fixerBtns = Array.from(buttons).filter((b) =>
+			(b.textContent ?? "").startsWith("Open Instruction Fixer"),
+		);
+		expect(fixerBtns).toHaveLength(2);
+		const labels = fixerBtns.map((b) => b.textContent ?? "");
+		expect(labels.some((l) => l.includes("alpha.json"))).toBe(true);
+		expect(labels.some((l) => l.includes("beta.json"))).toBe(true);
+
+		const alphaBtn = fixerBtns.find((b) => (b.textContent ?? "").includes("alpha.json"));
+		alphaBtn!.dispatchEvent(new Event("click"));
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("alpha.json");
+
+		const betaBtn = fixerBtns.find((b) => (b.textContent ?? "").includes("beta.json"));
+		betaBtn!.dispatchEvent(new Event("click"));
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("beta.json");
+	});
+
+	it('"Open Instruction Fixer" is absent on a zero-failure run', () => {
 		const exec = makeExecutor();
 		const modal = new ExecutionModal(app, exec, {});
 		modal.onOpen();
@@ -891,6 +1021,7 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		const buttons = modal.contentEl.querySelectorAll("button");
 		const labels = Array.from(buttons).map((b) => b.textContent ?? "");
 		expect(labels).not.toContain("View errors");
+		expect(labels.some((l) => l.startsWith("Open Instruction Fixer"))).toBe(false);
 		expect(labels).toContain("Close");
 	});
 
