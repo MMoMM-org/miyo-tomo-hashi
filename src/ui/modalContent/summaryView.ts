@@ -95,12 +95,17 @@ function renderSummary(
 	// of reach, and the label itself uses the basename (full path on `title`,
 	// same disclosure pattern as a filesystem breadcrumb) so the common case
 	// doesn't need to wrap at all.
+	//
+	// review follow-up: a basename is only unique-enough to READ by if it's
+	// actually unique among this run's failing sources — vaults repeat
+	// filenames across folders (`100 Inbox/x.json` vs. `200 Archive/x.json`).
+	// Disambiguate ONLY the sources whose basename collides, falling back to
+	// the full path for those; a source with a one-of-a-kind basename keeps
+	// the short label. `title` always carries the full path regardless.
 	const fixerSources = failingSourcePaths(state.records);
+	const basenameCounts = countBasenames(fixerSources);
 	for (const sourcePath of fixerSources) {
-		const label =
-			fixerSources.length === 1
-				? "Open Instruction Fixer"
-				: `Open Instruction Fixer: ${basename(sourcePath)}`;
+		const label = fixerButtonLabel(sourcePath, fixerSources.length, basenameCounts);
 		const fixerBtn = btnRow.createEl("button", { text: label });
 		if (fixerSources.length > 1) {
 			fixerBtn.setAttribute("title", sourcePath);
@@ -151,6 +156,34 @@ function renderValidationFailed(
 function basename(path: string): string {
 	const slash = path.lastIndexOf("/");
 	return slash === -1 ? path : path.slice(slash + 1);
+}
+
+/** How many of `paths` share each basename — collisions need a longer label. */
+function countBasenames(paths: readonly string[]): Map<string, number> {
+	const counts = new Map<string, number>();
+	for (const path of paths) {
+		const name = basename(path);
+		counts.set(name, (counts.get(name) ?? 0) + 1);
+	}
+	return counts;
+}
+
+/**
+ * `"Open Instruction Fixer"` when it's the only failing source; otherwise
+ * `"Open Instruction Fixer: <name>"`, where `<name>` is the basename UNLESS
+ * it collides with another failing source's basename, in which case the full
+ * path is used instead — two buttons must never read identically on the
+ * screen whose job is "pick the set you want to repair".
+ */
+function fixerButtonLabel(
+	sourcePath: string,
+	sourceCount: number,
+	basenameCounts: ReadonlyMap<string, number>,
+): string {
+	if (sourceCount === 1) return "Open Instruction Fixer";
+	const name = basename(sourcePath);
+	const disambiguated = (basenameCounts.get(name) ?? 0) > 1 ? sourcePath : name;
+	return `Open Instruction Fixer: ${disambiguated}`;
 }
 
 /**

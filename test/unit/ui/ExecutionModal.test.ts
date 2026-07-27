@@ -1022,6 +1022,59 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("100 Inbox/beta.json");
 	});
 
+	it('"Open Instruction Fixer" labels stay distinct when two failing sources share a basename', () => {
+		// Vaults repeat filenames across folders. A basename-only label would
+		// render two buttons reading the IDENTICAL text — distinguishable only
+		// by hovering for the `title` tooltip — on the screen whose whole job
+		// is "pick the set you want to repair". Both must fall back to the
+		// full path since basename alone can't disambiguate either of them.
+		const onOpenInstructionFixerCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {
+			onOpenInstructionFixer: onOpenInstructionFixerCb,
+		});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [
+				record({
+					fileId: "100 Inbox/x_instructions.json",
+					id: "I01",
+					outcome: { kind: "failed", reason: "boom" },
+				}),
+				record({
+					fileId: "200 Archive/x_instructions.json",
+					id: "I01",
+					outcome: { kind: "skipped-already" },
+				}),
+			],
+			counts: counts({ "skipped-already": 1, failed: 1, durationMs: 100 }),
+			logFilePath: null,
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const fixerBtns = Array.from(buttons).filter((b) =>
+			(b.textContent ?? "").startsWith("Open Instruction Fixer"),
+		);
+		expect(fixerBtns).toHaveLength(2);
+		const labels = fixerBtns.map((b) => b.textContent ?? "");
+
+		// The two labels must be distinct from each other...
+		expect(labels[0]).not.toBe(labels[1]);
+		// ...by falling back to the full (distinguishing) path for both.
+		expect(labels).toContain("Open Instruction Fixer: 100 Inbox/x_instructions.json");
+		expect(labels).toContain("Open Instruction Fixer: 200 Archive/x_instructions.json");
+
+		const inboxBtn = fixerBtns.find((b) => (b.textContent ?? "").includes("100 Inbox/"));
+		inboxBtn!.dispatchEvent(new Event("click"));
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("100 Inbox/x_instructions.json");
+
+		const archiveBtn = fixerBtns.find((b) => (b.textContent ?? "").includes("200 Archive/"));
+		archiveBtn!.dispatchEvent(new Event("click"));
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("200 Archive/x_instructions.json");
+	});
+
 	it('"Open Instruction Fixer" is absent on a zero-failure run', () => {
 		const exec = makeExecutor();
 		const modal = new ExecutionModal(app, exec, {});
