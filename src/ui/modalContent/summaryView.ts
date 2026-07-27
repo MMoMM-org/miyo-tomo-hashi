@@ -88,13 +88,23 @@ function renderSummary(
 	// failed/skipped-* action — derived straight from the records, so a
 	// zero-failure run naturally offers nothing (no separate flag to drift
 	// out of sync with the data).
+	//
+	// code-quality review W2: a multi-source run can have an unbounded number
+	// of these buttons, each keyed to a full vault path. `.hashi-execution-
+	// modal-buttons` wraps (styles.css) so a long row can never push Close out
+	// of reach, and the label itself uses the basename (full path on `title`,
+	// same disclosure pattern as a filesystem breadcrumb) so the common case
+	// doesn't need to wrap at all.
 	const fixerSources = failingSourcePaths(state.records);
 	for (const sourcePath of fixerSources) {
 		const label =
 			fixerSources.length === 1
 				? "Open Instruction Fixer"
-				: `Open Instruction Fixer: ${sourcePath}`;
+				: `Open Instruction Fixer: ${basename(sourcePath)}`;
 		const fixerBtn = btnRow.createEl("button", { text: label });
+		if (fixerSources.length > 1) {
+			fixerBtn.setAttribute("title", sourcePath);
+		}
 		fixerBtn.addEventListener("click", () => {
 			callbacks.onOpenInstructionFixer?.(sourcePath);
 		});
@@ -135,6 +145,12 @@ function renderValidationFailed(
 	closeBtn.addEventListener("click", () => {
 		callbacks.onClose?.();
 	});
+}
+
+/** Last path segment, for the multi-source button label (full path on `title`). */
+function basename(path: string): string {
+	const slash = path.lastIndexOf("/");
+	return slash === -1 ? path : path.slice(slash + 1);
 }
 
 /**

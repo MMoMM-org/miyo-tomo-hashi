@@ -957,7 +957,7 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		expect(labels).toContain("Open Instruction Fixer");
 	});
 
-	it('"Open Instruction Fixer" offers one option per failing source on a multi-source run', () => {
+	it('"Open Instruction Fixer" offers one option per failing source on a multi-source run, and omits a fully-applied third source (W3)', () => {
 		const onOpenInstructionFixerCb = vi.fn();
 		const exec = makeExecutor();
 		const modal = new ExecutionModal(app, exec, {
@@ -969,22 +969,31 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 			mode: "confirm",
 			records: [
 				record({
-					fileId: "alpha.json",
+					fileId: "100 Inbox/alpha.json",
 					id: "I01",
 					outcome: { kind: "failed", reason: "boom" },
 				}),
 				record({
-					fileId: "alpha.json",
+					fileId: "100 Inbox/alpha.json",
 					id: "I02",
 					outcome: { kind: "applied" },
 				}),
 				record({
-					fileId: "beta.json",
+					fileId: "100 Inbox/beta.json",
 					id: "I01",
 					outcome: { kind: "skipped-already" },
 				}),
+				// A regression that pushed every distinct fileId unconditionally
+				// (rather than filtering on failed/skipped-* outcomes) would still
+				// pass the two assertions above — this third, 100%-applied source
+				// is what W3 requires: its button must be ABSENT.
+				record({
+					fileId: "100 Inbox/gamma.json",
+					id: "I01",
+					outcome: { kind: "applied" },
+				}),
 			],
-			counts: counts({ applied: 1, "skipped-already": 1, failed: 1, durationMs: 100 }),
+			counts: counts({ applied: 2, "skipped-already": 1, failed: 1, durationMs: 100 }),
 			logFilePath: null,
 		});
 
@@ -994,16 +1003,23 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		);
 		expect(fixerBtns).toHaveLength(2);
 		const labels = fixerBtns.map((b) => b.textContent ?? "");
+		// W2: multi-source labels show the basename, not the full path, and
+		// carry the full path on `title` (styles.css also wraps the row so a
+		// long/unbounded list can never push Close out of reach).
 		expect(labels.some((l) => l.includes("alpha.json"))).toBe(true);
 		expect(labels.some((l) => l.includes("beta.json"))).toBe(true);
+		expect(labels.some((l) => l.includes("gamma.json"))).toBe(false);
+		expect(labels.every((l) => !l.includes("100 Inbox/"))).toBe(true);
 
 		const alphaBtn = fixerBtns.find((b) => (b.textContent ?? "").includes("alpha.json"));
+		expect(alphaBtn?.getAttribute("title")).toBe("100 Inbox/alpha.json");
 		alphaBtn!.dispatchEvent(new Event("click"));
-		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("alpha.json");
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("100 Inbox/alpha.json");
 
 		const betaBtn = fixerBtns.find((b) => (b.textContent ?? "").includes("beta.json"));
+		expect(betaBtn?.getAttribute("title")).toBe("100 Inbox/beta.json");
 		betaBtn!.dispatchEvent(new Event("click"));
-		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("beta.json");
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("100 Inbox/beta.json");
 	});
 
 	it('"Open Instruction Fixer" is absent on a zero-failure run', () => {

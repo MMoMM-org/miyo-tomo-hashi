@@ -162,6 +162,29 @@ interface VaultAdapterShape {
 	getBasePath?(): string;
 }
 
+/**
+ * "Open Instruction Fixer" ordering (spec-006 T4.2 / ADR-3a, code-quality
+ * review W1): idle the run-state store ONLY after `opener` settles, success
+ * or failure. `outcomeSource.resolveOutcomes` reads the store LIVE when the
+ * Fixer view loads; idling before `opener` (which awaits the view's
+ * `onOpen`/`setState`, and therefore its outcome resolution) would erase the
+ * terminal "summary" state before the view can read it — silently demoting
+ * this entry point to the cold-open/no-signal fail-closed path. Extracted
+ * (rather than inlined in the modal-glue closure) so this invariant is
+ * independently testable without an Obsidian `App`/`Plugin`.
+ */
+export async function openFixerThenIdle(
+	opener: (sourcePath: string) => Promise<void>,
+	sourcePath: string,
+	idle: () => void,
+): Promise<void> {
+	try {
+		await opener(sourcePath);
+	} finally {
+		idle();
+	}
+}
+
 export default class TomoHashiPlugin extends Plugin {
 	settings: PluginSettings = DEFAULT_SETTINGS;
 	private connection: TomoConnection | null = null;
@@ -530,29 +553,17 @@ export default class TomoHashiPlugin extends Plugin {
 						exec.state.set({ kind: "idle" });
 						modal.close();
 					},
-					// User clicked "Open Instruction Fixer" on the summary (spec-006
-					// T4.2 / ADR-3a) → close the modal so the newly revealed Fixer
-					// leaf isn't hidden behind it, THEN reveal the Fixer, and only
-					// AFTER that idle the store. Order matters: outcomeSource reads
-					// `executionStore` live when the Fixer view loads, and this is
-					// the one entry point where that read finding the terminal
-					// "summary" state is what unlocks editing (a cold open falls
-					// back to run-log parsing, fail-closed if none matches).
-					// Idling before the view has read it would downgrade this
-					// primary flow to that cold-open path. `openInstructionFixer`'s
-					// promise resolves only once the view's onOpen/setState (and
-					// therefore its outcome resolution) has completed, so awaiting
-					// it — and idling in `finally` so a rejected open still frees
-					// the store for the next run — is what makes this safe.
+					// User clicked "Open Instruction Fixer" on the summary → close the
+					// modal so the newly revealed Fixer leaf isn't hidden behind it,
+					// then hand off to `openFixerThenIdle` for the ordering (see its
+					// doc comment — idle only after the opener settles).
 					onOpenInstructionFixer: (sourcePath: string) => {
 						modal.close();
-						void (async () => {
-							try {
-								await openInstructionFixer(app, sourcePath);
-							} finally {
-								exec.state.set({ kind: "idle" });
-							}
-						})();
+						void openFixerThenIdle(
+							(p) => openInstructionFixer(app, p),
+							sourcePath,
+							() => exec.state.set({ kind: "idle" }),
+						);
 					},
 				});
 				activeModal = modal;
