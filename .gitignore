@@ -14,6 +14,7 @@ build/
 # Local test vault — user notes, audio recordings, Obsidian state
 # Never committed; live data only on the developer's machine.
 test/Hashi/
+test/*.zip
 
 # Test coverage
 coverage/
