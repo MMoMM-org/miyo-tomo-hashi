@@ -83,7 +83,7 @@ Cut down on the busywork — with the peace of mind that Hashi does only what yo
 - **Optional hooks** — `.cjs` files in your vault, full plugin privilege, with an ask-mode disclosure modal
 - **Schema validation** — vendored Tomo schema, ajv-compiled at module load
 - **14 action kinds** — create_moc, move_note, link_to_moc, insert_under_marker, replace_section, add_relationship, edit_note_text, remove_up_link, resolve_dead_link, update_tracker, update_log_entry, update_log_link, delete_source, skip
-- **Instruction Fixer** — a repair bench for actions that failed or were skipped: fix the mechanical detail (a wrong anchor, a moved target) and re-run, without a full Tomo regeneration. Fail-closed — only opens for editing what a trusted run outcome says actually failed
+- **Instruction Fixer** — a repair bench for actions that failed or were skipped: fix the mechanical detail (a wrong anchor, a moved target) and re-run, without a full Tomo regeneration. Anchors and markers are picked straight out of the target note, so every offered value is one the executor can resolve. Fail-closed — only opens for editing what a trusted run outcome says actually failed
 
 ## Documentation
 

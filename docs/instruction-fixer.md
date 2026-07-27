@@ -109,6 +109,38 @@ Changing a target field marks the model dirty and activates **Save**; committing
 on a currently-editable card is the only way to produce a pending edit — nothing here adds,
 removes, or reorders actions.
 
+### Choosing from the target note
+
+Fields that point *into* another note offer a **Choose…** button rather than free typing:
+
+| Field | What the button offers |
+|---|---|
+| Target note / MOC / path fields | any note in the vault (fuzzy search) |
+| **Anchor** (`link_to_moc`, `insert_under_marker`) | the target note's own headings, callouts and body lines |
+| **Section heading** (`replace_section`) | the target note's headings only |
+| **Marker** (`add_relationship`) | the target MOC's Dataview field openers (`up::`, `down::`) and body lines |
+
+The anchor picker lists each spot once per **placement** it legally allows, and picking a
+row commits the anchor's type, its value and the placement together. That is deliberate:
+those three are only valid in combination — `inside` works on a callout, and on a heading
+for `insert_under_marker`, but never on a plain line — and three separate dropdowns would
+let you build a combination the executor rejects. Every row you can see is one the executor
+can resolve.
+
+`replace_section` shows headings without a placement, because it always overwrites the
+section body; its wire carries no placement field at all.
+
+Two things the pickers deliberately do *not* do:
+
+- **Block anchors** (several consecutive lines matched exactly) are never constructed. There
+  is no sensible way to enumerate the combinations, so the field stays free text — an
+  existing block anchor is still editable by hand.
+- The note is read **at the moment you press the button**, not when the card was drawn, and
+  the structure is parsed from the file's content rather than Obsidian's metadata cache. A
+  repair you saved a second ago is therefore already reflected. If the target note can't be
+  read — the usual reason being that it's the thing that went missing — you get a notice
+  naming it instead of an empty picker.
+
 ## Saving — JSON only, `.md` peer untouched
 
 Unlike the Suggestions and Garden-Audit editors, **Save is not an approval step** — the
