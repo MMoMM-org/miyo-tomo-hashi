@@ -283,22 +283,26 @@ describe("resolveOutcomes — run-log fallback (trusted source #2)", () => {
 		expect(map.get("I05")).toEqual({ kind: "failed", reason: "anchor not found" });
 	});
 
-	it("parses the wikilink I## cell form emitted when the .md peer has ### I## headings", async () => {
-		const set = setWithIds("I01");
+	it("parses both the plain I## cell (ADR-8, current) and the legacy wikilink I## cell — the dual-format guard", async () => {
+		// T4.3 dropped the deep-link: RunLogWriter now emits plain `I##` only.
+		// Logs already written to users' vaults still carry the old
+		// `[[<peerStem>#<heading>|I##]]` form forever, so parseIdCell must
+		// keep accepting both. RunLogWriter can no longer produce the legacy
+		// form, so this log is hand-written to exercise that branch directly.
+		const set = setWithIds("I01", "I02");
 		const vault = new FakeVaultFS();
 		await vault.create(
-			SET_PATH.replace(/\.json$/, ".md"),
-			"# Instructions\n\n### I01 — Link to [[Hobbies (MOC)]]\n",
+			`${INBOX}/tomo-hashi-run-log_2026-07-20T1030.md`,
+			handWrittenLog([
+				"| I01 | skip | s | failed | current plain form |",
+				"| [[2026-07-20_1015_instructions#I02 — Link to Hobbies\\|I02]] | skip | s | failed | legacy wikilink form |",
+			]),
 		);
-		await writeRunLog(vault, {
-			startedAt: new Date(2026, 6, 20, 10, 30),
-			sources: [SET_PATH],
-			records: [record("I01", { kind: "failed", reason: "anchor not found" })],
-		});
 
 		const map = asMap(await resolveOutcomes(set, SET_PATH, deps(vault)));
 
-		expect(map.get("I01")).toEqual({ kind: "failed", reason: "anchor not found" });
+		expect(map.get("I01")).toEqual({ kind: "failed", reason: "current plain form" });
+		expect(map.get("I02")).toEqual({ kind: "failed", reason: "legacy wikilink form" });
 	});
 
 	it("unescapes pipes inside a failed reason", async () => {

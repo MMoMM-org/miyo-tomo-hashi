@@ -545,15 +545,19 @@ describe("RunLogWriter.finalize — retention", () => {
 });
 
 // ---------------------------------------------------------------------------
-// I## column wikilinks to the .md peer (2026-05-01)
+// I## column is plain text (deep-link removed, ADR-8, T4.3)
 // ---------------------------------------------------------------------------
 //
-// When a source's .md peer exists and contains `### <id> — <title>` headings,
-// the run log renders each I## column as a wikilink to the matching peer
-// heading. Falls back to plain `I##` text when peer is missing or no heading
-// matches. Format: `[[<peer_stem>#<heading_text>|I##]]`.
+// The pre-ADR-8 renderIdCell wikilinked the I## column to the matching
+// `### I##` heading in the source's .md peer — `[[<peerStem>#<heading>|I##]]`
+// — which broke when the heading text itself contained nested `[[ ]]`
+// (Tomo confirm #4). ADR-8 drops the deep-link entirely: the I## column is
+// now always plain text, regardless of whether a matching peer heading
+// exists. `outcomeSource.parseIdCell` (Phase 2) keeps parsing the legacy
+// wikilink form for logs already written to users' vaults — see
+// outcomeSource.test.ts's dual-format guard.
 
-describe("RunLogWriter — I## wikilinks to peer headings", () => {
+describe("RunLogWriter — I## column is plain text", () => {
 	const SOURCE = "2026-05-01_1008_instructions.json";
 	const PEER = "2026-05-01_1008_instructions.md";
 
@@ -568,7 +572,7 @@ describe("RunLogWriter — I## wikilinks to peer headings", () => {
 		"",
 	].join("\n");
 
-	it("renders I## as wikilink when peer exists with matching heading", async () => {
+	it("renders I## as plain text even when a matching peer heading exists", async () => {
 		const vault = new FakeVaultFS();
 		await vault.create(`${INBOX}/${PEER}`, peerContent);
 		const writer = new RunLogWriter(vault);
@@ -580,17 +584,14 @@ describe("RunLogWriter — I## wikilinks to peer headings", () => {
 		await writer.finalize(FIXED_END, "always");
 		const content = await vault.read(path);
 
-		// Pipe in alias separator is escaped (\|) so the wikilink survives
-		// the markdown table cell — Obsidian renders \| as the alias separator.
-		expect(content).toContain(
-			"[[2026-05-01_1008_instructions#I01 — Create MOC: Board Games (MOC)\\|I01]]",
-		);
-		expect(content).toContain(
-			"[[2026-05-01_1008_instructions#I03 — Move Note: Asahikawa — Hokkaidos zweitgrößte Stadt\\|I03]]",
-		);
+		expect(content).toContain("| I01 |");
+		expect(content).toContain("| I03 |");
+		// No wikilink, no nested [[ ]] — the origin bug this spec removes.
+		expect(content).not.toContain("[[");
+		expect(content).not.toContain("]]");
 	});
 
-	it("falls back to plain I## when peer file does not exist", async () => {
+	it("renders I## as plain text when no peer file exists", async () => {
 		const vault = new FakeVaultFS();
 		// No peer file created
 		const writer = new RunLogWriter(vault);
@@ -601,37 +602,11 @@ describe("RunLogWriter — I## wikilinks to peer headings", () => {
 		await writer.finalize(FIXED_END, "always");
 		const content = await vault.read(path);
 
-		expect(content).not.toContain("[[2026-05-01_1008_instructions#");
-		// Plain I01 still appears in the row
 		expect(content).toContain("| I01 |");
+		expect(content).not.toContain("[[");
 	});
 
-	it("falls back to plain I## when peer exists but heading for that id is missing", async () => {
-		const partialPeer = [
-			"# Tomo instructions",
-			"",
-			"### I01 — Create MOC: Board Games (MOC)",
-			"- [ ] Applied",
-			"",
-		].join("\n");
-		const vault = new FakeVaultFS();
-		await vault.create(`${INBOX}/${PEER}`, partialPeer);
-		const writer = new RunLogWriter(vault);
-		const path = await writer.start(makeStartMeta({
-			sources: [`${INBOX}/${SOURCE}`],
-		}));
-		// I01 has a heading; I99 does not
-		writer.appendRecord(makeRecord(`${INBOX}/${SOURCE}`, "I01", "create_moc", "src → dst", { kind: "applied" }));
-		writer.appendRecord(makeRecord(`${INBOX}/${SOURCE}`, "I99", "skip", "x", { kind: "applied" }));
-		await writer.finalize(FIXED_END, "always");
-		const content = await vault.read(path);
-
-		expect(content).toContain("[[2026-05-01_1008_instructions#I01 — Create MOC: Board Games (MOC)\\|I01]]");
-		expect(content).toContain("| I99 |");
-		expect(content).not.toContain("#I99");
-	});
-
-	it("validation-failure rows do not get wikilinks (I## column is `—`)", async () => {
+	it("validation-failure rows keep the `—` placeholder in the I## column", async () => {
 		const vault = new FakeVaultFS();
 		await vault.create(`${INBOX}/${PEER}`, peerContent);
 		const writer = new RunLogWriter(vault);
@@ -645,8 +620,56 @@ describe("RunLogWriter — I## wikilinks to peer headings", () => {
 		await writer.finalize(FIXED_END, "always");
 		const content = await vault.read(path);
 
-		// Row contains the dash placeholder, not a wikilink
 		expect(content).toMatch(/\|\s*—\s*\|/);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Fixer pointer line (T4.3)
+// ---------------------------------------------------------------------------
+
+describe("RunLogWriter — Instruction Fixer pointer line", () => {
+	it("carries the informational Fixer pointer line in the log body", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "a → b", { kind: "failed", reason: "boom" }));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain(
+			"Errors can be viewed and repaired in the Instruction Fixer (command: 'Open instruction fixer').",
+		);
+	});
+
+	it("places the pointer line in the body, after the # Hashi run log heading and before the per-file sections", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({
+			sources: ["2026-04-29_1432_instructions.json"],
+		}));
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "a → b", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		const headingIndex = content.indexOf("# Hashi run log");
+		const pointerIndex = content.indexOf("Instruction Fixer");
+		const sectionIndex = content.indexOf("## 2026-04-29_1432_instructions.json");
+
+		expect(headingIndex).toBeGreaterThan(-1);
+		expect(pointerIndex).toBeGreaterThan(headingIndex);
+		expect(sectionIndex).toBeGreaterThan(pointerIndex);
+	});
+
+	it("pointer line appears even on a clean run with no failures", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta());
+		writer.appendRecord(makeRecord("2026-04-29_1432_instructions.json", "I01", "create_moc", "a → b", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		expect(content).toContain("Instruction Fixer");
 	});
 });
 
