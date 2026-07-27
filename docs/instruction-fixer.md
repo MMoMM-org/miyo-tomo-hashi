@@ -75,6 +75,11 @@ deep-link into the `.md` heading; that was the original bug this feature replace
 outcome badge, and its key fields. Card body order is fixed: intent → failure reason →
 target fields → note link.
 
+- **Intent line** names both WHERE an action writes and WHAT it writes there — e.g.
+  `Link "- [[Weekly review]]" into Systems (MOC), after heading "Maintenance"`, not just
+  the target. Earlier versions named only the target, which left no way to tell which note
+  a `link_to_moc`/`insert_under_marker`/`replace_section` card was actually about to link
+  or insert.
 - **Outcome badge** shows the trusted outcome's kind verbatim (`applied`, `failed`,
   `skipped-already`, …), or `—` when there's no signal for that action.
 - **Failure reason** appears under the intent line it explains — the error text from a
