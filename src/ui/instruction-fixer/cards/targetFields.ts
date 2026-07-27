@@ -48,6 +48,18 @@ export interface TargetFieldSpec {
 	readonly placeholder: string;
 	/** What a picked vault note commits as — or `none` for a free-text field. */
 	readonly pick: TargetPickMode;
+	/**
+	 * A second picker sourced from the action's own TARGET note rather than
+	 * from the vault at large (2026-07-27 follow-up):
+	 *   - `anchor-spot` — the note's headings/callouts/lines, committing
+	 *     `anchor.type` + `anchor.value` + `placement` together;
+	 *   - `marker` — the note's Dataview field openers and body lines.
+	 *
+	 * Absent means free text only. This is the presentation-layer flag; what
+	 * each pick may WRITE is still decided by `transforms.ts` (`setAnchorSpot`'s
+	 * ADR-5 amendment, and `TARGET_FIELD_WHITELIST` for the marker).
+	 */
+	readonly docPick?: "anchor-spot" | "marker";
 }
 
 /**
@@ -85,6 +97,7 @@ export const TARGET_FIELDS: TargetFieldMap = {
 			captionTooltip: ANCHOR_TOOLTIP,
 			placeholder: "Heading, callout or line text…",
 			pick: "none",
+			docPick: "anchor-spot",
 		},
 	},
 	insert_under_marker: {
@@ -101,6 +114,7 @@ export const TARGET_FIELDS: TargetFieldMap = {
 			captionTooltip: ANCHOR_TOOLTIP,
 			placeholder: "Heading, callout or line text…",
 			pick: "none",
+			docPick: "anchor-spot",
 		},
 	},
 	replace_section: {
@@ -118,6 +132,7 @@ export const TARGET_FIELDS: TargetFieldMap = {
 				"Heading text without the leading #. The heading line itself is kept; only its body is replaced.",
 			placeholder: "Heading text…",
 			pick: "none",
+			docPick: "anchor-spot",
 		},
 	},
 	add_relationship: {
@@ -135,6 +150,7 @@ export const TARGET_FIELDS: TargetFieldMap = {
 				"The relationship line the new entry is written under — matched the same way an anchor is.",
 			placeholder: "Marker line to match…",
 			pick: "none",
+			docPick: "marker",
 		},
 		line: {
 			label: "Line",

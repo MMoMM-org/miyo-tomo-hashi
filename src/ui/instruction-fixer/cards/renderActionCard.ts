@@ -38,10 +38,18 @@
  */
 
 import type { Action } from "../../../schema/types.js";
-import { setTargetField } from "../../../instruction-fixer/transforms.js";
+import { anchorSpotKindOf } from "../../../instruction-fixer/noteSpots.js";
+import { setAnchorSpot, setTargetField } from "../../../instruction-fixer/transforms.js";
 import { renderNavigableNoteLink } from "../../garden-audit-view/noteNavigation.js";
-import { renderTargetControlCore } from "../../garden-audit-view/TargetControl.js";
+import {
+	renderTargetControlCore,
+	type TargetControlCoreOptions,
+} from "../../garden-audit-view/TargetControl.js";
 import type { FixerCardContext, FixerCardRenderer } from "../fixerContract.js";
+import {
+	openAnchorSpotPicker,
+	openMarkerSpotPicker,
+} from "../pickers/openSpotPicker.js";
 
 import { targetFieldsFor, type TargetField } from "./targetFields.js";
 
@@ -82,6 +90,17 @@ function anchorText(value: string | null): string {
  * points at the destination — and its most common failure, "Source missing —
  * nothing to move", interpolates no path at all. Without `source` in this
  * sentence the user could not tell which file went missing.
+ *
+ * The same rule covers the PAYLOAD — the text an action writes — for exactly
+ * the same reason, and this is where the first version fell short: an intent
+ * naming only the target answers "where does this go?" but not "what goes
+ * there?", so `link_to_moc` read as "Link into @, after heading Maintenance"
+ * with no way to tell WHICH note was being linked. The payload comes from the
+ * field the executor actually writes (`line_to_add`, `content`), never from a
+ * friendlier label alongside it: `source_note_title` is a derived hint Tomo may
+ * emit as null, and a card that showed it while the executor wrote something
+ * else would mislead the one user who most needs the truth — the one about to
+ * repair the action.
  */
 export function actionIntent(action: Action): string {
 	switch (action.action) {
@@ -90,11 +109,11 @@ export function actionIntent(action: Action): string {
 		case "move_note":
 			return `Move ${action.source} → ${action.destination}`;
 		case "link_to_moc":
-			return `Link into ${action.target_moc}, ${action.placement} ${action.anchor.type} ${anchorText(action.anchor.value)}`;
+			return `Link ${quote(action.line_to_add)} into ${action.target_moc}, ${action.placement} ${action.anchor.type} ${anchorText(action.anchor.value)}`;
 		case "insert_under_marker":
-			return `Insert into ${action.target_path}, ${action.placement} ${action.anchor.type} ${anchorText(action.anchor.value)}`;
+			return `Insert ${quote(action.content)} into ${action.target_path}, ${action.placement} ${action.anchor.type} ${anchorText(action.anchor.value)}`;
 		case "replace_section":
-			return `Replace section ${anchorText(action.anchor.value)} in ${action.target_path}`;
+			return `Replace section ${anchorText(action.anchor.value)} in ${action.target_path} with ${quote(action.content)}`;
 		case "add_relationship":
 			return `Add ${quote(action.line)} under ${quote(action.marker)} in ${action.target_moc_path}`;
 		case "edit_note_text":
@@ -159,6 +178,53 @@ export function affectedNotePath(action: Action): string | null {
 	}
 }
 
+/**
+ * The "choose from the target note" button for a field that declares one, or
+ * `undefined` for a plain free-text field.
+ *
+ * Only reachable on an `editable` card — `renderField` returns before this on
+ * every other gate, so a frozen card has no button to press and no path into
+ * either transform. The picks themselves are still validated on the write side
+ * (`setAnchorSpot` re-checks the enums, `setTargetField` the whitelist); this
+ * is the affordance, not the guard.
+ *
+ * An anchor pick commits three fields at once and so cannot go through
+ * `onChange(value)` — that is the whole reason `extraPick` exists as a bare
+ * button rather than a second `TargetPickMode`. A marker pick is an ordinary
+ * string commit and rides the existing whitelist entry unchanged.
+ */
+function extraPickFor(
+	action: Action,
+	field: TargetField,
+	ctx: FixerCardContext,
+): TargetControlCoreOptions["extraPick"] {
+	if (field.spec.docPick === undefined) return undefined;
+
+	if (field.spec.docPick === "anchor-spot") {
+		const kind = anchorSpotKindOf(action);
+		if (kind === null) return undefined; // unreachable — only anchor kinds declare it
+		return {
+			label: "Choose…",
+			ariaLabel: "Choose an anchor from the target note",
+			onClick: () => {
+				void openAnchorSpotPicker(ctx.app, action, kind, (spot) => {
+					ctx.apply((model) => setAnchorSpot(model, action.id, spot));
+				});
+			},
+		};
+	}
+
+	return {
+		label: "Choose…",
+		ariaLabel: "Choose a marker from the target note",
+		onClick: () => {
+			void openMarkerSpotPicker(ctx.app, action, (spot) => {
+				ctx.apply((model) => setTargetField(model, action.id, field.key, spot.value));
+			});
+		},
+	};
+}
+
 function renderField(
 	container: HTMLElement,
 	action: Action,
@@ -185,6 +251,7 @@ function renderField(
 		placeholder: field.spec.placeholder,
 		ariaLabel: field.spec.label,
 		pick: field.spec.pick,
+		extraPick: extraPickFor(action, field, ctx),
 		onChange: (next) => {
 			ctx.apply((model) => setTargetField(model, action.id, field.key, next));
 		},

@@ -11,7 +11,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import { setTargetField, TARGET_FIELD_WHITELIST } from "../../../src/instruction-fixer/transforms.js";
+import {
+	setAnchorSpot,
+	setTargetField,
+	TARGET_FIELD_WHITELIST,
+} from "../../../src/instruction-fixer/transforms.js";
 import type { Action } from "../../../src/schema/types.js";
 import type { InstructionFixerModel } from "../../../src/vault/InstructionSetDoc.js";
 
@@ -451,5 +455,143 @@ describe("setTargetField — duplicate id", () => {
 		const [a, b] = next.doc.actions;
 		expect(a?.action === "link_to_moc" && a.target_moc).toBe("Renamed (MOC)");
 		expect(b?.action === "link_to_moc" && b.target_moc).toBe("Second (MOC)");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// setAnchorSpot — the picker's write path (ADR-5 amendment, 2026-07-27)
+//
+// Same both-directions discipline as `setTargetField` above (Constitution L1,
+// Testing): every accept case is paired with the rejection that proves the
+// widened write surface did not become an open one.
+// ---------------------------------------------------------------------------
+
+describe("setAnchorSpot — accepts", () => {
+	it("writes anchor.type, anchor.value and placement together", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setAnchorSpot(model, "I01", {
+			anchorType: "callout",
+			value: "[!blocks] Key Concepts",
+			placement: "inside",
+		});
+
+		const action = next.doc.actions[0];
+		expect(next).not.toBe(model);
+		expect(next.dirty).toBe(true);
+		expect(action?.action === "link_to_moc" && action.anchor).toEqual({
+			type: "callout",
+			value: "[!blocks] Key Concepts",
+		});
+		expect(action?.action === "link_to_moc" && action.placement).toBe("inside");
+	});
+
+	/**
+	 * The whole reason the three fields move as one: writing the value while
+	 * leaving `type: "heading"` behind would emit a triple the resolver cannot
+	 * resolve — a repair that fails for a reason the user did not cause.
+	 */
+	it("never leaves a stale anchor.type behind a new value", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setAnchorSpot(model, "I01", {
+			anchorType: "line",
+			value: "- [[Weekly review]]",
+			placement: "before",
+		});
+
+		const action = next.doc.actions[0];
+		expect(action?.action === "link_to_moc" && action.anchor.type).toBe("line");
+	});
+});
+
+describe("setAnchorSpot — rejects (same model reference, dirty untouched)", () => {
+	/**
+	 * `replace_section` has no `placement` on its wire, and the schema is
+	 * `additionalProperties: false` — growing the key here would make the very
+	 * next Save fail validation.
+	 */
+	it("adds no placement key to a kind whose wire has none", () => {
+		const model = makeModel([replaceSection()]);
+		const next = setAnchorSpot(model, "I03", {
+			anchorType: "heading",
+			value: "Summary",
+			placement: null,
+		});
+
+		expect(Object.keys(next.doc.actions[0] ?? {})).not.toContain("placement");
+	});
+
+	it("ignores a placement offered for a kind that has no placement field", () => {
+		const model = makeModel([replaceSection()]);
+		const next = setAnchorSpot(model, "I03", {
+			anchorType: "heading",
+			value: "Summary",
+			placement: "inside",
+		});
+
+		expect(Object.keys(next.doc.actions[0] ?? {})).not.toContain("placement");
+	});
+
+	it("rejects an anchor type outside the schema enum", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setAnchorSpot(model, "I01", {
+			anchorType: "footnote" as never,
+			value: "x",
+			placement: "after",
+		});
+
+		expect(next).toBe(model);
+	});
+
+	it("rejects a placement outside the schema enum", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setAnchorSpot(model, "I01", {
+			anchorType: "heading",
+			value: "Key Concepts",
+			placement: "underneath" as never,
+		});
+
+		expect(next).toBe(model);
+	});
+
+	it("rejects a kind that carries no anchor", () => {
+		const model = makeModel([editNoteText()]);
+		const next = setAnchorSpot(model, "I05", {
+			anchorType: "heading",
+			value: "Notes",
+			placement: "after",
+		});
+
+		expect(next).toBe(model);
+	});
+
+	it("rejects an unknown id", () => {
+		const model = makeModel([linkToMoc()]);
+		expect(
+			setAnchorSpot(model, "NOPE", { anchorType: "heading", value: "x", placement: "after" }),
+		).toBe(model);
+	});
+
+	it("is a no-op when the picked spot is the one already on the wire", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setAnchorSpot(model, "I01", {
+			anchorType: "heading",
+			value: "Key Concepts",
+			placement: "after",
+		});
+
+		expect(next).toBe(model);
+	});
+
+	it("is NOT a no-op when only the placement differs", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setAnchorSpot(model, "I01", {
+			anchorType: "heading",
+			value: "Key Concepts",
+			placement: "before",
+		});
+
+		expect(next).not.toBe(model);
+		const action = next.doc.actions[0];
+		expect(action?.action === "link_to_moc" && action.placement).toBe("before");
 	});
 });

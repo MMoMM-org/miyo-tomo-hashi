@@ -126,6 +126,24 @@ export interface TargetControlCoreOptions {
 	/** `aria-label` of the text input — the field's own name. */
 	readonly ariaLabel: string;
 	readonly pick: TargetPickMode;
+	/**
+	 * A SECOND picker button, for fields whose candidates come from somewhere
+	 * other than "any note in the vault" — the Instruction Fixer's anchor and
+	 * marker pickers, which enumerate one target note's own structure.
+	 *
+	 * Deliberately just a labelled button with an `onClick`, not another
+	 * `TargetPickMode` variant: those pickers are async (they read the target
+	 * note first), can fail before opening (the target may not resolve), and one
+	 * of them commits three wire fields at once rather than a string. None of
+	 * that fits `onChange(value)`, so the caller owns the whole interaction and
+	 * this widget owns only the button's placement. The input re-reads its value
+	 * from the model on the re-render a commit triggers.
+	 */
+	readonly extraPick?: {
+		readonly label: string;
+		readonly ariaLabel: string;
+		readonly onClick: () => void;
+	};
 }
 
 /**
@@ -174,6 +192,18 @@ export function renderTargetControlCore(
 				input.value = picked;
 				onChange(picked);
 			}).open();
+		});
+	}
+
+	if (opts.extraPick !== undefined) {
+		const extra = opts.extraPick;
+		const button = wrap.createEl("button", {
+			cls: ["hashi-se-mini-pick"],
+			text: extra.label,
+			attr: { type: "button", "aria-label": extra.ariaLabel },
+		});
+		button.addEventListener("click", () => {
+			extra.onClick();
 		});
 	}
 

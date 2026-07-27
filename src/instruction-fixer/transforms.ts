@@ -18,8 +18,17 @@
  * enumerate the same roster to render the right fields per card.
  *
  * ADR-6 — no skip/disable field, no schema change, no new persisted field:
- * this transform only ever rewrites one of the whitelisted string fields (or
- * `anchor`'s nested `value`) already defined on `src/schema/types.ts`'s wire.
+ * this module only ever rewrites fields already defined on
+ * `src/schema/types.ts`'s wire. Still true after the amendment below: `type`
+ * and `placement` are existing enum fields, not new ones.
+ *
+ * ADR-5 amendment (2026-07-27, user request b + c) — `setAnchorSpot` widens the
+ * write surface from `anchor.value` alone to the triple `anchor.type` +
+ * `anchor.value` + `placement`, for the three anchor-bearing kinds only. The
+ * reason is in that function's own docblock; the short form is that a picker
+ * choosing a real spot out of the target note cannot honestly write one third
+ * of it. `TARGET_FIELD_WHITELIST` is unchanged and still governs every
+ * free-text field, including `anchor.value` when typed by hand.
  *
  * Empty/whitespace values are accepted verbatim and never trimmed or coerced
  * to `null` — several whitelisted fields (`edit_note_text.match`, `anchor`'s
@@ -30,6 +39,8 @@
 
 import type { Action, Anchor } from "../schema/types.js";
 import type { InstructionFixerModel } from "../vault/InstructionSetDoc.js";
+
+import { anchorSpotKindOf, type AnchorSpot } from "./noteSpots.js";
 
 // ---------------------------------------------------------------------------
 // TARGET_FIELD_WHITELIST — ADR-5's roster, verbatim
@@ -116,4 +127,79 @@ function setStringField(action: Action, key: string, value: string): Action {
 function setAnchorValue<T extends Action & { anchor: Anchor }>(action: T, value: string): T {
 	if (action.anchor.value === value) return action;
 	return { ...action, anchor: { ...action.anchor, value } };
+}
+
+// ---------------------------------------------------------------------------
+// setAnchorSpot — the picker's write path (ADR-5 amendment, 2026-07-27)
+// ---------------------------------------------------------------------------
+
+/**
+ * Commits a picked anchor spot: `anchor.type`, `anchor.value` and — for the two
+ * kinds that have one — `placement`, in ONE transform.
+ *
+ * This is the ADR-5 amendment. The original roster made only `anchor.value`
+ * writable, on the reasoning that the type and placement came from Tomo's
+ * analysis and the user was correcting a stale VALUE. Picking a spot out of the
+ * live note invalidates that split: the user repairing a renamed heading by
+ * choosing a callout instead is changing the type as a direct consequence, and
+ * a picker that wrote the value while leaving `type: "heading"` behind would
+ * emit a triple the resolver cannot resolve — a repair that fails closed for a
+ * reason the user did nothing to cause.
+ *
+ * The three fields therefore move together or not at all, and the legality of
+ * the combination is decided in `noteSpots.placementsFor` (which mirrors each
+ * handler) BEFORE a row is ever offered. This function re-checks the enum
+ * membership of both values anyway: it is a write path into the wire, and a
+ * caller that hand-built a spot must not be able to widen what lands on disk
+ * beyond what the schema's enums allow.
+ *
+ * Rejections return the SAME model (unknown id, a kind with no anchor, a value
+ * outside the schema enums, or a spot that changes nothing) — same convention
+ * as `setTargetField`, for the same store `===` reason.
+ */
+export function setAnchorSpot(
+	model: InstructionFixerModel,
+	actionId: string,
+	spot: Pick<AnchorSpot, "anchorType" | "value" | "placement">,
+): InstructionFixerModel {
+	const current = model.doc.actions.find((a) => a.id === actionId);
+	if (current === undefined) return model;
+
+	const kind = anchorSpotKindOf(current);
+	if (kind === null || !("anchor" in current)) return model;
+	if (!ANCHOR_TYPES.includes(spot.anchorType)) return model;
+	if (spot.placement !== null && !PLACEMENTS.includes(spot.placement)) return model;
+
+	const next = applyAnchorSpot(current, spot);
+	if (next === current) return model;
+
+	const actions = model.doc.actions.map((a) => (a === current ? next : a));
+	return { doc: { ...model.doc, actions }, dirty: true };
+}
+
+const ANCHOR_TYPES: readonly string[] = ["callout", "heading", "line", "block"];
+const PLACEMENTS: readonly string[] = ["inside", "before", "after"];
+
+/**
+ * Writes the triple onto an anchor-bearing action. `placement` is written only
+ * when the spot carries one AND the action already has the field — the second
+ * check is what keeps `replace_section` (which has no `placement` on its wire)
+ * from growing an unknown property that `additionalProperties: false` would
+ * reject at save.
+ */
+function applyAnchorSpot<T extends Action & { anchor: Anchor }>(
+	action: T,
+	spot: Pick<AnchorSpot, "anchorType" | "value" | "placement">,
+): T {
+	const writesPlacement = spot.placement !== null && "placement" in action;
+	const sameAnchor = action.anchor.type === spot.anchorType && action.anchor.value === spot.value;
+	const samePlacement =
+		!writesPlacement ||
+		(action as unknown as Record<string, unknown>)["placement"] === spot.placement;
+	if (sameAnchor && samePlacement) return action;
+
+	const next: T = { ...action, anchor: { type: spot.anchorType, value: spot.value } };
+	// `placement` is not on `T` (only two of the three anchor kinds declare it),
+	// so the write is guarded by the `in` check above and cast once here.
+	return writesPlacement ? ({ ...next, placement: spot.placement } as T) : next;
 }

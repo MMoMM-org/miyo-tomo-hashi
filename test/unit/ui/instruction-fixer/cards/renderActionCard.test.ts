@@ -17,7 +17,7 @@
  */
 
 import "obsidian";
-import { App, WorkspaceLeaf } from "obsidian";
+import { App, Notice, TFile, WorkspaceLeaf } from "obsidian";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ActionOutcome } from "../../../../../src/executor/state";
@@ -61,6 +61,50 @@ vi.mock("../../../../../src/ui/garden-audit-view/pickers/TargetNotePicker", () =
 	) {
 		const instance: PickerInstance = { app, onChoose, open: vi.fn() };
 		pickerInstances.push(instance);
+		return instance;
+	}),
+}));
+
+// --- target-note picker spies ------------------------------------------------
+// Same idiom, one level lower: the modals are stubbed but `openSpotPicker` runs
+// for real, so these tests also cover the resolve → read → derive-rows wiring.
+
+/** Structurally the union of what both rosters emit — enough to assert on
+ * without importing the production types into a spy. */
+interface SpotRow {
+	readonly value: string;
+	readonly anchorType?: string;
+	readonly placement?: string | null;
+}
+
+interface SpotPickerInstance {
+	spots: readonly SpotRow[];
+	onPick: (spot: never) => void;
+	open: ReturnType<typeof vi.fn>;
+}
+
+const { anchorPickers, markerPickers } = vi.hoisted(() => ({
+	anchorPickers: [] as SpotPickerInstance[],
+	markerPickers: [] as SpotPickerInstance[],
+}));
+
+vi.mock("../../../../../src/ui/instruction-fixer/pickers/SpotPickers", () => ({
+	AnchorSpotPicker: vi.fn(function AnchorSpotPicker(
+		_app: unknown,
+		spots: readonly SpotRow[],
+		onPick: (spot: never) => void,
+	) {
+		const instance: SpotPickerInstance = { spots, onPick, open: vi.fn() };
+		anchorPickers.push(instance);
+		return instance;
+	}),
+	MarkerSpotPicker: vi.fn(function MarkerSpotPicker(
+		_app: unknown,
+		spots: readonly SpotRow[],
+		onPick: (spot: never) => void,
+	) {
+		const instance: SpotPickerInstance = { spots, onPick, open: vi.fn() };
+		markerPickers.push(instance);
 		return instance;
 	}),
 }));
@@ -126,6 +170,8 @@ function modelOf(action: Action): InstructionFixerModel {
 
 beforeEach(() => {
 	pickerInstances.length = 0;
+	anchorPickers.length = 0;
+	markerPickers.length = 0;
 });
 
 // --- intent line -------------------------------------------------------------
@@ -175,6 +221,39 @@ describe("intent line (PRD F2-AC1, F2-AC4)", () => {
 		for (const action of Object.values(SAMPLES) as Action[]) {
 			expect(actionIntent(action).length).toBeGreaterThan(0);
 		}
+	});
+
+	/**
+	 * The payload is the half the first version dropped: an intent naming only
+	 * the target says where the write lands but not what lands there, so a
+	 * `link_to_moc` read as "Link into Systems (MOC), after heading Tools" with
+	 * no way to tell WHICH note was being linked in.
+	 *
+	 * Table-driven over the field the EXECUTOR writes, so the assertion fails if
+	 * an intent ever swaps the payload for a friendlier sibling label —
+	 * `source_note_title` here is "Kanban" while `line_to_add` is
+	 * "- [[Kanban]]", which is exactly the substitution that would mislead a
+	 * user repairing the action.
+	 */
+	it.each([
+		["link_to_moc", SAMPLES.link_to_moc, SAMPLES.link_to_moc.line_to_add],
+		["insert_under_marker", SAMPLES.insert_under_marker, SAMPLES.insert_under_marker.content],
+		["replace_section", SAMPLES.replace_section, SAMPLES.replace_section.content],
+		["add_relationship", SAMPLES.add_relationship, SAMPLES.add_relationship.line],
+	] as const)("names the text %s writes, not just where it writes it", (_kind, action, payload) => {
+		expect(actionIntent(action)).toContain(`"${payload}"`);
+	});
+
+	it("spells out the three payload-carrying intents in full", () => {
+		expect(actionIntent(SAMPLES.link_to_moc)).toBe(
+			'Link "- [[Kanban]]" into Systems (MOC), after heading "Tools"',
+		);
+		expect(actionIntent(SAMPLES.insert_under_marker)).toBe(
+			'Insert "- [[Kanban]]" into Atlas/202 Notes/Board.md, inside callout "[!blocks] Key concepts"',
+		);
+		expect(actionIntent(SAMPLES.replace_section)).toBe(
+			'Replace section "Summary" in Atlas/202 Notes/Board.md with "Rewritten body"',
+		);
 	});
 });
 
@@ -330,13 +409,158 @@ describe("target fields — the 7 repair kinds, driven off TARGET_FIELD_WHITELIS
 		expect((edited as { target_moc: string }).target_moc).toBe("Other (MOC)");
 	});
 
-	it("a free-text field (anchor) offers no note picker", () => {
+	/**
+	 * The anchor field grew a picker (2026-07-27 follow-up) but NOT this one:
+	 * its candidates are the target note's own headings, so offering "any note
+	 * in the vault" there would commit a note path into a field the resolver
+	 * matches as heading text. Pressing it must therefore never reach
+	 * `TargetNotePicker`.
+	 */
+	it("an anchor field's picker is the target-note one, never the vault-note one", () => {
 		const { body } = render(SAMPLES.replace_section);
 		const anchorField = Array.from(body.querySelectorAll(".hashi-if-field")).find((field) =>
 			(field.querySelector("label")?.textContent ?? "").toLowerCase().includes("section"),
 		);
+		const button = anchorField?.querySelector("button");
 
-		expect(anchorField?.querySelector("button")).toBeNull();
+		expect(button?.getAttribute("aria-label")).toBe("Choose an anchor from the target note");
+
+		button?.dispatchEvent(new MouseEvent("click"));
+		expect(pickerInstances).toHaveLength(0);
+	});
+
+	it("a genuinely free-text field (edit_note_text.match) offers no picker at all", () => {
+		const { body } = render(SAMPLES.edit_note_text);
+		const matchField = Array.from(body.querySelectorAll(".hashi-if-field")).find(
+			(field) => (field.querySelector("label")?.textContent ?? "") === "Match",
+		);
+
+		expect(matchField?.querySelector("button")).toBeNull();
+	});
+});
+
+// --- target-note pickers (2026-07-27 follow-up, request b + c) ---------------
+
+/** The field row whose label matches, and the picker button inside it. */
+function pickButton(body: HTMLElement, label: string): HTMLButtonElement | undefined {
+	const field = Array.from(body.querySelectorAll(".hashi-if-field")).find(
+		(row) => (row.querySelector("label")?.textContent ?? "") === label,
+	);
+	return field?.querySelector("button") ?? undefined;
+}
+
+/** Points the app mock at a target note with `content`. */
+function withTargetNote(app: App, content: string): void {
+	vi.mocked(app.metadataCache.getFirstLinkpathDest).mockReturnValue(new TFile());
+	vi.mocked(app.vault.cachedRead).mockResolvedValue(content);
+}
+
+const TARGET_NOTE = [
+	"# Systems (MOC)",
+	"",
+	"> [!blocks] Key Concepts",
+	"> - [[Kanban]]",
+	"",
+	"## Maintenance",
+	"",
+	"up:: [[Atlas (MOC)]]",
+].join("\n");
+
+describe("anchor picker", () => {
+	it("offers the target note's own structure, read fresh from content", async () => {
+		const { body, app } = render(SAMPLES.link_to_moc);
+		withTargetNote(app, TARGET_NOTE);
+
+		pickButton(body, "Anchor")?.dispatchEvent(new MouseEvent("click"));
+		await vi.waitFor(() => expect(anchorPickers).toHaveLength(1));
+
+		const values = anchorPickers[0]?.spots.map((s) => s.value) ?? [];
+		expect(values).toContain("Maintenance");
+		expect(values).toContain("[!blocks] Key Concepts");
+		expect(anchorPickers[0]?.open).toHaveBeenCalled();
+	});
+
+	/**
+	 * The point of the whole feature: one pick repairs the triple. A picker that
+	 * committed only the value would leave `type: "heading"` on a callout choice
+	 * and fail the re-run for a reason the user did not cause.
+	 */
+	it("commits anchor.type, anchor.value and placement from ONE pick", async () => {
+		const { body, app, transforms } = render(SAMPLES.link_to_moc);
+		withTargetNote(app, TARGET_NOTE);
+
+		pickButton(body, "Anchor")?.dispatchEvent(new MouseEvent("click"));
+		await vi.waitFor(() => expect(anchorPickers).toHaveLength(1));
+
+		const picker = anchorPickers[0];
+		if (picker === undefined) throw new Error("no picker constructed");
+		const callout = picker.spots.find((s) => s.anchorType === "callout");
+		picker.onPick(callout as never);
+
+		const transform = transforms[0];
+		if (transform === undefined) throw new Error("no transform");
+		const edited = transform(modelOf(SAMPLES.link_to_moc)).doc.actions[0];
+
+		expect(edited?.action === "link_to_moc" && edited.anchor).toEqual({
+			type: "callout",
+			value: "[!blocks] Key Concepts",
+		});
+		expect(edited?.action === "link_to_moc" && edited.placement).toBe(callout?.placement);
+	});
+
+	/**
+	 * The target note being gone is the failure the user came here to repair, so
+	 * it must be reported — an unopened picker with no message reads as a dead
+	 * button, and an EMPTY picker would falsely imply the note has no structure.
+	 */
+	it("reports an unreadable target instead of opening an empty picker", async () => {
+		const { body, app } = render(SAMPLES.link_to_moc);
+		vi.mocked(app.metadataCache.getFirstLinkpathDest).mockReturnValue(null);
+
+		pickButton(body, "Anchor")?.dispatchEvent(new MouseEvent("click"));
+		await vi.waitFor(() => expect(vi.mocked(Notice)).toHaveBeenCalled());
+
+		expect(anchorPickers).toHaveLength(0);
+		expect(vi.mocked(Notice).mock.calls[0]?.[0]).toContain("Atlas/200 Maps/Systems (MOC).md");
+	});
+
+	it("offers replace_section headings only — its handler is heading-scoped", async () => {
+		const { body, app } = render(SAMPLES.replace_section);
+		withTargetNote(app, TARGET_NOTE);
+
+		pickButton(body, "Section heading")?.dispatchEvent(new MouseEvent("click"));
+		await vi.waitFor(() => expect(anchorPickers).toHaveLength(1));
+
+		const spots = anchorPickers[0]?.spots ?? [];
+		expect(spots.length).toBeGreaterThan(0);
+		expect(spots.every((s) => s.anchorType === "heading")).toBe(true);
+	});
+
+	it("renders no picker button at all on a frozen card", () => {
+		const { body } = render(SAMPLES.link_to_moc, "frozen-applied");
+
+		expect(pickButton(body, "Anchor")).toBeUndefined();
+	});
+});
+
+describe("marker picker", () => {
+	it("offers the target MOC's field openers and commits the picked one", async () => {
+		const { body, app, transforms } = render(SAMPLES.add_relationship);
+		withTargetNote(app, TARGET_NOTE);
+
+		pickButton(body, "Marker")?.dispatchEvent(new MouseEvent("click"));
+		await vi.waitFor(() => expect(markerPickers).toHaveLength(1));
+
+		const picker = markerPickers[0];
+		if (picker === undefined) throw new Error("no picker constructed");
+		expect(picker.spots.map((s) => s.value)).toContain("up::");
+
+		picker.onPick({ value: "up::" } as never);
+		const transform = transforms[0];
+		if (transform === undefined) throw new Error("no transform");
+		const edited = transform(modelOf(SAMPLES.add_relationship)).doc.actions[0];
+
+		expect(edited?.action === "add_relationship" && edited.marker).toBe("up::");
 	});
 });
 

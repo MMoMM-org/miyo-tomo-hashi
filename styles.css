@@ -1705,6 +1705,29 @@
 	overflow-x: auto;
 	white-space: pre-wrap;
 }
+/* Rows of the anchor / marker pickers (SpotPickers.ts). Label and detail sit on
+   one line so a long heading truncates rather than pushing the placement out of
+   view — the placement is the half that makes the row a distinct choice. */
+.hashi-if-spot-item {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	justify-content: space-between;
+}
+.hashi-if-spot-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.hashi-if-spot-detail {
+	flex: 0 0 auto;
+	font-size: 11px;
+	color: var(--se-text-faint);
+	max-width: 45%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 .hashi-if-note {
 	margin-top: 7px;
 	font-size: 12px;
