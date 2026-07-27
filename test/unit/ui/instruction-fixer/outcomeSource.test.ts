@@ -289,13 +289,22 @@ describe("resolveOutcomes — run-log fallback (trusted source #2)", () => {
 		// `[[<peerStem>#<heading>|I##]]` form forever, so parseIdCell must
 		// keep accepting both. RunLogWriter can no longer produce the legacy
 		// form, so this log is hand-written to exercise that branch directly.
-		const set = setWithIds("I01", "I02");
+		//
+		// I03's heading segment nests a wikilink (`[[Hobbies (MOC)]]`) — this
+		// is the literal malformed shape (nested `[[ ]]`) that motivated
+		// dropping the deep-link in the first place (ADR-8). parseIdCell's
+		// `.*` is greedy and still resolves it today, but nothing else pins
+		// that: a later "tightening" of `.*` to exclude brackets would
+		// silently stop parsing exactly this class of historical log row
+		// without failing a single test. This case exists to catch that.
+		const set = setWithIds("I01", "I02", "I03");
 		const vault = new FakeVaultFS();
 		await vault.create(
 			`${INBOX}/tomo-hashi-run-log_2026-07-20T1030.md`,
 			handWrittenLog([
 				"| I01 | skip | s | failed | current plain form |",
 				"| [[2026-07-20_1015_instructions#I02 — Link to Hobbies\\|I02]] | skip | s | failed | legacy wikilink form |",
+				"| [[2026-07-20_1015_instructions#I03 — Link to [[Hobbies (MOC)]]\\|I03]] | skip | s | failed | legacy wikilink, nested brackets |",
 			]),
 		);
 
@@ -303,6 +312,7 @@ describe("resolveOutcomes — run-log fallback (trusted source #2)", () => {
 
 		expect(map.get("I01")).toEqual({ kind: "failed", reason: "current plain form" });
 		expect(map.get("I02")).toEqual({ kind: "failed", reason: "legacy wikilink form" });
+		expect(map.get("I03")).toEqual({ kind: "failed", reason: "legacy wikilink, nested brackets" });
 	});
 
 	it("unescapes pipes inside a failed reason", async () => {

@@ -574,6 +574,8 @@ describe("RunLogWriter — I## column is plain text", () => {
 
 	it("renders I## as plain text even when a matching peer heading exists", async () => {
 		const vault = new FakeVaultFS();
+		// The peer file is created deliberately: renderIdCell reads none of
+		// it post-ADR-8, so its mere presence must have zero effect on output.
 		await vault.create(`${INBOX}/${PEER}`, peerContent);
 		const writer = new RunLogWriter(vault);
 		const path = await writer.start(makeStartMeta({
@@ -608,6 +610,8 @@ describe("RunLogWriter — I## column is plain text", () => {
 
 	it("validation-failure rows keep the `—` placeholder in the I## column", async () => {
 		const vault = new FakeVaultFS();
+		// Peer file present but inert, as above — a validation row never had
+		// an id to look up anyway.
 		await vault.create(`${INBOX}/${PEER}`, peerContent);
 		const writer = new RunLogWriter(vault);
 		const path = await writer.start(makeStartMeta({
