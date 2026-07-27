@@ -8,3 +8,6 @@
 
 <!-- 2026-06-09 -->
 - **`HASHI_DEPLOY_PRIVAT=1 npm run build` deploys the built plugin into the Privat-Test QA vault** (`../temp/Privat-Test/.obsidian/plugins/miyo-tomo-hashi`) — parallel to the documented `HASHI_DEPLOY_VAULT=1`, which targets `test/Hashi`. Both flags are independent and can be set together (handled by the `copy-assets` plugin in `esbuild.config.mjs`). CLAUDE.md only documents `HASHI_DEPLOY_VAULT`; the Privat-Test flag is undocumented there. The deploy copies outside the repo, so under the command sandbox it needs sandbox disabled — the in-repo `tsc`/`esbuild` part runs fine; only the final `copyFileSync` to `../temp/...` hits `EPERM`.
+
+<!-- 2026-07-26 -->
+- **Post-hoc RED check when a test is added after its production fix already landed:** `git stash push -- <prod-file>` (leaves the new test in place, reverts only the production file to HEAD), then `npx vitest run <test-file> -t "<substring-of-the-new-test's-name>"` to confirm it fails against the old behavior, then `git stash pop` to restore. Cheap way to prove RED-then-GREEN ordering without a throwaway branch or a manual revert/reapply. The `-t` filter matches a substring of the full `describe > it` name, not any arbitrary phrase — a filter string that isn't a literal substring silently matches zero tests and reports "skipped", which looks like a pass at a glance.

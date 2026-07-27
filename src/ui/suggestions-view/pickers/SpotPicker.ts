@@ -18,30 +18,25 @@
  * always yields one concrete, legal `AnchorWire` — no separate "pick a
  * placement" step needed on top.
  *
- * Callout enumeration: `markdownStructure.findCallout` searches for ONE
- * already-known `{type, title}` pair; it has no "list every callout" export
- * because no other caller has needed that. SpotPicker does, so it reuses the
- * exported `fencedLineMask` (same fenced-code-block exclusion as the rest of
- * markdownStructure) and matches callout openers locally with the same
- * `> [!type] Title` shape `findCallout`/`anchorResolver` use — this does not
- * modify markdownStructure.ts, it composes with its exported primitive.
+ * Callout enumeration: `markdownStructure.enumerateCallouts` — the shared
+ * counterpart to `findCallout`, which only answers "where is THIS known
+ * `{type, title}` pair". This file matched openers locally until the
+ * Instruction Fixer's anchor picker needed the same list (spec-006 follow-up),
+ * at which point the opener shape moved next to the fence masking and heading
+ * parse it belongs with rather than being copied a second time.
  *
  * Spec refs: spec-004 SDD §7; PRD F3; plan/phase-3.md T3.3.
  */
 
 import { type App, SuggestModal } from "obsidian";
 
-import { fencedLineMask, parseHeadings } from "../../../actions/markdownStructure.js";
+import { enumerateCallouts, parseHeadings } from "../../../actions/markdownStructure.js";
 import { validPlacements, type Placement } from "../../../suggestions/validPlacements.js";
 import type { AnchorWire } from "../../../types/suggestions.js";
 
 // ---------------------------------------------------------------------------
 // Pure core
 // ---------------------------------------------------------------------------
-
-/** Same opener shape as `markdownStructure`'s `CALLOUT_FIRST_LINE_RE`/
- * `anchorResolver`'s `ANCHOR_VALUE_PREFIX_RE` — `> [!type] Title`. */
-const CALLOUT_OPENER_RE = /^>\s*\[!(\w+)\]\s*(.*)$/;
 
 export type SpotOptionType = "heading" | "callout" | "line";
 
@@ -117,25 +112,6 @@ export function computeSpotOptions(
 	});
 
 	return options;
-}
-
-interface CalloutOpener {
-	readonly type: string;
-	readonly title: string;
-}
-
-/** Every callout opener line in `lines` (outside fenced code blocks), in
- * document order. Reuses `fencedLineMask` — see file header. */
-function enumerateCallouts(lines: readonly string[]): CalloutOpener[] {
-	const fenced = fencedLineMask(lines);
-	const callouts: CalloutOpener[] = [];
-	for (let i = 0; i < lines.length; i++) {
-		if (fenced[i]) continue;
-		const m = CALLOUT_OPENER_RE.exec(lines[i] ?? "");
-		if (m === null) continue;
-		callouts.push({ type: m[1]!, title: m[2]!.trim() });
-	}
-	return callouts;
 }
 
 /** One concrete, choosable row in the picker's suggestion list: an option

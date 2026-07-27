@@ -2,6 +2,9 @@
  * JsonAppliedWriter — atomic, monotonic applied-flag writer.
  *
  * Writes `applied: true` for a single action in a _instructions.json file.
+ * Also home to markActionFields (spec 006, T1.2) — the Instruction Fixer's
+ * generic whitelisted-field patch writer, kept as a sibling so it reuses
+ * the same atomic write path rather than racing this module's applied flush.
  * Uses vault.processJSON to ensure:
  *   - Atomic read-transform-write (concurrent calls serialize via per-path queue)
  *   - 2-space indent + trailing newline on output
@@ -12,7 +15,7 @@
  * [ref: PRD/F5; SDD/Atomic JSON Applied-Flag Write]
  */
 
-import type { InstructionSet } from "../schema/types.js";
+import type { Action, InstructionSet } from "../schema/types.js";
 import type { VaultFS } from "../vault/VaultFS.js";
 
 /**
@@ -57,4 +60,57 @@ export async function markActionsApplied(
 			ids.has(a.id) ? { ...a, applied: true } : a,
 		),
 	}));
+}
+
+/**
+ * Sibling atomic writer for the Instruction Fixer (spec 006, T1.2): patch
+ * arbitrary whitelisted fields on the action identified by `actionId`,
+ * reusing this module's single processJSON transform + serialization so the
+ * fixer never races the executor's own applied-flag flush (ADR-9).
+ *
+ * Monotonic like markActionApplied/markActionsApplied: if the target action
+ * already has `applied: true`, the patch is not allowed to move it off
+ * `true` — not to `false`, and not to `undefined` (which drops the key
+ * entirely on serialization; exactOptionalPropertyTypes is off in this
+ * repo, so `{ applied: undefined }` is a legal Partial<Action> value with
+ * the key present). Other patched fields in the same call still apply.
+ *
+ * Other actions in the set, and non-action fields on the instruction set,
+ * are left untouched.
+ *
+ * Rejects — rather than silently no-op-ing — when `actionId` matches no
+ * action in the set. This is the Instruction Fixer's targeted repair path:
+ * a stale or typo'd id (e.g. the UI's model drifted from the on-disk set)
+ * must surface as a failed save, not as a save that reports success while
+ * writing nothing. Reject before writing so the file is never rewritten on
+ * a no-match call.
+ */
+export async function markActionFields(
+	vault: VaultFS,
+	sourcePath: string,
+	actionId: string,
+	patch: Partial<Action>,
+): Promise<void> {
+	await vault.processJSON<InstructionSet>(sourcePath, (set) => {
+		let matched = false;
+		const actions = set.actions.map((a): Action => {
+			if (a.id !== actionId) return a;
+			matched = true;
+			// `patch` only carries the fields the caller intends to change
+			// (id/applied always shared across variants; other keys are
+			// only valid when they belong to `a`'s own variant) — the cast
+			// documents that this stays within the same Action variant.
+			const patched = { ...a, ...patch } as Action;
+			if (a.applied === true && patched.applied !== true) {
+				return { ...patched, applied: true };
+			}
+			return patched;
+		});
+		if (!matched) {
+			throw new Error(
+				`markActionFields: no action with id "${actionId}" in ${sourcePath}`,
+			);
+		}
+		return { ...set, actions };
+	});
 }

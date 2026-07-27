@@ -876,7 +876,206 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		expect(onViewErrorsCb).toHaveBeenCalledWith(null);
 	});
 
-	it("View errors button is absent when failed == 0", () => {
+	it('"Open instruction fixer" button is present (alongside View errors) when failed > 0', () => {
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [
+				record({
+					fileId: "alpha.json",
+					id: "I01",
+					outcome: { kind: "failed", reason: "x" },
+				}),
+			],
+			counts: counts({ failed: 1, durationMs: 100 }),
+			logFilePath: null,
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const labels = Array.from(buttons).map((b) => b.textContent ?? "");
+		expect(labels).toContain("Open instruction fixer");
+		expect(labels).toContain("View errors");
+		expect(labels).toContain("Close");
+	});
+
+	it("clicking Open instruction fixer invokes onOpenInstructionFixer with the source's fileId", () => {
+		const onOpenInstructionFixerCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {
+			onOpenInstructionFixer: onOpenInstructionFixerCb,
+		});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [
+				record({
+					fileId: "alpha.json",
+					id: "I01",
+					outcome: { kind: "failed", reason: "x" },
+				}),
+			],
+			counts: counts({ failed: 1, durationMs: 100 }),
+			logFilePath: null,
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const fixerBtn = Array.from(buttons).find(
+			(b) => (b.textContent ?? "") === "Open instruction fixer",
+		);
+		expect(fixerBtn).toBeDefined();
+		fixerBtn!.dispatchEvent(new Event("click"));
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("alpha.json");
+	});
+
+	it('"Open instruction fixer" is offered for a skipped-only run (failed == 0, skipped > 0)', () => {
+		const onOpenInstructionFixerCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {
+			onOpenInstructionFixer: onOpenInstructionFixerCb,
+		});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [
+				record({
+					fileId: "alpha.json",
+					id: "I01",
+					outcome: { kind: "skipped-dependency", dependsOn: "I00" },
+				}),
+			],
+			counts: counts({ "skipped-dependency": 1, durationMs: 100 }),
+			logFilePath: null,
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const labels = Array.from(buttons).map((b) => b.textContent ?? "");
+		expect(labels).toContain("Open instruction fixer");
+	});
+
+	it('"Open instruction fixer" offers one option per failing source on a multi-source run, and omits a fully-applied third source (W3)', () => {
+		const onOpenInstructionFixerCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {
+			onOpenInstructionFixer: onOpenInstructionFixerCb,
+		});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [
+				record({
+					fileId: "100 Inbox/alpha.json",
+					id: "I01",
+					outcome: { kind: "failed", reason: "boom" },
+				}),
+				record({
+					fileId: "100 Inbox/alpha.json",
+					id: "I02",
+					outcome: { kind: "applied" },
+				}),
+				record({
+					fileId: "100 Inbox/beta.json",
+					id: "I01",
+					outcome: { kind: "skipped-already" },
+				}),
+				// A regression that pushed every distinct fileId unconditionally
+				// (rather than filtering on failed/skipped-* outcomes) would still
+				// pass the two assertions above — this third, 100%-applied source
+				// is what W3 requires: its button must be ABSENT.
+				record({
+					fileId: "100 Inbox/gamma.json",
+					id: "I01",
+					outcome: { kind: "applied" },
+				}),
+			],
+			counts: counts({ applied: 2, "skipped-already": 1, failed: 1, durationMs: 100 }),
+			logFilePath: null,
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const fixerBtns = Array.from(buttons).filter((b) =>
+			(b.textContent ?? "").startsWith("Open instruction fixer"),
+		);
+		expect(fixerBtns).toHaveLength(2);
+		const labels = fixerBtns.map((b) => b.textContent ?? "");
+		// W2: multi-source labels show the basename, not the full path, and
+		// carry the full path on `title` (styles.css also wraps the row so a
+		// long/unbounded list can never push Close out of reach).
+		expect(labels.some((l) => l.includes("alpha.json"))).toBe(true);
+		expect(labels.some((l) => l.includes("beta.json"))).toBe(true);
+		expect(labels.some((l) => l.includes("gamma.json"))).toBe(false);
+		expect(labels.every((l) => !l.includes("100 Inbox/"))).toBe(true);
+
+		const alphaBtn = fixerBtns.find((b) => (b.textContent ?? "").includes("alpha.json"));
+		expect(alphaBtn?.getAttribute("title")).toBe("100 Inbox/alpha.json");
+		alphaBtn!.dispatchEvent(new Event("click"));
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("100 Inbox/alpha.json");
+
+		const betaBtn = fixerBtns.find((b) => (b.textContent ?? "").includes("beta.json"));
+		expect(betaBtn?.getAttribute("title")).toBe("100 Inbox/beta.json");
+		betaBtn!.dispatchEvent(new Event("click"));
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("100 Inbox/beta.json");
+	});
+
+	it('"Open instruction fixer" labels stay distinct when two failing sources share a basename', () => {
+		// Vaults repeat filenames across folders. A basename-only label would
+		// render two buttons reading the IDENTICAL text — distinguishable only
+		// by hovering for the `title` tooltip — on the screen whose whole job
+		// is "pick the set you want to repair". Both must fall back to the
+		// full path since basename alone can't disambiguate either of them.
+		const onOpenInstructionFixerCb = vi.fn();
+		const exec = makeExecutor();
+		const modal = new ExecutionModal(app, exec, {
+			onOpenInstructionFixer: onOpenInstructionFixerCb,
+		});
+		modal.onOpen();
+		exec.state.set({
+			kind: "summary",
+			mode: "confirm",
+			records: [
+				record({
+					fileId: "100 Inbox/x_instructions.json",
+					id: "I01",
+					outcome: { kind: "failed", reason: "boom" },
+				}),
+				record({
+					fileId: "200 Archive/x_instructions.json",
+					id: "I01",
+					outcome: { kind: "skipped-already" },
+				}),
+			],
+			counts: counts({ "skipped-already": 1, failed: 1, durationMs: 100 }),
+			logFilePath: null,
+		});
+
+		const buttons = modal.contentEl.querySelectorAll("button");
+		const fixerBtns = Array.from(buttons).filter((b) =>
+			(b.textContent ?? "").startsWith("Open instruction fixer"),
+		);
+		expect(fixerBtns).toHaveLength(2);
+		const labels = fixerBtns.map((b) => b.textContent ?? "");
+
+		// The two labels must be distinct from each other...
+		expect(labels[0]).not.toBe(labels[1]);
+		// ...by falling back to the full (distinguishing) path for both.
+		expect(labels).toContain("Open instruction fixer: 100 Inbox/x_instructions.json");
+		expect(labels).toContain("Open instruction fixer: 200 Archive/x_instructions.json");
+
+		const inboxBtn = fixerBtns.find((b) => (b.textContent ?? "").includes("100 Inbox/"));
+		inboxBtn!.dispatchEvent(new Event("click"));
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("100 Inbox/x_instructions.json");
+
+		const archiveBtn = fixerBtns.find((b) => (b.textContent ?? "").includes("200 Archive/"));
+		archiveBtn!.dispatchEvent(new Event("click"));
+		expect(onOpenInstructionFixerCb).toHaveBeenCalledWith("200 Archive/x_instructions.json");
+	});
+
+	it('"Open instruction fixer" is absent on a zero-failure run', () => {
 		const exec = makeExecutor();
 		const modal = new ExecutionModal(app, exec, {});
 		modal.onOpen();
@@ -891,6 +1090,7 @@ describe("ExecutionModal — summary subview (state=summary)", () => {
 		const buttons = modal.contentEl.querySelectorAll("button");
 		const labels = Array.from(buttons).map((b) => b.textContent ?? "");
 		expect(labels).not.toContain("View errors");
+		expect(labels.some((l) => l.startsWith("Open instruction fixer"))).toBe(false);
 		expect(labels).toContain("Close");
 	});
 

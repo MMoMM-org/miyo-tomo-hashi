@@ -37,6 +37,24 @@
  * `.md`) before it ever reaches the input or `onChange`. This is the one
  * seam that knows about picked-vs-typed provenance; callers (the T5.2 cards)
  * only ever see a plain committed string and never re-derive it.
+ *
+ * --- spec-006 T3.2: the widget core is now shared -------------------------
+ *
+ * The Instruction Fixer needs the same text-input + picker + caption widget,
+ * but for fields that are NOT garden-audit findings: its captions come from a
+ * per-(kind, field) descriptor map, its pick values are sometimes a full vault
+ * PATH rather than a stem, and several of its fields (an anchor's text, a
+ * literal match string) take no note picker at all. So the widget core moved
+ * into `renderTargetControlCore`, which takes those three things as plain
+ * options, and `renderTargetControl` became the garden-audit-facing wrapper
+ * that resolves `FindingCheck` → caption through the maps below. Garden-audit
+ * behaviour and DOM are unchanged — the `FindingCheck` coupling now lives only
+ * in that wrapper, not in the widget.
+ *
+ * The emitted class names stay `hashi-ga-target*`: they are the shared
+ * widget's namespace now (the same dual-class reuse `hashi-se-inp` already
+ * represents in the other direction), and renaming them would churn CSS and
+ * the garden-audit tests for no behavioural gain.
  */
 
 import type { App } from "obsidian";
@@ -84,20 +102,60 @@ function pathToStem(path: string): string {
 	return base.endsWith(".md") ? base.slice(0, -3) : base;
 }
 
-export interface TargetControlOptions {
-	/** For the picker button's `TargetNotePicker`. */
+/**
+ * What a picked vault path commits as:
+ *   - `stem` — basename minus `.md` (the wire's bare-stem target fields);
+ *   - `path` — the full vault-relative path, verbatim;
+ *   - `none` — no picker button at all (free-text fields: an anchor's text,
+ *     a literal match string, a relationship marker).
+ */
+export type TargetPickMode = "none" | "stem" | "path";
+
+export interface TargetControlCoreOptions {
+	/** For the picker button's `TargetNotePicker`. Unused when `pick` is `none`. */
 	readonly app: App;
-	/** Selects the empty-state caption's wording. */
-	readonly check: FindingCheck;
 	/** Current committed value. `undefined` and `""` both render a blank input. */
 	readonly value: string | undefined;
 	/** Fired on every commit: free-typed change/Enter, or a picker choice. */
 	readonly onChange: (value: string) => void;
+	/** Trailing caption. `""` renders no caption span at all. */
+	readonly caption: string;
+	/** Native-tooltip text for the caption (`aria-label`). */
+	readonly captionTooltip: string;
+	readonly placeholder: string;
+	/** `aria-label` of the text input — the field's own name. */
+	readonly ariaLabel: string;
+	readonly pick: TargetPickMode;
+	/**
+	 * A SECOND picker button, for fields whose candidates come from somewhere
+	 * other than "any note in the vault" — the Instruction Fixer's anchor and
+	 * marker pickers, which enumerate one target note's own structure.
+	 *
+	 * Deliberately just a labelled button with an `onClick`, not another
+	 * `TargetPickMode` variant: those pickers are async (they read the target
+	 * note first), can fail before opening (the target may not resolve), and one
+	 * of them commits three wire fields at once rather than a string. None of
+	 * that fits `onChange(value)`, so the caller owns the whole interaction and
+	 * this widget owns only the button's placement. The input re-reads its value
+	 * from the model on the re-render a commit triggers.
+	 */
+	readonly extraPick?: {
+		readonly label: string;
+		readonly ariaLabel: string;
+		readonly onClick: () => void;
+	};
 }
 
-/** Renders the widget's DOM into `container`. Caller empties/rebuilds `container` per render. */
-export function renderTargetControl(container: HTMLElement, opts: TargetControlOptions): void {
-	const { app, check, value, onChange } = opts;
+/**
+ * The shared widget core: text input + optional picker button + optional
+ * caption. Knows nothing about findings, checks, or action kinds — every
+ * caller-specific string arrives as an option.
+ */
+export function renderTargetControlCore(
+	container: HTMLElement,
+	opts: TargetControlCoreOptions,
+): void {
+	const { app, value, onChange, caption, captionTooltip, placeholder, ariaLabel, pick } = opts;
 
 	const wrap = container.createDiv({ cls: "hashi-ga-target" });
 
@@ -106,8 +164,8 @@ export function renderTargetControl(container: HTMLElement, opts: TargetControlO
 		attr: {
 			type: "text",
 			value: value ?? "",
-			placeholder: "Type or pick a note…",
-			"aria-label": "Target note",
+			placeholder,
+			"aria-label": ariaLabel,
 		},
 	});
 
@@ -122,22 +180,69 @@ export function renderTargetControl(container: HTMLElement, opts: TargetControlO
 		}
 	});
 
-	const pick = wrap.createEl("button", {
-		cls: ["hashi-se-mini-pick"],
-		text: "Choose…",
-		attr: { type: "button", "aria-label": "Choose target note from vault" },
-	});
-	pick.addEventListener("click", () => {
-		new TargetNotePicker(app, (path) => {
-			const stem = pathToStem(path);
-			input.value = stem;
-			onChange(stem);
-		}).open();
-	});
+	if (pick !== "none") {
+		const button = wrap.createEl("button", {
+			cls: ["hashi-se-mini-pick"],
+			text: "Choose…",
+			attr: { type: "button", "aria-label": "Choose target note from vault" },
+		});
+		button.addEventListener("click", () => {
+			new TargetNotePicker(app, (path) => {
+				const picked = pick === "stem" ? pathToStem(path) : path;
+				input.value = picked;
+				onChange(picked);
+			}).open();
+		});
+	}
 
-	wrap.createSpan({
-		cls: "hashi-ga-target-hint",
-		text: `(empty=${EMPTY_LABEL[check]})`,
-		attr: { "aria-label": EMPTY_TOOLTIP[check] },
+	if (opts.extraPick !== undefined) {
+		const extra = opts.extraPick;
+		const button = wrap.createEl("button", {
+			cls: ["hashi-se-mini-pick"],
+			text: extra.label,
+			attr: { type: "button", "aria-label": extra.ariaLabel },
+		});
+		button.addEventListener("click", () => {
+			extra.onClick();
+		});
+	}
+
+	if (caption !== "") {
+		wrap.createSpan({
+			cls: "hashi-ga-target-hint",
+			text: caption,
+			attr: { "aria-label": captionTooltip },
+		});
+	}
+}
+
+export interface TargetControlOptions {
+	/** For the picker button's `TargetNotePicker`. */
+	readonly app: App;
+	/** Selects the empty-state caption's wording. */
+	readonly check: FindingCheck;
+	/** Current committed value. `undefined` and `""` both render a blank input. */
+	readonly value: string | undefined;
+	/** Fired on every commit: free-typed change/Enter, or a picker choice. */
+	readonly onChange: (value: string) => void;
+}
+
+/**
+ * Garden-audit's target field: the shared core with this editor's per-check
+ * `(empty=…)` caption resolved from `FindingCheck`. Renders into `container`;
+ * the caller empties/rebuilds `container` per render.
+ */
+export function renderTargetControl(container: HTMLElement, opts: TargetControlOptions): void {
+	const { app, check, value, onChange } = opts;
+
+	renderTargetControlCore(container, {
+		app,
+		value,
+		onChange,
+		caption: `(empty=${EMPTY_LABEL[check]})`,
+		captionTooltip: EMPTY_TOOLTIP[check],
+		placeholder: "Type or pick a note…",
+		ariaLabel: "Target note",
+		pick: "stem",
 	});
 }

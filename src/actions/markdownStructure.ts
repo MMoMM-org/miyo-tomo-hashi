@@ -24,6 +24,13 @@ export interface HeadingInfo {
 	readonly line: number; // line index of the heading
 }
 
+/** A callout's opening line, split into the two halves `[!type] Title` carries. */
+export interface CalloutOpener {
+	readonly type: string; // the `!type` token, verbatim casing
+	readonly title: string; // text after `[!type]`, trimmed
+	readonly line: number; // line index of the opener
+}
+
 const CODE_FENCE_RE = /^\s*(?:```|~~~)/;
 const CALLOUT_FIRST_LINE_RE = /^>\s*\[!(\w+)\]\s*(.*)$/;
 const CALLOUT_CONTINUATION_RE = /^>/;
@@ -58,6 +65,30 @@ export function parseHeadings(lines: readonly string[]): HeadingInfo[] {
 		headings.push({ heading: m[2]!.trim(), level: m[1]!.length, line: i });
 	}
 	return headings;
+}
+
+/**
+ * Every callout opener (outside fenced code blocks) in document order.
+ *
+ * The counterpart to `findCallout`, which answers "where is THIS callout" for a
+ * caller that already knows the `{type, title}` pair it wants. Enumeration is
+ * what a PICKER needs instead: the Suggestions Editor's `SpotPicker` and the
+ * Instruction Fixer's anchor picker both offer the user a choice among the
+ * callouts a note actually has, and neither can ask `findCallout` for a pair it
+ * does not yet know. Both matched openers locally before this existed; it lives
+ * here so the opener shape stays defined once, next to the fence masking and
+ * the heading parse that are subject to the same #68 content-only rule.
+ */
+export function enumerateCallouts(lines: readonly string[]): CalloutOpener[] {
+	const fenced = fencedLineMask(lines);
+	const callouts: CalloutOpener[] = [];
+	for (let i = 0; i < lines.length; i++) {
+		if (fenced[i]) continue;
+		const m = CALLOUT_FIRST_LINE_RE.exec(lines[i] ?? "");
+		if (m === null) continue;
+		callouts.push({ type: m[1]!, title: m[2]!.trim(), line: i });
+	}
+	return callouts;
 }
 
 /**

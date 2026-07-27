@@ -1,0 +1,54 @@
+{
+  "schema_version": "2",
+  "type": "tomo-instructions",
+  "generated": "2026-07-20T10:15:00Z",
+  "profile": "default",
+  "source_suggestions": "2026-07-20_1015_suggestions",
+  "tomo_version": "0.42.0",
+  "action_count": 3,
+  "md_peer": "2026-07-20_1015_instructions",
+  "tomo": {
+    "doc_type": "instructions",
+    "state": "approved",
+    "run_id": "run-20260720-001",
+    "updated_at": "2026-07-20T10:16:00Z",
+    "sources": [
+      {
+        "path": "100 Inbox/2026-07-20_1015_suggestions.md",
+        "checksum": "abc123"
+      }
+    ]
+  },
+  "actions": [
+    {
+      "id": "I01",
+      "action": "link_to_moc",
+      "target_moc": "Hobbies (MOC)",
+      "target_moc_path": "Atlas/200 Maps/Hobbies (MOC).md",
+      "anchor": {
+        "type": "heading",
+        "value": "Key Concepts"
+      },
+      "placement": "after",
+      "line_to_add": "- [[New Note]]",
+      "source_note_title": "New Note",
+      "applied": false
+    },
+    {
+      "id": "I02",
+      "action": "edit_note_text",
+      "path": "Atlas/202 Notes/Existing.md",
+      "match": "[[Missing Note]]",
+      "replace": "",
+      "occurrence": "first",
+      "applied": true
+    },
+    {
+      "id": "I03",
+      "action": "skip",
+      "source_path": "100 Inbox/2026-07-20_orphan.md",
+      "reason": "duplicate of existing note",
+      "applied": false
+    }
+  ]
+}

@@ -1,5 +1,10 @@
 # General Memory
 
+<!-- 2026-07-27 -->
+- **When labeling N same-kind UI controls by a vault-relative path's basename, count basenames first — only show the short label where it's actually unique.** Spec-006 T4.2's multi-source "Open Instruction Fixer" buttons initially labeled every button with its basename and put the full path only on the `title` tooltip. Vaults commonly repeat filenames across folders (`100 Inbox/x.json` vs `200 Archive/x.json`), so two failing sources with the same basename rendered two buttons with IDENTICAL visible text — distinguishable only by hovering — on the screen whose whole job is "pick the one you want." Caught by code-quality review.
+  - **Why:** a `title` attribute is not discoverable without hovering, so it cannot carry the disambiguating information a sighted, non-hovering user needs to make the choice the UI exists to offer.
+  - **How to apply:** build a `Map<basename, count>` over the candidate set; a control whose basename count is 1 keeps the short label, one whose count is >1 falls back to the full (disambiguating) path. `title` still carries the full path either way. See `fixerButtonLabel`/`countBasenames` in `src/ui/modalContent/summaryView.ts`. Applies to any list keyed by vault-relative path where entries could come from different folders — picker lists, multi-source run summaries, etc.
+
 <!-- 2026-04-28 -->
 - **`tsconfig.json` `include` must list `test/**/*.ts` from day 1.**
   Tests outside `include` cause LSP "Cannot find module" diagnostics on every new test file — vitest resolves fine at runtime, but the editor experience degrades and `tsc -noEmit` skips type-checking the test surface entirely. Hashi hit this 3× during phase-1 implementation (commits `09b27bd`, `7734334`, `5402455`) before the include was widened in `4d039f2`. Widening immediately surfaced one real `noUncheckedIndexedAccess` violation that vitest had been masking.

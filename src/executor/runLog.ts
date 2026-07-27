@@ -36,6 +36,14 @@ export type RunLogRetention = "always" | "only-after-failed";
  */
 const LOG_FORMAT_VERSION = 1;
 
+/**
+ * Informational pointer to the Instruction Fixer (spec-006, ADR-8, T4.3).
+ * Pointer only — no link, no click-to-open; the run log is a plain-text
+ * artifact and the Fixer is opened via the command, not from here.
+ */
+const FIXER_POINTER_LINE =
+	"Errors can be viewed and repaired in the Instruction Fixer (command: 'Open instruction fixer').";
+
 export interface RunLogStartMeta {
 	readonly inboxFolder: string;
 	readonly startedAt: Date;
@@ -133,61 +141,9 @@ export class RunLogWriter {
 			return;
 		}
 
-		const peerHeadings = await loadPeerHeadings(this.vault, this.meta.sources);
-		const content = renderLog(this.meta, endedAt, this.entries, peerHeadings);
+		const content = renderLog(this.meta, endedAt, this.entries);
 		await this.vault.create(this.logPath, content);
 	}
-}
-
-// ---------------------------------------------------------------------------
-// Peer-heading map — read each source's `.md` peer once, extract `### I##`
-// headings so the run log can wikilink each row's I## column to the matching
-// peer heading. Soft-fail on missing peer or unreadable file.
-// ---------------------------------------------------------------------------
-
-interface PeerHeading {
-	readonly headingText: string; // full heading text after `### `, e.g. "I01 — Create MOC: Board Games (MOC)"
-	readonly peerStem: string;    // peer filename without path/.md, e.g. "2026-05-01_1008_instructions"
-}
-
-const HEADING_RE = /^### ((I\d+)(?:\s.*)?)$/;
-
-async function loadPeerHeadings(
-	vault: VaultFS,
-	sources: readonly string[],
-): Promise<Map<string, Map<string, PeerHeading>>> {
-	const out = new Map<string, Map<string, PeerHeading>>();
-
-	for (const sourcePath of sources) {
-		if (!sourcePath.endsWith(".json")) continue;
-		const peerPath = sourcePath.slice(0, -".json".length) + ".md";
-		if (!(await vault.exists(peerPath))) continue;
-
-		let raw: string;
-		try {
-			raw = await vault.read(peerPath);
-		} catch {
-			continue;
-		}
-
-		const peerStem = basename(peerPath).slice(0, -".md".length);
-		const inner = new Map<string, PeerHeading>();
-		for (const line of raw.split("\n")) {
-			const m = HEADING_RE.exec(line);
-			if (m === null) continue;
-			const headingText = m[1]!;
-			const actionId = m[2]!;
-			inner.set(actionId, { headingText, peerStem });
-		}
-		out.set(sourcePath, inner);
-	}
-
-	return out;
-}
-
-function basename(path: string): string {
-	const slash = path.lastIndexOf("/");
-	return slash === -1 ? path : path.slice(slash + 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -198,12 +154,11 @@ function renderLog(
 	meta: RunLogStartMeta,
 	endedAt: Date,
 	entries: readonly BufferedEntry[],
-	peerHeadings: Map<string, Map<string, PeerHeading>>,
 ): string {
 	const totals = computeTotals(entries);
 	const front = renderFrontmatter(meta, endedAt, totals);
-	const body = renderBody(meta.sources, entries, peerHeadings);
-	return `${front}\n# Hashi run log\n\n${body}`;
+	const body = renderBody(meta.sources, entries);
+	return `${front}\n# Hashi run log\n\n${FIXER_POINTER_LINE}\n\n${body}`;
 }
 
 function renderFrontmatter(
@@ -248,7 +203,6 @@ function renderFrontmatter(
 function renderBody(
 	sources: readonly string[],
 	entries: readonly BufferedEntry[],
-	peerHeadings: Map<string, Map<string, PeerHeading>>,
 ): string {
 	// M9: pre-group entries once (O(E)). Pre-fix did entries.filter per
 	// source (O(S*E)) plus another full scan for "extra" file ids. Map
@@ -267,13 +221,13 @@ function renderBody(
 	for (const fileId of sources) {
 		seen.add(fileId);
 		const fileEntries = byFile.get(fileId) ?? [];
-		sections.push(renderFileSection(fileId, fileEntries, peerHeadings.get(fileId)));
+		sections.push(renderFileSection(fileId, fileEntries));
 	}
 
 	// Edge-case guard: files that appear in entries but not in sources.
 	for (const [fileId, fileEntries] of byFile) {
 		if (seen.has(fileId)) continue;
-		sections.push(renderFileSection(fileId, fileEntries, peerHeadings.get(fileId)));
+		sections.push(renderFileSection(fileId, fileEntries));
 	}
 
 	return sections.join("\n");
@@ -282,7 +236,6 @@ function renderBody(
 function renderFileSection(
 	fileId: string,
 	entries: readonly BufferedEntry[],
-	peerHeadings: Map<string, PeerHeading> | undefined,
 ): string {
 	const hasValidationFailure = entries.some((e) => e.kind === "validation");
 	const heading = hasValidationFailure
@@ -291,7 +244,7 @@ function renderFileSection(
 
 	const header = "| I##  | kind | summary | outcome | error |";
 	const divider = "|------|------|---------|---------|-------|";
-	const rows = entries.map((e) => renderEntryRow(e, peerHeadings));
+	const rows = entries.map((e) => renderEntryRow(e));
 
 	return [heading, "", header, divider, ...rows, ""].join("\n");
 }
@@ -308,10 +261,7 @@ function escapeCell(s: string): string {
 	return s.replace(/[\r\n]+/g, " ").replace(/\|/g, "\\|");
 }
 
-function renderEntryRow(
-	entry: BufferedEntry,
-	peerHeadings: Map<string, PeerHeading> | undefined,
-): string {
+function renderEntryRow(entry: BufferedEntry): string {
 	if (entry.kind === "validation") {
 		const msg = entry.failure.message;
 		return `| — | — | (validation failure) | failed | ${escapeCell(msg)} |`;
@@ -341,21 +291,20 @@ function renderEntryRow(
 		error = error !== "" ? `${error}; ${note}` : note;
 	}
 
-	const idCell = renderIdCell(id, peerHeadings);
+	const idCell = renderIdCell(id);
 	return `| ${idCell} | ${kind} | ${escapeCell(summary)} | ${escapeCell(outcomeStr + depNote)} | ${escapeCell(error)} |`;
 }
 
-function renderIdCell(
-	id: string,
-	peerHeadings: Map<string, PeerHeading> | undefined,
-): string {
-	const heading = peerHeadings?.get(id);
-	if (heading === undefined) return id;
-	// Inside a markdown table cell, `|` ends the column. Escape both the
-	// wikilink's alias separator and any pipes that happen to appear in
-	// the heading text so the table row stays well-formed.
-	const escapedHeading = heading.headingText.replace(/\|/g, "\\|");
-	return `[[${heading.peerStem}#${escapedHeading}\\|${id}]]`;
+/**
+ * ADR-8 (T4.3): the I## column is always plain text. The pre-fix wikilink to
+ * the source's `.md` peer heading (`[[<peerStem>#<heading>|<id>]]`) was
+ * malformed whenever the heading text itself contained nested `[[ ]]`
+ * (Tomo confirm #4 = drop the deep-link). `outcomeSource.parseIdCell`
+ * (Phase 2) still parses the legacy wikilink form — logs already in users'
+ * vaults keep it forever — but this producer never emits it again.
+ */
+function renderIdCell(id: string): string {
+	return id;
 }
 
 function entryFileId(entry: BufferedEntry): string {

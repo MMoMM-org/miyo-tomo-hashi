@@ -261,6 +261,7 @@
 
 .hashi-execution-modal-buttons {
 	display: flex;
+	flex-wrap: wrap;
 	justify-content: flex-end;
 	gap: 8px;
 	margin-top: 12px;
@@ -1521,4 +1522,216 @@
 	margin-top: 6px;
 	overflow-x: auto;
 	white-space: pre-wrap;
+}
+
+/* ---- Instruction Fixer shell (spec-006, T3.1) ---------------------------
+   Reuses the --se-* custom properties defined on .hashi-se-view above — the
+   Instruction Fixer root carries both hashi-instruction-fixer-view and
+   hashi-se-view, so these vars are in scope. Card BODIES are T3.2; only the
+   banner, the gate-derived group sections and the card shell live here. */
+.hashi-if-save-error {
+	padding: 8px 12px;
+	margin-bottom: 14px;
+	border-radius: var(--se-r-sm);
+	background: var(--se-bg-alt);
+	color: var(--se-text);
+	border: 1px solid var(--se-red);
+	font-size: 12.5px;
+	line-height: 1.4;
+}
+.hashi-if-save-error-head {
+	font-weight: 600;
+}
+.hashi-if-save-error-hint {
+	margin-top: 4px;
+	color: var(--se-text-muted);
+	font-size: 12px;
+}
+/* pre-wrap wraps at whitespace; overflow-x guards what it cannot break — the
+   diagnostic embeds a vault path and a validator JSON pointer
+   (`/actions/0/anchor`), either of which can be one long spaceless token in a
+   narrow leaf. Same pairing as .hashi-se-th-preview above, for the same
+   reason. */
+.hashi-if-save-error-detail {
+	margin-top: 6px;
+	font-family: var(--se-mono);
+	font-size: 11px;
+	color: var(--se-text-faint);
+	overflow-x: auto;
+	white-space: pre-wrap;
+}
+/* Re-run notice (T3.3) — one line: either "save first" or the run's own
+   failure. Warning-weighted rather than error-weighted: nothing was written
+   and nothing is pending, unlike .hashi-if-save-error above. */
+.hashi-if-rerun-error {
+	padding: 8px 12px;
+	margin-bottom: 14px;
+	border-radius: var(--se-r-sm);
+	background: var(--se-bg-alt);
+	color: var(--se-text);
+	border: 1px solid var(--se-amber);
+	font-size: 12.5px;
+	line-height: 1.4;
+}
+.hashi-if-banner {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	justify-content: space-between;
+	padding: 8px 12px;
+	margin-bottom: 14px;
+	border-radius: var(--se-r-sm);
+	background: var(--se-bg-alt);
+	color: var(--se-text);
+	border: 1px solid var(--se-border-strong);
+	font-size: 12.5px;
+	line-height: 1.4;
+}
+.hashi-if-banner-detail {
+	margin-top: 2px;
+	color: var(--se-text-muted);
+	font-size: 12px;
+}
+.hashi-if-group {
+	margin-bottom: 18px;
+}
+.hashi-if-group-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+.hashi-if-group-label {
+	font-size: 11.5px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	color: var(--se-text-muted);
+	text-transform: uppercase;
+}
+.hashi-if-group-count {
+	font-family: var(--se-mono);
+	font-size: 11px;
+	color: var(--se-text-faint);
+	background: var(--se-bg-alt);
+	border-radius: 999px;
+	padding: 1px 8px;
+}
+.hashi-if-group-tag {
+	font-size: 11px;
+	color: var(--se-text-faint);
+}
+.hashi-if-card {
+	padding: 9px 11px;
+	border: 1px solid var(--se-border);
+	border-radius: var(--se-r-sm);
+	background: var(--se-bg-elev);
+	margin-bottom: 6px;
+	font-size: 12.5px;
+}
+.hashi-if-card--readonly {
+	opacity: 0.72;
+}
+.hashi-if-card-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.hashi-if-card-id {
+	font-family: var(--se-mono);
+	font-size: 12px;
+	color: var(--se-text);
+	font-weight: 600;
+}
+.hashi-if-badge {
+	font-family: var(--se-mono);
+	font-size: 11px;
+	color: var(--se-text-muted);
+	background: var(--se-bg-alt);
+	border-radius: 4px;
+	padding: 1px 7px;
+}
+.hashi-if-card-tag {
+	font-size: 11px;
+	color: var(--se-text-faint);
+}
+.hashi-if-card-reason {
+	margin-top: 5px;
+	font-size: 12px;
+	color: var(--se-red);
+}
+.hashi-if-card-body:not(:empty) {
+	margin-top: 7px;
+}
+
+/* ---- Instruction Fixer card bodies (spec-006, T3.2) ---------------------
+   Intent line, the per-kind repair fields, and the note link. The field
+   control itself is the shared TargetControl widget (.hashi-ga-target*
+   above) — only the label/value column and the row rhythm live here. */
+.hashi-if-intent {
+	color: var(--se-text);
+	line-height: 1.45;
+}
+.hashi-if-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	margin-top: 7px;
+}
+.hashi-if-field {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.hashi-if-field label {
+	flex: 0 0 106px;
+	font-size: 10px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--se-text-faint);
+}
+.hashi-if-field .hashi-ga-target {
+	flex: 1;
+	min-width: 0;
+}
+/* Read-only mirror of the input's value (no control at all — see
+   renderActionCard Decision 2). Monospace so a path or a literal match string
+   reads exactly as it is stored, incl. leading/trailing spaces. */
+.hashi-if-field-value {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--se-mono);
+	font-size: 11.5px;
+	color: var(--se-text-muted);
+	overflow-x: auto;
+	white-space: pre-wrap;
+}
+/* Rows of the anchor / marker pickers (SpotPickers.ts). Label and detail sit on
+   one line so a long heading truncates rather than pushing the placement out of
+   view — the placement is the half that makes the row a distinct choice. */
+.hashi-if-spot-item {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	justify-content: space-between;
+}
+.hashi-if-spot-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.hashi-if-spot-detail {
+	flex: 0 0 auto;
+	font-size: 11px;
+	color: var(--se-text-faint);
+	max-width: 45%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.hashi-if-note {
+	margin-top: 7px;
+	font-size: 12px;
+}
+.hashi-if-note-arrow {
+	color: var(--se-text-faint);
 }

@@ -1128,3 +1128,280 @@ describe("registerOpenTomoEditorCommand", () => {
 		expect(openSuggestionsEditorSpy).not.toHaveBeenCalled();
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 006 spec — Instruction Fixer open command (T4.1)
+// ---------------------------------------------------------------------------
+//
+// Spec refs: spec-006-instruction-editor SDD ADR-3; PRD F1-AC1/AC4;
+// plan/phase-4.md T4.1. ADR-3: a DEDICATED command (not click-to-open, no
+// `obsidian://` handler) is what sidesteps the `_instructions.json`
+// collision — "Execute instructions document" already claims that suffix, so
+// two commands now act on the same file with distinct verbs (run it vs.
+// open-to-repair). The tests below prove both halves of that contract: the
+// new command resolves/opens correctly, AND the existing Execute command's
+// behavior is unchanged when both are registered together.
+
+import {
+	INSTRUCTIONS_JSON_RE,
+	listInstructionsDocs as listInstructionsFixerDocs,
+	registerOpenInstructionFixerCommand,
+	resolveInstructionsDocPath,
+	type OpenInstructionFixerCommandDeps,
+} from "../../../src/commands/registerCommands";
+
+const OPEN_INSTRUCTION_FIXER_ID = "open-instruction-fixer";
+const OPEN_INSTRUCTION_FIXER_LABEL = "Open instruction fixer";
+const NO_INSTRUCTIONS_FIXER_DOC_NOTICE =
+	"No instruction sets found — open a _instructions.json (or its .md) first";
+
+describe("INSTRUCTIONS_JSON_RE", () => {
+	it("matches an instructions wire filename", () => {
+		expect(
+			INSTRUCTIONS_JSON_RE.test("100 Inbox/2026-07-08_1307_instructions.json"),
+		).toBe(true);
+	});
+
+	it("does not match a suggestions or garden-audit filename", () => {
+		expect(INSTRUCTIONS_JSON_RE.test("100 Inbox/2026-07-06_1115_suggestions.json")).toBe(
+			false,
+		);
+		expect(
+			INSTRUCTIONS_JSON_RE.test("100 Inbox/run-editor-001_garden-audit.json"),
+		).toBe(false);
+	});
+});
+
+describe("resolveInstructionsDocPath", () => {
+	it("returns the path itself when it ends with _instructions.json", () => {
+		expect(
+			resolveInstructionsDocPath("100 Inbox/2026-07-08_1307_instructions.json"),
+		).toBe("100 Inbox/2026-07-08_1307_instructions.json");
+	});
+
+	it("derives the .json sibling when the path ends with _instructions.md", () => {
+		expect(
+			resolveInstructionsDocPath("100 Inbox/2026-07-08_1307_instructions.md"),
+		).toBe("100 Inbox/2026-07-08_1307_instructions.json");
+	});
+
+	it("returns null for an unrelated note", () => {
+		expect(resolveInstructionsDocPath("notes/random.md")).toBeNull();
+	});
+
+	it("returns null when there is no active file", () => {
+		expect(resolveInstructionsDocPath(null)).toBeNull();
+	});
+
+	it("returns null for a _suggestions.json file (disjoint from instructions discovery)", () => {
+		expect(
+			resolveInstructionsDocPath("100 Inbox/2026-07-06_1115_suggestions.json"),
+		).toBeNull();
+	});
+});
+
+describe("listInstructionsDocs (006 resolver helper)", () => {
+	it("filters to *_instructions.json paths only, sorted", () => {
+		expect(
+			listInstructionsFixerDocs([
+				"100 Inbox/b_instructions.json",
+				"notes/random.md",
+				"100 Inbox/a_instructions.json",
+				"100 Inbox/x_suggestions.json",
+			]),
+		).toEqual(["100 Inbox/a_instructions.json", "100 Inbox/b_instructions.json"]);
+	});
+
+	it("returns an empty array when none match", () => {
+		expect(listInstructionsFixerDocs(["notes/random.md"])).toEqual([]);
+	});
+});
+
+describe("registerOpenInstructionFixerCommand", () => {
+	let pluginMock: PluginMock;
+	let plugin: Plugin;
+	let getActiveFilePath: Mock<() => string | null>;
+	let listDocs: Mock<() => string[]>;
+	let pickInstructionsDoc: Mock<(docs: string[], onPick: (docPath: string) => void) => void>;
+	let openInstructionFixerSpy: Mock<(docPath: string) => Promise<void>>;
+	let deps: OpenInstructionFixerCommandDeps;
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		pluginMock = new PluginMock();
+		plugin = asPlugin(pluginMock);
+		getActiveFilePath = vi.fn<() => string | null>(() => null);
+		listDocs = vi.fn<() => string[]>(() => []);
+		pickInstructionsDoc = vi.fn<(docs: string[], onPick: (docPath: string) => void) => void>(
+			() => {},
+		);
+		openInstructionFixerSpy = vi.fn<(docPath: string) => Promise<void>>(async () => {});
+		deps = {
+			getActiveFilePath,
+			listInstructionsDocs: listDocs,
+			pickInstructionsDoc,
+			openInstructionFixer: openInstructionFixerSpy,
+		};
+	});
+
+	it("registers the 'Open instruction fixer' command under a stable id", () => {
+		registerOpenInstructionFixerCommand(plugin, deps);
+
+		const cmds = commandsForId(plugin, OPEN_INSTRUCTION_FIXER_ID);
+		expect(cmds).toHaveLength(1);
+		expect(cmds[0]?.name).toBe(OPEN_INSTRUCTION_FIXER_LABEL);
+	});
+
+	it("active _instructions.json → opens the Fixer with that path", async () => {
+		getActiveFilePath.mockReturnValue("100 Inbox/2026-07-08_1307_instructions.json");
+		registerOpenInstructionFixerCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_INSTRUCTION_FIXER_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openInstructionFixerSpy).toHaveBeenCalledWith(
+			"100 Inbox/2026-07-08_1307_instructions.json",
+		);
+		expect(vi.mocked(Notice)).not.toHaveBeenCalled();
+	});
+
+	it("active _instructions.md → opens the Fixer with the .json sibling", async () => {
+		getActiveFilePath.mockReturnValue("100 Inbox/2026-07-08_1307_instructions.md");
+		registerOpenInstructionFixerCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_INSTRUCTION_FIXER_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openInstructionFixerSpy).toHaveBeenCalledWith(
+			"100 Inbox/2026-07-08_1307_instructions.json",
+		);
+	});
+
+	it("no active doc, sets exist → offers the picker instead of a Notice", async () => {
+		getActiveFilePath.mockReturnValue("notes/random.md");
+		listDocs.mockReturnValue([
+			"100 Inbox/a_instructions.json",
+			"100 Inbox/b_instructions.json",
+		]);
+		registerOpenInstructionFixerCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_INSTRUCTION_FIXER_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+
+		expect(pickInstructionsDoc).toHaveBeenCalledWith(
+			["100 Inbox/a_instructions.json", "100 Inbox/b_instructions.json"],
+			expect.any(Function),
+		);
+		expect(vi.mocked(Notice)).not.toHaveBeenCalled();
+		expect(openInstructionFixerSpy).not.toHaveBeenCalled();
+	});
+
+	it("picking a doc from the picker opens the Fixer with the chosen path", async () => {
+		getActiveFilePath.mockReturnValue(null);
+		listDocs.mockReturnValue(["100 Inbox/a_instructions.json"]);
+		pickInstructionsDoc.mockImplementation((docs, onPick) => {
+			onPick(docs[0]!);
+		});
+		registerOpenInstructionFixerCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_INSTRUCTION_FIXER_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openInstructionFixerSpy).toHaveBeenCalledWith("100 Inbox/a_instructions.json");
+	});
+
+	it("no active doc, no sets in the vault → Notice, no picker, no open", async () => {
+		getActiveFilePath.mockReturnValue(null);
+		listDocs.mockReturnValue([]);
+		registerOpenInstructionFixerCommand(plugin, deps);
+
+		const cmd = commandsForId(plugin, OPEN_INSTRUCTION_FIXER_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+
+		expect(pickInstructionsDoc).not.toHaveBeenCalled();
+		expect(openInstructionFixerSpy).not.toHaveBeenCalled();
+		expect(vi.mocked(Notice)).toHaveBeenCalledWith(NO_INSTRUCTIONS_FIXER_DOC_NOTICE);
+	});
+});
+
+describe("ADR-3: Open Instruction Fixer does not disturb Execute (regression guard)", () => {
+	let pluginMock: PluginMock;
+	let plugin: Plugin;
+	let executor: ExecutorOnly;
+	let vault: ExistsVault;
+	let settings: PluginSettings;
+	let executorDeps: ExecutorCommandDeps;
+	let fixerDeps: OpenInstructionFixerCommandDeps;
+	let openInstructionFixerSpy: Mock<(docPath: string) => Promise<void>>;
+
+	const activeInstructionsPath = "inbox/2026-07-08_1307_instructions.json";
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		pluginMock = new PluginMock();
+		plugin = asPlugin(pluginMock);
+		pluginMock.app.workspace.getActiveFile = vi.fn<() => TFile | null>(() =>
+			fakeTFile(activeInstructionsPath),
+		);
+
+		executor = { execute: vi.fn(async () => ({})) };
+		vault = { exists: vi.fn(async () => true) };
+		settings = { ...DEFAULT_SETTINGS, tomoInboxFolder: "inbox" };
+		executorDeps = {
+			executor: executor as unknown as ExecutorCommandDeps["executor"],
+			vault: vault as unknown as ExecutorCommandDeps["vault"],
+			settings,
+			listInstructionsDocs: vi.fn<() => string[]>(() => []),
+			pickInstructionsDoc: vi.fn(),
+		};
+
+		openInstructionFixerSpy = vi.fn<(docPath: string) => Promise<void>>(async () => {});
+		fixerDeps = {
+			getActiveFilePath: () => activeInstructionsPath,
+			listInstructionsDocs: vi.fn<() => string[]>(() => []),
+			pickInstructionsDoc: vi.fn(),
+			openInstructionFixer: openInstructionFixerSpy,
+		};
+
+		registerExecutorCommands(plugin, executorDeps);
+		registerOpenInstructionFixerCommand(plugin, fixerDeps);
+	});
+
+	it("both commands register under stable, distinct ids", () => {
+		expect(commandsForId(plugin, EXECUTE_ID)).toHaveLength(1);
+		expect(commandsForId(plugin, OPEN_INSTRUCTION_FIXER_ID)).toHaveLength(1);
+		expect(EXECUTE_ID).not.toBe(OPEN_INSTRUCTION_FIXER_ID);
+	});
+
+	it("invoking Execute on an active _instructions.json still runs it (unchanged) and does NOT open the Fixer", async () => {
+		const cmd = commandsForId(plugin, EXECUTE_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(executor.execute).toHaveBeenCalledTimes(1);
+		expect(executor.execute).toHaveBeenCalledWith({
+			kind: "single-file",
+			sourcePath: activeInstructionsPath,
+		});
+		expect(openInstructionFixerSpy).not.toHaveBeenCalled();
+	});
+
+	it("invoking Open Instruction Fixer on the same active file opens the Fixer and does NOT execute", async () => {
+		const cmd = commandsForId(plugin, OPEN_INSTRUCTION_FIXER_ID).at(-1);
+		cmd?.callback?.();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(openInstructionFixerSpy).toHaveBeenCalledWith(activeInstructionsPath);
+		expect(executor.execute).not.toHaveBeenCalled();
+	});
+});

@@ -133,7 +133,7 @@ import { executionStore } from "../../src/executor/executionStore";
 import { FsHookLoader } from "../../src/hooks/FsHookLoader";
 import { IdeBridge } from "../../src/ide-bridge/IdeBridge";
 import { ideBridgeStore } from "../../src/ide-bridge/ideBridgeStore";
-import TomoHashiPlugin from "../../src/main";
+import TomoHashiPlugin, { openFixerThenIdle } from "../../src/main";
 import { SettingsTab } from "../../src/settings/SettingsTab";
 import {
 	EditorView,
@@ -284,7 +284,9 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 				.mocked(plugin.addCommand)
 				.mock.calls.map((call) => (call[0] as { id: string }).id);
 			// 001 + 002 are unchanged; 003 adds the IDE-bridge toggle; 004 adds
-			// the Suggestions Editor open command.
+			// the Suggestions Editor open command; 006 adds the Instruction
+			// Fixer open command (ADR-3: dedicated, alongside — not replacing —
+			// "execute-instructions-document").
 			expect(new Set(ids)).toEqual(
 				new Set([
 					"reconnect-to-tomo",
@@ -292,6 +294,7 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 					"execute-instructions-document",
 					"toggle-ide-bridge",
 					"open-suggestions-editor",
+					"open-instruction-fixer",
 				]),
 			);
 		});
@@ -453,5 +456,62 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 			plugin.onunload();
 			expect(IdeBridge.prototype.stop).toHaveBeenCalledTimes(1);
 		});
+	});
+});
+
+/**
+ * openFixerThenIdle — the "Open Instruction Fixer" ordering invariant
+ * (spec-006 T4.2 / ADR-3a, code-quality review W1). Extracted from the
+ * modal-glue closure specifically so it can be pinned here with a deferred
+ * promise: `idle` must not fire until `opener` settles, or a future
+ * "simplification" that hoists the idle-set above the await would silently
+ * demote the primary Fixer entry point to the fail-closed cold-open path
+ * while every ExecutionModal/summaryView test stayed green.
+ */
+describe("openFixerThenIdle (spec-006 T4.2 / code-quality review W1)", () => {
+	function deferred<T>(): {
+		promise: Promise<T>;
+		resolve: (value: T) => void;
+		reject: (reason: unknown) => void;
+	} {
+		let resolve!: (value: T) => void;
+		let reject!: (reason: unknown) => void;
+		const promise = new Promise<T>((res, rej) => {
+			resolve = res;
+			reject = rej;
+		});
+		return { promise, resolve, reject };
+	}
+
+	it("does not call idle until the opener's promise resolves", async () => {
+		const { promise, resolve } = deferred<void>();
+		const idle = vi.fn();
+		const opener = vi.fn(() => promise);
+
+		const call = openFixerThenIdle(opener, "alpha.json", idle);
+
+		// Opener was invoked with the source path; while its promise is still
+		// pending, idle must NOT have fired — that's the whole invariant.
+		expect(opener).toHaveBeenCalledWith("alpha.json");
+		expect(idle).not.toHaveBeenCalled();
+
+		resolve();
+		await call;
+
+		expect(idle).toHaveBeenCalledTimes(1);
+	});
+
+	it("still calls idle exactly once when the opener's promise rejects", async () => {
+		const { promise, reject } = deferred<void>();
+		const idle = vi.fn();
+		const opener = vi.fn(() => promise);
+
+		const call = openFixerThenIdle(opener, "alpha.json", idle);
+		expect(idle).not.toHaveBeenCalled();
+
+		reject(new Error("boom"));
+
+		await expect(call).rejects.toThrow("boom");
+		expect(idle).toHaveBeenCalledTimes(1);
 	});
 });

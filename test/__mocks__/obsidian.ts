@@ -175,6 +175,10 @@ export class App {
 	vault = {
 		getAbstractFileByPath: vi.fn(),
 		read: vi.fn(),
+		// Obsidian's read-only read path. Used by the Instruction Fixer's
+		// anchor/marker pickers, which parse the target note's structure from
+		// content rather than from the async metadataCache (#68).
+		cachedRead: vi.fn<(file: TFile) => Promise<string>>(async () => ""),
 		modify: vi.fn(),
 		create: vi.fn(),
 		delete: vi.fn(),

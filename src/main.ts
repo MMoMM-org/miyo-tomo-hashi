@@ -85,10 +85,12 @@ import { Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 
 import {
 	listGardenAuditDocs,
+	listInstructionsDocs,
 	listSuggestionsDocs,
 	registerCommands,
 	registerExecutorCommands,
 	registerIdeBridgeCommand,
+	registerOpenInstructionFixerCommand,
 	registerOpenTomoEditorCommand,
 } from "./commands/registerCommands";
 import { registerFileMenu, registerExecutorFileMenu } from "./commands/fileMenu";
@@ -120,6 +122,14 @@ import {
 	TomoEditorDocPicker,
 	VIEW_TYPE_GARDEN_AUDIT_EDITOR,
 } from "./ui/garden-audit-view/index";
+import { ObsidianInstructionSetDoc } from "./instruction-fixer/ObsidianInstructionSetDoc";
+import {
+	actionCardRenderer,
+	InstructionFixerView,
+	openInstructionFixer,
+	resolveOutcomes,
+	VIEW_TYPE_INSTRUCTION_FIXER,
+} from "./ui/instruction-fixer/index";
 import { StatusBarIcon, copyAuthToken } from "./ui/status-bar/StatusBarIcon";
 import {
 	openSuggestionsEditor,
@@ -150,6 +160,29 @@ interface AdapterStat {
 interface VaultAdapterShape {
 	stat(path: string): Promise<AdapterStat | null>;
 	getBasePath?(): string;
+}
+
+/**
+ * "Open Instruction Fixer" ordering (spec-006 T4.2 / ADR-3a, code-quality
+ * review W1): idle the run-state store ONLY after `opener` settles, success
+ * or failure. `outcomeSource.resolveOutcomes` reads the store LIVE when the
+ * Fixer view loads; idling before `opener` (which awaits the view's
+ * `onOpen`/`setState`, and therefore its outcome resolution) would erase the
+ * terminal "summary" state before the view can read it — silently demoting
+ * this entry point to the cold-open/no-signal fail-closed path. Extracted
+ * (rather than inlined in the modal-glue closure) so this invariant is
+ * independently testable without an Obsidian `App`/`Plugin`.
+ */
+export async function openFixerThenIdle(
+	opener: (sourcePath: string) => Promise<void>,
+	sourcePath: string,
+	idle: () => void,
+): Promise<void> {
+	try {
+		await opener(sourcePath);
+	} finally {
+		idle();
+	}
 }
 
 export default class TomoHashiPlugin extends Plugin {
@@ -520,6 +553,18 @@ export default class TomoHashiPlugin extends Plugin {
 						exec.state.set({ kind: "idle" });
 						modal.close();
 					},
+					// User clicked "Open Instruction Fixer" on the summary → close the
+					// modal so the newly revealed Fixer leaf isn't hidden behind it,
+					// then hand off to `openFixerThenIdle` for the ordering (see its
+					// doc comment — idle only after the opener settles).
+					onOpenInstructionFixer: (sourcePath: string) => {
+						modal.close();
+						void openFixerThenIdle(
+							(p) => openInstructionFixer(app, p),
+							sourcePath,
+							() => exec.state.set({ kind: "idle" }),
+						);
+					},
 				});
 				activeModal = modal;
 				modal.open();
@@ -609,6 +654,58 @@ export default class TomoHashiPlugin extends Plugin {
 				}),
 		);
 
+		// =========================================================================
+		// 006 wiring (T3.1) — Instruction Fixer
+		// =========================================================================
+		//
+		// 16. InstructionFixerView registration. Same shape as 15. above:
+		//     `ObsidianInstructionSetDoc` is the ONE wire-aware adapter for
+		//     `_instructions.json`, one instance per leaf-open (it tracks its own
+		//     docPath, so each leaf's "one active doc" stays independent).
+		//
+		//     `resolveOutcomes` is bound HERE rather than inside the view so its
+		//     `logFolder` dep reads the LIVE `tomoInboxFolder` setting on every
+		//     call — a user changing it mid-session must not leave an open leaf
+		//     parsing run logs out of the old folder. `getRunState` likewise
+		//     closes over the module-level executionStore singleton so the view
+		//     never imports it (SDD ADR-4: the resolver is pure w.r.t. its deps).
+		//
+		//     `card` (T3.2) renders each card's body — intent line, per-kind
+		//     repair fields, note link. It is a stateless module-level renderer
+		//     (every per-card input arrives through `FixerCardContext`), so one
+		//     shared instance serves every leaf.
+		//
+		//     `rerun` (T3.3) is the SAME `InstructionExecutor` singleton the
+		//     execute command drives (10. above), invoked with the same
+		//     `single-file` invocation — SDD ADR-9: one executor, one atomic
+		//     write path, no second writer racing the applied-flag flush. It is
+		//     read off `this.executor` per call rather than captured, because
+		//     `onunload` nulls it; and the existing ExecutionModal glue (12.)
+		//     picks the run up off `executionStore` exactly as it does for a
+		//     command-initiated run, so a Fixer re-run gets the same preview /
+		//     progress / summary surface for free.
+		this.registerView(
+			VIEW_TYPE_INSTRUCTION_FIXER,
+			(leaf: WorkspaceLeaf) =>
+				new InstructionFixerView(leaf, {
+					adapter: new ObsidianInstructionSetDoc(vault),
+					resolveOutcomes: (set, docPath) =>
+						resolveOutcomes(set, docPath, {
+							vault,
+							getRunState: () => executionStore.get(),
+							logFolder: this.settings.tomoInboxFolder,
+						}),
+					card: actionCardRenderer,
+					rerun: async (docPath: string) => {
+						const executor = this.executor;
+						if (executor === null) {
+							throw new Error("Hashi is still loading — try again in a moment.");
+						}
+						await executor.execute({ kind: "single-file", sourcePath: docPath });
+					},
+				}),
+		);
+
 		// Registers Hashi's `hover-link` source (T6.2 note navigation, PRD F9)
 		// with Obsidian's Page Preview core plugin — without this, Page Preview
 		// has no settings entry for Hashi and hovering a note link falls back to
@@ -633,6 +730,26 @@ export default class TomoHashiPlugin extends Plugin {
 				openSuggestionsEditor(this.app, docPath),
 			openGardenAuditEditor: (docPath: string) =>
 				openGardenAuditEditor(this.app, docPath),
+		});
+
+		// =========================================================================
+		// 006 wiring (T4.1) — Instruction Fixer entry command (ADR-3)
+		// =========================================================================
+		//
+		// 17. A DEDICATED command, separate from "Open Tomo editor" above and
+		//     from "Execute instructions document" (13.) — ADR-3: this is what
+		//     sidesteps the `_instructions.json` collision, since Execute
+		//     already claims that suffix for a different verb (run vs.
+		//     open-to-repair). Reuses `TomoEditorDocPicker` (15.'s import) for
+		//     the no-active-doc fallback — it's already a content-agnostic
+		//     "choose a Tomo run" picker, so no new picker class is needed here.
+		registerOpenInstructionFixerCommand(this, {
+			getActiveFilePath: () => this.app.workspace.getActiveFile()?.path ?? null,
+			listInstructionsDocs: () =>
+				listInstructionsDocs(this.app.vault.getFiles().map((file) => file.path)),
+			pickInstructionsDoc: (docs, onPick) =>
+				new TomoEditorDocPicker(this.app, docs, onPick).open(),
+			openInstructionFixer: (docPath: string) => openInstructionFixer(this.app, docPath),
 		});
 	}
 
