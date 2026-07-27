@@ -5,8 +5,8 @@
 | Field | Value |
 |-------|-------|
 | **Created** | 2026-07-26 |
-| **Current Phase** | Ready |
-| **Last Updated** | 2026-07-26 |
+| **Current Phase** | Implemented |
+| **Last Updated** | 2026-07-27 |
 
 ## Documents
 
@@ -43,6 +43,8 @@
 | 2026-07-26 | **ADR-8: run-log `I##` deep-link dropped → plain text; add Fixer pointer line** (user) | The malformed nested-`[[]]` deep-link (the origin bug) is removed (Tomo confirm #4 = (b)); log otherwise unchanged. |
 | 2026-07-26 | **SDD complete — ADR-1..9 confirmed; constitution self-check passed** | Parallel `InstructionFixerView` reusing spec-005 infra (adapter/transforms/noteNavigation verbatim; `TargetControl` generalized off `FindingCheck`); outcome-sourced fail-closed gate (in-session `executionStore` summary \| source-matched newest run-log \| else read-only + offer run); re-run via existing `InstructionExecutor` + atomic `processJSON`. No external surface; local-only; no new deps. |
 | 2026-07-26 | **PLAN complete + validated** (user approved SDD → PLAN) | 5 TDD phases, 15 deliverable tasks (4 parallel): (1) data spine — port/adapter/`markActionFields`/transforms; (2) outcome source + fail-closed gate; (3) Fixer view — cards/gate/re-run; (4) entry points + run-log change; (5) integration/E2E + full-suite gate. Two validation agents: cross-doc consistency (found + fixed an incomplete F5-scrub + stale AC count) and plan↔code alignment (**PASS on all 8 code claims** — renderIdCell bug present, jsonAppliedWriter/executionStore/ActionOutcome shapes, all 7 repair kinds' field names exact; 2 doc fixes: `TargetControl` needs generalization not verbatim reuse, Store path is `util/store.ts`). All findings resolved. |
+
+| 2026-07-27 | **Implementation complete** | Instruction Fixer shipped on `feat/instruction-editor` (5 phases, 18 tasks). Build + lint clean; **140 test files / 2308 tests**; bundle **870.9 KB** under the 900 KB ceiling raised at T3.1 (spec-001 CON-7 ≤1000 KB unaffected). New: `src/vault/InstructionSetDoc.ts`, `src/instruction-fixer/{ObsidianInstructionSetDoc,transforms}.ts`, `src/ui/instruction-fixer/{InstructionFixerView,openInstructionFixer,fixerContract,index,outcomeSource,sections,renderFixerBody}.ts` + `cards/{renderActionCard,targetFields}.ts`; `markActionFields` added to `executor/jsonAppliedWriter.ts`; `TargetControl` generalized off `FindingCheck` (garden-audit's 149 tests unmodified). Run-log `I##` deep-link removed — **the origin bug**. Entry: command + execute-result option + log pointer. Docs: new `docs/instruction-fixer.md` + 4 updates. **No schema change, no `schema_version` bump** (ADR-6). |
 
 ## Follow-ups (non-blocking)
 
