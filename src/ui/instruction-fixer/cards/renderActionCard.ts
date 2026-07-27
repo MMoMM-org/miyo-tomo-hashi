@@ -188,10 +188,18 @@ export function affectedNotePath(action: Action): string | null {
  * (`setAnchorSpot` re-checks the enums, `setTargetField` the whitelist); this
  * is the affordance, not the guard.
  *
- * An anchor pick commits three fields at once and so cannot go through
+ * Both picks commit more than one field at once and so cannot go through
  * `onChange(value)` — that is the whole reason `extraPick` exists as a bare
- * button rather than a second `TargetPickMode`. A marker pick is an ordinary
- * string commit and rides the existing whitelist entry unchanged.
+ * button rather than a second `TargetPickMode`. An anchor pick commits the
+ * type/value/placement triple; a marker pick commits `marker` AND seeds
+ * `line` with the matched line's current content (see `MarkerSpot.line`) —
+ * `marker` and `line` are independent wire fields, but not independent in
+ * meaning: the handler overwrites whatever `marker` finds with `line`
+ * verbatim, so picking a new marker while an unrelated `line` sits untouched
+ * can silently clobber a line that has nothing to do with the one just
+ * picked (found in manual QA, 2026-07-27). Both writes still go through
+ * `setTargetField`'s ordinary whitelist/no-op checks — `line` only actually
+ * changes when the seeded value differs from what was already there.
  */
 function extraPickFor(
 	action: Action,
@@ -219,7 +227,10 @@ function extraPickFor(
 		ariaLabel: "Choose a marker from the target note",
 		onClick: () => {
 			void openMarkerSpotPicker(ctx.app, action, (spot) => {
-				ctx.apply((model) => setTargetField(model, action.id, field.key, spot.value));
+				ctx.apply((model) => {
+					const withMarker = setTargetField(model, action.id, field.key, spot.value);
+					return setTargetField(withMarker, action.id, "line", spot.line);
+				});
 			});
 		},
 	};

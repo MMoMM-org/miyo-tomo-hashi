@@ -184,13 +184,31 @@ export function computeAnchorSpots(content: string, kind: AnchorSpotKind): reado
 // Marker spots (add_relationship)
 // ---------------------------------------------------------------------------
 
-/** One choosable `add_relationship.marker`. */
+/** One choosable `add_relationship.marker`, paired with a safe starting `line`. */
 export interface MarkerSpot {
-	/** The value written to the wire. */
+	/** The value written to the wire's `marker` field. */
 	readonly value: string;
 	readonly label: string;
-	/** The source line it was read from, for context. */
+	/** The source line it was read from, for display context in the picker row. */
 	readonly detail: string;
+	/**
+	 * A safe STARTING value for the wire's `line` field: the located line's
+	 * content with the callout prefix and list bullet already stripped — the
+	 * same structural stripping the handler re-applies on write
+	 * (`addRelationship.ts`'s `newLine = prefix + bullet + line`). Writing this
+	 * verbatim into `line` unchanged is an idempotent no-op relative to what's
+	 * on disk today (the handler's own `skipped-already` case); the caller is
+	 * expected to edit it into the NEW content actually meant to replace it.
+	 *
+	 * This exists because `marker` and `line` are independent wire fields
+	 * (ADR-5) that are NOT independent in meaning: the handler overwrites
+	 * whatever line `marker` matches with `line` verbatim, so picking a new
+	 * marker while an unrelated `line` sits untouched can silently clobber a
+	 * line that has nothing to do with the one just picked. Seeding `line`
+	 * alongside `marker` on every pick is what keeps that combination from
+	 * being buildable through the picker.
+	 */
+	readonly line: string;
 }
 
 // Both mirror `actions/addRelationship.ts`'s locator, which strips an optional
@@ -235,11 +253,15 @@ export function computeMarkerSpots(content: string): readonly MarkerSpot[] {
 		const field = FIELD_PREFIX_RE.exec(stripped);
 		if (field !== null && !seen.has(field[1]!)) {
 			seen.add(field[1]!);
-			fields.push({ value: field[1]!, label: field[1]!, detail: stripped });
+			fields.push({ value: field[1]!, label: field[1]!, detail: stripped, line: stripped });
 		}
 		if (!seen.has(stripped)) {
 			seen.add(stripped);
-			wholeLines.push({ value: stripped, label: stripped, detail: raw.trim() });
+			// `line` is `stripped` here too, NOT `raw.trim()` (which `detail`
+			// uses for display) — `raw` still carries the callout `>`/bullet the
+			// handler reconstructs on its own, and seeding `line` with those
+			// prefixes already in it would double them up on write.
+			wholeLines.push({ value: stripped, label: stripped, detail: raw.trim(), line: stripped });
 		}
 	}
 

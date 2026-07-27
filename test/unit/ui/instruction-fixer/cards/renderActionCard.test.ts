@@ -555,12 +555,39 @@ describe("marker picker", () => {
 		if (picker === undefined) throw new Error("no picker constructed");
 		expect(picker.spots.map((s) => s.value)).toContain("up::");
 
-		picker.onPick({ value: "up::" } as never);
+		picker.onPick({ value: "up::", line: "up:: [[Atlas (MOC)]]" } as never);
 		const transform = transforms[0];
 		if (transform === undefined) throw new Error("no transform");
 		const edited = transform(modelOf(SAMPLES.add_relationship)).doc.actions[0];
 
 		expect(edited?.action === "add_relationship" && edited.marker).toBe("up::");
+	});
+
+	/**
+	 * The manual-QA finding (2026-07-27): `marker` and `line` are independent
+	 * wire fields but not independent in meaning — the handler overwrites
+	 * whatever `marker` finds with `line` verbatim. Picking a marker without
+	 * also touching `line` left SAMPLES.add_relationship's unrelated
+	 * `"- [[Kanban]]"` sitting there, ready to clobber whatever line the newly
+	 * picked marker matches. The pick must seed `line` in the SAME transform.
+	 */
+	it("seeds `line` from the pick, not just `marker` — the marker/line clobber", async () => {
+		const { body, app, transforms } = render(SAMPLES.add_relationship);
+		withTargetNote(app, TARGET_NOTE);
+
+		pickButton(body, "Marker")?.dispatchEvent(new MouseEvent("click"));
+		await vi.waitFor(() => expect(markerPickers).toHaveLength(1));
+
+		const picker = markerPickers[0];
+		if (picker === undefined) throw new Error("no picker constructed");
+		picker.onPick({ value: "up::", line: "up:: [[Atlas (MOC)]]" } as never);
+
+		const transform = transforms[0];
+		if (transform === undefined) throw new Error("no transform");
+		const edited = transform(modelOf(SAMPLES.add_relationship)).doc.actions[0];
+
+		expect(edited?.action === "add_relationship" && edited.marker).toBe("up::");
+		expect(edited?.action === "add_relationship" && edited.line).toBe("up:: [[Atlas (MOC)]]");
 	});
 });
 

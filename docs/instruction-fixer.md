@@ -130,6 +130,14 @@ can resolve.
 `replace_section` shows headings without a placement, because it always overwrites the
 section body; its wire carries no placement field at all.
 
+Picking a **Marker** also seeds the **Line** field with that marker's current line content
+(prefix-stripped). `marker` and `line` are independent wire fields, but not independent in
+*meaning*: on re-run, `add_relationship` overwrites whatever line `marker` matches with
+`line` verbatim. Without the seed, picking a new marker while an old, unrelated `line` sits
+untouched would silently clobber a line that has nothing to do with the one just picked. The
+seed is a safe starting point, not a lock — edit Line into the content you actually want
+written there before saving.
+
 Two things the pickers deliberately do *not* do:
 
 - **Block anchors** (several consecutive lines matched exactly) are never constructed. There
