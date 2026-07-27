@@ -545,3 +545,120 @@ export function resolveGardenAuditDocPath(
 export function listGardenAuditDocs(paths: readonly string[]): string[] {
 	return paths.filter((path) => GARDEN_AUDIT_JSON_RE.test(path)).sort();
 }
+
+// ---------------------------------------------------------------------------
+// 006 spec — "Open instruction fixer" command (T4.1)
+// ---------------------------------------------------------------------------
+//
+// Spec refs: spec-006-instruction-editor SDD ADR-3; PRD F1-AC1/AC4;
+// plan/phase-4.md T4.1.
+//
+// Decisions:
+//
+// 1. ADR-3: entry is a DEDICATED command — not click-to-open, no
+//    `obsidian://` handler. This is what sidesteps the `_instructions.json`
+//    collision: "Execute instructions document" (002, above) already claims
+//    that suffix, so two commands now act on the same file with distinct
+//    verbs — Execute runs it, this one opens it for repair. Neither reads
+//    nor calls the other; they're wired independently in main.ts.
+//
+// 2. `resolveInstructionsDocPath` / `INSTRUCTIONS_JSON_RE` / the
+//    `listInstructionsDocs` helper mirror the garden-audit resolver above
+//    1:1 (single doc family, no suffix-dispatch needed — unlike the unified
+//    Suggestions/Garden-Audit "Open Tomo editor" command, the Fixer only
+//    ever opens one kind of doc).
+//
+// 3. `openInstructionFixer` is injected (Phase 3 T3.1's opener) rather than
+//    imported here, keeping this module's only Obsidian-side dependency the
+//    `Notice`/`Plugin` surface already imported above — same pattern as
+//    `openSuggestionsEditor`/`openGardenAuditEditor` above.
+
+export const INSTRUCTIONS_JSON_RE = /_instructions\.json$/;
+const INSTRUCTIONS_MD_RE = /_instructions\.md$/;
+
+const OPEN_INSTRUCTION_FIXER_ID = "open-instruction-fixer";
+const OPEN_INSTRUCTION_FIXER_LABEL = "Open instruction fixer";
+const NO_INSTRUCTIONS_FIXER_DOC_NOTICE =
+	"No instruction sets found — open a _instructions.json (or its .md) first";
+
+/**
+ * Map the active file path to the `_instructions.json` doc to open in the
+ * Fixer:
+ *   - `<stem>_instructions.json` → itself.
+ *   - `<stem>_instructions.md` → the `.json` sibling.
+ *   - anything else (no active file, unrelated note, a suggestions/garden-
+ *     audit doc) → null; the caller falls through to the picker / Notice.
+ */
+export function resolveInstructionsDocPath(activePath: string | null): string | null {
+	if (activePath === null) return null;
+	if (INSTRUCTIONS_JSON_RE.test(activePath)) return activePath;
+	if (INSTRUCTIONS_MD_RE.test(activePath)) {
+		return activePath.slice(0, -".md".length) + ".json";
+	}
+	return null;
+}
+
+/**
+ * Pure filter+sort over a flat list of vault paths to every
+ * `*_instructions.json` set. Parity with `listGardenAuditDocs`/
+ * `listSuggestionsDocs` above — discovery stays unit-testable without a
+ * real vault.
+ */
+export function listInstructionsDocs(paths: readonly string[]): string[] {
+	return paths.filter((path) => INSTRUCTIONS_JSON_RE.test(path)).sort();
+}
+
+export interface OpenInstructionFixerCommandDeps {
+	/** Vault-relative path of the active file, or null if none is open. */
+	readonly getActiveFilePath: () => string | null;
+	/** Every `*_instructions.json` set in the vault (sorted). */
+	readonly listInstructionsDocs: () => string[];
+	/**
+	 * Opens a fuzzy picker over `docs`, invoking `onPick` with the chosen
+	 * path. Injected (rather than importing the Obsidian picker here) so
+	 * this module stays testable without a real `FuzzySuggestModal`.
+	 */
+	readonly pickInstructionsDoc: (docs: string[], onPick: (docPath: string) => void) => void;
+	/** Opens (or retargets/reveals) the Instruction Fixer leaf for docPath. */
+	readonly openInstructionFixer: (docPath: string) => Promise<void>;
+}
+
+/**
+ * Register the "Open instruction fixer" palette command (ADR-3). Called
+ * separately from the other registrars so 006 wiring stays decoupled —
+ * main.ts calls it after constructing the vault-backed opener.
+ */
+export function registerOpenInstructionFixerCommand(
+	plugin: Plugin,
+	deps: OpenInstructionFixerCommandDeps,
+): void {
+	plugin.addCommand({
+		id: OPEN_INSTRUCTION_FIXER_ID,
+		name: OPEN_INSTRUCTION_FIXER_LABEL,
+		callback: () => {
+			void dispatchOpenInstructionFixer(deps);
+		},
+	});
+}
+
+async function dispatchOpenInstructionFixer(
+	deps: OpenInstructionFixerCommandDeps,
+): Promise<void> {
+	const resolved = resolveInstructionsDocPath(deps.getActiveFilePath());
+	if (resolved !== null) {
+		await deps.openInstructionFixer(resolved);
+		return;
+	}
+
+	// The active file isn't an instructions doc — offer a picker over every
+	// set in the vault, same fallback shape as the Execute command's picker
+	// and the unified Tomo editor's picker above.
+	const docs = deps.listInstructionsDocs();
+	if (docs.length === 0) {
+		new Notice(NO_INSTRUCTIONS_FIXER_DOC_NOTICE);
+		return;
+	}
+	deps.pickInstructionsDoc(docs, (chosen) => {
+		void deps.openInstructionFixer(chosen);
+	});
+}

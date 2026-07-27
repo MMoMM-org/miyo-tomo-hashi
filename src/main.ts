@@ -85,10 +85,12 @@ import { Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 
 import {
 	listGardenAuditDocs,
+	listInstructionsDocs as listInstructionsFixerDocs,
 	listSuggestionsDocs,
 	registerCommands,
 	registerExecutorCommands,
 	registerIdeBridgeCommand,
+	registerOpenInstructionFixerCommand,
 	registerOpenTomoEditorCommand,
 } from "./commands/registerCommands";
 import { registerFileMenu, registerExecutorFileMenu } from "./commands/fileMenu";
@@ -124,6 +126,7 @@ import { ObsidianInstructionSetDoc } from "./instruction-fixer/ObsidianInstructi
 import {
 	actionCardRenderer,
 	InstructionFixerView,
+	openInstructionFixer,
 	resolveOutcomes,
 	VIEW_TYPE_INSTRUCTION_FIXER,
 } from "./ui/instruction-fixer/index";
@@ -692,6 +695,26 @@ export default class TomoHashiPlugin extends Plugin {
 				openSuggestionsEditor(this.app, docPath),
 			openGardenAuditEditor: (docPath: string) =>
 				openGardenAuditEditor(this.app, docPath),
+		});
+
+		// =========================================================================
+		// 006 wiring (T4.1) — Instruction Fixer entry command (ADR-3)
+		// =========================================================================
+		//
+		// 17. A DEDICATED command, separate from "Open Tomo editor" above and
+		//     from "Execute instructions document" (13.) — ADR-3: this is what
+		//     sidesteps the `_instructions.json` collision, since Execute
+		//     already claims that suffix for a different verb (run vs.
+		//     open-to-repair). Reuses `TomoEditorDocPicker` (15.'s import) for
+		//     the no-active-doc fallback — it's already a content-agnostic
+		//     "choose a Tomo run" picker, so no new picker class is needed here.
+		registerOpenInstructionFixerCommand(this, {
+			getActiveFilePath: () => this.app.workspace.getActiveFile()?.path ?? null,
+			listInstructionsDocs: () =>
+				listInstructionsFixerDocs(this.app.vault.getFiles().map((file) => file.path)),
+			pickInstructionsDoc: (docs, onPick) =>
+				new TomoEditorDocPicker(this.app, docs, onPick).open(),
+			openInstructionFixer: (docPath: string) => openInstructionFixer(this.app, docPath),
 		});
 	}
 

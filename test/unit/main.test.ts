@@ -284,7 +284,9 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 				.mocked(plugin.addCommand)
 				.mock.calls.map((call) => (call[0] as { id: string }).id);
 			// 001 + 002 are unchanged; 003 adds the IDE-bridge toggle; 004 adds
-			// the Suggestions Editor open command.
+			// the Suggestions Editor open command; 006 adds the Instruction
+			// Fixer open command (ADR-3: dedicated, alongside — not replacing —
+			// "execute-instructions-document").
 			expect(new Set(ids)).toEqual(
 				new Set([
 					"reconnect-to-tomo",
@@ -292,6 +294,7 @@ describe("TomoHashiPlugin — 002 wiring (T6.2)", () => {
 					"execute-instructions-document",
 					"toggle-ide-bridge",
 					"open-suggestions-editor",
+					"open-instruction-fixer",
 				]),
 			);
 		});
