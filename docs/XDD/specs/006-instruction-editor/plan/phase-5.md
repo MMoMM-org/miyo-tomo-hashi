@@ -16,6 +16,21 @@ phase: 5
 - `[ref: PRD/Success Metrics]` quality gates (verbatim round-trip, no `.md`/`tomo.sources` mutation)
 - `[ref: SDD/Risks and Technical Debt]` gotchas to assert against
 
+**Doc surface owed (from T4.4's doc-site grep) — the Fixer is currently undocumented for users:**
+`rg` over `README.md` + `docs/*.md` returns **zero** hits for "Instruction Fixer" / "open-instruction-fixer".
+Every sibling editor has a page; this one has none. Owed:
+- `docs/instruction-fixer.md` — new page, mirroring `docs/garden-audit-editor.md` / `docs/suggestions-editor.md`.
+  Must cover the fail-closed gate honestly: a cold open with no run-log renders **read-only** and offers
+  Run, and that is deliberate, not a bug. Users who don't know this will report it as one.
+- `docs/commands-reference.md` — the "Open instruction fixer" command.
+- `docs/instruction-executor.md` — the "Open Instruction Fixer" option on the execute-result surface
+  (its table at :16-17 lists the entry points and is now incomplete).
+- `docs/run-log.md` — the new pointer line in the log body. NOTE its sample row (:50) already shows a
+  plain `I01` cell, so it is accidentally correct post-ADR-8 and needs no format change.
+- `README.md` — feature mention alongside the other editors.
+- `docs/design/instruction-editor-charter.md` describes the deep-link bug in the past tense as origin
+  history — correct as-is, do NOT "fix" it.
+
 **Carried from Phase 4 — re-evaluate here:**
 - **`src/commands/registerCommands.ts` is 664 LOC**, hosting five unrelated command families across
   specs 001/002/003/004/006. It was already over the L2 guideline (547) *before* T4.1 added its
