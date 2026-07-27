@@ -22,7 +22,9 @@ Because the log lands in the same inbox folder Tomo's `/inbox` scans, its frontm
 ## Structure
 
 ```markdown
-# Hashi run log — 2026-04-30T1407
+# Hashi run log
+
+Errors can be viewed and repaired in the Instruction Fixer (command: 'Open instruction fixer').
 
 | Field | Value |
 |---|---|
@@ -58,6 +60,15 @@ Because the log lands in the same inbox folder Tomo's `/inbox` scans, its frontm
 ```
 
 The exact column set is stable across versions — additions go to the right, no rename or removal. A `Detail` cell may carry extra context (path-safety reason, hook IDs, dependency reference).
+
+## Instruction Fixer pointer
+
+Every log carries one informational line right below the `# Hashi run log` heading:
+*"Errors can be viewed and repaired in the Instruction Fixer (command: 'Open instruction
+fixer')."* It's a pointer, not a link — the log stays a plain-text artifact, and there's no
+click-to-open into the [Instruction Fixer](instruction-fixer.md) from here or from any `ID`
+cell in the Actions table. Open the Fixer from the command palette, or from the execute
+modal's **Open Instruction Fixer** button while the run summary is still on screen.
 
 ## Retention
 
@@ -122,3 +133,4 @@ You can also open the file from the file explorer or via Obsidian's quick-switch
 - [Instruction Executor / Modal stages](instruction-executor.md#modal-stages) — where View errors is wired
 - [Hooks](hooks.md) — what `ctx.logger` lines look like
 - [Action reference](action-reference.md) — outcome semantics for each kind
+- [Instruction Fixer](instruction-fixer.md) — repair a failed/skipped action; parses this log's table when no in-session run summary is available
