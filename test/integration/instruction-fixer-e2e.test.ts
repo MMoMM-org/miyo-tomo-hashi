@@ -240,6 +240,13 @@ function fieldInput(view: InstructionFixerView, id: string, label: string): HTML
 	return input as HTMLInputElement;
 }
 
+/** Every control a card offers — i.e. every path from that card into a write. */
+function cardControls(view: InstructionFixerView, id: string): string[] {
+	return Array.from(
+		cardEl(view, id).querySelectorAll("input, button, select, textarea"),
+	).map((el) => el.tagName.toLowerCase());
+}
+
 /** Commit a value the way a user does: type into the input, then blur/commit. */
 function commitField(
 	view: InstructionFixerView,
@@ -292,6 +299,12 @@ function actionId(value: unknown): string | null {
 	if (typeof value !== "object" || value === null) return null;
 	const id = (value as Record<string, unknown>).id;
 	return typeof id === "string" && /^I\d+$/.test(id) ? id : null;
+}
+
+/** Every run log currently in the inbox folder, by vault path. */
+async function runLogPaths(vault: FakeVaultFS): Promise<string[]> {
+	const children = await vault.list(INBOX);
+	return children.filter((path) => /\/tomo-hashi-run-log_[^/]+\.md$/.test(path)).sort();
 }
 
 async function readSet(vault: FakeVaultFS): Promise<InstructionSet> {
@@ -479,6 +492,259 @@ describe("Instruction Fixer end-to-end — execute → repair → save → re-ru
 		expect(countWrites(vault)).toEqual(writesBefore);
 		expect(await vault.read(SET_PATH)).toBe(setBefore);
 		expect(await vault.read(PEER_PATH)).toBe(peerBefore);
+	});
+
+	// -----------------------------------------------------------------------
+	// T5.2 — the fail-closed spine, end to end.
+	//
+	// ADR-4: there is NO durable per-action outcome store. On disk `failed`,
+	// `skipped-*` and never-run all collapse to `applied: false`, so the ONLY
+	// signals the edit gate may trust are (1) the in-session `executionStore`
+	// summary and (2) a run log whose frontmatter `sources:` names this set's
+	// path EXACTLY. Anything else is `NO_TRUSTED_SIGNAL` → the whole set renders
+	// read-only and the view offers Run.
+	//
+	// The dangerous failure is a FALSE POSITIVE: mapping some other log's
+	// outcomes onto this set unlocks editing on actions that never failed.
+	// Phase 2 proved the resolver refuses near-miss paths at the unit level;
+	// these four cases prove the VIEW behaves that way over the real stack.
+	//
+	// Nested inside the T5.1 describe so both suites share one harness — same
+	// seeded vault, same real executor, same `openFixer()` bridge.
+	// -----------------------------------------------------------------------
+	describe("fail-closed — cold open, stale run-logs, and the Run that unlocks (T5.2)", () => {
+		const ALL_IDS = ["I01", "I02", "I03", "I04"] as const;
+
+		/**
+		 * The whole read-only surface, asserted as one shape: no gate sections,
+		 * no outcome claimed for ANY action, no control on ANY card, and the
+		 * banner offering the one way out.
+		 *
+		 * The per-card control assertion is the load-bearing one — `editGate`
+		 * returning anything but `editable` makes `renderActionCard` emit a text
+		 * span INSTEAD of a `TargetControl` (its Decision 2: read-only is a
+		 * different control, not a disabled one), so "zero inputs and zero
+		 * buttons on the card" is the DOM-level statement of "no path from here
+		 * into `setTargetField`".
+		 */
+		function expectFailClosedSurface(view: InstructionFixerView): void {
+			// The three gate sections collapse into one read-only group.
+			expect(groupLabels(view)).toEqual(["All actions"]);
+			expect(
+				Array.from(view.contentEl.querySelectorAll(".hashi-if-group-tag")).map(
+					(el) => el.textContent,
+				),
+			).toEqual(["read-only"]);
+
+			for (const id of ALL_IDS) {
+				const card = cardEl(view, id);
+				expect(card.classList.contains("hashi-if-card--readonly")).toBe(true);
+				expect(cardControls(view, id)).toEqual([]);
+				// No outcome is claimed for any action, not even a plausible one.
+				expect(card.querySelector(".hashi-if-badge")?.textContent).toBe("—");
+				expect(card.querySelector(".hashi-if-card-reason")).toBeNull();
+			}
+			// Cards still RENDER — viewing is unrestricted, only editing is gated
+			// (ADR-027 ①). A surface that drew nothing at all would satisfy every
+			// assertion above, which is exactly what case (c) rules out.
+			expect(view.contentEl.querySelectorAll(".hashi-if-card")).toHaveLength(
+				ALL_IDS.length,
+			);
+
+			// The reason is stated ONCE, with the offer to run attached to it.
+			const banner = view.contentEl.querySelector(".hashi-if-banner");
+			expect(banner?.querySelector(".hashi-if-banner-text")?.textContent).toContain(
+				"No trusted outcome for this set.",
+			);
+			expect(button(view, "Run").disabled).toBe(false);
+		}
+
+		/**
+		 * Runs the set for real, through a store the VIEW never sees. What
+		 * survives is exactly what survives an Obsidian restart: the rewritten
+		 * set, the ticked peer, and a genuine run log on disk — with the
+		 * in-session summary (trusted source 1) gone. So the only signal left is
+		 * source 2, which is what cases (b) and (c) differ over.
+		 */
+		async function runLeavingOnlyTheLog(): Promise<string> {
+			const detached = new Store<RunState>({ kind: "idle" });
+			const counts = await makeExecutor(vault, detached).execute({
+				kind: "single-file",
+				sourcePath: SET_PATH,
+			});
+			expect(counts.failed).toBe(1);
+
+			const logs = await runLogPaths(vault);
+			expect(logs).toHaveLength(1);
+			const logPath = logs[0] ?? "";
+
+			// The log is a real, matching one: it names this set in `sources:`,
+			// carries this set's own section, and reports I02 as failed. Case (b)
+			// changes the FIRST of those three and nothing else.
+			const raw = await vault.read(logPath);
+			expect(raw).toContain(`\n  - ${SET_PATH}\n`);
+			expect(raw).toContain(`\n## ${SET_PATH}\n`);
+			expect(raw).toContain("| I02 | link_to_moc |");
+			expect(raw).toContain("| failed | MOC target missing |");
+			return logPath;
+		}
+
+		// --- (a) cold open ---------------------------------------------------
+
+		it("cold open — no run this session, no run log — edits nothing and offers Run", async () => {
+			// Both trusted sources are genuinely absent.
+			expect(runStore.get().kind).toBe("idle");
+			expect(await runLogPaths(vault)).toEqual([]);
+			const writesBefore = countWrites(vault);
+
+			const view = openFixer();
+			await view.onOpen();
+			await settle();
+
+			expectFailClosedSurface(view);
+
+			// PRD F3-AC3: nothing is edited until Run. Not "the same bytes were
+			// written back" — no write reached the vault at all.
+			expect(countWrites(vault)).toEqual(writesBefore);
+			expect(await vault.read(SET_PATH)).toBe(SET_JSON);
+			expect(await vault.read(PEER_PATH)).toBe(PEER_MD);
+		});
+
+		// --- (b) stale / other-set log ---------------------------------------
+
+		/**
+		 * Each case rewrites the real log's ONE `sources:` entry to a path that
+		 * is not this set's, leaving its `## <set path>` section — I02's `failed`
+		 * row and all — untouched. So the frontmatter match is the only thing
+		 * standing between that log and an unlock, and each variant is shaped to
+		 * be accepted by one plausible relaxation of it:
+		 *
+		 *   - a different set entirely  → the realistic stale-log case
+		 *   - this set's path prefixed  → an `item.endsWith(sourcePath)` match
+		 *   - this set's bare filename  → a basename or `sourcePath.endsWith(item)` match
+		 *   - a differently-cased folder → a case-insensitive match
+		 *
+		 * The last three are ADVERSARIAL, not captured: `InstructionExecutor`
+		 * builds both the `sources:` list and the section headings from the same
+		 * `resolvedSources` array, so a log it wrote can never disagree with
+		 * itself this way. That is the point — the fixture is the input a relaxed
+		 * `sourcesInclude` would accept, which is the regression ADR-4 exists to
+		 * prevent, and it isolates that gate from the `## <sourcePath>` heading
+		 * match that would otherwise mask it.
+		 */
+		const NEAR_MISS_SOURCES: readonly (readonly [string, string])[] = [
+			["a different set entirely", `${INBOX}/2026-07-23_0900_instructions.json`],
+			["this set's path with a folder prefixed", `Archive/${SET_PATH}`],
+			["this set's bare filename", "2026-07-24_1432_instructions.json"],
+			["this set's path in a differently-cased folder", SET_PATH.toLowerCase()],
+		];
+
+		it.each(NEAR_MISS_SOURCES)(
+			"a run log whose sources name %s unlocks nothing",
+			async (_label, nearMiss) => {
+				const logPath = await runLeavingOnlyTheLog();
+
+				// The one and only difference from case (c).
+				await vault.process(logPath, (raw) =>
+					raw.replace(`\n  - ${SET_PATH}\n`, `\n  - ${nearMiss}\n`),
+				);
+				const doctored = await vault.read(logPath);
+				expect(doctored).not.toContain(`\n  - ${SET_PATH}\n`);
+				expect(doctored).toContain(`\n  - ${nearMiss}\n`);
+				// This set's outcomes are still sitting right there in the log.
+				expect(doctored).toContain(`\n## ${SET_PATH}\n`);
+				expect(doctored).toContain("| failed | MOC target missing |");
+
+				const view = openFixer();
+				await view.onOpen();
+				await settle();
+
+				// Refused, not mapped optimistically.
+				expectFailClosedSurface(view);
+			},
+		);
+
+		// --- (c) positive control — a matching log ---------------------------
+
+		it("a run log whose sources name THIS set unlocks the failed action", async () => {
+			await runLeavingOnlyTheLog();
+			// Source 1 says nothing — this is the run-LOG path, on its own.
+			expect(runStore.get().kind).toBe("idle");
+
+			const view = openFixer();
+			await view.onOpen();
+			await settle();
+
+			// Not the collapsed surface: the gate sections are back and the
+			// banner is gone.
+			expect(groupLabels(view)).toEqual(["Needs repair", "Applied"]);
+			expect(view.contentEl.querySelector(".hashi-if-banner")).toBeNull();
+
+			const i02 = cardEl(view, "I02");
+			expect(i02.classList.contains("hashi-if-card--readonly")).toBe(false);
+			expect(i02.querySelector(".hashi-if-badge")?.textContent).toBe("failed");
+			expect(i02.querySelector(".hashi-if-card-reason")?.textContent).toBe(
+				"MOC target missing",
+			);
+			expect(
+				Array.from(i02.querySelectorAll("input")).map((el) =>
+					el.getAttribute("aria-label"),
+				),
+			).toEqual(["Target MOC", "Target MOC path", "Anchor"]);
+
+			// The unlock is real, not cosmetic: the widget commits and Save arms.
+			expect(fieldInput(view, "I02", "Target MOC path").value).toBe(BROKEN_MOC_PATH);
+			commitField(view, "I02", "Target MOC path", MOC_PATH);
+			expect(button(view, "Save").disabled).toBe(false);
+
+			// Everything the log reported as applied stays frozen.
+			for (const id of ["I01", "I03", "I04"]) {
+				expect(cardEl(view, id).querySelector(".hashi-if-card-tag")?.textContent).toBe(
+					"frozen",
+				);
+				expect(cardControls(view, id)).toEqual([]);
+			}
+		});
+
+		// --- (d) Run from cold ------------------------------------------------
+
+		it("Run from a cold open produces a live signal and unlocks in place", async () => {
+			const view = openFixer();
+			await view.onOpen();
+			await settle();
+			expectFailClosedSurface(view);
+
+			click(view, "Run");
+			await settle();
+
+			// The banner's Run is the same bridge Re-run uses — one real run.
+			expect(reruns).toHaveLength(1);
+			expect(reruns[0]?.failed).toBe(1);
+			expect(reruns[0]?.applied).toBe(2);
+			expect(await runLogPaths(vault)).toHaveLength(1);
+
+			// Same leaf, refreshed in place (PRD F7-AC2): sections back, banner
+			// gone, and the failure the user came for is now editable.
+			expect(runStore.get().kind).toBe("summary"); // trusted source 1
+			expect(groupLabels(view)).toEqual(["Needs repair", "Applied"]);
+			expect(view.contentEl.querySelector(".hashi-if-banner")).toBeNull();
+
+			const i02 = cardEl(view, "I02");
+			expect(i02.classList.contains("hashi-if-card--readonly")).toBe(false);
+			expect(i02.querySelector(".hashi-if-badge")?.textContent).toBe("failed");
+			expect(
+				Array.from(i02.querySelectorAll("input")).map((el) =>
+					el.getAttribute("aria-label"),
+				),
+			).toEqual(["Target MOC", "Target MOC path", "Anchor"]);
+
+			// The actions that succeeded froze rather than unlocking with it.
+			for (const id of ["I01", "I03", "I04"]) {
+				expect(cardEl(view, id).querySelector(".hashi-if-card-tag")?.textContent).toBe(
+					"frozen",
+				);
+			}
+		});
 	});
 });
 
