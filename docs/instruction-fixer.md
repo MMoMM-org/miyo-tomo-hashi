@@ -130,16 +130,14 @@ can resolve.
 `replace_section` shows headings without a placement, because it always overwrites the
 section body; its wire carries no placement field at all.
 
-Picking a **Marker** commits ONLY the Marker field — the **Line** field is left exactly as it
-was. That's deliberate, not an oversight: Marker says *where* to write, Line says *what
-relationship* to establish there, and the usual reason to pick a different marker is
-repositioning to a better anchor (a template placeholder like *"No parent map yet — this
-note is floating."* rather than an existing `up::` field) — not changing what gets written.
-If picking a marker also copied that spot's current text into Line, the action would stop
-establishing any relationship at all: on re-run it would just find the line and "replace" it
-with the text already there. Each row's secondary text shows the line's current content so
-you can see what a pick is about to match — and, once saved and re-run, overwrite — before
-you commit to it.
+Picking a **Marker** rewrites the FRONT of the **Line** field to match — whatever comes after
+the old marker is kept verbatim. Marker says *where* to write, Line says *what relationship*
+to establish there; picking `up::` when the target note actually uses `parent::` turns
+`up:: [[@]]` into `parent:: [[@]]`, keeping the `[[@]]` link exactly as it was. If Line
+doesn't currently start with the Marker value on record — Tomo's own multi-link aggregation
+can produce that — Hashi can't tell where the split is, so only Marker changes and Line is
+left exactly as it was rather than guessed at. Each row's secondary text shows the line's
+current content so you can see what a pick is about to match before you commit to it.
 
 Two things the pickers deliberately do *not* do:
 

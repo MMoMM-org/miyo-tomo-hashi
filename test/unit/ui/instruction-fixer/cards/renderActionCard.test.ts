@@ -544,8 +544,28 @@ describe("anchor picker", () => {
 });
 
 describe("marker picker", () => {
-	it("offers the target MOC's field openers and commits the picked one", async () => {
-		const { body, app, transforms } = render(SAMPLES.add_relationship);
+	it("offers the target MOC's field openers", async () => {
+		const { body, app } = render(SAMPLES.add_relationship);
+		withTargetNote(app, TARGET_NOTE);
+
+		pickButton(body, "Marker")?.dispatchEvent(new MouseEvent("click"));
+		await vi.waitFor(() => expect(markerPickers).toHaveLength(1));
+
+		expect(markerPickers[0]?.spots.map((s) => s.value)).toContain("up::");
+	});
+
+	/**
+	 * The concrete case that motivated this: `marker: "up::"` doesn't match
+	 * anything in the target note; the picker repoints WHERE to write, and the
+	 * link Tomo wanted established (`[[@]]`) must survive that unchanged — only
+	 * the field name in front of it should track the new marker. Two earlier
+	 * attempts got this wrong (seeding `line` from the pick's own current text;
+	 * then leaving `line` untouched no matter what) — see `setMarkerSpot`'s
+	 * docblock for both.
+	 */
+	it("swaps the marker prefix in `line`, keeping the payload after it", async () => {
+		const action: Action = { ...SAMPLES.add_relationship, marker: "up::", line: "up:: [[@]]" };
+		const { body, app, transforms } = render(action);
 		withTargetNote(app, TARGET_NOTE);
 
 		pickButton(body, "Marker")?.dispatchEvent(new MouseEvent("click"));
@@ -553,25 +573,23 @@ describe("marker picker", () => {
 
 		const picker = markerPickers[0];
 		if (picker === undefined) throw new Error("no picker constructed");
-		expect(picker.spots.map((s) => s.value)).toContain("up::");
+		picker.onPick({ value: "parent::" } as never);
 
-		picker.onPick({ value: "up::" } as never);
 		const transform = transforms[0];
 		if (transform === undefined) throw new Error("no transform");
-		const edited = transform(modelOf(SAMPLES.add_relationship)).doc.actions[0];
+		const edited = transform(modelOf(action)).doc.actions[0];
 
-		expect(edited?.action === "add_relationship" && edited.marker).toBe("up::");
+		expect(edited?.action === "add_relationship" && edited.marker).toBe("parent::");
+		expect(edited?.action === "add_relationship" && edited.line).toBe("parent:: [[@]]");
 	});
 
 	/**
-	 * `marker` says WHERE to write, `line` says WHAT relationship to establish
-	 * there — repositioning to a new anchor (a template placeholder, say) must
-	 * leave the relationship being written untouched, or nothing gets
-	 * established at all. A version of this picker that also wrote `line` was
-	 * reverted 2026-07-27 (user correction) for exactly this reason; this test
-	 * guards against that regression.
+	 * `SAMPLES.add_relationship` itself has no shared prefix between `marker`
+	 * ("down::") and `line` ("- [[Kanban]]") — Tomo's own aggregation can
+	 * produce exactly this. With no reliable split point, only `marker`
+	 * changes; `line` is left exactly as it was rather than guessed at.
 	 */
-	it("commits marker only — line stays whatever the user already set", async () => {
+	it("falls back to marker-only when line and marker share no prefix", async () => {
 		const { body, app, transforms } = render(SAMPLES.add_relationship);
 		withTargetNote(app, TARGET_NOTE);
 

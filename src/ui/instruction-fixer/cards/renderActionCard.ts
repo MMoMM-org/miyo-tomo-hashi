@@ -39,7 +39,7 @@
 
 import type { Action } from "../../../schema/types.js";
 import { anchorSpotKindOf } from "../../../instruction-fixer/noteSpots.js";
-import { setAnchorSpot, setTargetField } from "../../../instruction-fixer/transforms.js";
+import { setAnchorSpot, setMarkerSpot, setTargetField } from "../../../instruction-fixer/transforms.js";
 import { renderNavigableNoteLink } from "../../garden-audit-view/noteNavigation.js";
 import {
 	renderTargetControlCore,
@@ -188,22 +188,15 @@ export function affectedNotePath(action: Action): string | null {
  * (`setAnchorSpot` re-checks the enums, `setTargetField` the whitelist); this
  * is the affordance, not the guard.
  *
- * An anchor pick commits three fields at once and so cannot go through
+ * Both picks commit more than one field at once and so cannot go through
  * `onChange(value)` — that is the whole reason `extraPick` exists as a bare
- * button rather than a second `TargetPickMode`. A marker pick is an ordinary
- * SINGLE-field string commit and rides the existing whitelist entry
- * unchanged: it writes `marker` only, deliberately never `line`.
- *
- * That "deliberately" is load-bearing (corrected 2026-07-27 — an earlier
- * version of this picker seeded `line` too, which was wrong on the merits;
- * see `MarkerSpot`'s docblock). `marker` says WHERE to write, `line` says
- * WHAT relationship to establish there, and those are chosen independently
- * on purpose: repositioning to a different anchor — the actual reason to pick
- * a new marker, e.g. a template placeholder like "No parent map yet — this
- * note is floating." rather than an existing `up::` field — must leave the
- * relationship being written untouched, or the action stops establishing any
- * relationship at all (the handler would find the picked line and "replace"
- * it with the text already there).
+ * button rather than a second `TargetPickMode`. An anchor pick commits the
+ * type/value/placement triple (`setAnchorSpot`); a marker pick commits
+ * `marker` AND rewrites `line`'s PREFIX to match, preserving whatever follows
+ * it (`setMarkerSpot` — see that function's docblock for the two prior,
+ * wrong attempts at this and why each one was wrong). Neither commit can be
+ * decomposed into independent per-field `onChange` calls without recreating
+ * one of those wrong attempts.
  */
 function extraPickFor(
 	action: Action,
@@ -231,7 +224,7 @@ function extraPickFor(
 		ariaLabel: "Choose a marker from the target note",
 		onClick: () => {
 			void openMarkerSpotPicker(ctx.app, action, (spot) => {
-				ctx.apply((model) => setTargetField(model, action.id, field.key, spot.value));
+				ctx.apply((model) => setMarkerSpot(model, action.id, spot.value));
 			});
 		},
 	};

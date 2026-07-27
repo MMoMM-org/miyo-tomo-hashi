@@ -203,3 +203,54 @@ function applyAnchorSpot<T extends Action & { anchor: Anchor }>(
 	// so the write is guarded by the `in` check above and cast once here.
 	return writesPlacement ? ({ ...next, placement: spot.placement } as T) : next;
 }
+
+// ---------------------------------------------------------------------------
+// setMarkerSpot — add_relationship's marker picker (ADR-5 amendment,
+// 2026-07-27, second correction — see this function's docblock)
+// ---------------------------------------------------------------------------
+
+/**
+ * Commits a picked `add_relationship.marker`, and rewrites `line`'s PREFIX to
+ * match while preserving whatever follows it.
+ *
+ * The concrete case this answers: `marker: "up::"` doesn't match anything in
+ * the target note (no `up::` field there yet), and `line: "up:: [[@]]"` is
+ * the relationship Tomo wants established. Picking a different marker from
+ * the note's real structure is a repointing of WHERE to write, not a change
+ * to WHAT gets written — the link (`[[@]]`) must survive the pick unchanged;
+ * only the field name in front of it should track the new marker. So `line`
+ * goes from `up:: [[@]]` to `<picked marker> [[@]]` — the OLD marker's text
+ * is swapped out of `line`'s front, and everything after it carries over
+ * verbatim, whatever that is.
+ *
+ * This is a CORRECTION of a same-day amendment that instead seeded `line`
+ * from the picked spot's own current note content — which was wrong on the
+ * merits (it made every fresh placement a no-op, see that commit's message)
+ * — and of the revert that followed it, which left `line` untouched
+ * entirely and so couldn't fix I08's actual complaint: the marker text
+ * embedded at the front of `line` never changed with it.
+ *
+ * The swap only fires when `line` CURRENTLY starts with the CURRENT
+ * `marker` — the shape `add_relationship`'s simple field-marker case always
+ * has, and the one case where "everything after the marker" is a
+ * well-defined thing to preserve. When it doesn't hold (`line` already
+ * diverged from `marker`, e.g. Tomo's own multi-link aggregation replaced
+ * the whole line with unrelated content), there is no reliable split point,
+ * and only `marker` is written — the same safe fallback the revert used
+ * unconditionally.
+ */
+export function setMarkerSpot(
+	model: InstructionFixerModel,
+	actionId: string,
+	marker: string,
+): InstructionFixerModel {
+	const current = model.doc.actions.find((a) => a.id === actionId);
+	if (current === undefined || current.action !== "add_relationship") return model;
+
+	const rewrittenLine = current.line.startsWith(current.marker)
+		? marker + current.line.slice(current.marker.length)
+		: current.line;
+
+	const withMarker = setTargetField(model, actionId, "marker", marker);
+	return setTargetField(withMarker, actionId, "line", rewrittenLine);
+}

@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	setAnchorSpot,
+	setMarkerSpot,
 	setTargetField,
 	TARGET_FIELD_WHITELIST,
 } from "../../../src/instruction-fixer/transforms.js";
@@ -593,5 +594,87 @@ describe("setAnchorSpot — rejects (same model reference, dirty untouched)", ()
 		expect(next).not.toBe(model);
 		const action = next.doc.actions[0];
 		expect(action?.action === "link_to_moc" && action.placement).toBe("before");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// setMarkerSpot — the marker picker's write path (ADR-5 amendment,
+// 2026-07-27, second correction: swap the marker PREFIX in `line`, keep
+// whatever follows it)
+// ---------------------------------------------------------------------------
+
+function addRelationshipWithFieldMarker(
+	overrides?: Partial<Action & { action: "add_relationship" }>,
+): Action {
+	return {
+		id: "I08",
+		action: "add_relationship",
+		target_moc: "@",
+		target_moc_path: "005 Important Links.md",
+		marker: "up::",
+		line: "up:: [[@]]",
+		...overrides,
+	} as Action;
+}
+
+describe("setMarkerSpot — accepts", () => {
+	/** The exact case that motivated this transform: I08's own shape. */
+	it("swaps the marker prefix in `line`, keeping the payload that followed it", () => {
+		const model = makeModel([addRelationshipWithFieldMarker()]);
+		const next = setMarkerSpot(model, "I08", "parent::");
+
+		const action = next.doc.actions[0];
+		expect(next).not.toBe(model);
+		expect(next.dirty).toBe(true);
+		expect(action?.action === "add_relationship" && action.marker).toBe("parent::");
+		expect(action?.action === "add_relationship" && action.line).toBe("parent:: [[@]]");
+	});
+
+	it("preserves everything after the marker verbatim, however long", () => {
+		const model = makeModel([
+			addRelationshipWithFieldMarker({ line: "up:: [[A]], [[B]], [[C]]" }),
+		]);
+		const next = setMarkerSpot(model, "I08", "related::");
+
+		const action = next.doc.actions[0];
+		expect(action?.action === "add_relationship" && action.line).toBe(
+			"related:: [[A]], [[B]], [[C]]",
+		);
+	});
+
+	it("falls back to marker-only when `line` does NOT start with the current marker", () => {
+		// Tomo's own aggregation can already have replaced the whole line with
+		// something that no longer shares a prefix with `marker` — there is no
+		// reliable split point, so `line` is left exactly as it was.
+		const model = makeModel([
+			addRelationshipWithFieldMarker({ marker: "## Related", line: "- [[Some Note]]" }),
+		]);
+		const next = setMarkerSpot(model, "I08", "## Backlinks");
+
+		const action = next.doc.actions[0];
+		expect(next).not.toBe(model);
+		expect(action?.action === "add_relationship" && action.marker).toBe("## Backlinks");
+		expect(action?.action === "add_relationship" && action.line).toBe("- [[Some Note]]");
+	});
+});
+
+describe("setMarkerSpot — rejects / no-ops", () => {
+	it("rejects a kind that carries no marker", () => {
+		const model = makeModel([linkToMoc()]);
+		const next = setMarkerSpot(model, "I01", "up::");
+
+		expect(next).toBe(model);
+	});
+
+	it("rejects an unknown id", () => {
+		const model = makeModel([addRelationshipWithFieldMarker()]);
+		expect(setMarkerSpot(model, "NOPE", "parent::")).toBe(model);
+	});
+
+	it("is a no-op when the picked marker is the one already on the wire", () => {
+		const model = makeModel([addRelationshipWithFieldMarker()]);
+		const next = setMarkerSpot(model, "I08", "up::");
+
+		expect(next).toBe(model);
 	});
 });
