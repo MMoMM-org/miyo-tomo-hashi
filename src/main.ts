@@ -85,7 +85,7 @@ import { Notice, Plugin, type WorkspaceLeaf } from "obsidian";
 
 import {
 	listGardenAuditDocs,
-	listInstructionsDocs as listInstructionsFixerDocs,
+	listInstructionsDocs,
 	listSuggestionsDocs,
 	registerCommands,
 	registerExecutorCommands,
@@ -735,7 +735,7 @@ export default class TomoHashiPlugin extends Plugin {
 		registerOpenInstructionFixerCommand(this, {
 			getActiveFilePath: () => this.app.workspace.getActiveFile()?.path ?? null,
 			listInstructionsDocs: () =>
-				listInstructionsFixerDocs(this.app.vault.getFiles().map((file) => file.path)),
+				listInstructionsDocs(this.app.vault.getFiles().map((file) => file.path)),
 			pickInstructionsDoc: (docs, onPick) =>
 				new TomoEditorDocPicker(this.app, docs, onPick).open(),
 			openInstructionFixer: (docPath: string) => openInstructionFixer(this.app, docPath),

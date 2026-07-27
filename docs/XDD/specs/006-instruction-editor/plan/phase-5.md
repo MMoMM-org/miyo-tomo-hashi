@@ -16,6 +16,19 @@ phase: 5
 - `[ref: PRD/Success Metrics]` quality gates (verbatim round-trip, no `.md`/`tomo.sources` mutation)
 - `[ref: SDD/Risks and Technical Debt]` gotchas to assert against
 
+**Carried from Phase 4 — re-evaluate here:**
+- **`src/commands/registerCommands.ts` is 664 LOC**, hosting five unrelated command families across
+  specs 001/002/003/004/006. It was already over the L2 guideline (547) *before* T4.1 added its
+  117-line block — so this is inherited debt that spec-006 compounded rather than caused. It also
+  drove real merge friction: all three Phase 4 tasks landed in or beside this file. Judge here
+  whether to split per-spec or per-doc-family.
+- **Three byte-identical resolver quadruples** now exist in that file — `{*_JSON_RE, *_MD_RE,
+  resolve*DocPath, list*Docs}` for Suggestions, Garden-Audit, and Instructions. A `makeDocFamilyResolver`
+  factory is the obvious cleanup, but a **fourth** variant (`resolveActiveInvocation`) is genuinely
+  divergent — async, `vault.exists`-checked, `.endsWith` rather than regex — so a factory would have
+  to reconcile it or deliberately exclude it. The reviewer's call was "not yet"; revisit with the
+  split above.
+
 **Carried from Phase 3 — re-evaluate here:**
 - **`InstructionFixerView.ts` is 603 LOC**, over the Constitution L2 "~300–500 LOC of dense logic"
   guideline. T3.2b already extracted the pure gate-section grouping into `sections.ts` (100 LOC,
