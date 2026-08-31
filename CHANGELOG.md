@@ -1,3 +1,9 @@
+## [0.19.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.19.1...0.19.2) (2026-08-31)
+
+### Bug Fixes
+
+* **deps:** hoist esbuild to 0.28.2 so Dependabot lockfiles pass npm ci ([8d68ee5](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/8d68ee5f83ee0cb3829068ad7fbc99a977011624)), closes [#103](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/103)
+
 ## [0.19.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.19.0...0.19.1) (2026-08-31)
 
 ### Bug Fixes
