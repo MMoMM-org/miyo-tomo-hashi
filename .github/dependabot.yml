@@ -13,6 +13,13 @@ updates:
       commit-message:
           prefix: "chore(deps)"
           prefix-development: "chore(deps-dev)"
+      ignore:
+          # Obsidian peers on exact @codemirror/* versions (obsidian@1.13.1
+          # wants @codemirror/view 6.38.6, @codemirror/state 6.5.0). Any bump
+          # past the pin fails npm ci with ERESOLVE, so these follow Obsidian's
+          # own release cadence, not Dependabot's. The pin lives in
+          # package.json too — this rule only stops the doomed PRs.
+          - dependency-name: "@codemirror/*"
       groups:
           # One PR per lane keeps the release noise down; majors stay separate
           # so a breaking bump is never buried in a batch.

@@ -322,7 +322,7 @@ function fieldDiff(before: Action, after: Action): Partial<Action> | null {
 		patch[key] = a[key];
 		changed = true;
 	}
-	return changed ? (patch as Partial<Action>) : null;
+	return changed ? patch : null;
 }
 
 /**
