@@ -115,7 +115,7 @@ function applyTargetField(action: Action, fieldKey: string, value: string): Acti
 function setStringField(action: Action, key: string, value: string): Action {
 	const record = action as unknown as Record<string, unknown>;
 	if (record[key] === value) return action;
-	return { ...action, [key]: value } as Action;
+	return { ...action, [key]: value };
 }
 
 /**
@@ -200,8 +200,8 @@ function applyAnchorSpot<T extends Action & { anchor: Anchor }>(
 
 	const next: T = { ...action, anchor: { type: spot.anchorType, value: spot.value } };
 	// `placement` is not on `T` (only two of the three anchor kinds declare it),
-	// so the write is guarded by the `in` check above and cast once here.
-	return writesPlacement ? ({ ...next, placement: spot.placement } as T) : next;
+	// so the write is guarded by the `in` check above.
+	return writesPlacement ? { ...next, placement: spot.placement } : next;
 }
 
 // ---------------------------------------------------------------------------
