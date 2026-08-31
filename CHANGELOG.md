@@ -1,3 +1,9 @@
+## [0.19.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.19.0...0.19.1) (2026-08-31)
+
+### Bug Fixes
+
+* **deps:** drop obsolete nested vitest/esbuild override ([024571d](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/024571dd388d324af26c1c6e68b9b5fb6d6fe8e9))
+
 ## [0.19.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.18.0...0.19.0) (2026-07-27)
 
 ### Features
