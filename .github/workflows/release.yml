@@ -42,7 +42,7 @@ jobs:
             # uploaded — attesting them here yields matching digests. Verify a
             # downloaded asset with: gh attestation verify main.js --repo MMoMM-org/miyo-tomo-hashi
             - name: Attest build provenance
-              uses: actions/attest-build-provenance@v2
+              uses: actions/attest-build-provenance@v4
               with:
                   subject-path: |
                       build/main.js
