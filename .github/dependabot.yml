@@ -1,0 +1,36 @@
+# Dependabot version updates. Security updates are enabled separately in the
+# repo settings and do not need an entry here — this file only controls the
+# routine, scheduled bumps so transitive CVEs stop piling up unattended.
+version: 2
+
+updates:
+    - package-ecosystem: npm
+      directory: /
+      schedule:
+          interval: weekly
+          day: monday
+      open-pull-requests-limit: 5
+      commit-message:
+          prefix: "chore(deps)"
+          prefix-development: "chore(deps-dev)"
+      groups:
+          # One PR per lane keeps the release noise down; majors stay separate
+          # so a breaking bump is never buried in a batch.
+          production:
+              dependency-type: production
+              update-types: ["minor", "patch"]
+          development:
+              dependency-type: development
+              update-types: ["minor", "patch"]
+
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: weekly
+          day: monday
+      open-pull-requests-limit: 5
+      commit-message:
+          prefix: "chore(ci)"
+      groups:
+          actions:
+              update-types: ["minor", "patch"]
