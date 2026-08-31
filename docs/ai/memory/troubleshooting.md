@@ -108,3 +108,22 @@ lockfile. Bump the override to the patched version and prefer a caret inside the
 parents require (`^3.1.6`, not `3.1.6`) so the next patch lands on its own. Note that
 `node_modules/npm/node_modules/*` alerts (bundled npm inside `@semantic-release/npm`) are a
 different class — those need a wrapper bump, not an override.
+
+<!-- 2026-08-31 -->
+## Every Dependabot npm PR fails CI with `npm ci` EUSAGE "Missing: esbuild@… from lock file"
+**Symptom:** each Dependabot npm PR — even ones that touch neither esbuild nor vitest — dies in
+the `npm ci` step with `package.json and package-lock.json are not in sync` and a long
+`Missing: @esbuild/<platform>@0.28.1` list. `@dependabot rebase` reports "already up-to-date"
+and changes nothing; `@dependabot recreate` reproduces the same failure.
+**Cause:** a **nested** override in `package.json` (`"vitest": { "esbuild": "0.28.1" }`).
+Dependabot's resolver does not honour nested overrides, so the lockfile it generates lacks the
+`node_modules/vitest/node_modules/esbuild` entry that `npm ci` then demands. The override was
+also obsolete: `vitest → vite@8` declares `esbuild ^0.27.0 || ^0.28.0` and resolves 0.28.1 on
+its own — dropping the override leaves `package-lock.json` byte-identical.
+**How to apply:** prefer a flat override over a nested one; before adding either, check whether
+the parent's own range already reaches the patched version. If a nested override is genuinely
+unavoidable, expect to regenerate Dependabot's lockfiles by hand.
+**Do not "fix" this by regenerating the lockfile from scratch** (`rm package-lock.json &&
+npm install`) in the Linux dev container: that drops the `@esbuild/*` / `@rollup/*` optional
+platform packages for every other platform (~12k-line diff) and breaks `npm ci` on macOS.
+Restore the lockfile from `main` and run a plain `npm install` instead.

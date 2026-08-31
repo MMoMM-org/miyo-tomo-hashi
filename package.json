@@ -55,9 +55,6 @@
 	"overrides": {
 		"fast-uri": "^3.1.6",
 		"protobufjs": "^7.6.6",
-		"js-yaml": "^4.3.2",
-		"vitest": {
-			"esbuild": "0.28.1"
-		}
+		"js-yaml": "^4.3.2"
 	}
 }
