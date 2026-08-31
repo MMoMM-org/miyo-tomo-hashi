@@ -94,3 +94,17 @@ setting: `FsHookLoader` takes an optional `debug` sink (wired in main.ts to fire
 (including the hooks-dir path that diagnosed #52). Always-on signals stay (`.js`-ignored,
 vault-escape, malformed-hook warnings) plus the `[hashi] run aborted before finalize:`
 console.error.
+
+<!-- 2026-08-31 -->
+## Dependabot alert stays open although the parent's range already allows the patch
+**Symptom:** `npm audit fix` / `npm update <pkg>` report "fix available" but leave the package
+at the vulnerable version — even after deleting its `package-lock.json` entry and re-resolving.
+**Cause:** `package.json` `overrides` pinned that package to an **exact** version (`"fast-uri":
+"3.1.2"`, `"protobufjs": "7.6.3"`) in an earlier CVE round. The pin outlives the CVE it fixed and
+then becomes the thing that blocks the next patch — npm honours the override over every parent
+range, so no update path exists.
+**How to apply:** when a transitive alert refuses to move, check `overrides` **before** the
+lockfile. Bump the override to the patched version and prefer a caret inside the major the
+parents require (`^3.1.6`, not `3.1.6`) so the next patch lands on its own. Note that
+`node_modules/npm/node_modules/*` alerts (bundled npm inside `@semantic-release/npm`) are a
+different class — those need a wrapper bump, not an override.
