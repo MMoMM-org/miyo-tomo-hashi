@@ -113,17 +113,23 @@ different class — those need a wrapper bump, not an override.
 ## Every Dependabot npm PR fails CI with `npm ci` EUSAGE "Missing: esbuild@… from lock file"
 **Symptom:** each Dependabot npm PR — even ones that touch neither esbuild nor vitest — dies in
 the `npm ci` step with `package.json and package-lock.json are not in sync` and a long
-`Missing: @esbuild/<platform>@0.28.1` list. `@dependabot rebase` reports "already up-to-date"
-and changes nothing; `@dependabot recreate` reproduces the same failure.
-**Cause:** a **nested** override in `package.json` (`"vitest": { "esbuild": "0.28.1" }`).
-Dependabot's resolver does not honour nested overrides, so the lockfile it generates lacks the
-`node_modules/vitest/node_modules/esbuild` entry that `npm ci` then demands. The override was
-also obsolete: `vitest → vite@8` declares `esbuild ^0.27.0 || ^0.28.0` and resolves 0.28.1 on
-its own — dropping the override leaves `package-lock.json` byte-identical.
-**How to apply:** prefer a flat override over a nested one; before adding either, check whether
-the parent's own range already reaches the patched version. If a nested override is genuinely
-unavoidable, expect to regenerate Dependabot's lockfiles by hand.
+`Missing: @esbuild/<platform>@0.28.x` list. `@dependabot rebase` reports "already up-to-date";
+`@dependabot recreate` reproduces the same failure.
+**Cause:** Dependabot's resolver omits a whole nested subtree from the lockfile it generates.
+Here `vitest` pulls its own `vite@8.0.16`, which needs `esbuild ^0.27.0 || ^0.28.0` — main's
+lock carries `node_modules/vitest/node_modules/esbuild` plus its 26 `@esbuild/*` platform
+packages to satisfy that, and Dependabot's lock simply has none of them. npm then reports the
+whole subtree as missing. The **nested override** `"vitest": { "esbuild": "0.28.1" }` looked
+like the culprit and was removed first (it was obsolete — vite@8's own range already resolved
+0.28.1, so the lock stayed byte-identical) but removing it did not fix the failure.
+**Fix:** eliminate the nested subtree instead of trying to make Dependabot reproduce it — bump
+the *direct* `esbuild` devDep into vite's range (0.25.5 → 0.28.2). One hoisted esbuild then
+satisfies both the root and vite@8, `node_modules/vitest/node_modules/esbuild` disappears
+(lockfile shrinks ~500 lines), and Dependabot's lockfiles become consistent.
+**How to apply:** when a Dependabot PR fails `npm ci` on a package it never touched, diff the
+*vitest/nested* subtree of its lock against main's — a wholly absent subtree is the signature.
+Prefer deduplicating the version so no nested copy is needed over patching each PR by hand.
 **Do not "fix" this by regenerating the lockfile from scratch** (`rm package-lock.json &&
-npm install`) in the Linux dev container: that drops the `@esbuild/*` / `@rollup/*` optional
-platform packages for every other platform (~12k-line diff) and breaks `npm ci` on macOS.
-Restore the lockfile from `main` and run a plain `npm install` instead.
+npm install`) in the Linux dev container: that drops the `@esbuild/*` optional platform
+packages for every other platform (~12k-line diff) and breaks `npm ci` on macOS. Restore the
+lockfile from `main` and run a plain `npm install` instead.
