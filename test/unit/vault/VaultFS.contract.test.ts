@@ -144,6 +144,60 @@ export function runContractTests(makeVaultFS: () => VaultFS): void {
     });
   });
 
+  describe("processFrontMatter", () => {
+    it("mutations survive; a note with no frontmatter starts empty", async () => {
+      const vault = makeVaultFS();
+      await vault.create("notes/a.md", "# body");
+
+      await vault.processFrontMatter("notes/a.md", (fm) => {
+        expect(fm).toEqual({});
+        fm.up = ["[[A]]"];
+      });
+
+      let seen: unknown;
+      await vault.processFrontMatter("notes/a.md", (fm) => {
+        seen = fm.up;
+      });
+      expect(seen).toEqual(["[[A]]"]);
+    });
+
+    it("delete removes the key", async () => {
+      const vault = makeVaultFS();
+      await vault.create("notes/b.md", "# body");
+      await vault.processFrontMatter("notes/b.md", (fm) => {
+        fm.status = "draft";
+      });
+
+      await vault.processFrontMatter("notes/b.md", (fm) => {
+        delete fm.status;
+      });
+
+      let has = true;
+      await vault.processFrontMatter("notes/b.md", (fm) => {
+        has = "status" in fm;
+      });
+      expect(has).toBe(false);
+    });
+
+    it("a callback that mutates nothing leaves the value alone", async () => {
+      // The mismatch path depends on this: the handler inspects, decides the
+      // expectation is not met, and returns without touching anything.
+      const vault = makeVaultFS();
+      await vault.create("notes/c.md", "# body");
+      await vault.processFrontMatter("notes/c.md", (fm) => {
+        fm.up = ["[[A]]"];
+      });
+
+      await vault.processFrontMatter("notes/c.md", () => {});
+
+      let seen: unknown;
+      await vault.processFrontMatter("notes/c.md", (fm) => {
+        seen = fm.up;
+      });
+      expect(seen).toEqual(["[[A]]"]);
+    });
+  });
+
   describe("rename moves file", () => {
     it("read(from) fails after rename(from, to); read(to) succeeds", async () => {
       const vault = makeVaultFS();
@@ -222,6 +276,8 @@ function makeBrokenStub(overrides: Partial<VaultFS>): VaultFS {
     store.set(path, JSON.stringify(updated, null, 2) + "\n");
   };
 
+  const fmStore = new Map<string, Record<string, unknown>>();
+
   const base: VaultFS = {
     read: vi.fn(async (path: string) => {
       const v = store.get(path);
@@ -250,6 +306,13 @@ function makeBrokenStub(overrides: Partial<VaultFS>): VaultFS {
       },
     ),
     processJSON: processJSONImpl as VaultFS["processJSON"],
+    processFrontMatter: vi.fn(
+      async (path: string, fn: (fm: Record<string, unknown>) => void) => {
+        const fm = fmStore.get(path) ?? {};
+        fn(fm);
+        fmStore.set(path, fm);
+      },
+    ),
     rename: vi.fn(async (fromPath: string, toPath: string) => {
       const content = store.get(fromPath);
       if (content !== undefined) {

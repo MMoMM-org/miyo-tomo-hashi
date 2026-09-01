@@ -25,6 +25,7 @@ import { insertUnderMarker } from "./insertUnderMarker.js";
 import { replaceSection } from "./replaceSection.js";
 import { addRelationship } from "./addRelationship.js";
 import { editNoteText } from "./editNoteText.js";
+import { editFrontmatter } from "./editFrontmatter.js";
 import { removeUpLink } from "./removeUpLink.js";
 import { resolveDeadLink } from "./resolveDeadLink.js";
 import { updateTracker } from "./updateTracker.js";
@@ -63,6 +64,7 @@ export const HANDLERS: {
 	replace_section: replaceSection,
 	add_relationship: addRelationship,
 	edit_note_text: editNoteText,
+	edit_frontmatter: editFrontmatter,
 	remove_up_link: removeUpLink,
 	resolve_dead_link: resolveDeadLink,
 	update_tracker: updateTracker,
@@ -84,6 +86,7 @@ export { insertUnderMarker } from "./insertUnderMarker.js";
 export { replaceSection } from "./replaceSection.js";
 export { addRelationship } from "./addRelationship.js";
 export { editNoteText } from "./editNoteText.js";
+export { editFrontmatter } from "./editFrontmatter.js";
 export { removeUpLink } from "./removeUpLink.js";
 export { resolveDeadLink } from "./resolveDeadLink.js";
 export { updateTracker } from "./updateTracker.js";

@@ -22,7 +22,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 describe("ActionKind", () => {
-	it("is the exact 15-element string-literal union", () => {
+	it("is the exact 16-element string-literal union", () => {
 		expectTypeOf<ActionKind>().toEqualTypeOf<
 			| "create_moc"
 			| "move_note"
@@ -32,6 +32,7 @@ describe("ActionKind", () => {
 			| "replace_section"
 			| "add_relationship"
 			| "edit_note_text"
+			| "edit_frontmatter"
 			| "remove_up_link"
 			| "resolve_dead_link"
 			| "update_tracker"
@@ -42,7 +43,7 @@ describe("ActionKind", () => {
 		>();
 	});
 
-	it("all 15 literals are assignable to ActionKind", () => {
+	it("all 16 literals are assignable to ActionKind", () => {
 		const allKinds: ActionKind[] = [
 			"create_moc",
 			"move_note",
@@ -52,6 +53,7 @@ describe("ActionKind", () => {
 			"replace_section",
 			"add_relationship",
 			"edit_note_text",
+			"edit_frontmatter",
 			"remove_up_link",
 			"resolve_dead_link",
 			"update_tracker",
@@ -60,8 +62,8 @@ describe("ActionKind", () => {
 			"delete_source",
 			"skip",
 		];
-		// Runtime check: exactly 15
-		expect(allKinds).toHaveLength(15);
+		// Runtime check: exactly 16
+		expect(allKinds).toHaveLength(16);
 	});
 });
 
@@ -311,6 +313,8 @@ describe("Action discriminated union", () => {
 					return `delete_source:${a.source_path}`;
 				case "move_asset":
 					return `move_asset:${a.source}`;
+				case "edit_frontmatter":
+					return `edit_frontmatter:${a.path}:${a.property}`;
 				case "skip":
 					return `skip:${String(a.source_path)}`;
 				default: {

@@ -1,6 +1,6 @@
 # Action Reference
 
-The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are fifteen kinds; each has its own outcome semantics, idempotency rule, and failure surface.
+The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are sixteen kinds; each has its own outcome semantics, idempotency rule, and failure surface.
 
 | Action | What it does | Idempotency probe | Halt-on-fail effect |
 |---|---|---|---|
@@ -12,6 +12,7 @@ The instruction executor dispatches each action in an `_instructions.json` to a 
 | [replace_section](#replace_section) | Overwrite a heading section's body in any note | Body already equals content | None |
 | [add_relationship](#add_relationship) | Add a wikilink under a frontmatter relationship key | Wikilink already present | None |
 | [edit_note_text](#edit_note_text) | Literal find-and-replace in a note's **body only** — never frontmatter (repoint/remove dead links, strip broken inline `up::` lines) | Match not found anywhere | None |
+| [edit_frontmatter](#edit_frontmatter) | Set or remove a YAML property, guarded by an expected current value | Value already correct → `skipped-already` | None |
 | [remove_up_link](#remove_up_link) | Remove one link from a note's `up::` line, preserving the field | No up:: line, or link not on it | None |
 | [resolve_dead_link](#resolve_dead_link) | Alias-aware unlink/repoint of a dead wikilink in a note's body | Target not present in any wikilink form | None |
 | [update_tracker](#update_tracker) | Set a frontmatter scalar on a tracker note | Field already at target value | None |
@@ -180,8 +181,8 @@ silently:
   note permanently wrong with nothing reported. The failure message names the
   path and says why.
 
-Editing, adding or removing frontmatter properties needs a frontmatter-aware
-action. There is no such kind yet — see the note under Outcome.
+Editing, adding or removing frontmatter properties is
+[`edit_frontmatter`](#edit_frontmatter)'s job.
 
 **Deletion (`replace: ""`):** a whole-line match collapses its now-empty line, so repeated runs never accumulate blank lines; an inline match just loses the substring.
 
@@ -191,10 +192,53 @@ action. There is no such kind yet — see the note under Outcome.
 - `failed` — target note missing. File untouched.
 - `failed` — the `match` was found only in the frozen frontmatter. See above; this is a structural limit of the action, not a transient condition, so retrying will not help.
 
-> **Gap:** there is currently no action kind that can edit, add or remove a
-> frontmatter property. Hooks can (`app.fileManager.processFrontMatter` — see
-> [hooks](hooks.md)), but nothing on the instruction-set surface can, so a
-> producer cannot drive it. Tracked for a wire-contract round with Tomo.
+Use [`edit_frontmatter`](#edit_frontmatter) for anything inside the block.
+
+## `edit_frontmatter`
+
+Set or remove a YAML property on a note. The **only** action that touches frontmatter — [`edit_note_text`](#edit_note_text) freezes the block, which is why a link living in `up:` used to be unrepairable.
+
+Works on the **parsed** value through Obsidian's `processFrontMatter`, never on YAML text. Literal string surgery on a parsed format is how documents get corrupted, and avoiding it is the whole reason this is a separate kind rather than a flag on the text editor.
+
+**Markdown only.** Obsidian documents `processFrontMatter` as "Must be a Markdown file"; a `.canvas` or `.base` target is rejected before the vault is touched.
+
+| Field | Type | Notes |
+|---|---|---|
+| `path` | string | Vault-relative path. Must be `.md`. |
+| `property` | string | The YAML key. **Any** key — nothing is treated specially. |
+| `operation` | `"set"` \| `"remove"` | `set` writes `value`, creating the key when absent — that is also how a property is **added**. `remove` deletes it. |
+| `value` | any JSON | The whole new value: scalar, list or map. Required for `set`, ignored for `remove`. |
+| `expected` | any JSON | **Required.** See below. |
+
+### `expected` — the guard, and why it is not optional
+
+Tomo reads the current value and emits the complete replacement; there are no
+list-item operations. That means an instruction set carries an assumption about
+what the note holds — and notes change between the audit and the apply.
+
+`expected` is compared **deep-equal** against the value found at the moment of
+writing. If it does not match, the action **fails and writes nothing**. A vault
+that moved on is never silently clobbered.
+
+- `expected: null` means **"the property must not exist"**. That is how an add
+  is expressed. A property holding a literal YAML `null` is a *different* thing
+  and does not satisfy it — so a literal null cannot be expressed as an
+  expectation.
+- List order is significant: `[A, B]` does not match `[B, A]`. Map key order is
+  not.
+- It is required rather than optional deliberately. A producer that forgets it
+  gets a loud schema rejection instead of a silent default — which matters,
+  because instruction sets are not always machine-generated.
+
+When it fails, the repair path is the **Instruction Fixer**: `path`, `property`,
+`value` and `expected` are all editable there, with `value` and `expected` shown
+as JSON. Correct `expected` to what the note actually holds, save, re-run.
+
+**Outcome:**
+- `applied` — the property was written or removed.
+- `skipped-already` — the expectation held and the value was already what `set` wanted, or `remove` found nothing to delete. Idempotent re-run.
+- `failed` — the expectation did not match. Nothing written; the message names the *shapes* involved, never the values (Privacy L2 — the run log carries metadata only).
+- `failed` — target is not a markdown note, the note is missing, or its YAML could not be parsed.
 
 ## `remove_up_link`
 

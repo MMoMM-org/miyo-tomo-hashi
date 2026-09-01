@@ -193,6 +193,34 @@ export interface EditNoteTextAction extends ActionBase {
  * [ref: Tomo hashi-instructions.schema.json (feat/garden-audit-brainstorm);
  * tomo-to-hashi handoff 2026-07-23 remove_up_link]
  */
+/**
+ * edit_frontmatter — set or remove a YAML property on a note.
+ *
+ * The only kind that touches frontmatter. It works on the PARSED value via
+ * `VaultFS.processFrontMatter`, never on YAML text: literal string surgery on a
+ * parsed format is how documents get corrupted, which is exactly why
+ * `edit_note_text` freezes the block instead of trying.
+ *
+ * `operation: "set"` covers both editing and adding — writing an absent key
+ * creates it; the two differ only in what `expected` says.
+ *
+ * `expected` is REQUIRED and compared deep-equal against the current value.
+ * A mismatch fails the action and writes nothing, so a vault that moved between
+ * report and apply is never silently clobbered — optimistic locking, and the
+ * repair path is the Instruction Fixer. `expected: null` means "the property
+ * must not exist"; a literal YAML null therefore cannot be expressed as an
+ * expectation, which is not a shape MiYo uses.
+ */
+export interface EditFrontmatterAction extends ActionBase {
+	readonly action: "edit_frontmatter";
+	readonly path: string;
+	readonly property: string;
+	readonly operation: "set" | "remove";
+	/** Required when operation === "set" (enforced by the schema's allOf). */
+	readonly value?: unknown;
+	readonly expected: unknown;
+}
+
 export interface RemoveUpLinkAction extends ActionBase {
 	readonly action: "remove_up_link";
 	readonly path: string;
@@ -281,6 +309,7 @@ export type Action =
 	| ReplaceSectionAction
 	| AddRelationshipAction
 	| EditNoteTextAction
+	| EditFrontmatterAction
 	| RemoveUpLinkAction
 	| ResolveDeadLinkAction
 	| UpdateTrackerAction

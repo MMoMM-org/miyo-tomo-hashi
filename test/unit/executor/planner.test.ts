@@ -27,6 +27,7 @@ import type {
 	InsertUnderMarkerAction,
 	InstructionSet,
 	LinkToMocAction,
+	EditFrontmatterAction,
 	MoveAssetAction,
 	MoveNoteAction,
 	RemoveUpLinkAction,
@@ -80,6 +81,10 @@ function makeMoveNote(id: string, source: string, destination: string, applied?:
 		title: `Note ${id}`,
 		...(applied !== undefined ? { applied } : {}),
 	};
+}
+
+function makeEditFrontmatter(id: string, path: string, property: string): EditFrontmatterAction {
+	return { action: "edit_frontmatter", id, path, property, operation: "set", value: null, expected: null };
 }
 
 function makeMoveAsset(id: string, source: string, destination: string): MoveAssetAction {
@@ -310,6 +315,28 @@ describe("computeRemaining — canonical order", () => {
 			"insert_under_marker",
 			"replace_section",
 			"add_relationship",
+		]);
+	});
+
+	it("plans edit_frontmatter in its canonical slot after edit_note_text (silent-drop guard)", () => {
+		// Regression guard: a kind missing from planner KIND_ORDER is silently
+		// dropped from the execution list, invisible to handler/registry tests
+		// run in isolation. This is the only test proving edit_frontmatter is
+		// actually planned end-to-end, and it pins the slot — frontmatter edits
+		// run beside the body editors, not after the update kinds.
+		const actions: Action[] = [
+			makeEditFrontmatter("I03", "Atlas/note.md", "up"),
+			makeRemoveUpLink("I02", "Atlas/note.md", "Old Parent"),
+			makeCreateMoc("I01", "inbox/moc.md", "moc/A.md"),
+		];
+		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
+
+		const { records } = computeRemaining(sources);
+
+		expect(records.map((r) => r.kind)).toEqual([
+			"create_moc",
+			"edit_frontmatter",
+			"remove_up_link",
 		]);
 	});
 

@@ -52,6 +52,12 @@ export const TARGET_FIELD_WHITELIST = {
 	replace_section: ["target_path", "anchor"],
 	add_relationship: ["target_moc_path", "marker", "line"],
 	edit_note_text: ["path", "match", "replace"],
+	// The optimistic-locking guard on edit_frontmatter only helps if a failed
+	// expectation is repairable — otherwise it manufactures dead ends. `value`
+	// and `expected` are JSON-parsed (see setJsonField); `operation` is
+	// deliberately absent, since flipping set↔remove authors a different action
+	// rather than fixing a mechanical failure.
+	edit_frontmatter: ["path", "property", "value", "expected"],
 	remove_up_link: ["path", "link"],
 	resolve_dead_link: ["path", "target", "replace"],
 } as const satisfies Partial<Record<Action["action"], readonly string[]>>;
@@ -101,7 +107,35 @@ export function setTargetField(
 
 function applyTargetField(action: Action, fieldKey: string, value: string): Action {
 	if (fieldKey === "anchor" && "anchor" in action) return setAnchorValue(action, value);
+	if (
+		action.action === "edit_frontmatter" &&
+		(fieldKey === "value" || fieldKey === "expected")
+	) {
+		return setJsonField(action, fieldKey, value);
+	}
 	return setStringField(action, fieldKey, value);
+}
+
+/**
+ * JSON-valued setter for `edit_frontmatter`'s `value` / `expected`. Those carry
+ * whole YAML values — scalars, lists, maps — so the Fixer's text control edits
+ * their JSON rendering.
+ *
+ * Malformed JSON returns the SAME action reference, which the caller turns into
+ * "no change" exactly as it does for every other rejection in this module. That
+ * is deliberate: a half-typed `["[[A]]",` must leave the model untouched rather
+ * than commit garbage or throw into the render path.
+ */
+function setJsonField(action: Action, key: string, value: string): Action {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(value);
+	} catch {
+		return action;
+	}
+	const record = action as unknown as Record<string, unknown>;
+	if (JSON.stringify(record[key]) === JSON.stringify(parsed)) return action;
+	return { ...action, [key]: parsed };
 }
 
 /**

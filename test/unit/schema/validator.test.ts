@@ -712,3 +712,78 @@ describe("move_asset (Hashi-side wire shape)", () => {
 		expect(result.ok).toBe(false);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// edit_frontmatter — wire-shape drift guard
+//
+// Same reasoning as move_asset's: the vendored schema is a copy of Tomo's, and
+// a kind Hashi implements ahead of Tomo has to be pinned or the two drift
+// apart unnoticed. The conditional `value`-required rule is the part most
+// likely to rot silently.
+// ---------------------------------------------------------------------------
+
+describe("edit_frontmatter (Hashi-side wire shape)", () => {
+	const withActions = (actions: unknown[]) => ({
+		schema_version: "2",
+		type: "tomo-instructions",
+		generated: "2026-09-01T10:00:00Z",
+		profile: null,
+		actions,
+	});
+
+	const base = {
+		id: "I24",
+		action: "edit_frontmatter",
+		path: "Atlas/202 Notes/Tschechien.md",
+		property: "up",
+	};
+
+	it("accepts a set with a list value", () => {
+		expect(
+			validate(
+				withActions([
+					{ ...base, operation: "set", value: ["[[New]]"], expected: ["[[Old]]"] },
+				]),
+			).ok,
+		).toBe(true);
+	});
+
+	it("accepts expected null — the add path", () => {
+		expect(
+			validate(withActions([{ ...base, operation: "set", value: "x", expected: null }])).ok,
+		).toBe(true);
+	});
+
+	it("accepts a remove without a value", () => {
+		expect(
+			validate(withActions([{ ...base, operation: "remove", expected: ["[[Old]]"] }])).ok,
+		).toBe(true);
+	});
+
+	it("rejects a set with no value (the allOf conditional)", () => {
+		expect(validate(withActions([{ ...base, operation: "set", expected: null }])).ok).toBe(false);
+	});
+
+	it("rejects a missing expected — the guard is not optional", () => {
+		expect(
+			validate(withActions([{ ...base, operation: "set", value: "x" }])).ok,
+		).toBe(false);
+	});
+
+	it("rejects an unknown operation", () => {
+		expect(
+			validate(withActions([{ ...base, operation: "append", value: "x", expected: null }])).ok,
+		).toBe(false);
+	});
+
+	it("rejects unknown fields", () => {
+		expect(
+			validate(
+				withActions([
+					{ ...base, operation: "set", value: "x", expected: null, scope: "frontmatter" },
+				]),
+			).ok,
+		).toBe(false);
+	});
+});
+

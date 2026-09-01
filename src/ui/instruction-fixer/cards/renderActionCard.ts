@@ -122,6 +122,10 @@ export function actionIntent(action: Action): string {
 			return action.replace === ""
 				? `Delete ${quote(action.match)} in ${action.path} (${action.occurrence ?? "first"})`
 				: `Replace ${quote(action.match)} with ${quote(action.replace)} in ${action.path} (${action.occurrence ?? "first"})`;
+		case "edit_frontmatter":
+			return action.operation === "remove"
+				? `Remove frontmatter property ${quote(action.property)} from ${action.path}`
+				: `Set frontmatter property ${quote(action.property)} in ${action.path}`;
 		case "remove_up_link":
 			return `Remove the link to ${action.link} from up:: in ${action.path}`;
 		case "resolve_dead_link":
@@ -170,6 +174,7 @@ export function affectedNotePath(action: Action): string | null {
 			return action.target_path;
 		case "add_relationship":
 			return action.target_moc_path;
+		case "edit_frontmatter":
 		case "edit_note_text":
 		case "remove_up_link":
 		case "resolve_dead_link":

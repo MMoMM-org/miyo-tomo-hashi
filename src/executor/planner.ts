@@ -44,6 +44,7 @@ const KIND_ORDER: readonly ActionKind[] = [
 	"insert_under_marker",
 	"replace_section",
 	"edit_note_text",
+	"edit_frontmatter",
 	"remove_up_link",
 	"resolve_dead_link",
 	"add_relationship",
@@ -271,6 +272,10 @@ function buildSummary(action: Action): string {
 			return `${action.target_path}#${action.anchor.value ?? "—"}`;
 		case "add_relationship":
 			return `${action.target_moc_path} :: ${action.marker}`;
+		case "edit_frontmatter":
+			// Metadata only — path + key + operation. The VALUE is note content
+			// and must never reach the run log (Privacy L2).
+			return `${action.path} :: ${action.property} (${action.operation})`;
 		case "edit_note_text":
 			// Metadata only — path + occurrence. The `match`/`replace` link text
 			// is note content and must not land in the run-log (Privacy L2).

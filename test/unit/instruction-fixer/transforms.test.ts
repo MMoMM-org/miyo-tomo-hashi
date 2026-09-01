@@ -134,13 +134,14 @@ function skip(): Action {
 // ---------------------------------------------------------------------------
 
 describe("TARGET_FIELD_WHITELIST", () => {
-	it("lists exactly the 7 repair kinds with ADR-5's editable fields", () => {
+	it("lists exactly the 8 repair kinds with ADR-5's editable fields", () => {
 		expect(TARGET_FIELD_WHITELIST).toEqual({
 			link_to_moc: ["target_moc", "target_moc_path", "anchor"],
 			insert_under_marker: ["target_path", "anchor"],
 			replace_section: ["target_path", "anchor"],
 			add_relationship: ["target_moc_path", "marker", "line"],
 			edit_note_text: ["path", "match", "replace"],
+			edit_frontmatter: ["path", "property", "value", "expected"],
 			remove_up_link: ["path", "link"],
 			resolve_dead_link: ["path", "target", "replace"],
 		});
