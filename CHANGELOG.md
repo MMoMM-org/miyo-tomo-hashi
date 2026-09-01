@@ -1,3 +1,9 @@
+## [0.21.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.21.0...0.21.1) (2026-09-01)
+
+### Bug Fixes
+
+* **actions:** fail loudly when edit_note_text's match is frontmatter-only ([661bb58](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/661bb58da1c686343cc45ebaaef2e3d985496e92))
+
 ## [0.21.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.20.1...0.21.0) (2026-09-01)
 
 ### Features
