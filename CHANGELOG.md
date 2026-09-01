@@ -1,3 +1,9 @@
+## [0.21.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.20.1...0.21.0) (2026-09-01)
+
+### Features
+
+* **actions:** add move_asset kind for relocating attachments ([f68ee4f](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/f68ee4f77de45a7b5e97df039947ddf64c92ff53))
+
 ## [0.20.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.20.0...0.20.1) (2026-09-01)
 
 ### Bug Fixes
