@@ -118,6 +118,20 @@ note actually holds. Check that the action still makes sense against that value,
 save, and re-run. If the property has since been deleted entirely, the button
 fills in `null`, which is the correct way to say "this property must not exist".
 
+### My note's frontmatter comments disappeared
+
+`edit_frontmatter` writes through Obsidian's own frontmatter API, which
+re-serialises the whole block from its parsed form. **YAML comments do not
+survive that** — every `#` line in the block is gone after a successful write.
+
+This is not something Hashi chooses. The alternative is editing YAML as text,
+which is the corruption vector the kind exists to avoid; there is no third
+option that both edits structurally and preserves comments.
+
+Key order, nested maps and untargeted values are all preserved — see
+[what a write does to the rest of the block](action-reference.md#edit_frontmatter).
+If a note's frontmatter comments matter, keep that note out of the audit's reach.
+
 ### "edit_frontmatter only handles markdown notes"
 
 The target is a `.canvas`, `.base` or some other non-markdown file. Obsidian's

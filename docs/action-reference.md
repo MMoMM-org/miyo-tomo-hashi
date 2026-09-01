@@ -202,6 +202,28 @@ Works on the **parsed** value through Obsidian's `processFrontMatter`, never on 
 
 **Markdown only.** Obsidian documents `processFrontMatter` as "Must be a Markdown file"; a `.canvas` or `.base` target is rejected before the vault is touched.
 
+### What a write does to the rest of the block
+
+Obsidian re-serialises the whole frontmatter block from its parsed form, so a write
+touches more than the one key. Measured against a real vault, not inferred:
+
+| | |
+|---|---|
+| **YAML comments** | **Lost.** Every `#` line in the block is gone after any write |
+| Key order | Preserved; a removed key simply disappears from its position |
+| New keys | Appended at the end of the block |
+| Nested maps | Survive intact |
+| Lists | Written as block sequences, values quoted (`- "[[A]]"`) |
+| Untargeted keys | Values unchanged |
+| A note with no block | One is created at the top of the file |
+
+The comment loss is the one to know about, because nothing warns you: a note whose
+frontmatter carries explanatory `#` lines will come out of a successful
+`edit_frontmatter` without them. This is Obsidian's own serialiser, not something Hashi
+chooses — the alternative would be editing YAML as text, which is the corruption vector
+this kind exists to avoid. If a note's frontmatter comments matter, keep that note out of
+the audit's reach.
+
 | Field | Type | Notes |
 |---|---|---|
 | `path` | string | Vault-relative path. Must be `.md`. |
