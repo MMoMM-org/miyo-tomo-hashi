@@ -54,12 +54,18 @@ export interface TargetFieldSpec {
 	 *   - `anchor-spot` — the note's headings/callouts/lines, committing
 	 *     `anchor.type` + `anchor.value` + `placement` together;
 	 *   - `marker` — the note's Dataview field openers and body lines.
+	 *   - `frontmatter-property` — the note's YAML keys, committing `property`
+	 *     AND `expected` together (`setFrontmatterProperty`);
+	 *   - `frontmatter-value` — no modal at all: reads the CURRENT value of the
+	 *     property the action already names into `expected`. This is the
+	 *     repair loop's shortest path, since a failed expectation means the
+	 *     note holds something else and this puts that something else in.
 	 *
 	 * Absent means free text only. This is the presentation-layer flag; what
 	 * each pick may WRITE is still decided by `transforms.ts` (`setAnchorSpot`'s
 	 * ADR-5 amendment, and `TARGET_FIELD_WHITELIST` for the marker).
 	 */
-	readonly docPick?: "anchor-spot" | "marker";
+	readonly docPick?: "anchor-spot" | "marker" | "frontmatter-property" | "frontmatter-value";
 }
 
 /**
@@ -175,6 +181,7 @@ export const TARGET_FIELDS: TargetFieldMap = {
 				"The frontmatter key to write or remove, e.g. up. Any key — nothing is treated specially.",
 			placeholder: "Property name…",
 			pick: "none",
+			docPick: "frontmatter-property",
 		},
 		value: {
 			label: "New value",
@@ -188,9 +195,10 @@ export const TARGET_FIELDS: TargetFieldMap = {
 			label: "Expected current value",
 			caption: "JSON — null means the property must be absent",
 			captionTooltip:
-				"What must already be at that key for the action to run, as JSON. This is the guard: if the note no longer matches, the action fails and writes nothing. When it fails, correct this field to what the note actually holds.",
+				"What must already be at that key for the action to run, as JSON. This is the guard: if the note no longer matches, the action fails and writes nothing. When it fails, use \u201cRead from note\u201d to pull in what the note actually holds.",
 			placeholder: '["[[Old Parent]]"] or null',
 			pick: "none",
+			docPick: "frontmatter-value",
 		},
 	},
 

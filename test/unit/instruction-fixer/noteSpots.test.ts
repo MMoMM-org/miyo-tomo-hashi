@@ -18,6 +18,7 @@ import { resolveAnchor } from "../../../src/actions/anchorResolver.js";
 import {
 	anchorSpotKindOf,
 	computeAnchorSpots,
+	computeFrontmatterProperties,
 	computeMarkerSpots,
 	placementsFor,
 	spotSourcePath,
@@ -319,3 +320,70 @@ describe("anchorSpotKindOf / spotSourcePath", () => {
 		).toBeNull();
 	});
 });
+
+// ---------------------------------------------------------------------------
+// computeFrontmatterProperties
+// ---------------------------------------------------------------------------
+
+describe("computeFrontmatterProperties", () => {
+	it("returns one row per key, sorted, with the parsed value carried through", () => {
+		const rows = computeFrontmatterProperties({
+			up: ["[[A]]", "[[B]]"],
+			created: "2025-11-19",
+		});
+
+		expect(rows.map((r) => r.key)).toEqual(["created", "up"]);
+		// The VALUE travels with the row: the pick commits property + expected
+		// together, so it must not need a second read of a note that may have
+		// moved on in between.
+		expect(rows[1]?.value).toEqual(["[[A]]", "[[B]]"]);
+	});
+
+	it("a note with no frontmatter yields no rows — the caller turns that into a notice", () => {
+		expect(computeFrontmatterProperties(undefined)).toEqual([]);
+		expect(computeFrontmatterProperties({})).toEqual([]);
+	});
+
+	it("previews each value shape in one short line", () => {
+		const preview = (value: unknown): string =>
+			computeFrontmatterProperties({ k: value })[0]?.preview ?? "";
+
+		expect(preview(null)).toBe("null");
+		expect(preview([])).toBe("(empty list)");
+		expect(preview(["[[A]]"])).toBe("[[[A]]]");
+		expect(preview(["a", "b", "c", "d"])).toBe("[a, b, +2 more]");
+		expect(preview({ nested: true })).toBe("{…}");
+		expect(preview(42)).toBe("42");
+		expect(preview(false)).toBe("false");
+	});
+
+	it("truncates a long scalar rather than flooding the chooser row", () => {
+		const preview = computeFrontmatterProperties({ k: "x".repeat(120) })[0]?.preview ?? "";
+		expect(preview).toHaveLength(58);
+		expect(preview.endsWith("…")).toBe(true);
+	});
+
+	it("never prints [object Object] for a value it cannot summarise", () => {
+		const rows = computeFrontmatterProperties({ k: { a: { b: 1 } } });
+		expect(rows[0]?.preview).not.toContain("[object");
+	});
+});
+
+describe("spotSourcePath — edit_frontmatter", () => {
+	it("resolves to the action's own path, so the frontmatter pickers can reach it", () => {
+		// It fell through to null before, which is why no doc-sourced picker
+		// could open on the kind at all.
+		expect(
+			spotSourcePath({
+				action: "edit_frontmatter",
+				id: "I24",
+				path: "Atlas/202 Notes/Tschechien.md",
+				property: "up",
+				operation: "set",
+				value: null,
+				expected: null,
+			}),
+		).toBe("Atlas/202 Notes/Tschechien.md");
+	});
+});
+

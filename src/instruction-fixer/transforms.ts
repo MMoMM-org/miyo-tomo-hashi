@@ -288,3 +288,91 @@ export function setMarkerSpot(
 	const withMarker = setTargetField(model, actionId, "marker", marker);
 	return setTargetField(withMarker, actionId, "line", rewrittenLine);
 }
+
+// ---------------------------------------------------------------------------
+// Frontmatter pickers — ADR-5 amendment #2 (2026-09-01)
+// ---------------------------------------------------------------------------
+
+/**
+ * What a frontmatter pick carries back from the target note: the value found
+ * at a key, and whether the key was there at all. `present: false` is not the
+ * same as a value of `null` — `expected: null` is the wire's sentinel for
+ * "the property must not exist", so the two must stay distinguishable all the
+ * way from the note to the field.
+ */
+export interface FrontmatterPick {
+	readonly current: unknown;
+	readonly present: boolean;
+}
+
+/**
+ * Render a picked value as the JSON string the `expected` control edits.
+ * Returns `null` when the value has no JSON representation (an `undefined`
+ * from `JSON.stringify`), in which case the caller leaves the model alone
+ * rather than committing something lossy.
+ */
+function pickedAsJson(pick: FrontmatterPick): string | null {
+	// An absent key IS the null sentinel — that is the whole reason a refresh
+	// against a note someone deleted the key from produces a correct
+	// instruction with no special-casing.
+	if (!pick.present) return "null";
+	const json = JSON.stringify(pick.current);
+	return json === undefined ? null : json;
+}
+
+/**
+ * Commits a property picked out of the target note's frontmatter: writes
+ * `property` AND `expected` in one transform.
+ *
+ * Writing only `property` would be the dishonest half of the job. `expected`
+ * is compared deep-equal against the note at apply time, so a pick that
+ * changed the key while leaving the old key's expectation behind hands the
+ * user an action GUARANTEED to fail — the picker would be manufacturing the
+ * very breakage it exists to repair. Same reasoning as `setAnchorSpot`'s
+ * amendment: a picker choosing a real thing out of the target note cannot
+ * honestly write one half of it.
+ *
+ * Returns the SAME model reference when the id is unknown, the kind is wrong,
+ * the value has no JSON form, or nothing actually changed.
+ */
+export function setFrontmatterProperty(
+	model: InstructionFixerModel,
+	actionId: string,
+	property: string,
+	pick: FrontmatterPick,
+): InstructionFixerModel {
+	const current = model.doc.actions.find((a) => a.id === actionId);
+	if (current === undefined || current.action !== "edit_frontmatter") return model;
+
+	const json = pickedAsJson(pick);
+	if (json === null) return model;
+
+	// Both writes go through setTargetField so the ADR-5 whitelist stays the
+	// single authority on what may be written — the pick is the affordance,
+	// not the guard.
+	const withProperty = setTargetField(model, actionId, "property", property);
+	return setTargetField(withProperty, actionId, "expected", json);
+}
+
+/**
+ * Refreshes `expected` alone from the target note, for the property the action
+ * already names. Unlike the property pick there is no second field to be
+ * honest about: the key is fixed, so the value is fully determined.
+ *
+ * This is the repair loop's shortest path — an action fails BECAUSE the note
+ * holds something else, and this puts that something else in the field.
+ */
+export function setFrontmatterExpected(
+	model: InstructionFixerModel,
+	actionId: string,
+	pick: FrontmatterPick,
+): InstructionFixerModel {
+	const current = model.doc.actions.find((a) => a.id === actionId);
+	if (current === undefined || current.action !== "edit_frontmatter") return model;
+
+	const json = pickedAsJson(pick);
+	if (json === null) return model;
+
+	return setTargetField(model, actionId, "expected", json);
+}
+

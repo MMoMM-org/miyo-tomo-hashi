@@ -198,6 +198,24 @@ export function runContractTests(makeVaultFS: () => VaultFS): void {
     });
   });
 
+  describe("readFrontMatter", () => {
+    it("returns undefined for a note with no frontmatter block", async () => {
+      const vault = makeVaultFS();
+      await vault.create("notes/plain.md", "# body");
+      expect(await vault.readFrontMatter("notes/plain.md")).toBeUndefined();
+    });
+
+    it("sees what processFrontMatter wrote, without opening a write", async () => {
+      const vault = makeVaultFS();
+      await vault.create("notes/d.md", "# body");
+      await vault.processFrontMatter("notes/d.md", (fm) => {
+        fm.up = ["[[A]]"];
+      });
+
+      expect(await vault.readFrontMatter("notes/d.md")).toEqual({ up: ["[[A]]"] });
+    });
+  });
+
   describe("rename moves file", () => {
     it("read(from) fails after rename(from, to); read(to) succeeds", async () => {
       const vault = makeVaultFS();
@@ -306,6 +324,7 @@ function makeBrokenStub(overrides: Partial<VaultFS>): VaultFS {
       },
     ),
     processJSON: processJSONImpl as VaultFS["processJSON"],
+    readFrontMatter: vi.fn(async (path: string) => fmStore.get(path)),
     processFrontMatter: vi.fn(
       async (path: string, fn: (fm: Record<string, unknown>) => void) => {
         const fm = fmStore.get(path) ?? {};

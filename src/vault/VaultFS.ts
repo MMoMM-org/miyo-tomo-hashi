@@ -47,6 +47,25 @@ export interface VaultFS {
   process(path: string, transform: (content: string) => string): Promise<void>;
 
   /**
+   * A note's PARSED frontmatter without opening a write. `undefined` means the
+   * note has no frontmatter block at all — distinct from an empty one.
+   *
+   * Exists so a handler can decide NOT to call `processFrontMatter`. That call
+   * re-serialises the whole block whether or not the callback mutates
+   * anything, and Obsidian's serialiser does not preserve YAML comments — so
+   * entering it to then refuse to write costs the user their comments for
+   * nothing.
+   *
+   * Best-effort, and deliberately so: this is backed by the metadata cache,
+   * which lags during the multi-action batches that bit us in #68. The
+   * staleness only ever fails in the SAFE direction — a stale read can make a
+   * write be skipped (reported as a failure the user re-runs), never make a
+   * wrong write happen, because the authoritative comparison still runs inside
+   * the `processFrontMatter` callback.
+   */
+  readFrontMatter(path: string): Promise<Record<string, unknown> | undefined>;
+
+  /**
    * Atomically read-mutate-write a note's YAML frontmatter, mirroring
    * Obsidian's `FileManager.processFrontMatter`. `fm` is the PARSED
    * frontmatter object: mutate keys on it, or `delete fm[key]` to remove one.

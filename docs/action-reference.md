@@ -202,6 +202,28 @@ Works on the **parsed** value through Obsidian's `processFrontMatter`, never on 
 
 **Markdown only.** Obsidian documents `processFrontMatter` as "Must be a Markdown file"; a `.canvas` or `.base` target is rejected before the vault is touched.
 
+### What a write does to the rest of the block
+
+Obsidian re-serialises the whole frontmatter block from its parsed form, so a write
+touches more than the one key. Measured against a real vault, not inferred:
+
+| | |
+|---|---|
+| **YAML comments** | **Lost.** Every `#` line in the block is gone after any write |
+| Key order | Preserved; a removed key simply disappears from its position |
+| New keys | Appended at the end of the block |
+| Nested maps | Survive intact |
+| Lists | Written as block sequences, values quoted (`- "[[A]]"`) |
+| Untargeted keys | Values unchanged |
+| A note with no block | One is created at the top of the file |
+
+The comment loss is the one to know about, because nothing warns you: a note whose
+frontmatter carries explanatory `#` lines will come out of a successful
+`edit_frontmatter` without them. This is Obsidian's own serialiser, not something Hashi
+chooses — the alternative would be editing YAML as text, which is the corruption vector
+this kind exists to avoid. If a note's frontmatter comments matter, keep that note out of
+the audit's reach.
+
 | Field | Type | Notes |
 |---|---|---|
 | `path` | string | Vault-relative path. Must be `.md`. |
@@ -232,12 +254,23 @@ that moved on is never silently clobbered.
 
 When it fails, the repair path is the **Instruction Fixer**: `path`, `property`,
 `value` and `expected` are all editable there, with `value` and `expected` shown
-as JSON. Correct `expected` to what the note actually holds, save, re-run.
+as JSON. Two buttons read straight from the target note so nothing has to be
+transcribed:
+
+- **Choose…** on *Property* lists the keys the note actually has, with a preview
+  of each value. Picking one sets `property` **and** `expected` together — a
+  pick that changed the key while leaving the old expectation behind would hand
+  you an action guaranteed to fail.
+- **Read from note** on *Expected current value* pulls in whatever that property
+  holds right now. This is the short path out of a failed expectation: the
+  action failed *because* the note holds something else, and this puts that
+  something else in the field. If the property has since been deleted, it fills
+  in `null` — which is exactly the right instruction.
 
 **Outcome:**
 - `applied` — the property was written or removed.
 - `skipped-already` — the expectation held and the value was already what `set` wanted, or `remove` found nothing to delete. Idempotent re-run.
-- `failed` — the expectation did not match. Nothing written; the message names the *shapes* involved, never the values (Privacy L2 — the run log carries metadata only).
+- `failed` — the expectation did not match. **Nothing written, and the file is not opened for writing at all** — which matters because opening it would re-serialise the block and cost the note its comments (see above) even though no value changes. The message names the *shapes* involved, never the values (Privacy L2 — the run log carries metadata only).
 - `failed` — target is not a markdown note, the note is missing, or its YAML could not be parsed.
 
 ## `remove_up_link`

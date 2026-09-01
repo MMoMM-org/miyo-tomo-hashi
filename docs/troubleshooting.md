@@ -49,7 +49,7 @@ retrying, since neither resolves by waiting.
    `module.exports` yields an empty object and the hook silently does nothing.
 3. **The filename or location is wrong** — it must be `before-<action>.cjs` /
    `after-<action>.cjs`, sit in the configured hooks directory (default
-   `.tomo-hashi/hooks/`), and use one of the fourteen [action kinds](action-reference.md).
+   `.tomo-hashi/hooks/`), and use one of the sixteen [action kinds](action-reference.md).
 
 **Fix.** Settings → **Hooks** → switch to *Ask on first use* or *Enabled*; rename
 the file to `.cjs`; match the exact `before-`/`after-<action>` naming. See
@@ -81,6 +81,65 @@ Tomo, so regenerate or fix it there — and re-run. See the
 
 Re-triggering a file is safe: [partial-resume](instruction-executor.md#partial-resume)
 re-runs only the unapplied actions.
+
+### "match found only in the YAML frontmatter"
+
+An `edit_note_text` whose `match` exists in the note's frontmatter but nowhere in
+the body. **This is a real failure, not a near-miss** — `edit_note_text` is a
+note-*body* action and the YAML block is frozen to it, so no re-run will ever
+succeed.
+
+It used to report success and quietly do nothing, which meant the action was
+marked applied and filtered out of every later run while the note stayed wrong.
+If you have instruction sets from before that fix, check them: an action in this
+situation is sitting at `applied: true` and will never re-run. Set it back to
+`false` by hand.
+
+**Fix.** The property needs [`edit_frontmatter`](action-reference.md#edit_frontmatter)
+instead. Either re-run the audit so Tomo emits the right kind, or repair the
+action in the [Instruction Fixer](instruction-fixer.md).
+
+### "frontmatter '<key>' … is not what the instruction expected"
+
+An `edit_frontmatter` whose `expected` value does not match what the note holds
+right now. **The note is untouched** — not merely unchanged in value: the file
+is never opened for writing, so it does not even lose its comments the way a
+successful write would.
+
+This is the guard doing its job, not a bug. The instruction set was written
+against the note as it looked during the audit; someone or something has changed
+that property since. Overwriting blindly would discard whichever change is newer,
+so Hashi refuses and tells you.
+
+The message names *shapes*, not values (`expected list of 1, found string`) —
+the run log carries metadata only, never note content.
+
+**Fix.** Open the [Instruction Fixer](instruction-fixer.md) on the failed action
+and press **Read from note** on *Expected current value*: it fills in what the
+note actually holds. Check that the action still makes sense against that value,
+save, and re-run. If the property has since been deleted entirely, the button
+fills in `null`, which is the correct way to say "this property must not exist".
+
+### My note's frontmatter comments disappeared
+
+`edit_frontmatter` writes through Obsidian's own frontmatter API, which
+re-serialises the whole block from its parsed form. **YAML comments do not
+survive that** — every `#` line in the block is gone after a successful write.
+
+This is not something Hashi chooses. The alternative is editing YAML as text,
+which is the corruption vector the kind exists to avoid; there is no third
+option that both edits structurally and preserves comments.
+
+Key order, nested maps and untargeted values are all preserved — see
+[what a write does to the rest of the block](action-reference.md#edit_frontmatter).
+If a note's frontmatter comments matter, keep that note out of the audit's reach.
+
+### "edit_frontmatter only handles markdown notes"
+
+The target is a `.canvas`, `.base` or some other non-markdown file. Obsidian's
+frontmatter API is markdown-only, so this is rejected before the vault is
+touched rather than failing partway. There is no workaround — those formats have
+no frontmatter block to edit.
 
 ## Where to look for logs
 

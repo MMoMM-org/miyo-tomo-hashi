@@ -59,6 +59,7 @@ function withFailingWrite(base: VaultFS, failPath: string): VaultFS {
 			await base.process(path, transform);
 		},
 		processJSON: (path, transform) => base.processJSON(path, transform),
+		readFrontMatter: (path) => base.readFrontMatter(path),
 		processFrontMatter: (path, fn) => base.processFrontMatter(path, fn),
 		rename: (from, to) => base.rename(from, to),
 		createFolder: (path) => base.createFolder(path),

@@ -62,6 +62,11 @@ export class ObsidianVaultFS implements VaultFS {
     await this.app.vault.process(file, transform);
   }
 
+  async readFrontMatter(path: string): Promise<Record<string, unknown> | undefined> {
+    const file = this.requireFile(path);
+    return this.app.metadataCache.getFileCache(file)?.frontmatter;
+  }
+
   async processFrontMatter(
     path: string,
     fn: (fm: Record<string, unknown>) => void,

@@ -12,7 +12,9 @@
  *   - remove an existing key
  *   - idempotent re-run → skipped-already
  *   - expectation mismatch (wrong value / present-when-absent-expected /
- *     absent-when-value-expected) → failed, nothing written
+ *     absent-when-value-expected) → failed, and processFrontMatter is never
+ *     even OPENED, because opening it re-serialises the block and loses the
+ *     note's YAML comments whether or not anything is written
  *   - deep comparison: element order matters, key order does not
  *   - non-markdown target, missing note, malformed YAML → failed
  *
@@ -63,7 +65,7 @@ describe("editFrontmatter — set", () => {
 		const outcome = await editFrontmatter(makeAction(), makeCtx(vault));
 
 		expect(outcome.kind).toBe("applied");
-		expect(vault.readFrontMatter(PATH)).toEqual({ up: [NEW_LINK], related: [] });
+		expect(await vault.readFrontMatter(PATH)).toEqual({ up: [NEW_LINK], related: [] });
 	});
 
 	it("replaces a scalar value", async () => {
@@ -76,7 +78,7 @@ describe("editFrontmatter — set", () => {
 		);
 
 		expect(outcome.kind).toBe("applied");
-		expect(vault.readFrontMatter(PATH)).toEqual({ status: "published" });
+		expect(await vault.readFrontMatter(PATH)).toEqual({ status: "published" });
 	});
 
 	it("adds an absent property — expected null is how an add is expressed", async () => {
@@ -89,7 +91,7 @@ describe("editFrontmatter — set", () => {
 		);
 
 		expect(outcome.kind).toBe("applied");
-		expect(vault.readFrontMatter(PATH)).toEqual({ related: [], up: [NEW_LINK] });
+		expect(await vault.readFrontMatter(PATH)).toEqual({ related: [], up: [NEW_LINK] });
 	});
 
 	it("leaves the other properties alone", async () => {
@@ -98,7 +100,7 @@ describe("editFrontmatter — set", () => {
 
 		await editFrontmatter(makeAction(), makeCtx(vault));
 
-		expect(vault.readFrontMatter(PATH)).toEqual({
+		expect(await vault.readFrontMatter(PATH)).toEqual({
 			up: [NEW_LINK],
 			related: ["[[X]]"],
 			created: "2025-11-19",
@@ -133,7 +135,7 @@ describe("editFrontmatter — remove", () => {
 		);
 
 		expect(outcome.kind).toBe("applied");
-		expect(vault.readFrontMatter(PATH)).toEqual({ related: [] });
+		expect(await vault.readFrontMatter(PATH)).toEqual({ related: [] });
 	});
 
 	it("already gone with expected null → skipped-already", async () => {
@@ -146,7 +148,7 @@ describe("editFrontmatter — remove", () => {
 		);
 
 		expect(outcome.kind).toBe("skipped-already");
-		expect(vault.readFrontMatter(PATH)).toEqual({ related: [] });
+		expect(await vault.readFrontMatter(PATH)).toEqual({ related: [] });
 	});
 });
 
@@ -166,7 +168,7 @@ describe("editFrontmatter — expectation mismatch", () => {
 			expect(outcome.reason).toContain("not what the instruction expected");
 			expect(outcome.reason).toContain(PATH);
 		}
-		expect(vault.readFrontMatter(PATH)).toEqual({ up: ["[[Someone Else Changed This]]"] });
+		expect(await vault.readFrontMatter(PATH)).toEqual({ up: ["[[Someone Else Changed This]]"] });
 	});
 
 	it("fails when the property is absent but a value was expected", async () => {
@@ -189,7 +191,55 @@ describe("editFrontmatter — expectation mismatch", () => {
 		);
 
 		expect(outcome.kind).toBe("failed");
-		expect(vault.readFrontMatter(PATH)).toEqual({ up: [OLD_LINK] });
+		expect(await vault.readFrontMatter(PATH)).toEqual({ up: [OLD_LINK] });
+	});
+
+	it("never opens a write it already knows it will refuse", async () => {
+		// The reason this matters is measured, not theoretical: Obsidian's
+		// processFrontMatter re-serialises the whole block on entry, and its
+		// serialiser drops YAML comments. Entering it only to then refuse would
+		// cost the user their comments for nothing.
+		const vault = new FakeVaultFS();
+		await seed(vault, { up: ["[[Someone Else Changed This]]"] });
+		const spy = vi.spyOn(vault, "processFrontMatter");
+
+		const outcome = await editFrontmatter(makeAction(), makeCtx(vault));
+
+		expect(outcome.kind).toBe("failed");
+		expect(spy).not.toHaveBeenCalled();
+	});
+
+	it("still refuses when the pre-check read is unavailable", async () => {
+		// The pre-check is an optimisation, never the guard. With it blinded,
+		// the authoritative in-callback comparison must still catch the
+		// mismatch — this is the stale-cache path.
+		const vault = new FakeVaultFS();
+		await seed(vault, { up: ["[[Someone Else Changed This]]"] });
+		vi.spyOn(vault, "readFrontMatter").mockRejectedValueOnce(new Error("cache miss"));
+		const spy = vi.spyOn(vault, "processFrontMatter");
+
+		const outcome = await editFrontmatter(makeAction(), makeCtx(vault));
+
+		expect(outcome.kind).toBe("failed");
+		// It DID open the write this time — that is the cost of a stale read,
+		// and the point of the pre-check is to make this the rare path.
+		expect(spy).toHaveBeenCalled();
+		expect(await vault.readFrontMatter(PATH)).toEqual({
+			up: ["[[Someone Else Changed This]]"],
+		});
+	});
+
+	it("a stale pre-check that says MATCH is overruled by the real comparison", async () => {
+		// The dangerous direction: the cache must never be able to authorise a
+		// write the note does not actually permit.
+		const vault = new FakeVaultFS();
+		await seed(vault, { up: ["[[Actually Something Else]]"] });
+		vi.spyOn(vault, "readFrontMatter").mockResolvedValueOnce({ up: [OLD_LINK] });
+
+		const outcome = await editFrontmatter(makeAction(), makeCtx(vault));
+
+		expect(outcome.kind).toBe("failed");
+		expect(await vault.readFrontMatter(PATH)).toEqual({ up: ["[[Actually Something Else]]"] });
 	});
 
 	it("the failure message names shapes, never the values themselves", async () => {
@@ -258,7 +308,7 @@ describe("editFrontmatter — deep comparison", () => {
 		);
 
 		expect(outcome.kind).toBe("applied");
-		expect(vault.readFrontMatter(PATH)).toEqual({ pinned: true });
+		expect(await vault.readFrontMatter(PATH)).toEqual({ pinned: true });
 	});
 });
 

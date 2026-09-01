@@ -13,6 +13,8 @@ import { describe, expect, it } from "vitest";
 
 import {
 	setAnchorSpot,
+	setFrontmatterExpected,
+	setFrontmatterProperty,
 	setMarkerSpot,
 	setTargetField,
 	TARGET_FIELD_WHITELIST,
@@ -679,3 +681,122 @@ describe("setMarkerSpot — rejects / no-ops", () => {
 		expect(next).toBe(model);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// Frontmatter pickers — ADR-5 amendment #2
+// ---------------------------------------------------------------------------
+
+function editFrontmatter(
+	overrides?: Partial<Action & { action: "edit_frontmatter" }>,
+): Action {
+	return {
+		action: "edit_frontmatter",
+		id: "I24",
+		path: "Atlas/202 Notes/Tschechien.md",
+		property: "up",
+		operation: "set",
+		value: ["[[New]]"],
+		expected: ["[[Old]]"],
+		...overrides,
+	} as Action;
+}
+
+const fmAction = (model: ReturnType<typeof makeModel>) =>
+	model.doc.actions[0] as Action & { action: "edit_frontmatter" };
+
+describe("setFrontmatterProperty", () => {
+	it("writes property AND expected together", () => {
+		// The point of the amendment: writing only `property` leaves the old
+		// key's expectation behind, which is an action guaranteed to fail.
+		const model = makeModel([editFrontmatter()]);
+
+		const next = setFrontmatterProperty(model, "I24", "status", {
+			current: "draft",
+			present: true,
+		});
+
+		expect(next.dirty).toBe(true);
+		expect(fmAction(next).property).toBe("status");
+		expect(fmAction(next).expected).toBe("draft");
+	});
+
+	it("an absent key commits expected null — the must-not-exist sentinel", () => {
+		const model = makeModel([editFrontmatter()]);
+
+		const next = setFrontmatterProperty(model, "I24", "tags", {
+			current: undefined,
+			present: false,
+		});
+
+		expect(fmAction(next).property).toBe("tags");
+		expect(fmAction(next).expected).toBeNull();
+	});
+
+	it("commits a list value structurally, not as a string", () => {
+		const model = makeModel([editFrontmatter({ property: "status", expected: "x" })]);
+
+		const next = setFrontmatterProperty(model, "I24", "up", {
+			current: ["[[A]]", "[[B]]"],
+			present: true,
+		});
+
+		expect(fmAction(next).expected).toEqual(["[[A]]", "[[B]]"]);
+	});
+
+	it("returns the SAME model reference for an unknown id", () => {
+		const model = makeModel([editFrontmatter()]);
+		expect(setFrontmatterProperty(model, "I99", "x", { current: 1, present: true })).toBe(model);
+	});
+
+	it("returns the SAME model reference for a different kind", () => {
+		const model = makeModel([linkToMoc()]);
+		expect(setFrontmatterProperty(model, "I01", "x", { current: 1, present: true })).toBe(model);
+	});
+
+	it("rejects a value with no JSON form rather than committing something lossy", () => {
+		const model = makeModel([editFrontmatter()]);
+		expect(
+			setFrontmatterProperty(model, "I24", "up", { current: undefined, present: true }),
+		).toBe(model);
+	});
+});
+
+describe("setFrontmatterExpected", () => {
+	it("refreshes expected alone, leaving property untouched", () => {
+		const model = makeModel([editFrontmatter()]);
+
+		const next = setFrontmatterExpected(model, "I24", {
+			current: ["[[Something Else]]"],
+			present: true,
+		});
+
+		expect(next.dirty).toBe(true);
+		expect(fmAction(next).property).toBe("up");
+		expect(fmAction(next).expected).toEqual(["[[Something Else]]"]);
+	});
+
+	it("a deleted key refreshes to null, which is exactly the right instruction", () => {
+		// Not a special case in the setter — `present: false` maps to the wire's
+		// own "must not exist" sentinel. Pinned because it looks accidental
+		// until someone changes it.
+		const model = makeModel([editFrontmatter()]);
+
+		const next = setFrontmatterExpected(model, "I24", { current: undefined, present: false });
+
+		expect(fmAction(next).expected).toBeNull();
+	});
+
+	it("a same-value refresh is a no-op — the SAME model reference", () => {
+		const model = makeModel([editFrontmatter({ expected: ["[[Old]]"] })]);
+
+		expect(
+			setFrontmatterExpected(model, "I24", { current: ["[[Old]]"], present: true }),
+		).toBe(model);
+	});
+
+	it("returns the SAME model reference for a different kind", () => {
+		const model = makeModel([linkToMoc()]);
+		expect(setFrontmatterExpected(model, "I01", { current: 1, present: true })).toBe(model);
+	});
+});
+

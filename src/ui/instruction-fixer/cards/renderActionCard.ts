@@ -39,7 +39,13 @@
 
 import type { Action } from "../../../schema/types.js";
 import { anchorSpotKindOf } from "../../../instruction-fixer/noteSpots.js";
-import { setAnchorSpot, setMarkerSpot, setTargetField } from "../../../instruction-fixer/transforms.js";
+import {
+	setAnchorSpot,
+	setFrontmatterExpected,
+	setFrontmatterProperty,
+	setMarkerSpot,
+	setTargetField,
+} from "../../../instruction-fixer/transforms.js";
 import { renderNavigableNoteLink } from "../../garden-audit-view/noteNavigation.js";
 import {
 	renderTargetControlCore,
@@ -48,7 +54,9 @@ import {
 import type { FixerCardContext, FixerCardRenderer } from "../fixerContract.js";
 import {
 	openAnchorSpotPicker,
+	openFrontmatterPropertyPicker,
 	openMarkerSpotPicker,
+	readFrontmatterExpected,
 } from "../pickers/openSpotPicker.js";
 
 import { targetFieldsFor, type TargetField } from "./targetFields.js";
@@ -227,6 +235,38 @@ function extraPickFor(
 				void openAnchorSpotPicker(ctx.app, action, kind, (spot) => {
 					ctx.apply((model) => setAnchorSpot(model, action.id, spot));
 				});
+			},
+		};
+	}
+
+	if (field.spec.docPick === "frontmatter-property") {
+		return {
+			label: "Choose…",
+			ariaLabel: "Choose a property from the target note's frontmatter",
+			onClick: () => {
+				openFrontmatterPropertyPicker(ctx.app, action, (property) => {
+					ctx.apply((model) =>
+						setFrontmatterProperty(model, action.id, property.key, {
+							current: property.value,
+							present: true,
+						}),
+					);
+				});
+			},
+		};
+	}
+
+	if (field.spec.docPick === "frontmatter-value") {
+		// Not a choice — one click, one field. Labelled accordingly, because
+		// "Choose…" on a button that opens no chooser is a small lie the user
+		// pays for by clicking it to find out.
+		return {
+			label: "Read from note",
+			ariaLabel: "Read the property's current value from the target note",
+			onClick: () => {
+				const pick = readFrontmatterExpected(ctx.app, action);
+				if (pick === null) return;
+				ctx.apply((model) => setFrontmatterExpected(model, action.id, pick));
 			},
 		};
 	}

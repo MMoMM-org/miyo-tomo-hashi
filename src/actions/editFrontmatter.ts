@@ -16,10 +16,20 @@
  * changed between report and apply is never silently clobbered. The repair path
  * is the Instruction Fixer, which can edit `expected` and `value`.
  *
- * The comparison happens INSIDE the processFrontMatter callback, not before it.
- * That is the only state guaranteed fresh: `metadataCache` is subject to the
- * async-rebuild race that bit multi-action batches in #68, and a stale read here
- * would defeat the entire point of the guard.
+ * The comparison runs TWICE, on purpose:
+ *
+ *   1. A pre-check off `readFrontMatter` decides whether to open a write at
+ *      all. `processFrontMatter` re-serialises the whole block whether or not
+ *      the callback mutates anything, and Obsidian's serialiser does NOT
+ *      preserve YAML comments (measured, 2026-09-01) — so entering it only to
+ *      then refuse costs the user their comments for nothing. This read is
+ *      best-effort: it is cache-backed and can lag, but it only ever errs in
+ *      the safe direction, skipping a write that would have succeeded rather
+ *      than permitting one that should not.
+ *   2. The authoritative comparison inside the callback, against state that
+ *      cannot be stale. `metadataCache` is subject to the async-rebuild race
+ *      that bit multi-action batches in #68, so the pre-check can never be the
+ *      guard — only an optimisation in front of it.
  *
  * Outcomes:
  *   expectation met, value differs   → applied
@@ -80,6 +90,34 @@ function describeValue(value: unknown, present: boolean): string {
 	return typeof value;
 }
 
+/**
+ * The one place the expectation is evaluated, used by both the pre-check and
+ * the authoritative in-callback check. Returns the failure reason, or `null`
+ * when the expectation holds.
+ *
+ * Shared deliberately: two copies of this comparison would be two chances for
+ * the cheap check and the real one to disagree about what "matches" means, and
+ * the disagreement would surface as a write that the guard was supposed to
+ * stop.
+ */
+function describeMismatch(
+	fm: Record<string, unknown> | undefined,
+	property: string,
+	expected: unknown,
+	expectAbsent: boolean,
+	path: string,
+): string | null {
+	const present = fm !== undefined && hasKey(fm, property);
+	const current = present && fm !== undefined ? fm[property] : undefined;
+	const matches = expectAbsent ? !present : present && deepEqual(current, expected);
+	if (matches) return null;
+	return (
+		`frontmatter '${property}' in ${path} is not what the instruction expected ` +
+		`(expected ${describeValue(expected, !expectAbsent)}, found ${describeValue(current, present)}) ` +
+		`— the note changed since the instruction set was written; repair 'expected' in the editor or re-run the audit`
+	);
+}
+
 export async function editFrontmatter(
 	action: EditFrontmatterAction,
 	ctx: HandlerContext,
@@ -104,6 +142,17 @@ export async function editFrontmatter(
 	// `expected: null` means "must not exist" — see the type docblock.
 	const expectAbsent = expected === null;
 
+	// Pre-check: don't open a write we already know we will refuse. See the
+	// file header for why this is an optimisation and never the guard.
+	try {
+		const peek = await vault.readFrontMatter(path);
+		const mismatch = describeMismatch(peek, property, expected, expectAbsent, path);
+		if (mismatch !== null) return { kind: "failed", reason: mismatch };
+	} catch {
+		// A failed peek is not a failed action — fall through to the
+		// authoritative path, which reads the file itself.
+	}
+
 	let outcome: EditOutcome = { kind: "applied" };
 
 	try {
@@ -111,18 +160,14 @@ export async function editFrontmatter(
 			const present = hasKey(fm, property);
 			const current = present ? fm[property] : undefined;
 
-			const matches = expectAbsent ? !present : present && deepEqual(current, expected);
-			if (!matches) {
-				// Mutate nothing. The note must come out byte-identical: a guard
-				// that rewrites the file while refusing to apply is worse than no
-				// guard at all.
-				outcome = {
-					kind: "failed",
-					reason:
-						`frontmatter '${property}' in ${path} is not what the instruction expected ` +
-						`(expected ${describeValue(expected, !expectAbsent)}, found ${describeValue(current, present)}) ` +
-						`— the note changed since the instruction set was written; repair 'expected' in the editor or re-run the audit`,
-				};
+			const mismatch = describeMismatch(fm, property, expected, expectAbsent, path);
+			if (mismatch !== null) {
+				// Mutate nothing. Reaching here means the pre-check disagreed with
+				// the truth — a stale cache — so the write is still open and the
+				// block will be re-serialised regardless. Nothing we can do about
+				// that from inside the callback; the pre-check exists to make this
+				// the rare path rather than the normal one.
+				outcome = { kind: "failed", reason: mismatch };
 				return;
 			}
 

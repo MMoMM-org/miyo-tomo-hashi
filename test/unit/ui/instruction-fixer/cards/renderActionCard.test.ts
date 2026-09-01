@@ -172,6 +172,11 @@ beforeEach(() => {
 	pickerInstances.length = 0;
 	anchorPickers.length = 0;
 	markerPickers.length = 0;
+	// Notice is a module-level mock: without this, a test that fires one leaks
+	// into any later test reading `mock.calls[0]`, and the failure points at
+	// the innocent test. Surfaced when the edit_frontmatter picker tests
+	// started firing notices of their own.
+	vi.mocked(Notice).mockClear();
 });
 
 // --- intent line -------------------------------------------------------------
@@ -439,6 +444,57 @@ describe("target fields — the 7 repair kinds, driven off TARGET_FIELD_WHITELIS
 		button?.dispatchEvent(new MouseEvent("click"));
 		expect(pickerInstances).toHaveLength(0);
 	});
+
+	/**
+	 * The two edit_frontmatter affordances (2026-09-01). Both are sourced from
+	 * the action's own target note, and they are deliberately labelled
+	 * differently: one opens a chooser, the other does not open anything.
+	 */
+	const fieldByLabel = (body: HTMLElement, label: string): Element | undefined =>
+		Array.from(body.querySelectorAll(".hashi-if-field")).find(
+			(field) => (field.querySelector("label")?.textContent ?? "") === label,
+		);
+
+	it("the property field offers the frontmatter chooser", () => {
+		const { body } = render(SAMPLES.edit_frontmatter);
+		const button = fieldByLabel(body, "Property")?.querySelector("button");
+
+		expect(button?.textContent).toBe("Choose…");
+		expect(button?.getAttribute("aria-label")).toBe(
+			"Choose a property from the target note's frontmatter",
+		);
+
+		// Same guarantee as the anchor field: never the vault-note picker.
+		button?.dispatchEvent(new MouseEvent("click"));
+		expect(pickerInstances).toHaveLength(0);
+	});
+
+	it("the expected field's button is labelled as a read, not a choice", () => {
+		// It opens no modal at all, so calling it "Choose…" would be a small
+		// lie the user pays for by clicking it to find out.
+		const { body } = render(SAMPLES.edit_frontmatter);
+		const button = fieldByLabel(body, "Expected current value")?.querySelector("button");
+
+		expect(button?.textContent).toBe("Read from note");
+		expect(button?.getAttribute("aria-label")).toBe(
+			"Read the property's current value from the target note",
+		);
+	});
+
+	it("edit_frontmatter's free-text fields offer no picker", () => {
+		const { body } = render(SAMPLES.edit_frontmatter);
+		expect(fieldByLabel(body, "New value")?.querySelector("button")).toBeNull();
+	});
+
+	it.each(["frozen-applied", "read-only-no-signal"] as const)(
+		"a %s card renders neither frontmatter button",
+		(gate) => {
+			// Decision 2 — a read-only card renders no control at all, not a
+			// disabled one. That has to hold for the pick buttons too.
+			const { body } = render(SAMPLES.edit_frontmatter, gate);
+			expect(body.querySelector("button")).toBeNull();
+		},
+	);
 
 	it("a genuinely free-text field (edit_note_text.match) offers no picker at all", () => {
 		const { body } = render(SAMPLES.edit_note_text);
