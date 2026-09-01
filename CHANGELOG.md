@@ -1,3 +1,9 @@
+## [0.23.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.23.0...0.23.1) (2026-09-01)
+
+### Bug Fixes
+
+* **actions:** sweep the frontmatter blind spot to resolve_dead_link; split expected ([8ccacaa](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/8ccacaa2b85737c38257cf924733613056318750)), closes [#122](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/122) [#122](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/122)
+
 ## [0.23.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.22.0...0.23.0) (2026-09-01)
 
 ### Features
