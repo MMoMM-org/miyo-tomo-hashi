@@ -1,3 +1,9 @@
+## [0.20.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.19.2...0.20.0) (2026-09-01)
+
+### Features
+
+* **deps:** bump xterm to 6.0.0 and raise CON-7 to 980 KB ([c67267b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/c67267b1228fc9757beed239b712b907d3d54fde)), closes [xtermjs#5096](https://github.com/MMoMM-org/xtermjs/issues/5096)
+
 ## [0.19.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.19.1...0.19.2) (2026-08-31)
 
 ### Bug Fixes
