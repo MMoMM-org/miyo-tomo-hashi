@@ -50,3 +50,6 @@ _archive/
 /claude-docker-home/
 /begin-code.sh
 /generated-images/
+
+# session checkpoint (context-bridge)
+.claude/.session-checkpoint.md
