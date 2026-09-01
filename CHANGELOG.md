@@ -1,3 +1,9 @@
+## [0.22.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.21.1...0.22.0) (2026-09-01)
+
+### Features
+
+* **actions:** add edit_frontmatter — the first kind that can edit YAML properties ([320228e](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/320228e51988e701f0243ad7c8fcce775f1eb4a9)), closes [#68](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/68)
+
 ## [0.21.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.21.0...0.21.1) (2026-09-01)
 
 ### Bug Fixes
