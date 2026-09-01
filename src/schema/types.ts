@@ -33,6 +33,26 @@ export interface CreateMocAction extends ActionBase {
 	readonly supporting_items?: string | string[] | null;
 }
 
+/**
+ * move_asset — relocate an attachment (image, PDF, audio, …) inside the vault.
+ *
+ * Deliberately the minimal field set. `move_note`'s note-shaped extras
+ * (`title`, `parent_mocs`, `tags`, `source_inbox_item`) carry no meaning for a
+ * binary, and `source_inbox_item` is never read by Hashi on any kind — the
+ * paired `delete_source` is the operational cleanup signal. Embeds follow the
+ * move on their own: the adapter's `rename` goes through
+ * `fileManager.renameFile`, which rewrites references.
+ *
+ * Strict partition with `move_note`: this kind rejects note paths
+ * (`.md`, `.canvas`, `.base`) exactly as `move_note` rejects attachments, so a
+ * producer routing a file to the wrong kind fails loudly in either direction.
+ */
+export interface MoveAssetAction extends ActionBase {
+	readonly action: "move_asset";
+	readonly source: string;
+	readonly destination: string;
+}
+
 export interface MoveNoteAction extends ActionBase {
 	readonly action: "move_note";
 	readonly source: string;
@@ -255,6 +275,7 @@ export interface SkipAction extends ActionBase {
 export type Action =
 	| CreateMocAction
 	| MoveNoteAction
+	| MoveAssetAction
 	| LinkToMocAction
 	| InsertUnderMarkerAction
 	| ReplaceSectionAction

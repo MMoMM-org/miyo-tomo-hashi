@@ -634,3 +634,81 @@ describe("validate — real garden-audit instruction set (drift guard)", () => {
 		expect(result.ok).toBe(true);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// move_asset — wire-shape drift guard
+//
+// The vendored schema is a copy of Tomo's. A kind Hashi implements but Tomo
+// does not yet emit still has to be pinned here, or the two can drift apart
+// unnoticed (that is exactly how replace_section ended up in Hashi's copy and
+// nowhere upstream). This fixture is the shape stated in the handoff.
+// ---------------------------------------------------------------------------
+
+describe("move_asset (Hashi-side wire shape)", () => {
+	const withActions = (actions: unknown[]) => ({
+		schema_version: "2",
+		type: "tomo-instructions",
+		generated: "2026-09-01T10:00:00Z",
+		profile: null,
+		actions,
+	});
+
+	it("accepts the minimal required set", () => {
+		const result = validate(
+			withActions([
+				{
+					id: "I15",
+					action: "move_asset",
+					source: "100 Inbox/foto.png",
+					destination: "Atlas/900 Assets/foto.png",
+				},
+			]),
+		);
+		expect(result.ok).toBe(true);
+	});
+
+	it("accepts the applied flag", () => {
+		const result = validate(
+			withActions([
+				{
+					id: "I15",
+					action: "move_asset",
+					source: "100 Inbox/foto.png",
+					destination: "Atlas/900 Assets/foto.png",
+					applied: false,
+				},
+			]),
+		);
+		expect(result.ok).toBe(true);
+	});
+
+	it.each(["source", "destination"])("rejects a set missing %s", (field) => {
+		const action: Record<string, unknown> = {
+			id: "I15",
+			action: "move_asset",
+			source: "100 Inbox/foto.png",
+			destination: "Atlas/900 Assets/foto.png",
+		};
+		delete action[field];
+
+		expect(validate(withActions([action])).ok).toBe(false);
+	});
+
+	it("rejects move_note's note-shaped extras — they carry no meaning for a binary", () => {
+		// additionalProperties: false. If Tomo ever emits these, the mismatch
+		// surfaces here rather than being silently carried.
+		const result = validate(
+			withActions([
+				{
+					id: "I15",
+					action: "move_asset",
+					source: "100 Inbox/foto.png",
+					destination: "Atlas/900 Assets/foto.png",
+					title: "Foto",
+					parent_mocs: ["Atlas/200 Maps/Systems (MOC).md"],
+				},
+			]),
+		);
+		expect(result.ok).toBe(false);
+	});
+});

@@ -32,6 +32,12 @@ export const SAMPLES = {
 		destination: "Atlas/202 Notes/Kanban.md",
 		title: "Kanban",
 	},
+	move_asset: {
+		id: "I15",
+		action: "move_asset",
+		source: "100 Inbox/kanban-board.png",
+		destination: "Atlas/900 Assets/kanban-board.png",
+	},
 	link_to_moc: {
 		id: "I03",
 		action: "link_to_moc",

@@ -82,7 +82,7 @@ Cut down on the busywork — with the peace of mind that Hashi does only what yo
 - **Path safety** — `.obsidian/`, `.git/`, `.trash/`, hooks dir, and traversal-escape paths are denied
 - **Optional hooks** — `.cjs` files in your vault, full plugin privilege, with an ask-mode disclosure modal
 - **Schema validation** — vendored Tomo schema, ajv-compiled at module load
-- **14 action kinds** — create_moc, move_note, link_to_moc, insert_under_marker, replace_section, add_relationship, edit_note_text, remove_up_link, resolve_dead_link, update_tracker, update_log_entry, update_log_link, delete_source, skip
+- **15 action kinds** — create_moc, move_note, move_asset, link_to_moc, insert_under_marker, replace_section, add_relationship, edit_note_text, remove_up_link, resolve_dead_link, update_tracker, update_log_entry, update_log_link, delete_source, skip
 - **Instruction Fixer** — a repair bench for actions that failed or were skipped: fix the mechanical detail (a wrong anchor, a moved target) and re-run, without a full Tomo regeneration. Anchors and markers are picked straight out of the target note, so every offered value is one the executor can resolve. Fail-closed — only opens for editing what a trusted run outcome says actually failed
 
 ## Documentation
@@ -99,7 +99,7 @@ Cut down on the busywork — with the peace of mind that Hashi does only what yo
 | [Garden-Audit Editor](docs/garden-audit-editor.md) | Tomo users | Tier-grouped review of `_garden-audit.json`, apply/skip targets, candidate chips, Save = approve — branch C |
 | [Instruction Executor](docs/instruction-executor.md) | Tomo users | Modal stages, modes, partial-resume, status bar 橋 — branch C |
 | [Instruction Fixer](docs/instruction-fixer.md) | Tomo users | Repair failed/skipped actions and re-run, fail-closed edit gate — branch C |
-| [Action Reference](docs/action-reference.md) | Tomo users | All 14 action kinds with idempotency rules — branch C |
+| [Action Reference](docs/action-reference.md) | Tomo users | All 15 action kinds with idempotency rules — branch C |
 | [Hooks](docs/hooks.md) | Power users | `.cjs` hook authoring, policy, disclosure modal — branch C |
 | [Run Log](docs/run-log.md) | Vault owners | Log format, retention, hook output — branch C |
 | [Development](docs/development.md) | Contributors | Build, test, lint, architecture, test vault |

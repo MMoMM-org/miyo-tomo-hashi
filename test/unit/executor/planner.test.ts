@@ -27,6 +27,7 @@ import type {
 	InsertUnderMarkerAction,
 	InstructionSet,
 	LinkToMocAction,
+	MoveAssetAction,
 	MoveNoteAction,
 	RemoveUpLinkAction,
 	ReplaceSectionAction,
@@ -79,6 +80,10 @@ function makeMoveNote(id: string, source: string, destination: string, applied?:
 		title: `Note ${id}`,
 		...(applied !== undefined ? { applied } : {}),
 	};
+}
+
+function makeMoveAsset(id: string, source: string, destination: string): MoveAssetAction {
+	return { action: "move_asset", id, source, destination };
 }
 
 function makeLinkToMoc(id: string, targetMoc: string, lineToAdd: string, targetMocPath?: string, applied?: boolean): LinkToMocAction {
@@ -306,6 +311,24 @@ describe("computeRemaining — canonical order", () => {
 			"replace_section",
 			"add_relationship",
 		]);
+	});
+
+	it("plans move_asset in its canonical slot beside move_note (silent-drop guard)", () => {
+		// Regression guard: a kind missing from planner KIND_ORDER is silently
+		// dropped from the execution list, invisible to handler/registry tests
+		// run in isolation. This is the only test proving move_asset is actually
+		// planned end-to-end — and it also pins the slot, since move_asset must
+		// run beside move_note rather than after the update kinds.
+		const actions: Action[] = [
+			makeMoveAsset("I03", "inbox/foto.png", "assets/foto.png"),
+			makeMoveNote("I02", "inbox/note.md", "notes/note.md"),
+			makeCreateMoc("I01", "inbox/moc.md", "moc/A.md"),
+		];
+		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
+
+		const { records } = computeRemaining(sources);
+
+		expect(records.map((r) => r.kind)).toEqual(["create_moc", "move_note", "move_asset"]);
 	});
 
 	it("plans remove_up_link in its canonical slot beside edit_note_text (silent-drop guard)", () => {
