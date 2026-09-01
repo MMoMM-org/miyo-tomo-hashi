@@ -5,7 +5,7 @@ The instruction executor dispatches each action in an `_instructions.json` to a 
 | Action | What it does | Idempotency probe | Halt-on-fail effect |
 |---|---|---|---|
 | [create_moc](#create_moc) | Create a new MOC at `destination` from a template | Destination exists | Marks dependent `link_to_moc` as `skipped-dependency` |
-| [move_note](#move_note) | Rename source → destination | Destination exists, source missing → `skipped-already` | None — independent action |
+| [move_note](#move_note) | Rename source → destination (note files only) | Destination exists, source missing → `skipped-already` | None — independent action |
 | [link_to_moc](#link_to_moc) | Append `- [[note]]` bullet to a MOC's named section | Bullet already present | None |
 | [insert_under_marker](#insert_under_marker) | Insert a multi-line block at a marker in any note | Identical block already present | None |
 | [replace_section](#replace_section) | Overwrite a heading section's body in any note | Body already equals content | None |
@@ -42,17 +42,24 @@ If `applied`, the `_instructions.json` gets `applied: true` for this action. Sub
 
 ## `move_note`
 
-Rename a note from `from` → `to`. Uses `app.fileManager.renameFile` so backlinks are preserved automatically.
+Rename a note from `source` → `destination`. Uses `app.fileManager.renameFile` so backlinks are preserved automatically.
+
+**Note files only.** Both endpoints must be `.md`, `.canvas` or `.base` — the three kinds Obsidian treats as documents rather than attachments. Attachments belong to [`move_asset`](#move_asset).
+
+The restriction is not cosmetic. After the rename this action strips Tomo's frontmatter block, and that step reads the file as a UTF-8 *string* and writes it back. On binary content the round trip replaces invalid byte sequences with `U+FFFD` and persists them — a destroyed image reported as `applied`. Rather than skip the strip for unknown types, `move_note` refuses them outright, so a producer routing an attachment here finds out instead of half-succeeding. The frontmatter strip itself now runs for `.md` only: a `.canvas` is JSON and a `.base` is YAML, and a YAML document legitimately opens with `---`.
 
 | Field | Type | Notes |
 |---|---|---|
-| `from` | string | Source path, vault-relative. |
-| `to` | string | Destination path, vault-relative. Parent folder auto-created. |
+| `source` | string | Source path, vault-relative. Must be a note file. |
+| `destination` | string | Destination path, vault-relative. Must be a note file. Parent folder auto-created. |
+| `title` | string | Final title of the note (also the stem of the destination filename). |
 
 **Outcome:**
 - `applied` — moved.
-- `skipped-already` — `to` exists, `from` does not (already moved on a previous run).
-- `failed` — `to` exists AND `from` also exists. Inconsistent state; Hashi refuses to choose. Resolve manually before re-running.
+- `skipped-already` — `destination` exists, `source` does not (already moved on a previous run).
+- `failed` — `destination` exists AND `source` also exists. Inconsistent state; Hashi refuses to choose. Resolve manually before re-running.
+- `failed` — either endpoint is not a note file. The message names the offending path(s) and the allowed set.
+- `failed` — the destination filename contains a character Obsidian rejects. The producer must emit Obsidian-safe names; Hashi validates and rejects, never repairs.
 
 ## `link_to_moc`
 

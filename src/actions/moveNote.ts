@@ -4,6 +4,11 @@
  * Delegates to vault.rename (which calls fileManager.renameFile in the
  * Obsidian adapter) so incoming links are preserved.
  *
+ * Note-only: source and destination must both name a note-like document
+ * (`.md`, `.canvas`, `.base`). Attachments belong to `move_asset` — see the
+ * extension guard below for why that partition is enforced rather than
+ * silently accommodated.
+ *
  * Idempotency matrix:
  *   src ✓  dst ✗ → applied   (createFolder(dirOf(dst)) then rename)
  *   src ✗  dst ✓ → skipped-already
@@ -15,7 +20,13 @@
 
 import type { MoveNoteAction } from "../schema/types.js";
 import type { ActionOutcome } from "../executor/state.js";
-import { findIllegalFilenameChars, formatIllegalChars } from "../util/paths.js";
+import {
+	findIllegalFilenameChars,
+	formatIllegalChars,
+	formatNoteExtensions,
+	isMarkdown,
+	isNotePath,
+} from "../util/paths.js";
 import { dirOf, stripTomoFrontmatter, type HandlerContext } from "./types.js";
 
 type MoveOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
@@ -42,6 +53,21 @@ export async function moveNote(
 		};
 	}
 
+	// Note-only guard. `vault.process` below reads the file as a UTF-8 STRING
+	// and writes it back; on binary content that round trip replaces invalid
+	// byte sequences with U+FFFD and persists them — a destroyed attachment
+	// reported as `applied`. Rejecting here rather than skipping the strip
+	// keeps the two move kinds a clean partition: assets go to `move_asset`,
+	// and a producer routing one here finds out. Same reject-never-repair
+	// stance as the filename guard above.
+	const nonNote = [source, destination].filter((p) => !isNotePath(p));
+	if (nonNote.length > 0) {
+		return {
+			kind: "failed",
+			reason: `move_note only handles note files (${formatNoteExtensions()}), got: ${nonNote.join(", ")} — use move_asset for attachments`,
+		};
+	}
+
 	const [srcExists, dstExists] = await Promise.all([
 		vault.exists(source),
 		vault.exists(destination),
@@ -62,6 +88,12 @@ export async function moveNote(
 	const dir = dirOf(destination);
 	if (dir !== "") await vault.createFolder(dir);
 	await vault.rename(source, destination);
-	await vault.process(destination, stripTomoFrontmatter);
+	// Markdown only: the strip is a note cleanup that happens to live in the
+	// move handler, not part of moving. A `.canvas` is JSON and a `.base` is
+	// YAML — and a YAML document legitimately opens with `---`, which is
+	// exactly what stripTomoFrontmatter keys on.
+	if (isMarkdown(destination)) {
+		await vault.process(destination, stripTomoFrontmatter);
+	}
 	return { kind: "applied" };
 }
