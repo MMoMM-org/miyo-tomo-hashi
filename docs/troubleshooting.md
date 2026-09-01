@@ -99,13 +99,12 @@ under Outgoing links → Unresolved, which is the same graph
 dead link, emit a `resolve_dead_link` for it, and have that action mark itself
 done without ever touching the note.
 
-**Check your existing sets.** Notes imported from a vault that used frontmatter
-`up:` into one using the Dataview `up::` marker are the population where this
-bites hardest. In any `_instructions.json` written before this fix, a
-`resolve_dead_link` sitting at `applied: true` may never have run — the dead link
-is still there. Re-open the affected notes, or set those actions back to
-`applied: false` and re-run; they will now come back `failed` with the reason
-instead of silently passing.
+**If you have instruction sets written before this fix**, a `resolve_dead_link`
+sitting at `applied: true` may never have run — the dead link is still there, and
+a graduated action is filtered out of every later run. Set those back to
+`applied: false` and re-run; they now come back `failed` with the reason instead
+of silently passing. Notes imported from a vault that used frontmatter `up:` into
+one using the Dataview `up::` marker are the population where this bites hardest.
 
 **Fix.** The property needs [`edit_frontmatter`](action-reference.md#edit_frontmatter).
 
