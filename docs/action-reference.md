@@ -10,7 +10,7 @@ The instruction executor dispatches each action in an `_instructions.json` to a 
 | [link_to_moc](#link_to_moc) | Append `- [[note]]` bullet to a MOC's named section | Bullet already present | None |
 | [insert_under_marker](#insert_under_marker) | Insert a multi-line block at a marker in any note | Identical block already present | None |
 | [replace_section](#replace_section) | Overwrite a heading section's body in any note | Body already equals content | None |
-| [add_relationship](#add_relationship) | Add a wikilink under a frontmatter relationship key | Wikilink already present | None |
+| [add_relationship](#add_relationship) | Rewrite a Dataview marker line (`up::`, `related::`) in a MOC's **body** — replaces, never creates | Line already equals the target | None |
 | [edit_note_text](#edit_note_text) | Literal find-and-replace in a note's **body only** — never frontmatter (repoint/remove dead links, strip broken inline `up::` lines) | Match not found anywhere | None |
 | [edit_frontmatter](#edit_frontmatter) | Set or remove a YAML property, guarded by an expected current value | Value already correct → `skipped-already` | None |
 | [remove_up_link](#remove_up_link) | Remove one link from a note's `up::` line, preserving the field | No up:: line, or link not on it | None |
@@ -92,9 +92,12 @@ Append `- [[note]]` to a named section of a MOC. The section is identified by ca
 
 | Field | Type | Notes |
 |---|---|---|
-| `moc_path` | string | Path to the MOC. |
-| `note_path` | string | Note to link. The bullet uses the basename for the link target. |
-| `section` | string | Section heading after the callout marker — e.g., `Key Concepts`. |
+| `target_moc` | string | MOC stem — no path, no `.md`. Required. |
+| `target_moc_path` | string \| null | Resolved vault-relative path, when known. Takes precedence over the stem. |
+| `anchor` | object | Where in the MOC to insert. `{ type, value }` — `callout` matches the callout opening line, `heading` matches heading text, `line` matches a body line, `block` matches N consecutive lines. |
+| `placement` | string | `inside` (callout only — appends to the callout body with `> ` prefixes), `before`, or `after`, relative to the anchor. |
+| `line_to_add` | string | Pre-formatted content, written verbatim. May contain `\n`; every line is written as a block. |
+| `source_note_title` | string \| null | Optional display hint. |
 
 **Outcome:**
 - `applied` — bullet appended.
@@ -137,18 +140,24 @@ Insert a multi-line markdown block beneath a marker in **any** vault note (the `
 
 ## `add_relationship`
 
-Add a wikilink under a frontmatter relationship key on a note. Used to wire up "this note relates to that note" without touching body text.
+Replace a **Dataview marker line in a MOC's body** — `up:: [[…]]`, `related:: [[…]]` and the like. Despite the name it does not touch frontmatter, and it does not append: the whole marker line is rewritten with the `line` value Tomo supplies. Multi-link aggregation (`related:: [[A]], [[B]]`) happens producer-side; Hashi writes `line` verbatim.
+
+**It replaces, it never creates.** The marker line has to already exist — it *is* the locator, since this kind carries no anchor or section context. A note with no `up::` line at all yields `failed`, not a new line. To add a marker where none exists, use [`insert_under_marker`](#insert_under_marker); to write a *frontmatter* property, use [`edit_frontmatter`](#edit_frontmatter).
 
 | Field | Type | Notes |
 |---|---|---|
-| `note_path` | string | Note whose frontmatter is updated. |
-| `key` | string | Frontmatter key (e.g., `related`, `parents`, `children`). Created if missing. |
-| `target` | string | Path or basename of the related note. Stored as `[[basename]]`. |
+| `target_moc_path` | string | Vault-relative path of the MOC whose marker line is rewritten. |
+| `marker` | string | The Dataview field opener that locates the line, e.g. `up::`. Matched after an optional `> ` callout prefix and an optional list bullet. |
+| `line` | string | The complete replacement line, written verbatim. Any callout prefix and list bullet on the located line are preserved around it. |
+| `target_moc` | string | Optional MOC stem, for display. `target_moc_path` is what resolves. |
+| `source_note_title` | string \| null | Optional display hint. |
+
+**Locator:** the first line whose stripped content — after an optional `> ` callout prefix, an optional `- `/`* `/`+ `/`1. ` bullet, and surrounding whitespace — starts with `marker`. So a `> - up::` Dataview-in-callout list item stays a callout list item after the rewrite.
 
 **Outcome:**
-- `applied` — wikilink appended to the array under `key`.
-- `skipped-already` — wikilink already in the array.
-- `failed` — frontmatter is malformed (cannot parse), or `key` exists but is a non-array scalar (Hashi refuses to coerce types).
+- `applied` — the marker line was rewritten.
+- `skipped-already` — the located line already equals the would-be result, callout prefix included. Idempotent re-run.
+- `failed` — `Relationship target missing` (the MOC does not exist) or `Marker not found: <marker>` (no such line in it).
 
 ## `edit_note_text`
 
@@ -333,9 +342,14 @@ Set a frontmatter scalar field on a tracker-style note. Used for status-style fl
 
 | Field | Type | Notes |
 |---|---|---|
-| `note_path` | string | Tracker note to update. |
-| `field` | string | Frontmatter key (top-level; nested keys not supported in v0.1). |
+| `daily_note_path` | string | The daily note to update. |
+| `date` | string | `YYYY-MM-DD`. |
+| `field` | string | The tracker field name, matched as an inline Dataview field or a callout body entry — not a frontmatter key. |
 | `value` | string \| number \| boolean | New value. |
+| `syntax` | string | How the field is written in the note. |
+| `section` | string \| null | Optional section to scope the search to. |
+| `source_stem` | string \| null | Optional provenance hint. |
+| `reason` | string \| null | Optional. |
 
 **Outcome:**
 - `applied` — frontmatter mutated.
@@ -348,9 +362,15 @@ Append (or insert at a specific time) a line in a daily log file. Hashi uses pos
 
 | Field | Type | Notes |
 |---|---|---|
-| `log_path` | string | Daily-log note. Section to update is `## Log` (configurable via the SDD-defined section locator). |
-| `line` | string | Full markdown line to insert. Hashi does not transform it. |
-| `position` | object | `{ kind: "after_last_line" }` \| `{ kind: "before_first_line" }` \| `{ kind: "at_time", iso: "..." }` |
+| `daily_note_path` | string | The daily note to write into. |
+| `date` | string | `YYYY-MM-DD`. |
+| `section` | string | Heading text of the log section. |
+| `heading_level` | integer | Level of that heading. |
+| `position` | string | Where in the section the entry lands. |
+| `time` | string \| null | `HH:MM`. When set, the line is written as `- HH:MM: <content>`; otherwise `- <content>`. |
+| `content` | string | The entry text. Hashi composes the bullet and time prefix around it. |
+| `source_stem` | string \| null | Optional provenance hint. |
+| `reason` | string \| null | Optional. |
 
 **Outcome:**
 - `applied` — line inserted at the resolved position.
@@ -363,9 +383,14 @@ Replace one wikilink with another inside an existing log entry. Used when a note
 
 | Field | Type | Notes |
 |---|---|---|
-| `log_path` | string | Log note. |
-| `from_link` | string | Existing wikilink target (basename). |
-| `to_link` | string | Replacement wikilink target. |
+| `daily_note_path` | string | The daily note to write into. |
+| `date` | string | `YYYY-MM-DD`. |
+| `section` | string | Heading text of the log section. |
+| `heading_level` | integer | Level of that heading. |
+| `position` | string | Where in the section the link lands. |
+| `time` | string \| null | `HH:MM`. When set the line is `- HH:MM: [[stem]]`; otherwise `- [[stem]]`. |
+| `target_stem` | string | The note stem to link. This is link TEXT, not a path — it is not resolved against the vault. |
+| `reason` | string \| null | Optional. |
 
 **Outcome:**
 - `applied` — replaced.
@@ -378,7 +403,8 @@ Move a source file to the system trash via `app.vault.trash(file, true)`. Used a
 
 | Field | Type | Notes |
 |---|---|---|
-| `path` | string | File to trash. |
+| `source_path` | string | Vault-relative path of the file to trash. |
+| `reason` | string | Why it is being removed. Required. |
 
 **Outcome:**
 - `applied` — moved to system trash.
