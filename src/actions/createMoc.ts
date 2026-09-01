@@ -20,7 +20,7 @@
 
 import type { CreateMocAction } from "../schema/types.js";
 import type { ActionOutcome } from "../executor/state.js";
-import { findIllegalFilenameChars, formatIllegalChars } from "../util/paths.js";
+import { findIllegalFilenameChars, formatIllegalChars, isMarkdown } from "../util/paths.js";
 import { dirOf, stripTomoFrontmatter, type HandlerContext } from "./types.js";
 
 type MoveOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
@@ -67,6 +67,11 @@ export async function createMoc(
 	const dir = dirOf(destination);
 	if (dir !== "") await vault.createFolder(dir);
 	await vault.rename(source, destination);
-	await vault.process(destination, stripTomoFrontmatter);
+	// Markdown only — same reasoning as moveNote: the frontmatter strip is note
+	// cleanup, not part of moving. A MOC destination is always `.md` today, so
+	// this gate is a guard against future drift rather than a live branch.
+	if (isMarkdown(destination)) {
+		await vault.process(destination, stripTomoFrontmatter);
+	}
 	return { kind: "applied" };
 }

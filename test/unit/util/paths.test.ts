@@ -5,6 +5,9 @@ import {
 	denyListMatch,
 	findIllegalFilenameChars,
 	formatIllegalChars,
+	formatNoteExtensions,
+	isMarkdown,
+	isNotePath,
 	normalizeAndContain,
 	verifyRealpathContainment,
 } from "../../../src/util/paths";
@@ -347,5 +350,54 @@ describe("VALIDATION_ORDER", () => {
 		expect(typeof normalizeAndContain).toBe("function");
 		expect(typeof denyListMatch).toBe("function");
 		expect(typeof verifyRealpathContainment).toBe("function");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// isNotePath / isMarkdown — the move_note ↔ move_asset boundary
+// ---------------------------------------------------------------------------
+
+describe("isNotePath", () => {
+	it.each([".md", ".canvas", ".base"])("accepts %s", (ext) => {
+		expect(isNotePath(`Atlas/thing${ext}`)).toBe(true);
+	});
+
+	it.each([".png", ".jpg", ".pdf", ".mp4", ".json", ".txt"])("rejects %s", (ext) => {
+		expect(isNotePath(`Assets/thing${ext}`)).toBe(false);
+	});
+
+	it("is case-insensitive — Obsidian preserves whatever case the file has", () => {
+		expect(isNotePath("Atlas/Thing.MD")).toBe(true);
+		expect(isNotePath("Atlas/Thing.Canvas")).toBe(true);
+	});
+
+	it("rejects an extensionless path", () => {
+		expect(isNotePath("Atlas/README")).toBe(false);
+	});
+
+	it("matches on the extension, not on the name containing it", () => {
+		// A file literally named `.md.png` is an image, not a note.
+		expect(isNotePath("Assets/diagram.md.png")).toBe(false);
+	});
+});
+
+describe("isMarkdown", () => {
+	it("is narrower than isNotePath — frontmatter handling is markdown-only", () => {
+		expect(isMarkdown("Atlas/note.md")).toBe(true);
+		expect(isMarkdown("Atlas/board.canvas")).toBe(false);
+		expect(isMarkdown("Atlas/query.base")).toBe(false);
+		// Both of the above are still notes for move_note's purposes.
+		expect(isNotePath("Atlas/board.canvas")).toBe(true);
+		expect(isNotePath("Atlas/query.base")).toBe(true);
+	});
+
+	it("is case-insensitive", () => {
+		expect(isMarkdown("Atlas/Note.MD")).toBe(true);
+	});
+});
+
+describe("formatNoteExtensions", () => {
+	it("renders the allowed set for an error message", () => {
+		expect(formatNoteExtensions()).toBe("'.md', '.canvas', '.base'");
 	});
 });

@@ -44,6 +44,48 @@ const ILLEGAL_FILENAME_CHARS: readonly string[] = [
 ];
 
 /**
+ * The file kinds Obsidian treats as first-class documents rather than
+ * attachments: markdown, canvases and Bases queries. All three are text, so
+ * they survive the read-transform-write round trip `vault.process` performs;
+ * anything else is byte content that must never be read as a string.
+ *
+ * This is the boundary between the `move_note` and `move_asset` action kinds —
+ * each rejects the other's domain, so a producer routing a file to the wrong
+ * kind fails loudly instead of half-working.
+ */
+export const NOTE_EXTENSIONS: readonly string[] = [".md", ".canvas", ".base"];
+
+/**
+ * True when a vault-relative path names a note-like document (see
+ * `NOTE_EXTENSIONS`). Case-insensitive, because Obsidian happily creates
+ * `Note.MD` on a case-preserving filesystem and the extension carries no
+ * meaning beyond the file kind.
+ *
+ * Pure and synchronous so action handlers can pre-flight without I/O.
+ */
+export function isNotePath(path: string): boolean {
+	const lower = path.toLowerCase();
+	return NOTE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+/**
+ * True when a vault-relative path names a markdown file. Narrower than
+ * `isNotePath`: frontmatter handling applies to markdown alone, never to the
+ * JSON of a `.canvas` or the YAML of a `.base`.
+ */
+export function isMarkdown(path: string): boolean {
+	return path.toLowerCase().endsWith(".md");
+}
+
+/**
+ * Render `NOTE_EXTENSIONS` for an error message: each quoted, joined by `, `.
+ * Kept beside the list so a new extension cannot drift out of the diagnostics.
+ */
+export function formatNoteExtensions(): string {
+	return NOTE_EXTENSIONS.map((e) => `'${e}'`).join(", ");
+}
+
+/**
  * Inspect the basename of a vault-relative path for characters Obsidian
  * rejects in a filename. The directory portion is ignored — `/` is only an
  * offence inside the final segment, never as a separator.
