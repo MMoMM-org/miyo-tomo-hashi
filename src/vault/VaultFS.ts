@@ -47,6 +47,30 @@ export interface VaultFS {
   process(path: string, transform: (content: string) => string): Promise<void>;
 
   /**
+   * Atomically read-mutate-write a note's YAML frontmatter, mirroring
+   * Obsidian's `FileManager.processFrontMatter`. `fm` is the PARSED
+   * frontmatter object: mutate keys on it, or `delete fm[key]` to remove one.
+   * A file with no frontmatter block yields an empty object, and adding a key
+   * creates the block.
+   *
+   * Structural, not textual — this is the only safe way to edit YAML. Doing it
+   * through `process` would mean literal string surgery on a parsed format,
+   * which is how documents get corrupted.
+   *
+   * Markdown only: Obsidian documents this as "Must be a Markdown file".
+   * Callers guard with `isMarkdown` from `util/paths` before invoking.
+   *
+   * Throws on malformed YAML (Obsidian raises `YAMLParseError`); handlers turn
+   * that into a `failed` outcome rather than letting it abort the run.
+   *
+   * [ref: SDD/Architecture Decisions; ADR-7]
+   */
+  processFrontMatter(
+    path: string,
+    fn: (fm: Record<string, unknown>) => void,
+  ): Promise<void>;
+
+  /**
    * Convenience wrapper around `process` that parses JSON before calling
    * `transform` and re-serialises the result with
    * `JSON.stringify(v, null, 2) + "\n"` (2-space indent, trailing newline).

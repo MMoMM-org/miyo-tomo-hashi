@@ -5,6 +5,7 @@
  * richly-mocked Obsidian app, then verifies delegation specifics:
  *   - rename → fileManager.renameFile (NOT vault.rename)
  *   - trash  → fileManager.trashFile (honors user delete preference)
+ *   - processFrontMatter → fileManager.processFrontMatter (structural YAML edit)
  *   - createFolder swallows "Folder already exists"
  */
 
@@ -126,6 +127,19 @@ function makeRichApp(): App {
   app.fileManager.trashFile = vi.fn(async (file: TFile) => {
     store.delete(file.path);
   });
+
+  // Frontmatter lives in a parallel parsed map here for the same reason it
+  // does in FakeVaultFS: this mock is not a YAML implementation. Real
+  // serialisation behaviour is a test-vault question, not a unit-test one.
+  const fmStore = new Map<string, Record<string, unknown>>();
+  app.fileManager.processFrontMatter = vi.fn(
+    async (file: TFile, fn: (fm: Record<string, unknown>) => void) => {
+      if (!store.has(file.path)) throw new Error(`File not found: ${file.path}`);
+      const fm = fmStore.get(file.path) ?? {};
+      fn(fm);
+      fmStore.set(file.path, fm);
+    },
+  ) as App["fileManager"]["processFrontMatter"];
 
   return app;
 }

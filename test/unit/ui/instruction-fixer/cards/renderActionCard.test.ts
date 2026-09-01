@@ -318,6 +318,17 @@ describe("target fields — the 7 repair kinds, driven off TARGET_FIELD_WHITELIS
 		);
 	});
 
+	// edit_frontmatter's `value` / `expected` hold whole YAML values, so the
+	// control edits their JSON rendering rather than a bare string. The drift
+	// guard has to speak that too — skipping those fields would leave the one
+	// non-string write path in the roster uncovered.
+	const isJsonField = (kind: string, key: string): boolean =>
+		kind === "edit_frontmatter" && (key === "value" || key === "expected");
+	const typedInto = (kind: string, key: string): string =>
+		isJsonField(kind, key) ? `["repaired-${key}"]` : `repaired-${key}`;
+	const landsAs = (kind: string, key: string): unknown =>
+		isJsonField(kind, key) ? [`repaired-${key}`] : `repaired-${key}`;
+
 	it.each(repairKinds())("%s commits each field's edit through setTargetField", (kind) => {
 		const action = SAMPLES[kind];
 		const fields = targetFieldsFor(action);
@@ -328,7 +339,7 @@ describe("target fields — the 7 repair kinds, driven off TARGET_FIELD_WHITELIS
 		fields.forEach((field, index) => {
 			const input = rendered[index];
 			if (input === undefined) throw new Error(`no input for ${field.key}`);
-			input.value = `repaired-${field.key}`;
+			input.value = typedInto(kind, field.key);
 			input.dispatchEvent(new Event("change"));
 		});
 
@@ -344,12 +355,12 @@ describe("target fields — the 7 repair kinds, driven off TARGET_FIELD_WHITELIS
 				field.key === "anchor"
 					? (edited as { anchor: { value: string | null } }).anchor.value
 					: (edited as unknown as Record<string, unknown>)[field.key],
-			).toBe(`repaired-${field.key}`);
+			).toEqual(landsAs(kind, field.key));
 			// Drift guard: the card READS a field through `readTargetFieldValue`
 			// and WRITES it through `setTargetField`, two independent handlers of
 			// `anchor`'s nested shape. Reading back what the write landed proves
 			// they still agree — for every whitelisted field, not just `anchor`.
-			expect(readTargetFieldValue(edited, field.key)).toBe(`repaired-${field.key}`);
+			expect(readTargetFieldValue(edited, field.key)).toBe(typedInto(kind, field.key));
 		});
 	});
 
@@ -659,7 +670,7 @@ describe("note link (PRD F6)", () => {
 	 * Every kind's expected link target, checked against the handler that
 	 * actually performs it (`src/actions/*.ts`) — a `Record<ActionKind, …>` so
 	 * a new wire kind cannot be added without stating what its card links to,
-	 * and a swapped field in any of the 15 branches fails here.
+	 * and a swapped field in any of the 16 branches fails here.
 	 */
 	const EXPECTED_NOTE: Record<ActionKind, string | null> = {
 		// createMoc.ts moves source → destination; the destination is the note
@@ -677,6 +688,8 @@ describe("note link (PRD F6)", () => {
 		// addRelationship.ts:43 reads/writes target_moc_path.
 		add_relationship: "Atlas/200 Maps/Systems (MOC).md",
 		edit_note_text: "Atlas/202 Notes/Existing.md",
+		// editFrontmatter.ts writes into `path`, same as the other note editors.
+		edit_frontmatter: "Atlas/202 Notes/Existing.md",
 		remove_up_link: "Atlas/202 Notes/Existing.md",
 		resolve_dead_link: "Atlas/202 Notes/Existing.md",
 		// The update_* kinds all write into the daily note, never the stem they

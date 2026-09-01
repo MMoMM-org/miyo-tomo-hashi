@@ -38,6 +38,15 @@ export const SAMPLES = {
 		source: "100 Inbox/kanban-board.png",
 		destination: "Atlas/900 Assets/kanban-board.png",
 	},
+	edit_frontmatter: {
+		id: "I16",
+		action: "edit_frontmatter",
+		path: "Atlas/202 Notes/Existing.md",
+		property: "up",
+		operation: "set",
+		value: ["[[Systems (MOC)]]"],
+		expected: ["[[Old Parent]]"],
+	},
 	link_to_moc: {
 		id: "I03",
 		action: "link_to_moc",

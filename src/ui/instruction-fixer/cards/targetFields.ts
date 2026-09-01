@@ -160,6 +160,40 @@ export const TARGET_FIELDS: TargetFieldMap = {
 			pick: "none",
 		},
 	},
+	edit_frontmatter: {
+		path: {
+			label: "Note",
+			caption: "path",
+			captionTooltip: `${PATH_TOOLTIP} Markdown only — Obsidian's frontmatter API does not accept .canvas or .base.`,
+			placeholder: "Type or pick a note…",
+			pick: "path",
+		},
+		property: {
+			label: "Property",
+			caption: "YAML key",
+			captionTooltip:
+				"The frontmatter key to write or remove, e.g. up. Any key — nothing is treated specially.",
+			placeholder: "Property name…",
+			pick: "none",
+		},
+		value: {
+			label: "New value",
+			caption: "JSON",
+			captionTooltip:
+				'The whole new value, as JSON: "text" for a scalar, ["[[A]]", "[[B]]"] for a list. Invalid JSON is not committed. Ignored when the operation is remove.',
+			placeholder: '["[[Some MOC]]"]',
+			pick: "none",
+		},
+		expected: {
+			label: "Expected current value",
+			caption: "JSON — null means the property must be absent",
+			captionTooltip:
+				"What must already be at that key for the action to run, as JSON. This is the guard: if the note no longer matches, the action fails and writes nothing. When it fails, correct this field to what the note actually holds.",
+			placeholder: '["[[Old Parent]]"] or null',
+			pick: "none",
+		},
+	},
+
 	edit_note_text: {
 		path: {
 			label: "Note",
@@ -274,5 +308,12 @@ export function targetFieldsFor(action: Action): readonly TargetField[] {
 export function readTargetFieldValue(action: Action, key: string): string {
 	if (key === "anchor" && "anchor" in action) return action.anchor.value ?? "";
 	const value = (action as unknown as Record<string, unknown>)[key];
-	return typeof value === "string" ? value : "";
+	if (typeof value === "string") return value;
+	// Non-string whitelisted fields (edit_frontmatter's `value` / `expected`
+	// carry whole YAML values) render as JSON — the same form `setJsonField`
+	// parses back. Returning "" here instead would show the user an empty
+	// control for a field that holds something, which is worse than useless on
+	// the `expected` field they are there to correct.
+	if (value === undefined) return "";
+	return JSON.stringify(value);
 }

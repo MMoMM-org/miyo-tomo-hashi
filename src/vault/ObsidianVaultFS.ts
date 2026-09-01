@@ -62,6 +62,19 @@ export class ObsidianVaultFS implements VaultFS {
     await this.app.vault.process(file, transform);
   }
 
+  async processFrontMatter(
+    path: string,
+    fn: (fm: Record<string, unknown>) => void,
+  ): Promise<void> {
+    const file = this.requireFile(path);
+    // Obsidian's own atomic read-parse-mutate-serialise-write. It is typed
+    // `(frontmatter: any) => void`; the port narrows that to a record so
+    // handlers cannot reach for anything the fake cannot honour.
+    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+      fn(fm);
+    });
+  }
+
   async processJSON<T>(
     path: string,
     transform: (json: T) => T,

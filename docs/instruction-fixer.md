@@ -92,7 +92,7 @@ target fields → note link.
 
 ### Editable target fields, by kind
 
-Only 7 of the 15 action kinds carry a repairable target field (the ones where a mechanical
+Only 8 of the 16 action kinds carry a repairable target field (the ones where a mechanical
 mismatch — "what this points at isn't there anymore" — is the realistic failure mode):
 
 | Kind | Editable target fields |
@@ -211,5 +211,5 @@ cards and outcomes you see afterward always reflect what's actually on disk.
   reads outcomes from and re-runs through
 - [Run log](run-log.md) — the pointer line and the outcome table the Fixer parses when no
   in-session run summary is available
-- [Action reference](action-reference.md) — all 15 action kinds; the 7 with a repairable
+- [Action reference](action-reference.md) — all 16 action kinds; the 8 with a repairable
   target field are marked above

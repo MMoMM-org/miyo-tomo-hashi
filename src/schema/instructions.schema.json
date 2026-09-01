@@ -67,6 +67,7 @@
           {"$ref": "#/$defs/delete_source"},
           {"$ref": "#/$defs/skip"},
           {"$ref": "#/$defs/edit_note_text"},
+          {"$ref": "#/$defs/edit_frontmatter"},
           {"$ref": "#/$defs/remove_up_link"},
           {"$ref": "#/$defs/resolve_dead_link"}
         ]
@@ -311,6 +312,27 @@
         },
         "applied": {"$ref": "#/$defs/applied_field"}
       }
+    },
+    "edit_frontmatter": {
+      "type": "object",
+      "required": ["id", "action", "path", "property", "operation", "expected"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/action_id"},
+        "action": {"const": "edit_frontmatter"},
+        "path": {"type": "string", "description": "Vault-relative path of the note whose frontmatter is edited. MUST be a '.md' file \u2014 Obsidian's processFrontMatter is markdown-only."},
+        "property": {"type": "string", "description": "The YAML key to write or remove, e.g. 'up'. Any key; nothing is treated specially."},
+        "operation": {"enum": ["set", "remove"], "description": "'set' writes `value`, creating the key if absent (this is also how a property is ADDED). 'remove' deletes the key."},
+        "value": {"description": "The whole new value for `property`. Any JSON value \u2014 maps to YAML scalars, lists and maps. Required for operation='set'; ignored for 'remove'. Tomo reads the current value and emits the complete replacement; there are no list-item operations."},
+        "expected": {"description": "The value that must currently be at `property`, compared deep-equal. `null` means 'the property must not exist' \u2014 that is how an add is expressed. If the note does not match, the action FAILS and writes nothing, so a vault that changed between report and apply is never silently clobbered. A literal YAML null cannot be expressed as an expectation."},
+        "applied": {"$ref": "#/$defs/applied_field"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"operation": {"const": "set"}}, "required": ["operation"]},
+          "then": {"required": ["value"]}
+        }
+      ]
     },
     "remove_up_link": {
       "type": "object",

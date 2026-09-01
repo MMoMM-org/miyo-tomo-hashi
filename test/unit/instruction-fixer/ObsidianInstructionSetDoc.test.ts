@@ -46,6 +46,7 @@ function delegating(base: VaultFS, overrides: Partial<VaultFS>): VaultFS {
 		list: (folder) => base.list(folder),
 		process: (path, transform) => base.process(path, transform),
 		processJSON: (path, transform) => base.processJSON(path, transform),
+		processFrontMatter: (path, fn) => base.processFrontMatter(path, fn),
 		rename: (from, to) => base.rename(from, to),
 		createFolder: (path) => base.createFolder(path),
 		trash: (path) => base.trash(path),

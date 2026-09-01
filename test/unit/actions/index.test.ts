@@ -2,7 +2,7 @@
  * HANDLERS dispatch registry tests.
  *
  * T3.6 — verifies:
- *   1. Key coverage: HANDLERS has exactly 15 keys matching all ActionKind values.
+ *   1. Key coverage: HANDLERS has exactly 16 keys matching all ActionKind values.
  *   2. Identity: each registry entry points to the canonical handler function.
  *   3. Dispatch smoke: HANDLERS[action.action](action, ctx) routes to the correct handler.
  *
@@ -20,6 +20,7 @@ import {
 	removeUpLink,
 	resolveDeadLink,
 	createMoc,
+	editFrontmatter,
 	moveAsset,
 	moveNote,
 	linkToMoc,
@@ -53,7 +54,7 @@ const makeCtx = (vault: FakeVaultFS) => ({
 // ---------------------------------------------------------------------------
 
 describe("HANDLERS — key coverage", () => {
-	it("has exactly the 15 ActionKind keys", () => {
+	it("has exactly the 16 ActionKind keys", () => {
 		const expectedKeys: ActionKind[] = [
 			"create_moc",
 			"move_note",
@@ -63,6 +64,7 @@ describe("HANDLERS — key coverage", () => {
 			"replace_section",
 			"add_relationship",
 			"edit_note_text",
+			"edit_frontmatter",
 			"remove_up_link",
 			"resolve_dead_link",
 			"update_tracker",
@@ -90,6 +92,10 @@ describe("HANDLERS — identity", () => {
 
 	it("HANDLERS.move_asset === moveAsset", () => {
 		expect(HANDLERS.move_asset).toBe(moveAsset);
+	});
+
+	it("HANDLERS.edit_frontmatter === editFrontmatter", () => {
+		expect(HANDLERS.edit_frontmatter).toBe(editFrontmatter);
 	});
 
 	it("HANDLERS.link_to_moc === linkToMoc", () => {
