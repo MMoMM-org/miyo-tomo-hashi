@@ -22,10 +22,11 @@ import type {
 // ---------------------------------------------------------------------------
 
 describe("ActionKind", () => {
-	it("is the exact 14-element string-literal union", () => {
+	it("is the exact 15-element string-literal union", () => {
 		expectTypeOf<ActionKind>().toEqualTypeOf<
 			| "create_moc"
 			| "move_note"
+			| "move_asset"
 			| "link_to_moc"
 			| "insert_under_marker"
 			| "replace_section"
@@ -41,10 +42,11 @@ describe("ActionKind", () => {
 		>();
 	});
 
-	it("all 14 literals are assignable to ActionKind", () => {
+	it("all 15 literals are assignable to ActionKind", () => {
 		const allKinds: ActionKind[] = [
 			"create_moc",
 			"move_note",
+			"move_asset",
 			"link_to_moc",
 			"insert_under_marker",
 			"replace_section",
@@ -58,8 +60,8 @@ describe("ActionKind", () => {
 			"delete_source",
 			"skip",
 		];
-		// Runtime check: exactly 14
-		expect(allKinds).toHaveLength(14);
+		// Runtime check: exactly 15
+		expect(allKinds).toHaveLength(15);
 	});
 });
 
@@ -307,6 +309,8 @@ describe("Action discriminated union", () => {
 					return `update_log_link:${a.target_stem}`;
 				case "delete_source":
 					return `delete_source:${a.source_path}`;
+				case "move_asset":
+					return `move_asset:${a.source}`;
 				case "skip":
 					return `skip:${String(a.source_path)}`;
 				default: {

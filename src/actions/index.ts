@@ -19,6 +19,7 @@ import type { HandlerContext } from "./types.js";
 
 import { createMoc } from "./createMoc.js";
 import { moveNote } from "./moveNote.js";
+import { moveAsset } from "./moveAsset.js";
 import { linkToMoc } from "./linkToMoc.js";
 import { insertUnderMarker } from "./insertUnderMarker.js";
 import { replaceSection } from "./replaceSection.js";
@@ -56,6 +57,7 @@ export const HANDLERS: {
 } = {
 	create_moc: createMoc,
 	move_note: moveNote,
+	move_asset: moveAsset,
 	link_to_moc: linkToMoc,
 	insert_under_marker: insertUnderMarker,
 	replace_section: replaceSection,
@@ -76,6 +78,7 @@ export const HANDLERS: {
 
 export { createMoc } from "./createMoc.js";
 export { moveNote } from "./moveNote.js";
+export { moveAsset } from "./moveAsset.js";
 export { linkToMoc } from "./linkToMoc.js";
 export { insertUnderMarker } from "./insertUnderMarker.js";
 export { replaceSection } from "./replaceSection.js";

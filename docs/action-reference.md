@@ -1,11 +1,12 @@
 # Action Reference
 
-The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are fourteen kinds; each has its own outcome semantics, idempotency rule, and failure surface.
+The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are fifteen kinds; each has its own outcome semantics, idempotency rule, and failure surface.
 
 | Action | What it does | Idempotency probe | Halt-on-fail effect |
 |---|---|---|---|
 | [create_moc](#create_moc) | Create a new MOC at `destination` from a template | Destination exists | Marks dependent `link_to_moc` as `skipped-dependency` |
 | [move_note](#move_note) | Rename source → destination (note files only) | Destination exists, source missing → `skipped-already` | None — independent action |
+| [move_asset](#move_asset) | Rename source → destination (attachments only) | Destination exists, source missing → `skipped-already` | None — independent action |
 | [link_to_moc](#link_to_moc) | Append `- [[note]]` bullet to a MOC's named section | Bullet already present | None |
 | [insert_under_marker](#insert_under_marker) | Insert a multi-line block at a marker in any note | Identical block already present | None |
 | [replace_section](#replace_section) | Overwrite a heading section's body in any note | Body already equals content | None |
@@ -60,6 +61,29 @@ The restriction is not cosmetic. After the rename this action strips Tomo's fron
 - `failed` — `destination` exists AND `source` also exists. Inconsistent state; Hashi refuses to choose. Resolve manually before re-running.
 - `failed` — either endpoint is not a note file. The message names the offending path(s) and the allowed set.
 - `failed` — the destination filename contains a character Obsidian rejects. The producer must emit Obsidian-safe names; Hashi validates and rejects, never repairs.
+
+## `move_asset`
+
+Rename an attachment — image, PDF, audio, anything that is not a note — from `source` → `destination`. Uses `app.fileManager.renameFile`, so embeds (`![[foto.png]]`) and links pointing at the file are rewritten automatically.
+
+**Attachments only.** Neither endpoint may be `.md`, `.canvas` or `.base`. Notes belong to [`move_note`](#move_note), and each kind refuses the other's domain so a mis-routed file fails loudly in either direction rather than half-working.
+
+The reason this is a separate kind rather than a flag on `move_note` is that `move_note` strips Tomo's frontmatter after its rename, and that step round-trips the file content through a UTF-8 string — which silently replaces invalid byte sequences with `U+FFFD` on binary content. `move_asset` never reads the file at all: it renames, and nothing else.
+
+Deliberately minimal. `move_note`'s note-shaped extras (`title`, `parent_mocs`, `tags`, `source_inbox_item`) carry no meaning for a binary and are rejected by the schema. Cleanup of a source inbox item is `delete_source`'s job here exactly as it is for notes.
+
+| Field | Type | Notes |
+|---|---|---|
+| `source` | string | Source path, vault-relative. Must not be a note file. |
+| `destination` | string | Destination path, vault-relative. Must not be a note file. Parent folder auto-created. |
+| `applied` | boolean | Optional. Hashi writes `false` → `true`; never re-emitted as `true` by Tomo. |
+
+**Outcome:**
+- `applied` — moved.
+- `skipped-already` — `destination` exists, `source` does not (already moved on a previous run).
+- `failed` — `destination` exists AND `source` also exists. Inconsistent state; Hashi refuses to choose.
+- `failed` — either endpoint is a note file. The message names the offending path(s).
+- `failed` — the destination filename contains a character Obsidian rejects.
 
 ## `link_to_moc`
 

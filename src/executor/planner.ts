@@ -33,10 +33,13 @@ import type { VaultFS } from "../vault/VaultFS.js";
 // Garden-audit link-edit actions (edit_note_text, remove_up_link,
 // resolve_dead_link) run before add_relationship, allowing structured link
 // updates before navigation.
+// move_asset sits beside move_note: both are pure relocations with no
+// dependents, and grouping them keeps the run log readable.
 // Update kinds and source cleanup follow.
 const KIND_ORDER: readonly ActionKind[] = [
 	"create_moc",
 	"move_note",
+	"move_asset",
 	"link_to_moc",
 	"insert_under_marker",
 	"replace_section",
@@ -257,6 +260,8 @@ function buildSummary(action: Action): string {
 		case "create_moc":
 			return `${action.source} → ${action.destination}`;
 		case "move_note":
+			return `${action.source} → ${action.destination}`;
+		case "move_asset":
 			return `${action.source} → ${action.destination}`;
 		case "link_to_moc":
 			return `${action.target_moc}`;

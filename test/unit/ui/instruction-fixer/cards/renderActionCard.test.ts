@@ -659,13 +659,17 @@ describe("note link (PRD F6)", () => {
 	 * Every kind's expected link target, checked against the handler that
 	 * actually performs it (`src/actions/*.ts`) — a `Record<ActionKind, …>` so
 	 * a new wire kind cannot be added without stating what its card links to,
-	 * and a swapped field in any of the 14 branches fails here.
+	 * and a swapped field in any of the 15 branches fails here.
 	 */
 	const EXPECTED_NOTE: Record<ActionKind, string | null> = {
 		// createMoc.ts moves source → destination; the destination is the note
 		// the action is trying to produce (the source is named in the intent).
 		create_moc: "Atlas/200 Maps/Systems (MOC).md",
 		move_note: "Atlas/202 Notes/Kanban.md",
+		// moveAsset.ts moves source → destination too; the destination is an
+		// attachment rather than a note, but it is still the file the card
+		// should open.
+		move_asset: "Atlas/900 Assets/kanban-board.png",
 		// linkToMoc.ts:60 resolves `target_moc_path ?? target_moc` — same order.
 		link_to_moc: "Atlas/200 Maps/Systems (MOC).md",
 		insert_under_marker: "Atlas/202 Notes/Board.md",

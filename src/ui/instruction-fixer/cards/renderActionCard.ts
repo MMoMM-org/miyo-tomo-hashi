@@ -108,6 +108,8 @@ export function actionIntent(action: Action): string {
 			return `Create MOC ${quote(action.title)} at ${action.destination} (from ${action.source})`;
 		case "move_note":
 			return `Move ${action.source} → ${action.destination}`;
+		case "move_asset":
+			return `Move attachment ${action.source} → ${action.destination}`;
 		case "link_to_moc":
 			return `Link ${quote(action.line_to_add)} into ${action.target_moc}, ${action.placement} ${action.anchor.type} ${anchorText(action.anchor.value)}`;
 		case "insert_under_marker":
@@ -155,6 +157,11 @@ export function affectedNotePath(action: Action): string | null {
 	switch (action.action) {
 		case "create_moc":
 		case "move_note":
+		case "move_asset":
+			// move_asset's destination is an attachment rather than a note, but
+			// it is still the file the user wants to open to see what happened —
+			// and Obsidian opens images fine. Same fallback shape as move_note:
+			// on a failed move the destination does not exist yet.
 			return action.destination;
 		case "link_to_moc":
 			return action.target_moc_path ?? action.target_moc;
