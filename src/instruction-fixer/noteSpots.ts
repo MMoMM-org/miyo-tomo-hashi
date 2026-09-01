@@ -304,7 +304,69 @@ export function spotSourcePath(action: Action): string | null {
 			return action.target_path;
 		case "add_relationship":
 			return action.target_moc_path;
+		case "edit_frontmatter":
+			// Not a "spot" in the anchor sense — but the frontmatter pickers
+			// need the same resolve-and-read preamble, and this is the one
+			// function that maps an action to the note it works on.
+			return action.path;
 		default:
 			return null;
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Frontmatter properties — the edit_frontmatter pickers' row source
+// ---------------------------------------------------------------------------
+
+/** One offerable frontmatter key, with a preview of what it currently holds. */
+export interface FrontmatterProperty {
+	readonly key: string;
+	/** The parsed value, handed through untouched for the transform to commit. */
+	readonly value: unknown;
+	/** Short human preview for the picker row — never the full value. */
+	readonly preview: string;
+}
+
+/**
+ * Preview a parsed YAML value in one short line. Long strings and long lists
+ * are truncated: this is a chooser row, not a viewer, and a wall of text makes
+ * the list unscannable.
+ */
+function previewValue(value: unknown): string {
+	if (value === null) return "null";
+	if (Array.isArray(value)) {
+		if (value.length === 0) return "(empty list)";
+		const head = value.slice(0, 2).map((v) => previewValue(v)).join(", ");
+		return value.length > 2 ? `[${head}, +${String(value.length - 2)} more]` : `[${head}]`;
+	}
+	if (typeof value === "object") return "{…}";
+	// Everything reaching here is a primitive — object, array and null were
+	// handled above — but `unknown` does not narrow that far, and a blind
+	// String() on an object would print "[object Object]" into a chooser row.
+	if (typeof value === "string") {
+		return value.length > 60 ? `${value.slice(0, 57)}…` : value;
+	}
+	if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+		return String(value);
+	}
+	return typeof value;
+}
+
+/**
+ * Turn a note's parsed frontmatter into picker rows, sorted by key.
+ *
+ * Pure, and takes the already-parsed record rather than reading anything —
+ * same contract as the other spot computations, so the pickers stay testable
+ * without a vault. An empty or absent block yields an empty array, which the
+ * CALLER turns into a notice: opening an empty picker would imply the note is
+ * merely featureless rather than missing the block entirely.
+ */
+export function computeFrontmatterProperties(
+	frontmatter: Record<string, unknown> | undefined,
+): FrontmatterProperty[] {
+	if (frontmatter === undefined) return [];
+	return Object.keys(frontmatter)
+		.sort((a, b) => a.localeCompare(b))
+		.map((key) => ({ key, value: frontmatter[key], preview: previewValue(frontmatter[key]) }));
+}
+

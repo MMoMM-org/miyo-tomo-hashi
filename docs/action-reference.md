@@ -232,7 +232,18 @@ that moved on is never silently clobbered.
 
 When it fails, the repair path is the **Instruction Fixer**: `path`, `property`,
 `value` and `expected` are all editable there, with `value` and `expected` shown
-as JSON. Correct `expected` to what the note actually holds, save, re-run.
+as JSON. Two buttons read straight from the target note so nothing has to be
+transcribed:
+
+- **Choose…** on *Property* lists the keys the note actually has, with a preview
+  of each value. Picking one sets `property` **and** `expected` together — a
+  pick that changed the key while leaving the old expectation behind would hand
+  you an action guaranteed to fail.
+- **Read from note** on *Expected current value* pulls in whatever that property
+  holds right now. This is the short path out of a failed expectation: the
+  action failed *because* the note holds something else, and this puts that
+  something else in the field. If the property has since been deleted, it fills
+  in `null` — which is exactly the right instruction.
 
 **Outcome:**
 - `applied` — the property was written or removed.

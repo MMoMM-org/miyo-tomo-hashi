@@ -1,7 +1,10 @@
 /**
- * The Instruction Fixer's two target-note pickers (spec-006 follow-up, user
- * request 2026-07-27 b + c): choose an anchor, or an `add_relationship` marker,
- * from the structure the TARGET note actually has right now.
+ * The Instruction Fixer's target-note pickers: choose an anchor, an
+ * `add_relationship` marker, or an `edit_frontmatter` property — always from
+ * what the TARGET note actually has right now.
+ *
+ * The first two are the spec-006 follow-up (user request 2026-07-27 b + c);
+ * the frontmatter one is the 2026-09-01 follow-up to `edit_frontmatter`.
  *
  * Thin `SuggestModal` wrappers, same shape as the Suggestions Editor's
  * `SpotPicker`: all the domain logic (what is offerable, which placements are
@@ -18,7 +21,11 @@
 
 import { type App, SuggestModal } from "obsidian";
 
-import type { AnchorSpot, MarkerSpot } from "../../../instruction-fixer/noteSpots.js";
+import type {
+	AnchorSpot,
+	FrontmatterProperty,
+	MarkerSpot,
+} from "../../../instruction-fixer/noteSpots.js";
 
 /** Shared list-item rendering: primary label, secondary detail. */
 function renderRow(el: HTMLElement, label: string, detail: string): void {
@@ -82,5 +89,43 @@ export class MarkerSpotPicker extends SuggestModal<MarkerSpot> {
 
 	onChooseSuggestion(spot: MarkerSpot): void {
 		this.onPick(spot);
+	}
+}
+
+/**
+ * Choose a property out of the target note's frontmatter.
+ *
+ * Rows carry the parsed value, not just the key: the pick commits `property`
+ * AND `expected` together (see `setFrontmatterProperty`), so the value has to
+ * travel with the choice rather than be fetched again afterwards from a note
+ * that may have moved on in between.
+ */
+export class FrontmatterPropertyPicker extends SuggestModal<FrontmatterProperty> {
+	private readonly properties: readonly FrontmatterProperty[];
+	private readonly onPick: (property: FrontmatterProperty) => void;
+
+	constructor(
+		app: App,
+		properties: readonly FrontmatterProperty[],
+		onPick: (property: FrontmatterProperty) => void,
+	) {
+		super(app);
+		this.properties = properties;
+		this.onPick = onPick;
+		this.setPlaceholder("Choose a property…");
+	}
+
+	getSuggestions(query: string): FrontmatterProperty[] {
+		const q = query.trim().toLowerCase();
+		if (q === "") return [...this.properties];
+		return this.properties.filter((p) => p.key.toLowerCase().includes(q));
+	}
+
+	renderSuggestion(property: FrontmatterProperty, el: HTMLElement): void {
+		renderRow(el, property.key, property.preview);
+	}
+
+	onChooseSuggestion(property: FrontmatterProperty): void {
+		this.onPick(property);
 	}
 }

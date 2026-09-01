@@ -124,6 +124,15 @@ Fields that point *into* another note offer a **Choose…** button rather than f
 | **Anchor** (`link_to_moc`, `insert_under_marker`) | the target note's own headings, callouts and body lines |
 | **Section heading** (`replace_section`) | the target note's headings only |
 | **Marker** (`add_relationship`) | the target MOC's Dataview field openers (`up::`, `down::`) and body lines |
+| **Property** (`edit_frontmatter`) | the target note's own frontmatter keys, each with a preview of its current value |
+
+One field carries a button that is **not** a chooser: *Expected current value* on
+`edit_frontmatter` offers **Read from note**, which opens nothing and simply pulls in
+whatever that property holds right now. It is labelled differently because it behaves
+differently — a button saying "Choose…" that opens no chooser is a small lie you pay for
+by clicking it to find out. If the property has since been deleted it fills in `null`,
+which is the wire's way of saying "this property must not exist" and therefore exactly
+the right instruction.
 
 The anchor picker lists each spot once per **placement** it legally allows, and picking a
 row commits the anchor's type, its value and the placement together. That is deliberate:
@@ -143,6 +152,11 @@ doesn't currently start with the Marker value on record — Tomo's own multi-lin
 can produce that — Hashi can't tell where the split is, so only Marker changes and Line is
 left exactly as it was rather than guessed at. Each row's secondary text shows the line's
 current content so you can see what a pick is about to match before you commit to it.
+
+Picking a **Property** commits *Expected current value* alongside it, for the same reason.
+The expectation is compared against the note at apply time, so changing the key while
+leaving the old key's expectation behind would produce an action guaranteed to fail — the
+picker would be manufacturing the very breakage it exists to repair.
 
 Two things the pickers deliberately do *not* do:
 
