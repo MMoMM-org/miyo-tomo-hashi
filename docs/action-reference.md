@@ -324,7 +324,7 @@ Every occurrence in the body is replaced.
 **Outcome:**
 - `applied` — the body was edited.
 - `skipped-already` — `target` was not found in any wikilink form **anywhere in the note** (the note may have been fixed by hand, or a prior run already resolved it — idempotent re-run). A no-op success — never fails the batch.
-- `failed` — the link was found only in the frozen frontmatter. Reporting a no-op success there would mark the action done and filter it out of every later run, leaving the dead link in place with nothing reported. A structural limit, not a transient one; retrying will not help. The frontmatter is probed with the same link matcher the body uses, so a target merely appearing as ordinary text in some property does not trigger it.
+- `failed` — the link was found only in the frozen frontmatter. Obsidian indexes property links, so the audit genuinely produces these (confirmed 2026-09-01) — this is not a defensive branch. Reporting a no-op success there would mark the action done and filter it out of every later run, leaving the dead link in place with nothing reported. A structural limit, not a transient one; retrying will not help. The frontmatter is probed with the same link matcher the body uses, so a target merely appearing as ordinary text in some property does not trigger it.
 - `failed` — target note missing. File untouched.
 
 ## `update_tracker`
