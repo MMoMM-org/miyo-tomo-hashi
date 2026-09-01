@@ -1,3 +1,13 @@
+## [0.23.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.22.0...0.23.0) (2026-09-01)
+
+### Features
+
+* **instruction-fixer:** pick frontmatter properties and read values from the note ([986e565](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/986e565fd040aeaf5ecef5ec1f6a6b20280faedd))
+
+### Bug Fixes
+
+* **edit_frontmatter:** never open a write the expectation already refuses ([41d67dd](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/41d67ddfdaf83b7badf5f668b08df66e89b5829d)), closes [#68](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/68)
+
 ## [0.22.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.21.1...0.22.0) (2026-09-01)
 
 ### Features
