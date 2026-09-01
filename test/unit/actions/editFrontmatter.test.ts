@@ -86,7 +86,7 @@ describe("editFrontmatter — set", () => {
 		await seed(vault, { related: [] });
 
 		const outcome = await editFrontmatter(
-			makeAction({ expected: null }),
+			makeAction({ expected: undefined, expected_absent: true }),
 			makeCtx(vault),
 		);
 
@@ -143,7 +143,7 @@ describe("editFrontmatter — remove", () => {
 		await seed(vault, { related: [] });
 
 		const outcome = await editFrontmatter(
-			makeAction({ operation: "remove", value: undefined, expected: null }),
+			makeAction({ operation: "remove", value: undefined, expected: undefined, expected_absent: true }),
 			makeCtx(vault),
 		);
 
@@ -186,7 +186,7 @@ describe("editFrontmatter — expectation mismatch", () => {
 		await seed(vault, { up: [OLD_LINK] });
 
 		const outcome = await editFrontmatter(
-			makeAction({ expected: null }),
+			makeAction({ expected: undefined, expected_absent: true }),
 			makeCtx(vault),
 		);
 
@@ -287,15 +287,34 @@ describe("editFrontmatter — deep comparison", () => {
 		expect(outcome.kind).toBe("applied");
 	});
 
-	it("distinguishes a null value from an absent property", async () => {
-		// `expected: null` means ABSENT. A property holding a literal null is a
-		// different thing, and must not satisfy it.
-		const vault = new FakeVaultFS();
-		await seed(vault, { up: null });
+	it("distinguishes a null value from an absent property — both directions", async () => {
+		// The whole reason expected_absent exists (Tomo, 2026-09-01): the old
+		// `expected: null` overload could not tell these apart.
+		const holdsNull = new FakeVaultFS();
+		await seed(holdsNull, { up: null });
 
-		const outcome = await editFrontmatter(makeAction({ expected: null }), makeCtx(vault));
+		// Expecting ABSENT against a key that holds null → mismatch.
+		expect(
+			(
+				await editFrontmatter(
+					makeAction({ expected: undefined, expected_absent: true }),
+					makeCtx(holdsNull),
+				)
+			).kind,
+		).toBe("failed");
 
-		expect(outcome.kind).toBe("failed");
+		// Expecting a literal null against that same key → match. This is the
+		// case that was inexpressible before.
+		const outcome = await editFrontmatter(makeAction({ expected: null }), makeCtx(holdsNull));
+		expect(outcome.kind).toBe("applied");
+		expect(await holdsNull.readFrontMatter(PATH)).toEqual({ up: [NEW_LINK] });
+
+		// And expecting a literal null against an ABSENT key → mismatch.
+		const absent = new FakeVaultFS();
+		await seed(absent, { related: [] });
+		expect((await editFrontmatter(makeAction({ expected: null }), makeCtx(absent))).kind).toBe(
+			"failed",
+		);
 	});
 
 	it("distinguishes false from absent", async () => {

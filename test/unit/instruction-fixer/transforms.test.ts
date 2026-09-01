@@ -143,7 +143,7 @@ describe("TARGET_FIELD_WHITELIST", () => {
 			replace_section: ["target_path", "anchor"],
 			add_relationship: ["target_moc_path", "marker", "line"],
 			edit_note_text: ["path", "match", "replace"],
-			edit_frontmatter: ["path", "property", "value", "expected"],
+			edit_frontmatter: ["path", "property", "value", "expected", "expected_absent"],
 			remove_up_link: ["path", "link"],
 			resolve_dead_link: ["path", "target", "replace"],
 		});
@@ -720,7 +720,9 @@ describe("setFrontmatterProperty", () => {
 		expect(fmAction(next).expected).toBe("draft");
 	});
 
-	it("an absent key commits expected null — the must-not-exist sentinel", () => {
+	it("an absent key commits expected_absent and DROPS expected", () => {
+		// Leaving both behind would be a schema error — two different
+		// statements about one key.
 		const model = makeModel([editFrontmatter()]);
 
 		const next = setFrontmatterProperty(model, "I24", "tags", {
@@ -729,7 +731,8 @@ describe("setFrontmatterProperty", () => {
 		});
 
 		expect(fmAction(next).property).toBe("tags");
-		expect(fmAction(next).expected).toBeNull();
+		expect(fmAction(next).expected_absent).toBe(true);
+		expect("expected" in fmAction(next)).toBe(false);
 	});
 
 	it("commits a list value structurally, not as a string", () => {
@@ -755,9 +758,12 @@ describe("setFrontmatterProperty", () => {
 
 	it("rejects a value with no JSON form rather than committing something lossy", () => {
 		const model = makeModel([editFrontmatter()]);
-		expect(
-			setFrontmatterProperty(model, "I24", "up", { current: undefined, present: true }),
-		).toBe(model);
+		const next = setFrontmatterProperty(model, "I24", "up", {
+			current: undefined,
+			present: true,
+		});
+		// property may still have been written; the expectation must not be.
+		expect(fmAction(next).expected).toEqual(["[[Old]]"]);
 	});
 });
 
@@ -775,15 +781,35 @@ describe("setFrontmatterExpected", () => {
 		expect(fmAction(next).expected).toEqual(["[[Something Else]]"]);
 	});
 
-	it("a deleted key refreshes to null, which is exactly the right instruction", () => {
-		// Not a special case in the setter — `present: false` maps to the wire's
-		// own "must not exist" sentinel. Pinned because it looks accidental
-		// until someone changes it.
+	it("a deleted key refreshes to expected_absent, swapping the field pair", () => {
 		const model = makeModel([editFrontmatter()]);
 
 		const next = setFrontmatterExpected(model, "I24", { current: undefined, present: false });
 
+		expect(fmAction(next).expected_absent).toBe(true);
+		expect("expected" in fmAction(next)).toBe(false);
+	});
+
+	it("a key that came BACK swaps expected_absent away again", () => {
+		// The other direction of the same swap — without it, an action repaired
+		// once could never be repaired back.
+		const model = makeModel([
+			editFrontmatter({ expected: undefined, expected_absent: true }),
+		]);
+
+		const next = setFrontmatterExpected(model, "I24", { current: ["[[A]]"], present: true });
+
+		expect(fmAction(next).expected).toEqual(["[[A]]"]);
+		expect("expected_absent" in fmAction(next)).toBe(false);
+	});
+
+	it("a literal null value is a VALUE now, not the absence sentinel", () => {
+		const model = makeModel([editFrontmatter()]);
+
+		const next = setFrontmatterExpected(model, "I24", { current: null, present: true });
+
 		expect(fmAction(next).expected).toBeNull();
+		expect("expected_absent" in fmAction(next)).toBe(false);
 	});
 
 	it("a same-value refresh is a no-op — the SAME model reference", () => {

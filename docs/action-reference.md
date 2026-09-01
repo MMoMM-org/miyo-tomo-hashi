@@ -190,7 +190,7 @@ Editing, adding or removing frontmatter properties is
 - `applied` — the body was edited.
 - `skipped-already` — the `match` was not found **anywhere in the note**, or an empty `match` was supplied. A no-op success — never fails the batch on a stale single match, since the note may have been fixed by hand between report and apply.
 - `failed` — target note missing. File untouched.
-- `failed` — the `match` was found only in the frozen frontmatter. See above; this is a structural limit of the action, not a transient condition, so retrying will not help.
+- `failed` — the `match` was found only in the frozen frontmatter. See above; this is a structural limit of the action, not a transient condition, so retrying will not help. [`resolve_dead_link`](#resolve_dead_link) behaves the same way, for the same reason.
 
 Use [`edit_frontmatter`](#edit_frontmatter) for anything inside the block.
 
@@ -230,7 +230,8 @@ the audit's reach.
 | `property` | string | The YAML key. **Any** key — nothing is treated specially. |
 | `operation` | `"set"` \| `"remove"` | `set` writes `value`, creating the key when absent — that is also how a property is **added**. `remove` deletes it. |
 | `value` | any JSON | The whole new value: scalar, list or map. Required for `set`, ignored for `remove`. |
-| `expected` | any JSON | **Required.** See below. |
+| `expected` | any JSON | The property must hold this. Exactly one of `expected` / `expected_absent` is required. |
+| `expected_absent` | `true` | The property must not exist. This is how an add states its expectation. |
 
 ### `expected` — the guard, and why it is not optional
 
@@ -242,10 +243,14 @@ what the note holds — and notes change between the audit and the apply.
 writing. If it does not match, the action **fails and writes nothing**. A vault
 that moved on is never silently clobbered.
 
-- `expected: null` means **"the property must not exist"**. That is how an add
-  is expressed. A property holding a literal YAML `null` is a *different* thing
-  and does not satisfy it — so a literal null cannot be expressed as an
-  expectation.
+- **`expected_absent: true` means "the property must not exist"** — that is how
+  an add states its expectation. **`expected: null`** is a *value* expectation
+  and means the property holds a literal YAML null. The two are different notes,
+  and the schema keeps them apart.
+- **Supplying both is a schema error**, not a precedence rule. Two different
+  statements about one key have no honest winner, so the action is rejected at
+  validation rather than resolved by a tie-break nobody would remember.
+- `expected_absent: false` is also rejected — to expect a value, use `expected`.
 - List order is significant: `[A, B]` does not match `[B, A]`. Map key order is
   not.
 - It is required rather than optional deliberately. A producer that forgets it
@@ -314,9 +319,12 @@ Alias-aware unlink/repoint of a dead wikilink in a note's **body**. Supersedes `
 
 Every occurrence in the body is replaced.
 
+**Body only**, exactly as [`edit_note_text`](#edit_note_text) — the YAML frontmatter block is frozen, and this action can never reach a link that lives in a property. A dead `up: "[[Foo]]"` is [`edit_frontmatter`](#edit_frontmatter)'s job.
+
 **Outcome:**
 - `applied` — the body was edited.
-- `skipped-already` — `target` was not found in any wikilink form (the note may have been fixed by hand, or a prior run already resolved it — idempotent re-run). A no-op success — never fails the batch.
+- `skipped-already` — `target` was not found in any wikilink form **anywhere in the note** (the note may have been fixed by hand, or a prior run already resolved it — idempotent re-run). A no-op success — never fails the batch.
+- `failed` — the link was found only in the frozen frontmatter. Obsidian indexes property links, so the audit genuinely produces these (confirmed 2026-09-01) — this is not a defensive branch. Reporting a no-op success there would mark the action done and filter it out of every later run, leaving the dead link in place with nothing reported. A structural limit, not a transient one; retrying will not help. The frontmatter is probed with the same link matcher the body uses, so a target merely appearing as ordinary text in some property does not trigger it.
 - `failed` — target note missing. File untouched.
 
 ## `update_tracker`

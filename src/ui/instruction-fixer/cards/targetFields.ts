@@ -191,12 +191,20 @@ export const TARGET_FIELDS: TargetFieldMap = {
 			placeholder: '["[[Some MOC]]"]',
 			pick: "none",
 		},
+		expected_absent: {
+			label: "Expect the property to be absent",
+			caption: "true — the only accepted value",
+			captionTooltip:
+				"Set to true when the action should only run if the property does not exist yet — that is how an add states its expectation. Writing it clears the value below, since an action cannot state both; to expect a value instead, fill that one in and this clears itself.",
+			placeholder: "true",
+			pick: "none",
+		},
 		expected: {
 			label: "Expected current value",
-			caption: "JSON — null means the property must be absent",
+			caption: "JSON — a literal null means the property HOLDS null",
 			captionTooltip:
-				"What must already be at that key for the action to run, as JSON. This is the guard: if the note no longer matches, the action fails and writes nothing. When it fails, use \u201cRead from note\u201d to pull in what the note actually holds.",
-			placeholder: '["[[Old Parent]]"] or null',
+				"What must already be at that key for the action to run, as JSON. This is the guard: if the note no longer matches, the action fails and writes nothing. When it fails, use \u201cRead from note\u201d to pull in what the note actually holds \u2014 including switching to the absent form above if the key is gone.",
+			placeholder: '["[[Old Parent]]"]',
 			pick: "none",
 			docPick: "frontmatter-value",
 		},

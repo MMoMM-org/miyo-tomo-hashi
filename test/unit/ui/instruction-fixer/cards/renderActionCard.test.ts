@@ -329,10 +329,19 @@ describe("target fields — the 7 repair kinds, driven off TARGET_FIELD_WHITELIS
 	// non-string write path in the roster uncovered.
 	const isJsonField = (kind: string, key: string): boolean =>
 		kind === "edit_frontmatter" && (key === "value" || key === "expected");
+	// `expected_absent` is the pair's other half and accepts only `true` — see
+	// setExpectationField. Feeding it the generic string would be rejected, so
+	// the guard states the real contract instead of skipping the field.
+	const isAbsentFlag = (kind: string, key: string): boolean =>
+		kind === "edit_frontmatter" && key === "expected_absent";
 	const typedInto = (kind: string, key: string): string =>
-		isJsonField(kind, key) ? `["repaired-${key}"]` : `repaired-${key}`;
+		isAbsentFlag(kind, key)
+			? "true"
+			: isJsonField(kind, key)
+				? `["repaired-${key}"]`
+				: `repaired-${key}`;
 	const landsAs = (kind: string, key: string): unknown =>
-		isJsonField(kind, key) ? [`repaired-${key}`] : `repaired-${key}`;
+		isAbsentFlag(kind, key) ? true : isJsonField(kind, key) ? [`repaired-${key}`] : `repaired-${key}`;
 
 	it.each(repairKinds())("%s commits each field's edit through setTargetField", (kind) => {
 		const action = SAMPLES[kind];

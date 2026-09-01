@@ -204,12 +204,22 @@ export interface EditNoteTextAction extends ActionBase {
  * `operation: "set"` covers both editing and adding — writing an absent key
  * creates it; the two differ only in what `expected` says.
  *
- * `expected` is REQUIRED and compared deep-equal against the current value.
- * A mismatch fails the action and writes nothing, so a vault that moved between
- * report and apply is never silently clobbered — optimistic locking, and the
- * repair path is the Instruction Fixer. `expected: null` means "the property
- * must not exist"; a literal YAML null therefore cannot be expressed as an
- * expectation, which is not a shape MiYo uses.
+ * The expectation is REQUIRED and compared deep-equal against the current
+ * value. A mismatch fails the action and writes nothing, so a vault that moved
+ * between report and apply is never silently clobbered — optimistic locking,
+ * and the repair path is the Instruction Fixer.
+ *
+ * It is stated one of two ways, exactly one of which must be present:
+ *   - `expected: <value>` — the property must hold this, deep-equal. A literal
+ *     `null` is a real value here and means "the property holds a YAML null".
+ *   - `expected_absent: true` — the property must not exist. This is how an add
+ *     is expressed.
+ *
+ * The pair replaced an earlier `expected: null` overload that conflated "absent"
+ * with "holds null" (Tomo, 2026-09-01: "the ambiguity is the kind that gets
+ * discovered at apply time"). Supplying both is a schema error rather than a
+ * precedence rule — two different statements about one key have no honest
+ * winner.
  */
 export interface EditFrontmatterAction extends ActionBase {
 	readonly action: "edit_frontmatter";
@@ -218,7 +228,10 @@ export interface EditFrontmatterAction extends ActionBase {
 	readonly operation: "set" | "remove";
 	/** Required when operation === "set" (enforced by the schema's allOf). */
 	readonly value?: unknown;
-	readonly expected: unknown;
+	/** Present unless `expected_absent` is — the schema enforces exactly one. */
+	readonly expected?: unknown;
+	/** `true` = the property must not exist. Never `false`; omit it instead. */
+	readonly expected_absent?: true;
 }
 
 export interface RemoveUpLinkAction extends ActionBase {

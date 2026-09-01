@@ -24,10 +24,15 @@
  *     (`[[t|Nice]]` → `[[New|Nice]]`, `[[t]]` → `[[New]]`). `replace` is
  *     also accepted defensively as a bare stem without brackets.
  *   - Replaces EVERY occurrence in the body.
- *   - No match anywhere → skip-and-report (`skipped-already`), no partial
+ *   - No match ANYWHERE → skip-and-report (`skipped-already`), no partial
  *     write — mirrors editNoteText / removeUpLink's "not-found is a no-op
  *     success" convention. Idempotent: re-running after a resolution finds
  *     no further match and skips again.
+ *   - Match found ONLY in the frozen frontmatter → `failed`. A body-only
+ *     action can never reach it, in this run or any future one, so reporting
+ *     a no-op success would graduate the action to `applied: true` and hide a
+ *     permanently unrepaired note. Same treatment as editNoteText — see the
+ *     guard in the handler body.
  *   - Missing note → `failed`.
  *
  * Matching: the target is regex-escaped (it may contain `(`, `)`, `/`,
@@ -135,6 +140,33 @@ export async function resolveDeadLink(
 
 	const content = await vault.cachedRead(path);
 	if (!applyResolve(content, target, replace).changed) {
+		// No body hit. Two different situations hide behind that, and
+		// conflating them is how a dead link marks itself done:
+		//
+		//   - genuinely absent  → the vault may have been fixed by hand
+		//     between report and apply. `skipped-already` is right, and it
+		//     graduates to `applied: true`.
+		//   - present, but in the frozen frontmatter → this action CANNOT ever
+		//     touch it. Reporting success would graduate it too, filtering the
+		//     action out of every later run and leaving the dead link in place
+		//     with nothing reported.
+		//
+		// The second is a structural blind spot, not a race. Reported by Tomo
+		// 2026-09-01 after the same construction was fixed in editNoteText
+		// (PR #122) — this is the kind garden-audit actually emits, so the bug
+		// was live here while it was already dead code there.
+		//
+		// The head is probed with the SAME regex the body uses, not a literal
+		// substring: `target` is a link stem, and the frontmatter carries it as
+		// `"[[stem]]"`. A looser check would fire on the stem appearing as
+		// ordinary text in some unrelated property.
+		const { head } = splitFrontmatter(content);
+		if (head !== "" && buildLinkRegex(target).test(head)) {
+			return {
+				kind: "failed",
+				reason: `dead link found only in the YAML frontmatter, which resolve_dead_link never edits (it is a note-body action) — ${path}. Frontmatter properties need edit_frontmatter; resolve_dead_link cannot repair this and must not report it as done`,
+			};
+		}
 		return { kind: "skipped-already" };
 	}
 

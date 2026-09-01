@@ -11,6 +11,11 @@
  * string surgery on YAML is how documents get corrupted, and is precisely what
  * this kind exists to avoid.
  *
+ * The expectation arrives as either `expected: <value>` or
+ * `expected_absent: true`; the schema guarantees exactly one. A literal
+ * `expected: null` now means "the property holds a YAML null", which the
+ * earlier overload could not express (Tomo, 2026-09-01).
+ *
  * Optimistic locking: `expected` is compared deep-equal against the value found
  * at the moment of writing. A mismatch fails and writes NOTHING — a vault that
  * changed between report and apply is never silently clobbered. The repair path
@@ -123,7 +128,7 @@ export async function editFrontmatter(
 	ctx: HandlerContext,
 ): Promise<EditOutcome> {
 	const { vault } = ctx;
-	const { path, property, operation, expected } = action;
+	const { path, property, operation } = action;
 
 	// Obsidian documents processFrontMatter as "Must be a Markdown file". A
 	// .canvas or .base target would throw mid-run; reject it up front instead,
@@ -139,8 +144,10 @@ export async function editFrontmatter(
 		return { kind: "failed", reason: "target note missing" };
 	}
 
-	// `expected: null` means "must not exist" — see the type docblock.
-	const expectAbsent = expected === null;
+	// Exactly one of the two is present — the schema enforces it, so this is a
+	// read of which form was used, not a precedence decision.
+	const expectAbsent = action.expected_absent === true;
+	const expected = action.expected;
 
 	// Pre-check: don't open a write we already know we will refuse. See the
 	// file header for why this is an optimisation and never the guard.
