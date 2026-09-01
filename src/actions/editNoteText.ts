@@ -14,9 +14,13 @@
  *     inline match just loses the substring.
  *   - `occurrence`: "first" (default) replaces the first literal hit; "all"
  *     replaces every hit.
- *   - Match not found → no-op success (`skipped-already`): the vault may have
- *     been fixed by hand between report and apply, so a stale single match must
- *     not fail the batch.
+ *   - Match not found ANYWHERE → no-op success (`skipped-already`): the vault
+ *     may have been fixed by hand between report and apply, so a stale single
+ *     match must not fail the batch.
+ *   - Match found ONLY in the frozen frontmatter → `failed`. This action can
+ *     never edit it, so reporting success would graduate the action to
+ *     `applied: true` and hide a permanently unrepaired note. See the guard in
+ *     the handler body for the full reasoning.
  *
  * Single-line-match assumption: garden-audit only ever emits single-line
  * `match` strings. Matching is done line-by-line, which yields clean
@@ -122,6 +126,27 @@ export async function editNoteText(
 
 	const content = await vault.cachedRead(path);
 	if (!applyEdit(content, match, replace, occurrence).changed) {
+		// No body hit. Two very different situations hide behind that, and
+		// conflating them is how a dead link silently marks itself done:
+		//
+		//   - genuinely absent  → the vault may have been fixed by hand between
+		//     report and apply, so a stale match must not fail the batch.
+		//     `skipped-already` is right, and it graduates to `applied: true`.
+		//   - present, but in the frozen frontmatter → this action CANNOT ever
+		//     touch it, in this run or any future one. Reporting success would
+		//     graduate the action (InstructionExecutor: applied and
+		//     skipped-already both mark `applied: true`), filtering it out of
+		//     every subsequent run and leaving the note wrong forever, silently.
+		//
+		// The second case is a structural blind spot, not a race, so it fails
+		// loudly and names the way out.
+		const { head } = splitFrontmatter(content);
+		if (head !== "" && head.includes(match)) {
+			return {
+				kind: "failed",
+				reason: `match found only in the YAML frontmatter, which edit_note_text never edits (it is a note-body action) — ${path}. Frontmatter properties need a frontmatter-aware action; edit_note_text cannot repair this and must not report it as done`,
+			};
+		}
 		return { kind: "skipped-already" };
 	}
 

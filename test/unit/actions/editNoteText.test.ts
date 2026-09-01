@@ -8,6 +8,7 @@
  *   - inline removal (replace "")
  *   - whole-line removal collapses the empty line (no blank accumulation)
  *   - frontmatter frozen: a match present in frontmatter is never touched
+ *   - frontmatter-ONLY match → failed, never silent success (the blind spot)
  *   - literal matching: regex/glob metacharacters treated as literal text
  *   - match not found → skipped-already (no mutation, no failure)
  *   - idempotency: re-run after a repoint → skipped-already
@@ -216,5 +217,74 @@ describe("editNoteText — failure paths", () => {
 
 		expect(outcome.kind).toBe("failed");
 		if (outcome.kind === "failed") expect(outcome.reason).toBe("target note missing");
+	});
+
+	// -------------------------------------------------------------------------
+	// The frontmatter blind spot.
+	//
+	// A link living only in a YAML property can never be matched by this action
+	// — not this run, not any future one. Before the guard it returned
+	// skipped-already, which the executor graduates to `applied: true`
+	// (InstructionExecutor: "both mean the action's end-state is present"), so
+	// the action was filtered out of every later run and the note stayed wrong
+	// with nothing reported. Found in the wild 2026-09-01 on a hand-authored
+	// instruction set: `up:` property, action reported applied, link untouched.
+	// -------------------------------------------------------------------------
+
+	it("match only in frontmatter → failed, NOT skipped-already", async () => {
+		const vault = new FakeVaultFS();
+		const doc = [
+			"---",
+			"up:",
+			'  - "[[023 Sparks MOC]]"',
+			"related: []",
+			"---",
+			"",
+			"# Body with no link at all",
+			"",
+		].join("\n");
+		await vault.create(PATH, doc);
+
+		const outcome = await editNoteText(makeAction(), makeCtx(vault));
+
+		expect(outcome.kind).toBe("failed");
+		if (outcome.kind === "failed") {
+			expect(outcome.reason).toContain("YAML frontmatter");
+			expect(outcome.reason).toContain(PATH);
+		}
+		// And it still does not touch the frontmatter — failing loudly is the
+		// fix, editing YAML as text is not.
+		expect(await vault.read(PATH)).toBe(doc);
+	});
+
+	it("fires for any property, not just link-shaped ones", async () => {
+		// The property that surfaced this was `up:`, but nothing about the
+		// blind spot is `up`-specific — it is every key in the block.
+		const vault = new FakeVaultFS();
+		const doc = ["---", "status: [[023 Sparks MOC]]", "---", "", "body"].join("\n");
+		await vault.create(PATH, doc);
+
+		expect((await editNoteText(makeAction(), makeCtx(vault))).kind).toBe("failed");
+	});
+
+	it("still returns skipped-already when the match is absent everywhere", async () => {
+		// The genuine race the skipped-already path exists for: the vault may
+		// have been fixed by hand between report and apply. Unchanged.
+		const vault = new FakeVaultFS();
+		await vault.create(PATH, ["---", "aliases: []", "---", "", "already repointed"].join("\n"));
+
+		expect((await editNoteText(makeAction(), makeCtx(vault))).kind).toBe("skipped-already");
+	});
+
+	it("a body hit still wins even when the frontmatter also matches", async () => {
+		// Guard against the guard: the frontmatter check must only run when the
+		// body yielded nothing, or every mixed note would start failing.
+		const vault = new FakeVaultFS();
+		await vault.create(
+			PATH,
+			["---", "up: [[023 Sparks MOC]]", "---", "", "body [[023 Sparks MOC]]"].join("\n"),
+		);
+
+		expect((await editNoteText(makeAction(), makeCtx(vault))).kind).toBe("applied");
 	});
 });

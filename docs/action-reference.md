@@ -11,7 +11,7 @@ The instruction executor dispatches each action in an `_instructions.json` to a 
 | [insert_under_marker](#insert_under_marker) | Insert a multi-line block at a marker in any note | Identical block already present | None |
 | [replace_section](#replace_section) | Overwrite a heading section's body in any note | Body already equals content | None |
 | [add_relationship](#add_relationship) | Add a wikilink under a frontmatter relationship key | Wikilink already present | None |
-| [edit_note_text](#edit_note_text) | Literal find-and-replace in a note's body (repoint/remove dead links, strip broken `up::` lines) | Match not found | None |
+| [edit_note_text](#edit_note_text) | Literal find-and-replace in a note's **body only** — never frontmatter (repoint/remove dead links, strip broken inline `up::` lines) | Match not found anywhere | None |
 | [remove_up_link](#remove_up_link) | Remove one link from a note's `up::` line, preserving the field | No up:: line, or link not on it | None |
 | [resolve_dead_link](#resolve_dead_link) | Alias-aware unlink/repoint of a dead wikilink in a note's body | Target not present in any wikilink form | None |
 | [update_tracker](#update_tracker) | Set a frontmatter scalar on a tracker note | Field already at target value | None |
@@ -160,14 +160,41 @@ Add a wikilink under a frontmatter relationship key on a note. Used to wire up "
 | `replace` | string | Literal replacement written verbatim. `""` deletes the match. |
 | `occurrence` | `"first"` \| `"all"` | Optional (default `"first"`). `"first"` replaces the first literal hit; `"all"` replaces every hit. |
 
-**Body-only:** the leading YAML frontmatter block (`--- … ---`) is frozen — a `match` that also appears in frontmatter is never touched. A broken `up::` in frontmatter is out of scope for this action (it targets inline Dataview-style `up::` lines in the body).
+### Body only — this action cannot edit frontmatter at all
+
+The leading YAML frontmatter block (`--- … ---`) is **frozen**. This is not a
+soft preference or a best-effort skip: no `match` is ever sought or replaced
+inside it, in any run. If a value you need to change lives in a YAML property —
+`up:`, `related:`, `status:`, **any** key — this action is the wrong tool and
+always will be. It targets inline Dataview-style `up::` lines in the *body*,
+which is a different thing that happens to look similar.
+
+Two consequences worth stating plainly, because one of them used to bite
+silently:
+
+- A `match` that appears in **both** frontmatter and body: the body hit is
+  replaced, the frontmatter occurrence is left exactly as it was.
+- A `match` that appears **only** in frontmatter: this is a **`failed`**
+  outcome, deliberately. Reporting a no-op success there would graduate the
+  action to `applied: true` and filter it out of every later run, leaving the
+  note permanently wrong with nothing reported. The failure message names the
+  path and says why.
+
+Editing, adding or removing frontmatter properties needs a frontmatter-aware
+action. There is no such kind yet — see the note under Outcome.
 
 **Deletion (`replace: ""`):** a whole-line match collapses its now-empty line, so repeated runs never accumulate blank lines; an inline match just loses the substring.
 
 **Outcome:**
 - `applied` — the body was edited.
-- `skipped-already` — the `match` was not found (the note may have been fixed by hand between report and apply), or an empty `match` was supplied. A no-op success — never fails the batch on a stale single match.
+- `skipped-already` — the `match` was not found **anywhere in the note**, or an empty `match` was supplied. A no-op success — never fails the batch on a stale single match, since the note may have been fixed by hand between report and apply.
 - `failed` — target note missing. File untouched.
+- `failed` — the `match` was found only in the frozen frontmatter. See above; this is a structural limit of the action, not a transient condition, so retrying will not help.
+
+> **Gap:** there is currently no action kind that can edit, add or remove a
+> frontmatter property. Hooks can (`app.fileManager.processFrontMatter` — see
+> [hooks](hooks.md)), but nothing on the instruction-set surface can, so a
+> producer cannot drive it. Tracked for a wire-contract round with Tomo.
 
 ## `remove_up_link`
 
