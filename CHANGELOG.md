@@ -1,3 +1,9 @@
+## [0.20.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.20.0...0.20.1) (2026-09-01)
+
+### Bug Fixes
+
+* **actions:** restrict move_note to note files, gate frontmatter strip ([1f2939d](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/1f2939dbdfc22c80ef464ee9402c69a680c6a278))
+
 ## [0.20.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.19.2...0.20.0) (2026-09-01)
 
 ### Features
