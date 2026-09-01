@@ -97,7 +97,9 @@ Five glyphs appear across preview, progress, and summary:
 
 Sub-categorised in the run log; all roll up into the ⊘ count in the summary stats:
 
-- **`skipped-already`** — target state is already in place (bullet already in MOC, tracker field already at target, source file already trashed). Re-running is therefore safe — this is idempotency working correctly.
+- **`skipped-already`** — target state is already in place (bullet already in MOC, tracker field already at target, frontmatter property already at value, source file already trashed). Re-running is therefore safe — this is idempotency working correctly.
+
+  One thing this outcome deliberately does *not* mean is "couldn't find it". `skipped-already` graduates an action to `applied: true` and filters it out of every later run, so a path that never actually verified the end state must not report it — see the [frontmatter-only match](troubleshooting.md) failure for what that looked like when it did.
 - **`skipped-dependency`** — a `link_to_moc` references a MOC whose `create_moc` failed earlier in the same run; the dependent action halts.
 - **`skipped-cancelled`** — you clicked Cancel; the in-flight action committed, all remaining actions are recorded as cancelled.
 

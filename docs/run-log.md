@@ -54,8 +54,9 @@ Errors can be viewed and repaired in the Instruction Fixer (command: 'Open instr
 | I03 | link_to_moc | `Atlas/200 Maps/Topic.md ← note.md (Key Concepts)` | ✓ | bullet appended |
 | I04 | link_to_moc | `Atlas/200 Maps/Topic.md ← other.md (Key Concepts)` | ⊘ | already in section |
 | I05 | update_tracker | `Atlas/300 Trackers/Tracker.md status=stable` | ⊘ | already at value |
-| I06 | delete_source | `100 Inbox/note.md` | ✓ | trashed |
-| I07 | link_to_moc | `Atlas/200 Maps/MissingMoc.md ← x.md (Key Concepts)` | ⊘ | dependency I00 (failed) |
+| I06 | edit_frontmatter | `Atlas/100 Notes/note.md :: up (set)` | ✓ | property written |
+| I07 | delete_source | `100 Inbox/note.md` | ✓ | trashed |
+| I08 | link_to_moc | `Atlas/200 Maps/MissingMoc.md ← x.md (Key Concepts)` | ⊘ | dependency I00 (failed) |
 …
 ```
 
@@ -115,7 +116,10 @@ Other valid files in a batch run normally; their actions appear in the **Actions
 
 By [constitution rule L2](../README.md#part-of-miyo) (audit logs record metadata only, never content):
 
-- **No frontmatter values** that were written
+- **No frontmatter values** that were written. `edit_frontmatter` is the one kind
+  that writes them, and its summary carries the path, the key and the operation
+  only — never the value on either side of the change. Its failure messages name
+  *shapes* for the same reason (`expected list of 1, found string`).
 - **No body text** of created or modified notes
 - **No hook return-value contents** beyond the explicitly-logged `info` / `warnings` / `errors` strings the hook itself emits
 - **No environment variables**, API tokens, or credentials
