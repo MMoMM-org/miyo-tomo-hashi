@@ -102,7 +102,9 @@ action in the [Instruction Fixer](instruction-fixer.md).
 ### "frontmatter '<key>' … is not what the instruction expected"
 
 An `edit_frontmatter` whose `expected` value does not match what the note holds
-right now. **Nothing was written** — the note is untouched, deliberately.
+right now. **The note is untouched** — not merely unchanged in value: the file
+is never opened for writing, so it does not even lose its comments the way a
+successful write would.
 
 This is the guard doing its job, not a bug. The instruction set was written
 against the note as it looked during the audit; someone or something has changed

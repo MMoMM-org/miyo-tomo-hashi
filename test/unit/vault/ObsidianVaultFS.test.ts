@@ -132,6 +132,16 @@ function makeRichApp(): App {
   // does in FakeVaultFS: this mock is not a YAML implementation. Real
   // serialisation behaviour is a test-vault question, not a unit-test one.
   const fmStore = new Map<string, Record<string, unknown>>();
+
+  // The metadata cache and processFrontMatter must be the SAME truth here, as
+  // they are in Obsidian — readFrontMatter reads the cache and the handler's
+  // pre-check depends on it seeing what a write left behind.
+  app.metadataCache.getFileCache = vi.fn((file: TFile) => ({
+    headings: [],
+    sections: [],
+    ...(fmStore.has(file.path) ? { frontmatter: fmStore.get(file.path) } : {}),
+  })) as App["metadataCache"]["getFileCache"];
+
   app.fileManager.processFrontMatter = vi.fn(
     async (file: TFile, fn: (fm: Record<string, unknown>) => void) => {
       if (!store.has(file.path)) throw new Error(`File not found: ${file.path}`);

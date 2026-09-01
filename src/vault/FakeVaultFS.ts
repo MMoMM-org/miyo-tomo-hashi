@@ -79,6 +79,12 @@ export class FakeVaultFS implements VaultFS {
     });
   }
 
+  async readFrontMatter(path: string): Promise<Record<string, unknown> | undefined> {
+    if (!this.content.has(path)) throw new Error(`File not found: ${path}`);
+    const fm = this.frontmatter.get(path);
+    return fm === undefined ? undefined : { ...fm };
+  }
+
   async processFrontMatter(
     path: string,
     fn: (fm: Record<string, unknown>) => void,
@@ -104,12 +110,6 @@ export class FakeVaultFS implements VaultFS {
    */
   seedFrontMatter(path: string, fm: Record<string, unknown>): void {
     this.frontmatter.set(path, { ...fm });
-  }
-
-  /** Test-only seam: read back what `processFrontMatter` left behind. */
-  readFrontMatter(path: string): Record<string, unknown> | undefined {
-    const fm = this.frontmatter.get(path);
-    return fm === undefined ? undefined : { ...fm };
   }
 
   async rename(fromPath: string, toPath: string): Promise<void> {

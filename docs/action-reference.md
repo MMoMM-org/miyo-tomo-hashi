@@ -270,7 +270,7 @@ transcribed:
 **Outcome:**
 - `applied` — the property was written or removed.
 - `skipped-already` — the expectation held and the value was already what `set` wanted, or `remove` found nothing to delete. Idempotent re-run.
-- `failed` — the expectation did not match. Nothing written; the message names the *shapes* involved, never the values (Privacy L2 — the run log carries metadata only).
+- `failed` — the expectation did not match. **Nothing written, and the file is not opened for writing at all** — which matters because opening it would re-serialise the block and cost the note its comments (see above) even though no value changes. The message names the *shapes* involved, never the values (Privacy L2 — the run log carries metadata only).
 - `failed` — target is not a markdown note, the note is missing, or its YAML could not be parsed.
 
 ## `remove_up_link`
