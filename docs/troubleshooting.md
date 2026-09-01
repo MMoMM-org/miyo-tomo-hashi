@@ -82,6 +82,21 @@ Tomo, so regenerate or fix it there — and re-run. See the
 Re-triggering a file is safe: [partial-resume](instruction-executor.md#partial-resume)
 re-runs only the unapplied actions.
 
+### "dead link found only in the YAML frontmatter"
+
+A `resolve_dead_link` whose target exists in a note's frontmatter but nowhere in
+its body. Same shape as the `edit_note_text` case below, same reasoning: the
+action is body-only by design, so no re-run will ever reach it.
+
+This one matters more in practice, because `resolve_dead_link` is the kind
+garden-audit actually emits — notes imported from a vault that used frontmatter
+`up:` are exactly the population where it bites. Before the fix it returned a
+no-op success, so the action was marked done and the dead link stayed.
+
+**Fix.** The property needs [`edit_frontmatter`](action-reference.md#edit_frontmatter).
+If you have instruction sets from before the fix, actions in this situation are
+sitting at `applied: true` and will never re-run; set them back to `false`.
+
 ### "match found only in the YAML frontmatter"
 
 An `edit_note_text` whose `match` exists in the note's frontmatter but nowhere in

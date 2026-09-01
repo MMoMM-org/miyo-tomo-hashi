@@ -214,4 +214,83 @@ describe("resolveDeadLink — failure paths", () => {
 		expect(outcome.kind).toBe("failed");
 		if (outcome.kind === "failed") expect(outcome.reason).toBe("target note missing");
 	});
+
+	// -------------------------------------------------------------------------
+	// The frontmatter blind spot.
+	//
+	// Identical construction to the one fixed in editNoteText (PR #122) — this
+	// handler's own docblock cites that file for both the frontmatter freeze and
+	// the skipped-already convention, and inherited the bug with them. Reported
+	// by Tomo 2026-09-01, who pointed out the inversion that matters: they never
+	// emit edit_note_text (their parser rewrites it), but they DO emit
+	// resolve_dead_link — so the bug was live here while already dead code there.
+	// -------------------------------------------------------------------------
+
+	it("dead link only in frontmatter -> failed, NOT skipped-already", async () => {
+		const vault = new FakeVaultFS();
+		const doc = [
+			"---",
+			"up:",
+			'  - "[[023 Sparks MOC]]"',
+			"related: []",
+			"---",
+			"",
+			"# Body with no link at all",
+			"",
+		].join("\n");
+		await vault.create(PATH, doc);
+
+		const outcome = await resolveDeadLink(makeAction(), makeCtx(vault));
+
+		expect(outcome.kind).toBe("failed");
+		if (outcome.kind === "failed") {
+			expect(outcome.reason).toContain("YAML frontmatter");
+			expect(outcome.reason).toContain(PATH);
+		}
+		expect(await vault.read(PATH)).toBe(doc);
+	});
+
+	it("fires for an aliased frontmatter link too", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(
+			PATH,
+			["---", 'up: "[[023 Sparks MOC|Sparks]]"', "---", "", "body"].join("\n"),
+		);
+
+		expect((await resolveDeadLink(makeAction(), makeCtx(vault))).kind).toBe("failed");
+	});
+
+	it("does NOT fire on the bare stem appearing as ordinary property text", async () => {
+		// The head is probed with the link regex, not a substring: `target` is a
+		// stem, and a looser check would fail an action over an unrelated
+		// property that merely mentions the words.
+		const vault = new FakeVaultFS();
+		await vault.create(
+			PATH,
+			["---", "summary: about 023 Sparks MOC in passing", "---", "", "body"].join("\n"),
+		);
+
+		expect((await resolveDeadLink(makeAction(), makeCtx(vault))).kind).toBe("skipped-already");
+	});
+
+	it("still returns skipped-already when the link is absent everywhere", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(PATH, ["---", "up: []", "---", "", "already resolved"].join("\n"));
+
+		expect((await resolveDeadLink(makeAction(), makeCtx(vault))).kind).toBe("skipped-already");
+	});
+
+	it("a body hit still wins when the frontmatter also carries the link", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(
+			PATH,
+			["---", 'up: "[[023 Sparks MOC]]"', "---", "", "body [[023 Sparks MOC]]"].join("\n"),
+		);
+
+		const outcome = await resolveDeadLink(makeAction(), makeCtx(vault));
+
+		expect(outcome.kind).toBe("applied");
+		// Frontmatter occurrence untouched — the freeze still holds.
+		expect(await vault.read(PATH)).toContain('up: "[[023 Sparks MOC]]"');
+	});
 });

@@ -57,7 +57,7 @@ export const TARGET_FIELD_WHITELIST = {
 	// and `expected` are JSON-parsed (see setJsonField); `operation` is
 	// deliberately absent, since flipping set↔remove authors a different action
 	// rather than fixing a mechanical failure.
-	edit_frontmatter: ["path", "property", "value", "expected"],
+	edit_frontmatter: ["path", "property", "value", "expected", "expected_absent"],
 	remove_up_link: ["path", "link"],
 	resolve_dead_link: ["path", "target", "replace"],
 } as const satisfies Partial<Record<Action["action"], readonly string[]>>;
@@ -107,13 +107,41 @@ export function setTargetField(
 
 function applyTargetField(action: Action, fieldKey: string, value: string): Action {
 	if (fieldKey === "anchor" && "anchor" in action) return setAnchorValue(action, value);
-	if (
-		action.action === "edit_frontmatter" &&
-		(fieldKey === "value" || fieldKey === "expected")
-	) {
-		return setJsonField(action, fieldKey, value);
+	if (action.action === "edit_frontmatter") {
+		// `expected` and `expected_absent` are one logical field in two shapes,
+		// and the schema rejects an action carrying both. So a hand edit to
+		// either has to swap the pair, exactly as a pick does — writing one
+		// without clearing the other would let the Fixer produce an action that
+		// cannot validate.
+		if (fieldKey === "expected" || fieldKey === "expected_absent") {
+			return setExpectationField(action, fieldKey, value);
+		}
+		if (fieldKey === "value") return setJsonField(action, fieldKey, value);
 	}
 	return setStringField(action, fieldKey, value);
+}
+
+/**
+ * Hand edits to either half of the expectation pair, routed through the same
+ * swap the pickers use.
+ *
+ * `expected_absent` accepts only `true` — the field states one thing, and there
+ * is no meaningful `false` (to expect a value, fill in `expected` instead).
+ * Anything else returns the SAME action reference, which the caller already
+ * treats as "no change", the same as every other rejection here.
+ */
+function setExpectationField(action: Action, fieldKey: string, value: string): Action {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(value);
+	} catch {
+		return action;
+	}
+	if (fieldKey === "expected_absent") {
+		if (parsed !== true) return action;
+		return withExpectation(action, { current: undefined, present: false });
+	}
+	return withExpectation(action, { current: parsed, present: true });
 }
 
 /**
@@ -306,18 +334,52 @@ export interface FrontmatterPick {
 }
 
 /**
- * Render a picked value as the JSON string the `expected` control edits.
- * Returns `null` when the value has no JSON representation (an `undefined`
- * from `JSON.stringify`), in which case the caller leaves the model alone
- * rather than committing something lossy.
+ * Write a pick into the action's expectation, choosing the right one of the
+ * two mutually exclusive fields and REMOVING the other.
+ *
+ * This cannot go through `setTargetField`: an absent key has to produce
+ * `expected_absent: true` *and* drop `expected`, and a single-field setter has
+ * no way to express the removal. Leaving both behind would be a schema error —
+ * two different statements about one key.
+ *
+ * Returns the SAME action reference when the value has no JSON representation
+ * or nothing actually changed, matching every other rejection in this module.
  */
-function pickedAsJson(pick: FrontmatterPick): string | null {
-	// An absent key IS the null sentinel — that is the whole reason a refresh
-	// against a note someone deleted the key from produces a correct
-	// instruction with no special-casing.
-	if (!pick.present) return "null";
-	const json = JSON.stringify(pick.current);
-	return json === undefined ? null : json;
+function withExpectation(action: Action, pick: FrontmatterPick): Action {
+	const record = action as unknown as Record<string, unknown>;
+
+	if (!pick.present) {
+		if (record.expected_absent === true && !("expected" in record)) return action;
+		const next = { ...action } as Record<string, unknown>;
+		delete next.expected;
+		next.expected_absent = true;
+		return next as unknown as Action;
+	}
+
+	// A value expectation — including a literal null, which is now a real value
+	// rather than the absence sentinel it used to be.
+	if (JSON.stringify(pick.current) === undefined) return action;
+	if (
+		!("expected_absent" in record) &&
+		JSON.stringify(record.expected) === JSON.stringify(pick.current)
+	) {
+		return action;
+	}
+	const next = { ...action } as Record<string, unknown>;
+	delete next.expected_absent;
+	next.expected = pick.current;
+	return next as unknown as Action;
+}
+
+/** Replace `actionId`'s action with `next`, or return the model unchanged. */
+function commit(
+	model: InstructionFixerModel,
+	current: Action,
+	next: Action,
+): InstructionFixerModel {
+	if (next === current) return model;
+	const actions = model.doc.actions.map((a) => (a === current ? next : a));
+	return { doc: { ...model.doc, actions }, dirty: true };
 }
 
 /**
@@ -344,14 +406,14 @@ export function setFrontmatterProperty(
 	const current = model.doc.actions.find((a) => a.id === actionId);
 	if (current === undefined || current.action !== "edit_frontmatter") return model;
 
-	const json = pickedAsJson(pick);
-	if (json === null) return model;
-
-	// Both writes go through setTargetField so the ADR-5 whitelist stays the
-	// single authority on what may be written — the pick is the affordance,
-	// not the guard.
+	// The property still goes through setTargetField, so the ADR-5 whitelist
+	// stays the authority for it; the expectation needs the two-field swap
+	// below, which a single-field setter cannot express.
 	const withProperty = setTargetField(model, actionId, "property", property);
-	return setTargetField(withProperty, actionId, "expected", json);
+	const target = withProperty.doc.actions.find((a) => a.id === actionId);
+	if (target === undefined) return model;
+	const next = withExpectation(target, pick);
+	return next === target ? withProperty : commit(withProperty, target, next);
 }
 
 /**
@@ -370,9 +432,6 @@ export function setFrontmatterExpected(
 	const current = model.doc.actions.find((a) => a.id === actionId);
 	if (current === undefined || current.action !== "edit_frontmatter") return model;
 
-	const json = pickedAsJson(pick);
-	if (json === null) return model;
-
-	return setTargetField(model, actionId, "expected", json);
+	return commit(model, current, withExpectation(current, pick));
 }
 

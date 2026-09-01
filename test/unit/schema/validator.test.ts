@@ -748,10 +748,39 @@ describe("edit_frontmatter (Hashi-side wire shape)", () => {
 		).toBe(true);
 	});
 
-	it("accepts expected null — the add path", () => {
+	it("accepts expected_absent — the add path", () => {
+		expect(
+			validate(
+				withActions([{ ...base, operation: "set", value: "x", expected_absent: true }]),
+			).ok,
+		).toBe(true);
+	});
+
+	it("accepts a literal null as a VALUE expectation", () => {
+		// The case the old `expected: null` overload could not express.
 		expect(
 			validate(withActions([{ ...base, operation: "set", value: "x", expected: null }])).ok,
 		).toBe(true);
+	});
+
+	it("rejects both halves of the expectation pair at once", () => {
+		// Two different statements about one key have no honest winner, so the
+		// schema refuses rather than picking a precedence.
+		expect(
+			validate(
+				withActions([
+					{ ...base, operation: "set", value: "x", expected: null, expected_absent: true },
+				]),
+			).ok,
+		).toBe(false);
+	});
+
+	it("rejects expected_absent: false — omit it instead", () => {
+		expect(
+			validate(
+				withActions([{ ...base, operation: "set", value: "x", expected_absent: false }]),
+			).ok,
+		).toBe(false);
 	});
 
 	it("accepts a remove without a value", () => {
@@ -761,13 +790,13 @@ describe("edit_frontmatter (Hashi-side wire shape)", () => {
 	});
 
 	it("rejects a set with no value (the allOf conditional)", () => {
-		expect(validate(withActions([{ ...base, operation: "set", expected: null }])).ok).toBe(false);
+		expect(
+			validate(withActions([{ ...base, operation: "set", expected_absent: true }])).ok,
+		).toBe(false);
 	});
 
-	it("rejects a missing expected — the guard is not optional", () => {
-		expect(
-			validate(withActions([{ ...base, operation: "set", value: "x" }])).ok,
-		).toBe(false);
+	it("rejects an action stating NEITHER expectation — the guard is not optional", () => {
+		expect(validate(withActions([{ ...base, operation: "set", value: "x" }])).ok).toBe(false);
 	});
 
 	it("rejects an unknown operation", () => {
