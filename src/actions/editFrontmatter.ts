@@ -21,6 +21,13 @@
  * changed between report and apply is never silently clobbered. The repair path
  * is the Instruction Fixer, which can edit `expected` and `value`.
  *
+ * A consequence worth stating out loud: this handler is NOT idempotent across
+ * runs. `expected` names the pre-apply value, so a second run of an action that
+ * already applied FAILS — the guard cannot distinguish "we already did this"
+ * from "somebody else changed the note", and refusing is the safer of the two
+ * readings. Run-level idempotency is the planner's `applied: true` filter, not
+ * this comparison.
+ *
  * The comparison runs TWICE, on purpose:
  *
  *   1. A pre-check off `readFrontMatter` decides whether to open a write at
@@ -38,7 +45,7 @@
  *
  * Outcomes:
  *   expectation met, value differs   → applied
- *   expectation met, already correct → skipped-already   (idempotent re-run)
+ *   expectation met, already correct → skipped-already
  *   expectation NOT met              → failed, nothing written
  *   not a .md file                   → failed  (processFrontMatter is md-only)
  *   note missing / malformed YAML    → failed
@@ -179,6 +186,11 @@ export async function editFrontmatter(
 			}
 
 			if (operation === "remove") {
+				// Reachable only under `expected_absent: true` — with a value
+				// expectation, an absent property has already failed the guard
+				// above. So this is NOT re-run protection: re-running an applied
+				// remove fails, because `expected` still names the pre-apply value.
+				// Idempotency across runs is the planner's `applied: true` filter.
 				if (!present) {
 					outcome = { kind: "skipped-already" };
 					return;
