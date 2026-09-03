@@ -133,3 +133,26 @@ Prefer deduplicating the version so no nested copy is needed over patching each 
 npm install`) in the Linux dev container: that drops the `@esbuild/*` optional platform
 packages for every other platform (~12k-line diff) and breaks `npm ci` on macOS. Restore the
 lockfile from `main` and run a plain `npm install` instead.
+
+<!-- 2026-09-03 -->
+## `edit_frontmatter` re-run reports "the note changed since the instruction set was written"
+**Symptom:** an `edit_frontmatter` action that demonstrably worked — the property really was set
+or removed in the note — comes back `failed` on a later run, with
+`frontmatter 'up' in <path> is not what the instruction expected (expected list of 1, found
+absent)`. The reason string blames a concurrent edit, so it reads like Tomo emitted a stale
+`expected`, or like a user edited the note behind the run.
+**Cause:** the handler is **not idempotent across runs, by design.** `expected` names the
+*pre-apply* value, so once the action has applied, the guard sees a note that no longer matches
+and refuses. It cannot distinguish "we already did this" from "somebody else changed it", and
+refusing is the safer reading — the looser one is the silent-success shape the kind exists to
+prevent. Run-level idempotency comes from `planner.ts`, which filters out every action carrying
+`applied: true` before a handler sees it. So this failure needs a run where the **vault edit
+landed but the applied flag did not persist**.
+**Fix:** nothing to fix in the handler. Confirm the note is already in the desired end state,
+then mark the action applied (or re-run the audit, which will not re-emit a finding that no
+longer exists).
+**How to apply:** when triaging an `edit_frontmatter` failure, check the note's *current* state
+first. Property already gone (for `remove`) or already at `value` (for `set`) means an
+applied-flag persistence problem, not a bad `expected` — do not report it upstream to Tomo as a
+mis-emission. A genuine mismatch shows a *third* value, one that is neither `expected` nor
+`value`. Told to Tomo 2026-09-03 so their user-report triage starts from the same hypothesis.

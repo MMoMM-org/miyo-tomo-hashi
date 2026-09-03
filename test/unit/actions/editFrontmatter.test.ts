@@ -10,7 +10,11 @@
  * path):
  *   - set: change a scalar, change a list, add an absent key (expected null)
  *   - remove an existing key
- *   - idempotent re-run → skipped-already
+ *   - re-writing a value that is already correct → skipped-already
+ *   - re-running an ALREADY-APPLIED action → failed, not skipped. The guard
+ *     sees the post-apply state and refuses, because `expected` still names the
+ *     pre-apply value. Idempotency comes from the planner's `applied: true`
+ *     filter, NOT from this handler; see the re-run block below.
  *   - expectation mismatch (wrong value / present-when-absent-expected /
  *     absent-when-value-expected) → failed, and processFrontMatter is never
  *     even OPENED, because opening it re-serialises the block and loses the
@@ -81,7 +85,7 @@ describe("editFrontmatter — set", () => {
 		expect(await vault.readFrontMatter(PATH)).toEqual({ status: "published" });
 	});
 
-	it("adds an absent property — expected null is how an add is expressed", async () => {
+	it("adds an absent property — expected_absent is how an add is expressed", async () => {
 		const vault = new FakeVaultFS();
 		await seed(vault, { related: [] });
 
@@ -107,7 +111,7 @@ describe("editFrontmatter — set", () => {
 		});
 	});
 
-	it("re-running after a successful set → skipped-already", async () => {
+	it("a set whose expectation already names the current value → skipped-already", async () => {
 		const vault = new FakeVaultFS();
 		await seed(vault, { up: [NEW_LINK] });
 
@@ -138,7 +142,7 @@ describe("editFrontmatter — remove", () => {
 		expect(await vault.readFrontMatter(PATH)).toEqual({ related: [] });
 	});
 
-	it("already gone with expected null → skipped-already", async () => {
+	it("already gone, with expected_absent → skipped-already", async () => {
 		const vault = new FakeVaultFS();
 		await seed(vault, { related: [] });
 
@@ -148,6 +152,51 @@ describe("editFrontmatter — remove", () => {
 		);
 
 		expect(outcome.kind).toBe("skipped-already");
+		expect(await vault.readFrontMatter(PATH)).toEqual({ related: [] });
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Re-running an action that already applied
+//
+// Not idempotent, on purpose. `expected` names the PRE-apply value, so once the
+// action has run the guard sees a note that no longer matches and refuses. That
+// is the same optimistic lock that protects a concurrently-edited note — the
+// handler cannot tell "we already did this" from "somebody else did something".
+//
+// In normal operation this is unreachable: the planner drops every action
+// carrying `applied: true` before a handler sees it (planner.ts), so idempotency
+// lives there. This path needs a run where the vault edit landed but the applied
+// flag did not persist. Documented in troubleshooting.md so the resulting
+// "the note changed" failure is not misread as a bad `expected` from Tomo.
+// ---------------------------------------------------------------------------
+
+describe("editFrontmatter — re-running an already-applied action", () => {
+	it("set: second run of the SAME action fails and leaves the applied value intact", async () => {
+		const vault = new FakeVaultFS();
+		await seed(vault, { up: [OLD_LINK], related: [] });
+
+		const action = makeAction();
+		expect((await editFrontmatter(action, makeCtx(vault))).kind).toBe("applied");
+
+		const second = await editFrontmatter(action, makeCtx(vault));
+
+		expect(second.kind).toBe("failed");
+		if (second.kind === "failed") expect(second.reason).toContain("not what the instruction expected");
+		expect(await vault.readFrontMatter(PATH)).toEqual({ up: [NEW_LINK], related: [] });
+	});
+
+	it("remove: second run of the SAME action fails rather than reporting skipped-already", async () => {
+		const vault = new FakeVaultFS();
+		await seed(vault, { up: [OLD_LINK], related: [] });
+
+		const action = makeAction({ operation: "remove", value: undefined });
+		expect((await editFrontmatter(action, makeCtx(vault))).kind).toBe("applied");
+
+		const second = await editFrontmatter(action, makeCtx(vault));
+
+		expect(second.kind).toBe("failed");
+		if (second.kind === "failed") expect(second.reason).toContain("found absent");
 		expect(await vault.readFrontMatter(PATH)).toEqual({ related: [] });
 	});
 });
