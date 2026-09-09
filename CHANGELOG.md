@@ -1,3 +1,14 @@
+## [0.24.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.23.1...0.24.0) (2026-09-09)
+
+### ⚠ BREAKING CHANGES
+
+* **schema:** require item_key, matching Tomo's schema verbatim
+
+### Bug Fixes
+
+* **schema:** accept Tomo's item_key and attachments on suggestions[] ([b33d017](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/b33d017517568218cab298db03b969b67eb64c60))
+* **schema:** require item_key, matching Tomo's schema verbatim ([01921c6](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/01921c6f8aff9cb3f7e68b6fcb0f95884022ad1a))
+
 ## [0.23.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.23.0...0.23.1) (2026-09-01)
 
 ### Bug Fixes
