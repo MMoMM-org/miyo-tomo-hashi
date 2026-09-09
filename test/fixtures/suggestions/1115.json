@@ -21,7 +21,8 @@
       "force_atomic": false,
       "suppressed": true,
       "worthiness": 0.2,
-      "candidate_mocs": []
+      "candidate_mocs": [],
+      "item_key": "100 Inbox/call-vendor.md"
     },
     {
       "id": "S02",
@@ -40,7 +41,8 @@
       "force_atomic": false,
       "suppressed": true,
       "worthiness": 0.4,
-      "candidate_mocs": []
+      "candidate_mocs": [],
+      "item_key": "100 Inbox/deliberate-practice.md"
     },
     {
       "id": "S03",
@@ -58,7 +60,8 @@
       "force_atomic": false,
       "suppressed": true,
       "worthiness": 0.4,
-      "candidate_mocs": []
+      "candidate_mocs": [],
+      "item_key": "100 Inbox/idea-capture.md"
     },
     {
       "id": "S04",
@@ -76,7 +79,8 @@
       "force_atomic": false,
       "suppressed": true,
       "worthiness": 0.4,
-      "candidate_mocs": []
+      "candidate_mocs": [],
+      "item_key": "100 Inbox/interleaving.md"
     },
     {
       "id": "S05",
@@ -94,7 +98,8 @@
       "force_atomic": false,
       "suppressed": true,
       "worthiness": 0.2,
-      "candidate_mocs": []
+      "candidate_mocs": [],
+      "item_key": "100 Inbox/quick-thought.md"
     },
     {
       "id": "S06",
@@ -112,7 +117,8 @@
       "force_atomic": false,
       "suppressed": true,
       "worthiness": 0.4,
-      "candidate_mocs": []
+      "candidate_mocs": [],
+      "item_key": "100 Inbox/spaced-repetition.md"
     },
     {
       "id": "S07",
@@ -149,7 +155,8 @@
           "anchor": null,
           "source": "tomo"
         }
-      ]
+      ],
+      "item_key": "100 Inbox/zettelkasten-method.md"
     }
   ],
   "proposed_mocs": [],

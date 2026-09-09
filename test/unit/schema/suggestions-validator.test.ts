@@ -18,6 +18,7 @@ import type {
 const VALID_SUGGESTION: SuggestionWire = {
 	id: "S01",
 	stem: "2026-07-01_some-note",
+	item_key: "100 Inbox/2026-07-01_some-note.md",
 	title: "Some Note",
 	template: "[[Templates/Atomic]]",
 	location: "202 Notes",
@@ -129,6 +130,95 @@ describe("validate (suggestions wire)", () => {
 			],
 		};
 		expect(validate(fixture).ok).toBe(false);
+	});
+
+	// -----------------------------------------------------------------------
+	// Tomo wire drift (handoff 2026-09-09): spec 031 added `attachments` and
+	// spec 034 added `item_key` to suggestions[] without moving
+	// schema_version, so every current run was rejected by
+	// additionalProperties:false. Both are vendored EXACTLY as Tomo declares
+	// them — item_key required, attachments optional. The two sides pin ONE
+	// schema; updating one without the other is meant to fail loud rather
+	// than degrade quietly.
+	// -----------------------------------------------------------------------
+
+	it("accepts a suggestion carrying item_key and attachments (current Tomo runs)", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			suggestions: [
+				{
+					...VALID_SUGGESTION,
+					item_key: "100 Inbox/Places/Dresden.md",
+					attachments: ["100 Inbox/attachments/photo.jpg"],
+				},
+			],
+		};
+		const result = validate(fixture);
+		expect(result.ok).toBe(true);
+	});
+
+	it("rejects a suggestion missing item_key (a Tomo older than this Hashi)", () => {
+		// Deliberate parity with Tomo's own `required` list: the two sides pin
+		// ONE wire. A pre-034 run failing loud here is the designed outcome —
+		// half-opening a doc whose join key is absent would silently reinstate
+		// the same-stem ambiguity item_key exists to remove.
+		const { item_key: _dropped, ...withoutItemKey } = VALID_SUGGESTION;
+		const fixture = { ...VALID_FIXTURE, suggestions: [withoutItemKey] };
+		const result = validate(fixture);
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.message).toContain("item_key");
+	});
+
+	it("accepts a suggestion without attachments (still optional — Tomo does not require it)", () => {
+		expect(validate(VALID_FIXTURE).ok).toBe(true);
+	});
+
+	it("preserves item_key and attachments on the validated doc (save round-trip)", () => {
+		// The adapter re-serializes result.data, so unknown-to-the-editor
+		// passthrough fields must survive validation unstripped.
+		const fixture = {
+			...VALID_FIXTURE,
+			suggestions: [
+				{
+					...VALID_SUGGESTION,
+					item_key: "100 Inbox/Reise/Dresden.md",
+					attachments: ["a.png", "b.pdf"],
+				},
+			],
+		};
+		const result = validate(fixture);
+		if (!result.ok) throw new Error(result.message);
+		expect(result.data.suggestions[0]?.item_key).toBe(
+			"100 Inbox/Reise/Dresden.md",
+		);
+		expect(result.data.suggestions[0]?.attachments).toEqual(["a.png", "b.pdf"]);
+	});
+
+	it("names the offending key when a suggestion carries an unknown field", () => {
+		// Regression for the diagnosis half of the same handoff: the notice
+		// used to read "must NOT have additional properties" with no key.
+		const fixture = {
+			...VALID_FIXTURE,
+			suggestions: [{ ...VALID_SUGGESTION, totally_new_field: 1 }],
+		};
+		const result = validate(fixture);
+		if (result.ok) throw new Error("expected validation to fail");
+		expect(result.message).toContain("'totally_new_field'");
+		expect(result.message).toContain("/suggestions/0");
+	});
+
+	it("names every offending key on the same object, not just the first", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			suggestions: [
+				{ ...VALID_SUGGESTION, future_one: 1, future_two: 2 },
+			],
+		};
+		const result = validate(fixture);
+		if (result.ok) throw new Error("expected validation to fail");
+		expect(result.message).toContain("'future_one'");
+		expect(result.message).toContain("'future_two'");
+		expect(result.message).toContain("properties");
 	});
 
 	it("rejects an unknown top-level property (additionalProperties:false at root)", () => {

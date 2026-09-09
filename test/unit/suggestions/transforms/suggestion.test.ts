@@ -47,6 +47,7 @@ function getMockSuggestion(overrides?: Partial<SuggestionWire>): SuggestionWire 
 	return {
 		id: "S01",
 		stem: "test-stem",
+		item_key: "100 Inbox/test-stem.md",
 		title: "Original Title",
 		template: "t_note_tomo.md",
 		location: "Atlas/202 Notes/",
