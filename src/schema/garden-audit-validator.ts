@@ -59,8 +59,44 @@ function formatErrors(errors: ErrorObject[], raw: unknown): string {
 		return `Schema version mismatch — expected ${expected}, got ${actual}`;
 	}
 
+	// An additionalProperties failure names the offending key ONLY in
+	// `params.additionalProperty` — Ajv's own message stops at "must NOT have
+	// additional properties", which is unactionable on its own. Surfacing the
+	// key names turns a puzzling notice into a one-line drift diagnosis
+	// (Tomo handoff 2026-09-09: two added wire fields rejected every run, and
+	// the notice never said which). Keys are collected for the FIRST failing
+	// path only — a doc drifting by two fields reports both at once instead of
+	// costing two round trips.
+	if (first.keyword === "additionalProperties") {
+		const path = first.instancePath || "(root)";
+		const keys = unknownPropertyKeys(errors, first.instancePath);
+		if (keys.length > 0) {
+			const label = keys.length === 1 ? "property" : "properties";
+			return `${path} has unknown ${label} ${keys.join(", ")} — the document may target a newer Tomo schema than this Hashi build`;
+		}
+	}
+
 	const path = first.instancePath || "(root)";
 	return `${path} ${first.message ?? "is invalid"}`;
+}
+
+// Collect every unknown-property key Ajv reported at `instancePath`, quoted
+// and de-duplicated in report order. Ajv emits ONE error per offending key,
+// so a doc with two unknown fields on the same object yields two errors that
+// only differ in `params.additionalProperty`.
+function unknownPropertyKeys(
+	errors: ErrorObject[],
+	instancePath: string,
+): string[] {
+	const seen = new Set<string>();
+	for (const error of errors) {
+		if (error.keyword === "additionalProperties" && error.instancePath === instancePath) {
+			const key = (error.params as { additionalProperty?: unknown })
+				.additionalProperty;
+			if (typeof key === "string") seen.add(`'${key}'`);
+		}
+	}
+	return [...seen];
 }
 
 // Format a primitive value safely; objects/arrays return JSON.stringify

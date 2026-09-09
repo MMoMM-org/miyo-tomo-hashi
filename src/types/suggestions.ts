@@ -59,6 +59,20 @@ export interface SuggestionWire {
 	readonly id: string;
 	/** Read-only — source note stem. */
 	readonly stem: string;
+	/**
+	 * Read-only — vault-relative path of the source note, verbatim (Tomo
+	 * spec 034). Unique across inbox subfolders where `stem` is not, so it
+	 * is the key any same-stem disambiguation should join on. Optional:
+	 * Tomo `required`s it, but pre-034 runs have no such field and there is
+	 * no schema_version signal to branch on.
+	 */
+	readonly item_key?: string;
+	/**
+	 * Read-only passthrough — vault-relative paths of files the source note
+	 * embeds (Tomo spec 031). The editor never edits these; they only have
+	 * to survive the save round-trip.
+	 */
+	readonly attachments?: readonly string[];
 	/** Editable — the note name; the filename derives from it. */
 	readonly title: string;
 	/**

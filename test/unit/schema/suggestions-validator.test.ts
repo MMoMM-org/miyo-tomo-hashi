@@ -131,6 +131,82 @@ describe("validate (suggestions wire)", () => {
 		expect(validate(fixture).ok).toBe(false);
 	});
 
+	// -----------------------------------------------------------------------
+	// Tomo wire drift (handoff 2026-09-09): spec 031 added `attachments` and
+	// spec 034 added `item_key` to suggestions[] without moving
+	// schema_version, so every current run was rejected by
+	// additionalProperties:false. Both are accepted as OPTIONAL here — Tomo
+	// `required`s item_key, but pre-034 runs lack it and there is no version
+	// signal to branch on, so the editor has to read both shapes.
+	// -----------------------------------------------------------------------
+
+	it("accepts a suggestion carrying item_key and attachments (current Tomo runs)", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			suggestions: [
+				{
+					...VALID_SUGGESTION,
+					item_key: "100 Inbox/Places/Dresden.md",
+					attachments: ["100 Inbox/attachments/photo.jpg"],
+				},
+			],
+		};
+		const result = validate(fixture);
+		expect(result.ok).toBe(true);
+	});
+
+	it("accepts a suggestion WITHOUT item_key or attachments (pre-034 runs)", () => {
+		expect(validate(VALID_FIXTURE).ok).toBe(true);
+	});
+
+	it("preserves item_key and attachments on the validated doc (save round-trip)", () => {
+		// The adapter re-serializes result.data, so unknown-to-the-editor
+		// passthrough fields must survive validation unstripped.
+		const fixture = {
+			...VALID_FIXTURE,
+			suggestions: [
+				{
+					...VALID_SUGGESTION,
+					item_key: "100 Inbox/Reise/Dresden.md",
+					attachments: ["a.png", "b.pdf"],
+				},
+			],
+		};
+		const result = validate(fixture);
+		if (!result.ok) throw new Error(result.message);
+		expect(result.data.suggestions[0]?.item_key).toBe(
+			"100 Inbox/Reise/Dresden.md",
+		);
+		expect(result.data.suggestions[0]?.attachments).toEqual(["a.png", "b.pdf"]);
+	});
+
+	it("names the offending key when a suggestion carries an unknown field", () => {
+		// Regression for the diagnosis half of the same handoff: the notice
+		// used to read "must NOT have additional properties" with no key.
+		const fixture = {
+			...VALID_FIXTURE,
+			suggestions: [{ ...VALID_SUGGESTION, totally_new_field: 1 }],
+		};
+		const result = validate(fixture);
+		if (result.ok) throw new Error("expected validation to fail");
+		expect(result.message).toContain("'totally_new_field'");
+		expect(result.message).toContain("/suggestions/0");
+	});
+
+	it("names every offending key on the same object, not just the first", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			suggestions: [
+				{ ...VALID_SUGGESTION, future_one: 1, future_two: 2 },
+			],
+		};
+		const result = validate(fixture);
+		if (result.ok) throw new Error("expected validation to fail");
+		expect(result.message).toContain("'future_one'");
+		expect(result.message).toContain("'future_two'");
+		expect(result.message).toContain("properties");
+	});
+
 	it("rejects an unknown top-level property (additionalProperties:false at root)", () => {
 		const fixture = { ...VALID_FIXTURE, extra_root_field: true };
 		expect(validate(fixture).ok).toBe(false);
