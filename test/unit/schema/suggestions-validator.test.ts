@@ -18,6 +18,7 @@ import type {
 const VALID_SUGGESTION: SuggestionWire = {
 	id: "S01",
 	stem: "2026-07-01_some-note",
+	item_key: "100 Inbox/2026-07-01_some-note.md",
 	title: "Some Note",
 	template: "[[Templates/Atomic]]",
 	location: "202 Notes",
@@ -135,9 +136,10 @@ describe("validate (suggestions wire)", () => {
 	// Tomo wire drift (handoff 2026-09-09): spec 031 added `attachments` and
 	// spec 034 added `item_key` to suggestions[] without moving
 	// schema_version, so every current run was rejected by
-	// additionalProperties:false. Both are accepted as OPTIONAL here — Tomo
-	// `required`s item_key, but pre-034 runs lack it and there is no version
-	// signal to branch on, so the editor has to read both shapes.
+	// additionalProperties:false. Both are vendored EXACTLY as Tomo declares
+	// them — item_key required, attachments optional. The two sides pin ONE
+	// schema; updating one without the other is meant to fail loud rather
+	// than degrade quietly.
 	// -----------------------------------------------------------------------
 
 	it("accepts a suggestion carrying item_key and attachments (current Tomo runs)", () => {
@@ -155,7 +157,19 @@ describe("validate (suggestions wire)", () => {
 		expect(result.ok).toBe(true);
 	});
 
-	it("accepts a suggestion WITHOUT item_key or attachments (pre-034 runs)", () => {
+	it("rejects a suggestion missing item_key (a Tomo older than this Hashi)", () => {
+		// Deliberate parity with Tomo's own `required` list: the two sides pin
+		// ONE wire. A pre-034 run failing loud here is the designed outcome —
+		// half-opening a doc whose join key is absent would silently reinstate
+		// the same-stem ambiguity item_key exists to remove.
+		const { item_key: _dropped, ...withoutItemKey } = VALID_SUGGESTION;
+		const fixture = { ...VALID_FIXTURE, suggestions: [withoutItemKey] };
+		const result = validate(fixture);
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.message).toContain("item_key");
+	});
+
+	it("accepts a suggestion without attachments (still optional — Tomo does not require it)", () => {
 		expect(validate(VALID_FIXTURE).ok).toBe(true);
 	});
 

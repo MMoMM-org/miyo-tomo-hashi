@@ -22,7 +22,7 @@
       "description": "One entry per atomic note suggestion, keyed by its stable S## id. Carries the full editable per-note surface.",
       "items": {
         "type": "object",
-        "required": ["id", "stem", "title", "template", "location", "tags", "decision", "keep_source", "delete_source", "force_atomic", "suppressed", "candidate_mocs"],
+        "required": ["id", "stem", "item_key", "title", "template", "location", "tags", "decision", "keep_source", "delete_source", "force_atomic", "suppressed", "candidate_mocs"],
         "additionalProperties": false,
         "properties": {
           "id": {"type": "string", "pattern": "^S[0-9]{2,}(#[0-9]+)?$"},
@@ -30,7 +30,7 @@
           "item_key": {
             "type": "string",
             "minLength": 1,
-            "description": "Vault-relative path of the source note, verbatim (Tomo spec 034). Unique across inbox subfolders where `stem` is not. OPTIONAL here although Tomo `required`s it: there is no schema_version signal to branch on, so accepting its absence is what lets this editor read pre-034 runs too."
+            "description": "Vault-relative path of the source note, verbatim (Tomo spec 034). Unique across inbox subfolders where `stem` is not. Required, matching Tomo verbatim: the two sides pin ONE schema, so a run without item_key is a Tomo older than this Hashi and must fail loud rather than half-open."
           },
           "attachments": {
             "type": "array",

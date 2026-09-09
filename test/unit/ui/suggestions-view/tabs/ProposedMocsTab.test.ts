@@ -79,6 +79,7 @@ vi.mock("../../../../../src/ui/suggestions-view/pickers/MergeTargetPicker", () =
 function makeSuggestion(overrides: Partial<SuggestionWire> & { id: string; title: string }): SuggestionWire {
 	return {
 		stem: overrides.id,
+		item_key: `100 Inbox/${overrides.id}.md`,
 		template: "[[Templates/Atomic]]",
 		location: "Atomics",
 		tags: [],

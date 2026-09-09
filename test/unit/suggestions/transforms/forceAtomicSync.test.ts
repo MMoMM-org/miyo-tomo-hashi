@@ -21,6 +21,7 @@ import type {
 const getMockSuggestion = (overrides?: Partial<SuggestionWire>): SuggestionWire => ({
 	id: "S01",
 	stem: "shared-stem",
+	item_key: "100 Inbox/shared-stem.md",
 	title: "Some Note",
 	template: "[[Templates/Atomic]]",
 	location: "202 Notes",

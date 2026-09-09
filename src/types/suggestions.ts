@@ -62,11 +62,11 @@ export interface SuggestionWire {
 	/**
 	 * Read-only — vault-relative path of the source note, verbatim (Tomo
 	 * spec 034). Unique across inbox subfolders where `stem` is not, so it
-	 * is the key any same-stem disambiguation should join on. Optional:
-	 * Tomo `required`s it, but pre-034 runs have no such field and there is
-	 * no schema_version signal to branch on.
+	 * is the key any same-stem disambiguation should join on. Required, as
+	 * in Tomo's own schema: the two sides pin ONE wire, and a run without it
+	 * is a Tomo older than this Hashi — which must fail loud, not half-open.
 	 */
-	readonly item_key?: string;
+	readonly item_key: string;
 	/**
 	 * Read-only passthrough — vault-relative paths of files the source note
 	 * embeds (Tomo spec 031). The editor never edits these; they only have

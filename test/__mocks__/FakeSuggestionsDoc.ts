@@ -8,6 +8,12 @@
  * fixture — spec-002 lesson: test against real Tomo output, since a
  * hand-rolled fixture can silently drift from what Tomo actually emits.
  *
+ * The emission predates Tomo spec 034, so `item_key` was backfilled onto its
+ * suggestions (2026-09-09) when that field became required on both sides.
+ * Everything else is the original run, untouched. `emit_digest` is stale as a
+ * result, which is harmless here: Hashi treats it as an opaque passthrough and
+ * never recomputes or verifies it.
+ *
  * `load()` deep-clones the seed so callers can mutate the returned
  * `EditModel` freely without corrupting the fake's internal state or
  * leaking mutations into a later `load()` call. `save()` deep-clones the
