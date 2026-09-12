@@ -55,7 +55,7 @@ function getMockFinding(overrides?: Partial<FindingWire>): FindingWire {
 
 function getMockDoc(overrides?: Partial<GardenAuditWire>): GardenAuditWire {
 	return {
-		schema_version: "1",
+		schema_version: "2",
 		generated: "2026-01-01T00:00:00Z",
 		run_id: "test-run",
 		profile: "test",

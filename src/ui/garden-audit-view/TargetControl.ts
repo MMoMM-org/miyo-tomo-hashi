@@ -71,6 +71,7 @@ const EMPTY_LABEL: Record<FindingCheck, string> = {
 	// Advisory checks never render this widget — see file header.
 	duplicate_stem: "n/a",
 	stale_moc: "n/a",
+	parent_not_moc: "n/a",
 };
 
 /**
@@ -94,6 +95,7 @@ const EMPTY_TOOLTIP: Record<FindingCheck, string> = {
 	// Advisory checks never render this widget — see file header.
 	duplicate_stem: "n/a",
 	stale_moc: "n/a",
+	parent_not_moc: "n/a",
 };
 
 /** Basename minus a trailing `.md` — vault path → bare stem. */

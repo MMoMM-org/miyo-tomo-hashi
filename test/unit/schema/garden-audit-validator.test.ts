@@ -11,7 +11,7 @@ import type { GardenAuditWire } from "../../../src/types/garden-audit.js";
 // ---------------------------------------------------------------------------
 
 const VALID_FIXTURE: GardenAuditWire = {
-	schema_version: "1",
+	schema_version: "2",
 	generated: "2026-07-22T12:00:00Z",
 	run_id: "run-editor-001",
 	profile: "miyo",
@@ -80,7 +80,7 @@ describe("validate (garden-audit wire)", () => {
 		const result = validate(VALID_FIXTURE);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
-			expect(result.data.schema_version).toBe("1");
+			expect(result.data.schema_version).toBe("2");
 			expect(result.data.findings).toHaveLength(4);
 			expect(result.data.findings[3]?.decision).toBeUndefined();
 		}
@@ -94,15 +94,53 @@ describe("validate (garden-audit wire)", () => {
 		if (!result.ok) expect(result.message).toContain("emit_digest");
 	});
 
-	it("rejects schema_version '2' with the fail-loud version-mismatch message", () => {
+	// -----------------------------------------------------------------------
+	// Tomo spec 035 release (handoff 2026-09-11). Two disclosures, opposite
+	// consequences — worth separate tests because the difference is the whole
+	// lesson: an open node absorbs a new field silently, a closed enum does not.
+	// -----------------------------------------------------------------------
+
+	it("accepts the parent_not_moc check (closed enum — rejected before this release)", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			findings: [{ ...VALID_FIXTURE.findings[0], check: "parent_not_moc" }],
+		};
+		const result = validate(fixture);
+		expect(result.ok, result.ok ? "" : result.message).toBe(true);
+	});
+
+	it("still rejects a check outside the enum", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			findings: [{ ...VALID_FIXTURE.findings[0], check: "not_a_real_check" }],
+		};
+		expect(validate(fixture).ok).toBe(false);
+	});
+
+	it("accepts up_source / up_value on detail — and would have before, since detail is open", () => {
+		// These rode in undisclosed since Tomo specs 032/033. The test records
+		// that the open node is WHY nothing broke, so closing detail later is
+		// a decision someone has to make deliberately rather than discover.
+		const fixture = {
+			...VALID_FIXTURE,
+			findings: [{
+				...VALID_FIXTURE.findings[0],
+				detail: { dead_target: "x", count: 1, up_source: "frontmatter", up_value: "[[A MOC]]" },
+			}],
+		};
+		const result = validate(fixture);
+		expect(result.ok, result.ok ? "" : result.message).toBe(true);
+	});
+
+	it("rejects schema_version '3' with the fail-loud version-mismatch message", () => {
 		// Mirrors the suggestions-validator precedent: the literal
 		// "Schema version mismatch — expected X, got Y" form is parsed
 		// downstream to drive an "upgrade Hashi" prompt.
-		const result = validate({ ...VALID_FIXTURE, schema_version: "2" });
+		const result = validate({ ...VALID_FIXTURE, schema_version: "3" });
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.message).toBe(
-				"Schema version mismatch — expected 1, got 2",
+				"Schema version mismatch — expected 2, got 3",
 			);
 		}
 	});

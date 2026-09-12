@@ -41,6 +41,7 @@ const getMockLogEntry = (overrides?: Partial<DailyLogEntryWire>): DailyLogEntryW
 	content: "Some log content.",
 	reason: "test fixture",
 	source_stem: "shared-stem",
+	source_item_key: "100 Inbox/shared-stem.md",
 	accepted: false,
 	force_atomic_note: false,
 	...overrides,
@@ -55,7 +56,7 @@ const getMockDailyUpdate = (overrides?: Partial<DailyUpdateWire>): DailyUpdateWi
 });
 
 const getMockWire = (overrides?: Partial<SuggestionsWire>): SuggestionsWire => ({
-	schema_version: "1",
+	schema_version: "2",
 	generated: "2026-07-06T11:15:00Z",
 	run_id: "test-run",
 	profile: "test-profile",

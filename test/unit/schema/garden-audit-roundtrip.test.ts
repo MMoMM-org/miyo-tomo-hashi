@@ -60,7 +60,7 @@ describe("garden-audit wire round-trip — current-wire.json fixture", () => {
 describe("garden-audit wire round-trip — stale-shape rejection", () => {
 	it("rejects a stale pre-spec-030 doc (decision missing the required 'action' field)", () => {
 		const staleDoc = {
-			schema_version: "1",
+			schema_version: "2",
 			generated: "2026-01-01T00:00:00Z",
 			run_id: "run-stale-001",
 			profile: null,

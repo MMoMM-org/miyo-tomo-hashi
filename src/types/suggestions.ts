@@ -158,6 +158,13 @@ export interface DailyTrackerWire {
 	readonly value: string;
 	readonly reason: string;
 	readonly source_stem: string;
+	/**
+	 * Read-only — vault-relative path of the source note this entry came from
+	 * (Tomo spec 035 F9). Required on all three daily buckets: `source_stem`
+	 * is display text and collides across inbox subfolders, so this is the
+	 * only unambiguous join back to the originating note.
+	 */
+	readonly source_item_key: string;
 	/** Editable — accept toggle. */
 	readonly accepted: boolean;
 }
@@ -171,6 +178,13 @@ export interface DailyLogEntryWire {
 	readonly content: string;
 	readonly reason: string;
 	readonly source_stem: string;
+	/**
+	 * Read-only — vault-relative path of the source note this entry came from
+	 * (Tomo spec 035 F9). Required on all three daily buckets: `source_stem`
+	 * is display text and collides across inbox subfolders, so this is the
+	 * only unambiguous join back to the originating note.
+	 */
+	readonly source_item_key: string;
 	/** Editable — accept toggle. */
 	readonly accepted: boolean;
 	/** Editable — kept in sync per source-stem with suggestions[].force_atomic. */
@@ -183,6 +197,13 @@ export interface DailyLogLinkWire {
 	readonly time: string | null;
 	readonly position: "at_time" | "after_last_line" | "before_first_line";
 	readonly reason: string;
+	/**
+	 * Read-only — vault-relative path of the source note this link came from
+	 * (Tomo spec 035 F9). `target_stem` names the atomic the link points TO;
+	 * before this field the wire carried NO way to reach the note it came
+	 * FROM — not ambiguously, but not at all.
+	 */
+	readonly source_item_key: string;
 	/** Editable — accept toggle. */
 	readonly accepted: boolean;
 }
@@ -200,7 +221,7 @@ export interface DailyUpdateWire {
 // ---------------------------------------------------------------------------
 
 export interface SuggestionsWire {
-	readonly schema_version: "1";
+	readonly schema_version: "2";
 	readonly generated: string;
 	readonly run_id: string;
 	readonly profile: string;

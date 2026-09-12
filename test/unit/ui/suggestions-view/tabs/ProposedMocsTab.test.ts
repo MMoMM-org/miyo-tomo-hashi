@@ -106,7 +106,7 @@ function makeProposedMoc(overrides: Partial<ProposedMocWire> & { id: string }): 
 
 function makeDoc(overrides: Partial<SuggestionsWire> = {}): SuggestionsWire {
 	return {
-		schema_version: "1",
+		schema_version: "2",
 		generated: "2026-07-06T11:15:00Z",
 		run_id: "run-1",
 		profile: "default",

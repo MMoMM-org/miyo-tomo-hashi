@@ -1,5 +1,5 @@
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "generated": "2026-07-06T11:15:02Z",
   "run_id": "2026-07-06T11-07-59Z-948750",
   "profile": "miyo",
@@ -172,7 +172,8 @@
           "reason": "Short call log (195 chars), not atomic-worthy → inline daily log for 2026-07-05",
           "source_stem": "call-vendor",
           "accepted": false,
-          "force_atomic_note": false
+          "force_atomic_note": false,
+          "source_item_key": "100 Inbox/call-vendor.md"
         }
       ],
       "log_links": []
@@ -188,7 +189,8 @@
           "reason": "Short gym log (~20 words), not atomic-worthy → inline daily log entry",
           "source_stem": "workout-log",
           "accepted": false,
-          "force_atomic_note": false
+          "force_atomic_note": false,
+          "source_item_key": "100 Inbox/workout-log.md"
         }
       ],
       "log_links": []

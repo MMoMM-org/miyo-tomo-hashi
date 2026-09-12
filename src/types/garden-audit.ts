@@ -75,7 +75,9 @@ export type FindingCheck =
 	| "broken_up"
 	| "dead_link"
 	| "duplicate_stem"
-	| "stale_moc";
+	| "stale_moc"
+	/** Advisory, not fixable — an up:: declaration pointing at a non-MOC note. */
+	| "parent_not_moc";
 
 export type FindingTier = "integrity" | "structure" | "advisory";
 
@@ -100,7 +102,7 @@ export interface FindingWire {
 // ---------------------------------------------------------------------------
 
 export interface GardenAuditWire {
-	readonly schema_version: "1";
+	readonly schema_version: "2";
 	readonly generated: string;
 	readonly run_id: string;
 	readonly profile: string | null;
