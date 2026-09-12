@@ -1,3 +1,13 @@
+## [0.25.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.24.0...0.25.0) (2026-09-12)
+
+### ⚠ BREAKING CHANGES
+
+* **schema:** vendor Tomo's spec-035 release — both wires to schema_version 2
+
+### Features
+
+* **schema:** vendor Tomo's spec-035 release — both wires to schema_version 2 ([f799588](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/f799588770928ebef1ba9483118a9cf5e3a238f8))
+
 ## [0.24.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.23.1...0.24.0) (2026-09-09)
 
 ### ⚠ BREAKING CHANGES
