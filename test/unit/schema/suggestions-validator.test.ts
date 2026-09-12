@@ -46,6 +46,7 @@ const VALID_LOG_ENTRY: DailyLogEntryWire = {
 	content: "Did the thing.",
 	reason: "captured from note",
 	source_stem: "2026-07-01_some-note",
+	source_item_key: "100 Inbox/2026-07-01_some-note.md",
 	accepted: true,
 	force_atomic_note: false,
 };
@@ -64,7 +65,7 @@ const VALID_TAG_GROUP: TagGroupWire = {
 };
 
 const VALID_FIXTURE: SuggestionsWire = {
-	schema_version: "1",
+	schema_version: "2",
 	generated: "2026-07-06T10:00:00Z",
 	run_id: "2026-07-06_1000",
 	profile: "default",
@@ -81,11 +82,11 @@ const VALID_FIXTURE: SuggestionsWire = {
 // ---------------------------------------------------------------------------
 
 describe("validate (suggestions wire)", () => {
-	it("accepts a schema_version '1' doc and returns a typed SuggestionsWire", () => {
+	it("accepts a schema_version '2' doc and returns a typed SuggestionsWire", () => {
 		const result = validate(VALID_FIXTURE);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
-			expect(result.data.schema_version).toBe("1");
+			expect(result.data.schema_version).toBe("2");
 			expect(result.data.suggestions).toHaveLength(1);
 			expect(result.data.daily_updates[0]?.log_entries[0]?.content).toBe(
 				"Did the thing.",
@@ -93,16 +94,16 @@ describe("validate (suggestions wire)", () => {
 		}
 	});
 
-	it("rejects schema_version '2' with the fail-loud version-mismatch message", () => {
+	it("rejects schema_version '3' with the fail-loud version-mismatch message", () => {
 		// Mirrors the executor precedent (src/schema/validator.ts M14): the
 		// literal "Schema version mismatch — expected X, got Y" form is
 		// parsed downstream to drive an "upgrade" prompt — never a silent
 		// pass-through of an unknown version.
-		const result = validate({ ...VALID_FIXTURE, schema_version: "2" });
+		const result = validate({ ...VALID_FIXTURE, schema_version: "3" });
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.message).toBe(
-				"Schema version mismatch — expected 1, got 2",
+				"Schema version mismatch — expected 2, got 3",
 			);
 		}
 	});
@@ -219,6 +220,79 @@ describe("validate (suggestions wire)", () => {
 		expect(result.message).toContain("'future_one'");
 		expect(result.message).toContain("'future_two'");
 		expect(result.message).toContain("properties");
+	});
+
+	// -----------------------------------------------------------------------
+	// Tomo spec 035 F9: source_item_key, required on all three daily buckets.
+	// trackers[] and log_entries[] had an ambiguous key (source_stem);
+	// log_links[] had NO source field at all, so it gains an identity rather
+	// than a better one. One rejection test per bucket — they are three
+	// separate closed objects, and a widening that misses one is invisible.
+	// -----------------------------------------------------------------------
+
+	it("rejects a log_entry missing source_item_key", () => {
+		const { source_item_key: _drop, ...entry } = VALID_LOG_ENTRY;
+		const fixture = {
+			...VALID_FIXTURE,
+			daily_updates: [{ ...VALID_DAILY_UPDATE, log_entries: [entry] }],
+		};
+		const result = validate(fixture);
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.message).toContain("source_item_key");
+	});
+
+	it("rejects a tracker missing source_item_key", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			daily_updates: [{
+				...VALID_DAILY_UPDATE,
+				trackers: [{
+					field: "mood", value: "good", reason: "r",
+					source_stem: "some-note", accepted: true,
+				}],
+			}],
+		};
+		const result = validate(fixture);
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.message).toContain("source_item_key");
+	});
+
+	it("rejects a log_link missing source_item_key — the bucket that had no source field at all", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			daily_updates: [{
+				...VALID_DAILY_UPDATE,
+				log_links: [{
+					target_stem: "some-atomic", time: null,
+					position: "after_last_line", reason: "r", accepted: true,
+				}],
+			}],
+		};
+		const result = validate(fixture);
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.message).toContain("source_item_key");
+	});
+
+	it("accepts all three daily buckets carrying source_item_key", () => {
+		const fixture = {
+			...VALID_FIXTURE,
+			daily_updates: [{
+				date: "2026-09-11",
+				trackers: [{
+					field: "mood", value: "good", reason: "r",
+					source_stem: "some-note", source_item_key: "100 Inbox/some-note.md",
+					accepted: true,
+				}],
+				log_entries: [VALID_LOG_ENTRY],
+				log_links: [{
+					target_stem: "some-atomic", time: null,
+					position: "after_last_line", reason: "r",
+					source_item_key: "100 Inbox/origin.md", accepted: true,
+				}],
+			}],
+		};
+		const result = validate(fixture);
+		expect(result.ok, result.ok ? "" : result.message).toBe(true);
 	});
 
 	it("rejects an unknown top-level property (additionalProperties:false at root)", () => {

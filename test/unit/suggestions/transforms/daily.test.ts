@@ -28,6 +28,7 @@ function getMockTracker(overrides?: Partial<DailyTrackerWire>): DailyTrackerWire
 		value: "good",
 		reason: "mentioned in log",
 		source_stem: "2026-07-06-note",
+		source_item_key: "100 Inbox/2026-07-06-note.md",
 		accepted: false,
 		...overrides,
 	};
@@ -40,6 +41,7 @@ function getMockLogEntry(overrides?: Partial<DailyLogEntryWire>): DailyLogEntryW
 		content: "Had coffee",
 		reason: "mentioned in log",
 		source_stem: "2026-07-06-note",
+		source_item_key: "100 Inbox/2026-07-06-note.md",
 		accepted: false,
 		force_atomic_note: false,
 		...overrides,
@@ -52,6 +54,7 @@ function getMockLogLink(overrides?: Partial<DailyLogLinkWire>): DailyLogLinkWire
 		time: "10:00",
 		position: "at_time",
 		reason: "mentioned in log",
+		source_item_key: "100 Inbox/some-atomic-note.md",
 		accepted: false,
 		...overrides,
 	};
@@ -69,7 +72,7 @@ function getMockDailyUpdate(overrides?: Partial<DailyUpdateWire>): DailyUpdateWi
 
 function getMockWire(overrides?: Partial<SuggestionsWire>): SuggestionsWire {
 	return {
-		schema_version: "1",
+		schema_version: "2",
 		generated: "2026-07-06T11:15:00Z",
 		run_id: "run-1",
 		profile: "default",

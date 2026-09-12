@@ -15,7 +15,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 describe("FindingCheck", () => {
-	it("is the exact 6-element string-literal union", () => {
+	it("is the exact 7-element string-literal union", () => {
 		expectTypeOf<FindingCheck>().toEqualTypeOf<
 			| "unparented"
 			| "orphan"
@@ -23,10 +23,11 @@ describe("FindingCheck", () => {
 			| "dead_link"
 			| "duplicate_stem"
 			| "stale_moc"
+			| "parent_not_moc"
 		>();
 	});
 
-	it("all 6 literals are assignable to FindingCheck", () => {
+	it("all 7 literals are assignable to FindingCheck", () => {
 		const allChecks: FindingCheck[] = [
 			"unparented",
 			"orphan",
@@ -170,8 +171,8 @@ describe("FindingWire", () => {
 // ---------------------------------------------------------------------------
 
 describe("GardenAuditWire", () => {
-	it("schema_version is typed as string literal '1', not number 1", () => {
-		expectTypeOf<GardenAuditWire["schema_version"]>().toEqualTypeOf<"1">();
+	it("schema_version is typed as string literal '2', not number 2", () => {
+		expectTypeOf<GardenAuditWire["schema_version"]>().toEqualTypeOf<"2">();
 	});
 
 	it("approved is optional boolean", () => {
@@ -196,7 +197,7 @@ describe("GardenAuditWire", () => {
 
 	it("accepts a minimal valid doc with no findings and approved omitted", () => {
 		const doc: GardenAuditWire = {
-			schema_version: "1",
+			schema_version: "2",
 			generated: "2026-07-22T12:00:00Z",
 			run_id: "run-editor-001",
 			profile: null,

@@ -35,7 +35,7 @@ const getMockProposedMoc = (overrides?: Partial<ProposedMocWire>): ProposedMocWi
 });
 
 const getMockWire = (proposedMocs: readonly ProposedMocWire[]): SuggestionsWire => ({
-	schema_version: "1",
+	schema_version: "2",
 	generated: "2026-07-06T11:15:00Z",
 	run_id: "test-run",
 	profile: "test-profile",
