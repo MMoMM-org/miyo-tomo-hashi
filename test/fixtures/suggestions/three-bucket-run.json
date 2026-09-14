@@ -1,0 +1,365 @@
+{
+  "schema_version": "2",
+  "generated": "2026-09-14T12:41:53Z",
+  "run_id": "2026-09-14T12-34-09Z-e048aa",
+  "profile": "miyo",
+  "source_items": 12,
+  "suggestions": [
+    {
+      "id": "S01",
+      "stem": "Bautzen",
+      "item_key": "100 Inbox/Bautzen.md",
+      "title": "Bautzen — Same Image Embedded Twice (Plain + Alias)",
+      "summary": "Short test note embedding the same image (bautzen-turm.jpg) twice — once plain, once with an alias — to verify PRD F1-AC4 expects exactly one entry, not two.",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [],
+      "audio_peer": null,
+      "attachments": [
+        "100 Inbox/Images/bautzen-turm.jpg"
+      ],
+      "decision": "skip",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": true,
+      "worthiness": 0.2,
+      "candidate_mocs": []
+    },
+    {
+      "id": "S02",
+      "stem": "Dresden",
+      "item_key": "100 Inbox/Dresden.md",
+      "title": "Dresden Map Scan Duplicate: Images vs Scans Folder Ambiguity",
+      "summary": "Notes that the same map scan exists twice in the inbox (under Images/ and Scans/), flagging the duplicate as ambiguous with no action taken.",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [],
+      "audio_peer": null,
+      "attachments": [
+        "100 Inbox/Scans/karte.png"
+      ],
+      "decision": "skip",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": true,
+      "worthiness": 0.4,
+      "candidate_mocs": []
+    },
+    {
+      "id": "S03",
+      "stem": "Elbsandstein & Tschechien 2026 - Migrationsplan",
+      "item_key": "100 Inbox/Elbsandstein & Tschechien 2026 - Migrationsplan.md",
+      "title": "Elbsandstein & Tschechien 2026 — Vault-Migrationsplan",
+      "summary": "Step-by-step plan to migrate the 13 Places notes and the Elbsandstein & Tschechien 2026 overview from the inbox into Atlas as a real MOC under Vacation (MOC) > Done.",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [
+        "topic/recreation/vacation",
+        "topic/geography"
+      ],
+      "audio_peer": null,
+      "attachments": [],
+      "decision": "approve",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": false,
+      "worthiness": 0.9,
+      "candidate_mocs": [
+        {
+          "path": "Atlas/200 Maps/Elbsandstein & Tschechien 2026 (MOC).md",
+          "selected": true,
+          "anchor": {
+            "type": "line",
+            "value": null,
+            "placement": "after",
+            "new_section": "Vault-Migration",
+            "alt_headings": [],
+            "fit_confidence": null
+          },
+          "source": "tomo"
+        },
+        {
+          "path": "Atlas/200 Maps/Vacation (MOC).md",
+          "selected": true,
+          "anchor": {
+            "type": "heading",
+            "value": "Done",
+            "placement": "after",
+            "new_section": null,
+            "alt_headings": [],
+            "fit_confidence": 0.9
+          },
+          "source": "tomo"
+        }
+      ]
+    },
+    {
+      "id": "S04",
+      "stem": "Kai",
+      "item_key": "100 Inbox/Fotos/Kai.md",
+      "title": "Kai — Warum die Gruendung teurer ist als die Oberflaeche",
+      "summary": "A short reflection on quay walls (Kai): the visible surface is cheap, the hidden underwater foundation (Spundwand/Pfahlrost) determined by ground conditions is what drives cost and reuse.",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [
+        "topic/applied/engineering"
+      ],
+      "audio_peer": null,
+      "attachments": [
+        "100 Inbox/Scans/karte.png"
+      ],
+      "decision": "skip",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": true,
+      "worthiness": 0.4,
+      "candidate_mocs": []
+    },
+    {
+      "id": "S05",
+      "stem": "Meissen",
+      "item_key": "100 Inbox/Meissen.md",
+      "title": "Meissen — Kontrollfall (kein Embedding)",
+      "summary": "Test/control-case note (CON-8) stating no embedding is expected: no Attachments block, no Unresolved-Embeds block, behaviour unchanged.",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [],
+      "audio_peer": null,
+      "attachments": [],
+      "decision": "skip",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": true,
+      "worthiness": 0.2,
+      "candidate_mocs": []
+    },
+    {
+      "id": "S06",
+      "stem": "Prager Burg",
+      "item_key": "100 Inbox/Reise/Tschechien/Prager Burg.md",
+      "title": "Der Hradschin ist ein ummauerter Bezirk, keine einzelne Burg",
+      "summary": "Notes that the Hradschin (Prague Castle) is a walled district containing the St. Vitus Cathedral, Old Royal Palace, and Golden Lane, not a single building.",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [
+        "geography",
+        "recreation/vacation"
+      ],
+      "audio_peer": null,
+      "attachments": [],
+      "decision": "approve",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": false,
+      "worthiness": 0.6,
+      "candidate_mocs": [
+        {
+          "path": "Atlas/200 Maps/Elbsandstein & Tschechien 2026 (MOC).md",
+          "selected": true,
+          "anchor": {
+            "type": "heading",
+            "value": "Tschechien",
+            "placement": "after",
+            "new_section": null,
+            "alt_headings": [],
+            "fit_confidence": 0.9
+          },
+          "source": "tomo"
+        }
+      ]
+    },
+    {
+      "id": "S07",
+      "stem": "Test",
+      "item_key": "100 Inbox/Images/Test.md",
+      "title": "Test",
+      "summary": "Inbox item is empty apart from frontmatter (UUID, DateStamp, tags) — no body content to analyse.",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [],
+      "audio_peer": null,
+      "attachments": [],
+      "decision": "skip",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": true,
+      "worthiness": 0.0,
+      "candidate_mocs": []
+    },
+    {
+      "id": "S08",
+      "stem": "Zettelkasten Verzweigung statt Reihenfolge",
+      "item_key": "100 Inbox/Zettelkasten Verzweigung statt Reihenfolge.md",
+      "title": "Zettelkasten: Verzweigung statt Reihenfolge",
+      "summary": "Argues that a Zettelkasten's branching numbering (not the numbering itself) shifts note structure from chronological capture order to the topology of arguments, and questions how this relates to flat tags.",
+      "template": "t_note_tomo.md",
+      "location": "Atlas/202 Notes/",
+      "tags": [
+        "topic/knowledge/frameworks"
+      ],
+      "audio_peer": null,
+      "attachments": [],
+      "decision": "approve",
+      "keep_source": false,
+      "delete_source": false,
+      "force_atomic": false,
+      "suppressed": false,
+      "worthiness": 0.9,
+      "candidate_mocs": [
+        {
+          "path": "Atlas/200 Maps/Frameworks (MOC).md",
+          "selected": true,
+          "anchor": {
+            "type": "callout",
+            "value": null,
+            "placement": "before",
+            "new_section": "Zettelkasten: Verzweigung statt Reihenfolge",
+            "alt_headings": [
+              "Structure"
+            ],
+            "fit_confidence": null
+          },
+          "source": "tomo"
+        },
+        {
+          "path": "Atlas/200 Maps/Linking Your Thinking (MOC).md",
+          "selected": false,
+          "anchor": null,
+          "source": "tomo"
+        },
+        {
+          "path": "Atlas/200 Maps/Type of Notes (MOC).md",
+          "selected": false,
+          "anchor": null,
+          "source": "tomo"
+        }
+      ]
+    }
+  ],
+  "proposed_mocs": [],
+  "daily_updates": [
+    {
+      "date": "2026-09-06",
+      "trackers": [],
+      "log_entries": [
+        {
+          "time": null,
+          "position": "after_last_line",
+          "content": "Inbox note with two unresolved attachment embeds (Test image, Test asset), no other content.",
+          "reason": "Short item (<500 chars), no atomic-worthy content, has date_relevance",
+          "source_stem": "DoubleTest",
+          "accepted": false,
+          "force_atomic_note": false,
+          "source_item_key": "100 Inbox/DoubleTest.md"
+        },
+        {
+          "time": null,
+          "position": "after_last_line",
+          "content": "Empty fleeting note capture (no body content added).",
+          "reason": "Empty note, not atomic-worthy -> inline log entry",
+          "source_stem": "Test",
+          "accepted": false,
+          "force_atomic_note": false,
+          "source_item_key": "100 Inbox/assets/Test.md"
+        }
+      ],
+      "log_links": []
+    },
+    {
+      "date": "2026-09-08",
+      "trackers": [
+        {
+          "field": "Sport",
+          "value": "true",
+          "reason": "Content mentions 'Laufrunde' and 'km' matching Sport positive_keywords",
+          "source_stem": "Laufrunde am Elbufer",
+          "accepted": false,
+          "source_item_key": "100 Inbox/Laufrunde am Elbufer.md"
+        },
+        {
+          "field": "HealthFood",
+          "value": "true",
+          "reason": "Content mentions 'Haferbrei' and 'Beeren' matching HealthFood keywords",
+          "source_stem": "Laufrunde am Elbufer",
+          "accepted": false,
+          "source_item_key": "100 Inbox/Laufrunde am Elbufer.md"
+        },
+        {
+          "field": "ToBed",
+          "value": "22:45",
+          "reason": "Content mentions 'ins Bett' at 22:45 matching ToBed keywords",
+          "source_stem": "Laufrunde am Elbufer",
+          "accepted": false,
+          "source_item_key": "100 Inbox/Laufrunde am Elbufer.md"
+        }
+      ],
+      "log_entries": [
+        {
+          "time": "07:15",
+          "position": "at_time",
+          "content": "08.09., 07:15 – Laufrunde am Elbufer, 5 km in 32 Minuten, deutlich besser als letzte Woche. Danach Haferbrei mit Beeren ohne Zucker gefrühstückt. Gestern schon um 22:45 ins Bett.",
+          "reason": "Short reflection (~250 chars), not atomic-worthy → inline log",
+          "source_stem": "Laufrunde am Elbufer",
+          "accepted": false,
+          "force_atomic_note": false,
+          "source_item_key": "100 Inbox/Laufrunde am Elbufer.md"
+        }
+      ],
+      "log_links": []
+    },
+    {
+      "date": "2026-09-09",
+      "trackers": [],
+      "log_entries": [
+        {
+          "time": "14:20",
+          "position": "at_time",
+          "content": "Werkstatt zurückgerufen: Inspektion am 24.09. um 08:00, Ersatzwagen ist reserviert.",
+          "reason": "Short logistics note (~160 chars), not atomic-worthy -> inline daily log",
+          "source_stem": "Werkstatt Rueckruf",
+          "accepted": false,
+          "force_atomic_note": false,
+          "source_item_key": "100 Inbox/Werkstatt Rueckruf.md"
+        }
+      ],
+      "log_links": []
+    },
+    {
+      "date": "2026-09-11",
+      "trackers": [],
+      "log_entries": [],
+      "log_links": [
+        {
+          "target_stem": "Zettelkasten: Verzweigung statt Reihenfolge",
+          "time": "09:30",
+          "position": "at_time",
+          "reason": "Substantive Zettelkasten insight (worthiness 0.9) -> link from daily log",
+          "accepted": false,
+          "source_item_key": "100 Inbox/Zettelkasten Verzweigung statt Reihenfolge.md"
+        }
+      ]
+    }
+  ],
+  "tag_handler_groups": [
+    {
+      "group_id": "th-tsukai-efforts-tomo-dev-log-md",
+      "approved": true,
+      "keep_source": false,
+      "handler": "tsukai",
+      "target_path": "Efforts/Tomo Dev Log.md",
+      "marker": "## Captures",
+      "source_paths": [
+        "100 Inbox/202609101804_renderers-read-schema-version-from-their-schema.md"
+      ],
+      "preview": "**2026-09-10 — architecture:** Wire renderers now read `schema_version` from the schema's own declared const instead of a hardcoded literal, closing a drift risk between schema and emitted output."
+    }
+  ],
+  "emit_digest": "sha256:c73f8304c0f30a957d365f447e637c08273b6fce9e735e4be289c43b0be7797e"
+}
