@@ -1,3 +1,9 @@
+## [0.25.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.25.0...0.25.1) (2026-09-15)
+
+### Bug Fixes
+
+* **suggestions:** key daily<->suggestion joins on item_key, not display stem ([96f1b22](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/96f1b22462e14c7865e9cfc6089f553814a7231d))
+
 ## [0.25.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.24.0...0.25.0) (2026-09-12)
 
 ### ⚠ BREAKING CHANGES
