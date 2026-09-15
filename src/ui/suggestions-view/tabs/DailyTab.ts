@@ -12,9 +12,12 @@
  * item's index in its array and calls the matching transform from
  * `suggestions/transforms/daily.ts`. Force-Atomic is the one exception: it
  * goes through `setForceAtomicFromDaily` (transforms/forceAtomicSync.ts),
- * addressed by the entry's `source_stem` — that's the shared key with
+ * addressed by the entry's `source_item_key` — that's the shared key with
  * `suggestions[].force_atomic` (PRD F7: "Force-Atomic is one decision per
- * source"). Note: an accepted daily-only source auto-deletes downstream —
+ * source"). It is the item_key and not the `source_stem` rendered beside it
+ * because two inbox notes of the same name in different subfolders share a
+ * stem, and the sync would then reach across them. Note: an accepted
+ * daily-only source auto-deletes downstream —
  * that's a save-time consequence, not a separate control, so there is
  * deliberately no UI for it here.
  *
@@ -310,7 +313,7 @@ export class DailyTab implements EditorTab {
 		label.createSpan({ text: "Force atomic note" });
 		forceAtomic.addEventListener("change", () => {
 			const checked = forceAtomic.checked;
-			ctx.apply((model) => setForceAtomicFromDaily(model, entry.source_stem, checked));
+			ctx.apply((model) => setForceAtomicFromDaily(model, entry.source_item_key, checked));
 		});
 	}
 

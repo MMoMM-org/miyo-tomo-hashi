@@ -896,7 +896,7 @@ describe("SuggestionsTab", () => {
 			expect(ctx.apply).not.toHaveBeenCalled();
 		});
 
-		it("shows the daily-log skip hint when the stem has a daily-log entry (S01 → call-vendor)", async () => {
+		it("shows the daily-log skip hint when the note has a daily-log entry (S01 → call-vendor)", async () => {
 			const model = await loadModel();
 			const { ctx } = makeCtx();
 			const container = renderTab(model, ctx);
@@ -942,6 +942,43 @@ describe("SuggestionsTab", () => {
 			expect(icon?.classList.contains("is-active")).toBe(true);
 		});
 
+		/**
+		 * The daily-log indicator is keyed on `item_key`, not the display
+		 * stem. Two inbox notes of the same name in different subfolders (the
+		 * "Test" pair in Tomo's 2026-09-14 three-bucket run) share a stem, and
+		 * the stem-keyed lookup lit S01's calendar icon from the OTHER note's
+		 * log entry — telling the user their choice had a daily destination it
+		 * did not have. Our 2026-09-12 handoff to Tomo, §4.
+		 */
+		it("does NOT light the daily-log icon from a NAMESAKE note's log entry", async () => {
+			const loaded = await loadModel();
+			const s01 = loaded.doc.suggestions.find((s) => s.id === SUPPRESSED_ID)!;
+			// Repoint the call-vendor log entry at a same-stem note in another
+			// folder: display text unchanged, identity different.
+			const model: EditModel = {
+				...loaded,
+				doc: {
+					...loaded.doc,
+					daily_updates: loaded.doc.daily_updates.map((d) => ({
+						...d,
+						log_entries: d.log_entries.map((e) =>
+							e.source_item_key === s01.item_key
+								? { ...e, source_item_key: "100 Inbox/Archive/call-vendor.md" }
+								: e,
+						),
+					})),
+				},
+			};
+			const { ctx } = makeCtx();
+			const card = cardFor(renderTab(model, ctx), SUPPRESSED_ID);
+
+			expect(card.querySelector(".hashi-se-suppressed-note .hashi-se-daily-icon")).toBeNull();
+			expect(card.querySelector(".hashi-se-suppressed-note")?.textContent).toBe(
+				"Below the 0.5 threshold — kept in inbox, not made an atomic note. " +
+					"Force creation if necessary.",
+			);
+		});
+
 		it("editing the suppressed title dispatches setTitle (the bug-1 regression)", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
@@ -960,7 +997,7 @@ describe("SuggestionsTab", () => {
 			expect(next.dirty).toBe(true);
 		});
 
-		it("toggling Force-Atomic dispatches setForceAtomicFromSuggestion, syncing the daily mirror by stem", async () => {
+		it("toggling Force-Atomic dispatches setForceAtomicFromSuggestion, syncing the daily mirror by item_key", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
 			const container = renderTab(model, ctx);
@@ -976,7 +1013,7 @@ describe("SuggestionsTab", () => {
 			const next = applyCalls[0]!(model);
 
 			expect(next.doc.suggestions.find((s) => s.id === SUPPRESSED_ID)?.force_atomic).toBe(true);
-			// call-vendor is S01's stem AND the daily log entry's source_stem —
+			// call-vendor is S01's note AND the daily log entry's source —
 			// the sync (T1.4) must flip both from one control.
 			const dailyEntry = next.doc.daily_updates
 				.flatMap((d) => d.log_entries)

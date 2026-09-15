@@ -15,9 +15,9 @@
  *   (its `stem`, via `renderNoteLink`) so the user can tell WHICH note the
  *   card is about and open it; the editable atomic-title input; a worthiness
  *   badge; a "why skipped" hint that branches on whether a daily-log entry
- *   exists for the stem (`suppressedHint` / `collectDailyLogStems`); and the
+ *   exists for the note (`suppressedHint` / `collectDailyLogSources`); and the
  *   single Force-Atomic control (`setForceAtomicFromSuggestion`, which keeps
- *   the daily-log mirror in sync by stem — SDD §6 "Force-Atomic is one
+ *   the daily-log mirror in sync by `item_key` — SDD §6 "Force-Atomic is one
  *   decision per source"). Tomo emits an empty `candidate_mocs` for
  *   suppressed suggestions, so there is no MOC UI to render here.
  *
@@ -161,27 +161,36 @@ async function readMocContent(app: App, path: string): Promise<string> {
 }
 
 /**
- * Maps the `source_stem` of every daily LOG ENTRY to whether that stem's log
- * entry is currently accepted (activated). A suppressed suggestion whose
- * `stem` is a key already has an inline daily-log entry proposed for it
- * (linked by stem — the same key `forceAtomicSync` uses), which changes the
- * "why skipped" hint on its card: "Daily Log suggested — check Force Atomic to
- * create a note" vs. the no-daily-entry "Force creation if necessary". The
- * boolean value drives the card's daily-log indicator icon (accent when the
- * entry is accepted, muted when not) — a stem is treated as active if ANY of
- * its log entries is accepted. Log LINKS are excluded — they point at an
- * atomic note (`target_stem`), they are not an alternative destination for the
- * source's content.
+ * Maps the `source_item_key` of every daily LOG ENTRY to whether that note's
+ * log entry is currently accepted (activated). A suppressed suggestion whose
+ * `item_key` is a key already has an inline daily-log entry proposed for it
+ * (linked by item_key — the same key `forceAtomicSync` uses), which changes
+ * the "why skipped" hint on its card: "Daily Log suggested — check Force
+ * Atomic to create a note" vs. the no-daily-entry "Force creation if
+ * necessary". The boolean value drives the card's daily-log indicator icon
+ * (accent when the entry is accepted, muted when not) — a note is treated as
+ * active if ANY of its log entries is accepted.
+ *
+ * Keyed on `source_item_key`, not `source_stem`: the stem is display text and
+ * two notes of the same name in different inbox subfolders collapse onto one
+ * key, lighting one card's indicator from the other card's entry. See
+ * `forceAtomicSync.ts` for the same correction and
+ * `test/fixtures/suggestions/three-bucket-run.json` for the live collision.
+ *
+ * Log LINKS are excluded — they point at an atomic note (`target_stem`), they
+ * are not an alternative destination for the source's content. That exclusion
+ * is also why `target_stem` reaching us as display text (Tomo's 2026-09-14
+ * handoff: a title carrying a colon its filename cannot) touches no join here.
  */
-function collectDailyLogStems(model: EditModel): ReadonlyMap<string, boolean> {
-	const stems = new Map<string, boolean>();
+function collectDailyLogSources(model: EditModel): ReadonlyMap<string, boolean> {
+	const sources = new Map<string, boolean>();
 	for (const daily of model.doc.daily_updates) {
 		for (const entry of daily.log_entries) {
-			const accepted = (stems.get(entry.source_stem) ?? false) || entry.accepted;
-			stems.set(entry.source_stem, accepted);
+			const accepted = (sources.get(entry.source_item_key) ?? false) || entry.accepted;
+			sources.set(entry.source_item_key, accepted);
 		}
 	}
-	return stems;
+	return sources;
 }
 
 /**
@@ -227,17 +236,17 @@ export class SuggestionsTab implements EditorTab {
 	}
 
 	render(container: HTMLElement, model: EditModel, ctx: TabContext): void {
-		const dailyLogStems = collectDailyLogStems(model);
+		const dailyLogSources = collectDailyLogSources(model);
 		const proposedByMember = collectProposedMocMembership(model);
 		for (const suggestion of model.doc.suggestions) {
-			this.renderCard(container, suggestion, dailyLogStems, proposedByMember, ctx);
+			this.renderCard(container, suggestion, dailyLogSources, proposedByMember, ctx);
 		}
 	}
 
 	private renderCard(
 		container: HTMLElement,
 		suggestion: SuggestionWire,
-		dailyLogStems: ReadonlyMap<string, boolean>,
+		dailyLogSources: ReadonlyMap<string, boolean>,
 		proposedByMember: ReadonlyMap<string, readonly string[]>,
 		ctx: TabContext,
 	): void {
@@ -253,7 +262,7 @@ export class SuggestionsTab implements EditorTab {
 		this.renderSummary(top, suggestion);
 
 		if (suggestion.suppressed) {
-			this.renderSuppressed(top, suggestion, dailyLogStems, ctx);
+			this.renderSuppressed(top, suggestion, dailyLogSources, ctx);
 		} else {
 			this.renderWorthy(top, suggestion, ctx);
 		}
@@ -606,18 +615,18 @@ export class SuggestionsTab implements EditorTab {
 	private renderSuppressed(
 		top: HTMLElement,
 		suggestion: SuggestionWire,
-		dailyLogStems: ReadonlyMap<string, boolean>,
+		dailyLogSources: ReadonlyMap<string, boolean>,
 		ctx: TabContext,
 	): void {
 		this.renderSuppressedRow1(top, suggestion, ctx);
-		this.renderSuppressedHint(top, suggestion, dailyLogStems);
+		this.renderSuppressedHint(top, suggestion, dailyLogSources);
 		this.renderForceAtomic(top, suggestion, ctx);
 	}
 
 	/**
 	 * The "why skipped" hint plus a daily-log indicator. When Tomo also
-	 * proposed a daily-log entry for this source (`stem` is a key in
-	 * `dailyLogStems`), a calendar icon leads the hint: accent-coloured when
+	 * proposed a daily-log entry for this source (`item_key` is a key in
+	 * `dailyLogSources`), a calendar icon leads the hint: accent-coloured when
 	 * that entry is currently accepted (activated), muted/faint when it is not
 	 * — a live at-a-glance cue for whether the source has an active daily-log
 	 * destination, without switching to the Daily tab. No icon when no daily
@@ -626,10 +635,10 @@ export class SuggestionsTab implements EditorTab {
 	private renderSuppressedHint(
 		top: HTMLElement,
 		suggestion: SuggestionWire,
-		dailyLogStems: ReadonlyMap<string, boolean>,
+		dailyLogSources: ReadonlyMap<string, boolean>,
 	): void {
 		const note = top.createDiv({ cls: "hashi-se-suppressed-note" });
-		const dailyAccepted = dailyLogStems.get(suggestion.stem);
+		const dailyAccepted = dailyLogSources.get(suggestion.item_key);
 		const hasDailyLog = dailyAccepted !== undefined;
 		if (hasDailyLog) {
 			const icon = note.createSpan({

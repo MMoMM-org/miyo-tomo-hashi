@@ -473,7 +473,7 @@ describe("DailyTab", () => {
 			expect(labelTextFor(forceAtomic)).toContain("Force atomic note");
 		});
 
-		it("toggling Force Atomic dispatches setForceAtomicFromDaily using the entry's source_stem", () => {
+		it("toggling Force Atomic dispatches setForceAtomicFromDaily using the entry's source_item_key", () => {
 			const model = getMockModel([
 				getMockDailyUpdate({
 					log_entries: [
@@ -496,6 +496,43 @@ describe("DailyTab", () => {
 			expect(next.doc.daily_updates[0]?.log_entries[0]?.force_atomic_note).toBe(
 				true,
 			);
+		});
+
+		// The control must address its entry by identity, not by the display
+		// stem rendered beside it: two inbox notes of the same name in
+		// different subfolders share a stem, and a stem-addressed dispatch
+		// ticks both. Tomo's 2026-09-14 run carries exactly this pair.
+		it("addresses the clicked entry by identity — a NAMESAKE entry is left alone", () => {
+			const model = getMockModel([
+				getMockDailyUpdate({
+					log_entries: [
+						getMockLogEntry({
+							source_stem: "Test",
+							source_item_key: "100 Inbox/Images/Test.md",
+						}),
+						getMockLogEntry({
+							source_stem: "Test",
+							source_item_key: "100 Inbox/assets/Test.md",
+						}),
+					],
+				}),
+			]);
+			const ctx = makeCtx(new App());
+			const container = document.createElement("div");
+
+			new DailyTab().render(container, model, ctx);
+			// Second entry's Force-Atomic checkbox (each entry renders accept + force).
+			const checkboxes = container.querySelectorAll(
+				".hashi-se-le-controls .hashi-se-cbx input[type=checkbox]",
+			);
+			const forceAtomic = checkboxes[3] as HTMLInputElement;
+			forceAtomic.checked = true;
+			forceAtomic.dispatchEvent(new Event("change", { bubbles: true }));
+
+			const next = runCaptured(ctx.apply, model);
+			const entries = next.doc.daily_updates[0]?.log_entries;
+			expect(entries?.[1]?.force_atomic_note).toBe(true);
+			expect(entries?.[0]?.force_atomic_note).toBe(false);
 		});
 	});
 
