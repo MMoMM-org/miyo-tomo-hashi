@@ -70,9 +70,25 @@ export class InboxNotFoundError extends Error {
 // DependencyEdge
 // ---------------------------------------------------------------------------
 
+/**
+ * One "B must not run unless A succeeded" edge.
+ *
+ * Both ends are `fileId::id` keys, not bare `I##`. A batch run resolves several
+ * instruction sets at once and their id spaces are independent — two sets both
+ * numbering from `I01` would otherwise share a graph, so a failure in one set
+ * would withhold an unrelated action in another. Matches how
+ * `InstructionExecutor` keys its action lookup.
+ *
+ * Edges come from two sources and are UNIONED, never overridden:
+ *   - derived: `link_to_moc`/`add_relationship` → the `create_moc` that makes
+ *     their target MOC (the F-43 collision-guard cascade);
+ *   - declared: an action's own `depends_on` (wire v3).
+ * Declaring an edge adds knowledge we could not derive; it is never evidence
+ * that a derived edge is wrong. Our 2026-09-09 handoff to Tomo, Q4.
+ */
 export interface DependencyEdge {
-	readonly dependent: string; // record.id of the link_to_moc action
-	readonly dependsOn: string; // record.id of the create_moc action
+	readonly dependent: string; // `fileId::id` of the action that waits
+	readonly dependsOn: string; // `fileId::id` of the action it waits for
 }
 
 // ---------------------------------------------------------------------------
@@ -155,19 +171,22 @@ export async function resolveBatch(
 export function computeRemaining(sources: readonly ResolvedSource[]): {
 	records: readonly ActionRecord[];
 	dependencies: readonly DependencyEdge[];
+	danglingIds: readonly string[];
 } {
 	const sorted = [...sources].sort((a, b) => a.fileId.localeCompare(b.fileId));
 
 	const records: ActionRecord[] = [];
 	const dependencies: DependencyEdge[] = [];
+	const danglingIds: string[] = [];
 
 	for (const source of sorted) {
 		const fileRecords = buildFileRecords(source);
 		records.push(...fileRecords);
 		dependencies.push(...buildDependencies(source));
+		danglingIds.push(...findDanglingDependencies(source));
 	}
 
-	return { records, dependencies };
+	return { records, dependencies, danglingIds };
 }
 
 // ---------------------------------------------------------------------------
@@ -219,12 +238,13 @@ function buildDependencies(source: ResolvedSource): DependencyEdge[] {
 	);
 
 	const edges: DependencyEdge[] = [];
+	const key = (id: string): string => `${source.fileId}::${id}`;
 
 	for (const link of linkToMocs) {
 		const resolvedTarget = link.target_moc_path ?? link.target_moc;
 		for (const create of createMocs) {
 			if (create.destination === resolvedTarget) {
-				edges.push({ dependent: link.id, dependsOn: create.id });
+				edges.push({ dependent: key(link.id), dependsOn: key(create.id) });
 			}
 		}
 	}
@@ -236,12 +256,64 @@ function buildDependencies(source: ResolvedSource): DependencyEdge[] {
 	for (const rel of addRelationships) {
 		for (const create of createMocs) {
 			if (create.destination === rel.target_moc_path) {
-				edges.push({ dependent: rel.id, dependsOn: create.id });
+				edges.push({ dependent: key(rel.id), dependsOn: key(create.id) });
 			}
 		}
 	}
 
+	// Declared edges (wire v3 `depends_on`), unioned with the derived ones
+	// above. Read structurally from EVERY action rather than narrowed to
+	// delete_source: we told Tomo we would honour the field wherever it
+	// appears, so a future kind carrying it works without a Hashi change.
+	for (const action of actions) {
+		for (const dependsOn of declaredDependencies(action)) {
+			edges.push({ dependent: key(action.id), dependsOn: key(dependsOn) });
+		}
+	}
+
 	return edges;
+}
+
+/**
+ * The `depends_on` entries an action declares, or empty when it carries none.
+ *
+ * Structural read (not a narrow on `action`) so the field is honoured on any
+ * kind that grows it. A non-array value is ignored rather than trusted — the
+ * schema already rejects it, and this helper must not be the thing that throws
+ * if a malformed set ever reaches the planner.
+ */
+function declaredDependencies(action: Action): readonly string[] {
+	const raw = (action as { depends_on?: unknown }).depends_on;
+	if (!Array.isArray(raw)) return [];
+	return raw.filter((id): id is string => typeof id === "string");
+}
+
+/**
+ * `fileId::id` keys for every `depends_on` entry naming an action that is NOT
+ * in the same set — a malformed producer output.
+ *
+ * Seeding these as unsatisfied makes the dependent skip rather than execute.
+ * That asymmetry is deliberate and is the position we committed to Tomo
+ * (2026-09-09 handoff, Q5): a dangling id means the set is malformed and we do
+ * not know which way. The named action might have been dropped, renamed, or
+ * never emitted — one of those means the justification for the delete is gone.
+ * A guard that opens when it cannot read its own precondition is not a guard.
+ *
+ * Tomo holds the producer-side invariant and audits it; this is what happens on
+ * the day that audit misses.
+ */
+function findDanglingDependencies(source: ResolvedSource): string[] {
+	const actions = source.instructionSet.actions;
+	const present = new Set(actions.map((a) => a.id));
+	const dangling: string[] = [];
+	for (const action of actions) {
+		for (const dependsOn of declaredDependencies(action)) {
+			if (!present.has(dependsOn)) {
+				dangling.push(`${source.fileId}::${dependsOn}`);
+			}
+		}
+	}
+	return dangling;
 }
 
 /** Compare two I## identifiers numerically (I01 < I02 < I10). */

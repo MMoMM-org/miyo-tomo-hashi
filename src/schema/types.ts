@@ -301,6 +301,23 @@ export interface DeleteSourceAction extends ActionBase {
 	readonly action: "delete_source";
 	readonly source_path: string;
 	readonly reason: string;
+	/**
+	 * Action ids this delete must not outlive (wire v3, Tomo spec 036 F5).
+	 * AND semantics: the delete is withheld unless every id here is satisfied.
+	 *
+	 * The ids are NOT always moves — they name whichever actions captured this
+	 * source's content: `move_note` for a filed atomic,
+	 * `update_tracker`/`update_log_entry`/`update_log_link` for a daily-only
+	 * origin, `insert_under_marker` for a tag-handler consolidation. An
+	 * implementation that assumes "every id is a move" mishandles the
+	 * daily-only case — which is exactly the case where the note's content
+	 * exists in no other file yet.
+	 *
+	 * Required, and `[]` is a positive assertion ("perform this delete, it has
+	 * no partner") rather than a gap — an ABSENT field is rejected by the
+	 * schema. Our 2026-09-09 handoff to Tomo, Q1.
+	 */
+	readonly depends_on: readonly string[];
 }
 
 export interface SkipAction extends ActionBase {
@@ -365,7 +382,7 @@ export interface TomoBlock {
 // ---------------------------------------------------------------------------
 
 export interface InstructionSet {
-	readonly schema_version: "2";
+	readonly schema_version: "3";
 	readonly type: "tomo-instructions";
 	readonly generated: string;
 	readonly profile: string | null;

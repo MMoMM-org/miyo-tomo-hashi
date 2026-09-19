@@ -132,6 +132,7 @@ export const SAMPLES = {
 		action: "delete_source",
 		source_path: "100 Inbox/Kanban.md",
 		reason: "moved",
+		depends_on: [],
 	},
 	skip: {
 		id: "I14",
@@ -149,7 +150,7 @@ export const VIEW_ONLY_KINDS: readonly ActionKind[] = (
 /** Wraps actions in a minimal schema-valid set. */
 export function makeSet(actions: readonly Action[]): InstructionSet {
 	return {
-		schema_version: "2",
+		schema_version: "3",
 		type: "tomo-instructions",
 		generated: "2026-07-26T10:15:00Z",
 		profile: "default",

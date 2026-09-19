@@ -93,7 +93,7 @@ const I12: Action = {
 
 function makeSet(actions: readonly Action[] = [I07, I09, I12]): InstructionSet {
 	return {
-		schema_version: "2",
+		schema_version: "3",
 		type: "tomo-instructions",
 		generated: "2026-07-20T10:15:00Z",
 		profile: "default",

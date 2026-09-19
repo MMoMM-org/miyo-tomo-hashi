@@ -72,20 +72,20 @@ describe("ActionKind", () => {
 // ---------------------------------------------------------------------------
 
 describe("InstructionSet", () => {
-	it("accepts a valid instruction set with schema_version '2'", () => {
+	it("accepts a valid instruction set with schema_version '3'", () => {
 		const is: InstructionSet = {
-			schema_version: "2",
+			schema_version: "3",
 			type: "tomo-instructions",
 			generated: "2026-04-28T00:00:00Z",
 			profile: null,
 			actions: [],
 		};
-		expect(is.schema_version).toBe("2");
+		expect(is.schema_version).toBe("3");
 	});
 
 	it("schema_version is typed as string literal '2', not number 2", () => {
-		// Type-level: schema_version must be "2" (string), not 2 (number).
-		expectTypeOf<InstructionSet["schema_version"]>().toEqualTypeOf<"2">();
+		// Type-level: schema_version must be "3" (string), not 3 (number).
+		expectTypeOf<InstructionSet["schema_version"]>().toEqualTypeOf<"3">();
 	});
 
 	it("actions field is a readonly array of Action", () => {
@@ -208,6 +208,7 @@ describe("Action discriminated union", () => {
 			action: "delete_source",
 			source_path: "100 Inbox/voice.m4a",
 			reason: "processed",
+			depends_on: [],
 		};
 		if (a.action === "delete_source") {
 			const _path: string = a.source_path;
@@ -403,6 +404,7 @@ describe("Action discriminated union", () => {
 			action: "delete_source",
 			source_path: "path",
 			reason: "processed",
+			depends_on: [],
 		};
 		expectTypeOf(a.reason).toEqualTypeOf<string>();
 	});

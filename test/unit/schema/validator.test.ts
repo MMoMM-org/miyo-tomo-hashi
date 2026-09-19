@@ -7,7 +7,7 @@ import type { InstructionSet } from "../../../src/schema/types.js";
 // ---------------------------------------------------------------------------
 
 const VALID_FIXTURE: InstructionSet = {
-	schema_version: "2",
+	schema_version: "3",
 	type: "tomo-instructions",
 	generated: "2026-04-28T10:00:00Z",
 	profile: null,
@@ -35,16 +35,16 @@ const makeSkip = (i: number) => ({
 // ---------------------------------------------------------------------------
 
 describe("validate", () => {
-	it("accepts a valid v2 InstructionSet", () => {
+	it("accepts a valid v3 InstructionSet", () => {
 		const result = validate(VALID_FIXTURE);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
-			expect(result.data.schema_version).toBe("2");
+			expect(result.data.schema_version).toBe("3");
 			expect(result.data.actions.length).toBeGreaterThan(0);
 		}
 	});
 
-	it("rejects schema_version '0' with PRD F2 'expected 2, got 0' message (M14)", () => {
+	it("rejects schema_version '0' with PRD F2 'expected 3, got 0' message (M14)", () => {
 		const result = validate({ ...VALID_FIXTURE, schema_version: "0" });
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
@@ -52,12 +52,12 @@ describe("validate", () => {
 			// with both expected and actual values, so it can drive the
 			// "upgrade Hashi" prompt without re-parsing AJV's generic msg.
 			expect(result.message).toBe(
-				"Schema version mismatch — expected 2, got 0",
+				"Schema version mismatch — expected 3, got 0",
 			);
 		}
 	});
 
-	it("rejects schema_version '1' with PRD F2 'expected 2, got 1' message (spec 027 ADR-3 lockstep)", () => {
+	it("rejects schema_version '1' with PRD F2 'expected 3, got 1' message (spec 027 ADR-3 lockstep)", () => {
 		// A v1 instruction set hitting v2-only Hashi must fail loud with the
 		// version mismatch — the lockstep fail-loud guarantee — not a confusing
 		// missing-field error from the origin_inbox_item → source_inbox_item rename.
@@ -65,7 +65,7 @@ describe("validate", () => {
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.message).toBe(
-				"Schema version mismatch — expected 2, got 1",
+				"Schema version mismatch — expected 3, got 1",
 			);
 		}
 	});
@@ -238,6 +238,7 @@ describe("validate", () => {
 					action: "delete_source",
 					source_path: "100 Inbox/2026-06-30_memo.m4a",
 					reason: "voice source files not kept",
+					depends_on: [],
 				},
 			],
 		};
@@ -554,7 +555,7 @@ describe("validate — resolve_dead_link", () => {
 
 describe("validate — real garden-audit instruction set (drift guard)", () => {
 	const GARDEN_AUDIT_EXAMPLE = {
-		schema_version: "2",
+		schema_version: "3",
 		type: "tomo-instructions",
 		source_suggestions: "garden-audit-report",
 		generated: "2026-07-21T18:16:19Z",
@@ -646,7 +647,7 @@ describe("validate — real garden-audit instruction set (drift guard)", () => {
 
 describe("move_asset (Hashi-side wire shape)", () => {
 	const withActions = (actions: unknown[]) => ({
-		schema_version: "2",
+		schema_version: "3",
 		type: "tomo-instructions",
 		generated: "2026-09-01T10:00:00Z",
 		profile: null,
@@ -724,7 +725,7 @@ describe("move_asset (Hashi-side wire shape)", () => {
 
 describe("edit_frontmatter (Hashi-side wire shape)", () => {
 	const withActions = (actions: unknown[]) => ({
-		schema_version: "2",
+		schema_version: "3",
 		type: "tomo-instructions",
 		generated: "2026-09-01T10:00:00Z",
 		profile: null,

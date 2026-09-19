@@ -363,6 +363,7 @@ describe("HANDLERS — dispatch smoke", () => {
 			id: "smoke-ds",
 			source_path: "Inbox/old.md",
 			reason: "processed",
+		depends_on: [],
 		};
 		const handler = HANDLERS[action.action];
 		const outcome = await handler(action, makeCtx(vault));

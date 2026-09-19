@@ -41,7 +41,7 @@ import type {
 
 function makeInstructionSet(actions: Action[] = []): InstructionSet {
 	return {
-		schema_version: "2",
+		schema_version: "3",
 		type: "tomo-instructions",
 		generated: "2026-04-28T10:00:00Z",
 		profile: null,
@@ -627,8 +627,8 @@ describe("computeRemaining — dependency graph", () => {
 		const { dependencies } = computeRemaining(sources);
 
 		expect(dependencies).toHaveLength(1);
-		expect(dependencies[0]?.dependent).toBe("I02");
-		expect(dependencies[0]?.dependsOn).toBe("I01");
+		expect(dependencies[0]?.dependent).toBe("file.json::I02");
+		expect(dependencies[0]?.dependsOn).toBe("file.json::I01");
 	});
 
 	it("uses target_moc_path (preferred) over target_moc for dependency matching", () => {
@@ -642,7 +642,7 @@ describe("computeRemaining — dependency graph", () => {
 		const { dependencies } = computeRemaining(sources);
 
 		expect(dependencies).toHaveLength(1);
-		expect(dependencies[0]?.dependent).toBe("I02");
+		expect(dependencies[0]?.dependent).toBe("file.json::I02");
 	});
 
 	it("falls back to target_moc when target_moc_path is absent and destination matches", () => {
@@ -655,8 +655,8 @@ describe("computeRemaining — dependency graph", () => {
 		const { dependencies } = computeRemaining(sources);
 
 		expect(dependencies).toHaveLength(1);
-		expect(dependencies[0]?.dependent).toBe("I02");
-		expect(dependencies[0]?.dependsOn).toBe("I01");
+		expect(dependencies[0]?.dependent).toBe("file.json::I02");
+		expect(dependencies[0]?.dependsOn).toBe("file.json::I01");
 	});
 
 	it("does NOT build a dependency edge when MOC paths do not match", () => {
@@ -709,8 +709,8 @@ describe("computeRemaining — dependency graph", () => {
 
 		expect(dependencies).toHaveLength(2);
 		const dependents = dependencies.map((d) => d.dependent).sort();
-		expect(dependents).toEqual(["I02", "I03"]);
-		expect(dependencies.every((d) => d.dependsOn === "I01")).toBe(true);
+		expect(dependents).toEqual(["file.json::I02", "file.json::I03"]);
+		expect(dependencies.every((d) => d.dependsOn === "file.json::I01")).toBe(true);
 	});
 
 	// F-43 collision-guard cascade — add_relationship → create_moc edges
@@ -726,8 +726,8 @@ describe("computeRemaining — dependency graph", () => {
 		const { dependencies } = computeRemaining(sources);
 
 		expect(dependencies).toHaveLength(1);
-		expect(dependencies[0]?.dependent).toBe("I02");
-		expect(dependencies[0]?.dependsOn).toBe("I01");
+		expect(dependencies[0]?.dependent).toBe("file.json::I02");
+		expect(dependencies[0]?.dependsOn).toBe("file.json::I01");
 	});
 
 	it("does NOT build an add_relationship → create_moc edge when paths do not match", () => {
@@ -754,7 +754,141 @@ describe("computeRemaining — dependency graph", () => {
 
 		expect(dependencies).toHaveLength(2);
 		const dependents = dependencies.map((d) => d.dependent).sort();
-		expect(dependents).toEqual(["I02", "I03"]);
-		expect(dependencies.every((d) => d.dependsOn === "I01")).toBe(true);
+		expect(dependents).toEqual(["file.json::I02", "file.json::I03"]);
+		expect(dependencies.every((d) => d.dependsOn === "file.json::I01")).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// depends_on — declared dependency edges (wire v3, Tomo spec 036 F5)
+//
+// Semantics are the ones we committed to Tomo in the 2026-09-09 handoff
+// (their status_note: "Q5 accepted — you were right to refuse"):
+//   Q1  required, and `[]` is a positive assertion rather than a gap
+//   Q4  UNION with the derived edges, never override; honoured on any kind
+//   Q5  an id absent from the set makes the dependent skip, not execute
+// ---------------------------------------------------------------------------
+
+/** A delete_source with an explicit `depends_on`. */
+function makeDeleteSource(
+	id: string,
+	sourcePath: string,
+	dependsOn: readonly string[],
+): Action {
+	return {
+		id,
+		action: "delete_source",
+		source_path: sourcePath,
+		reason: "origin consumed",
+		depends_on: dependsOn,
+	};
+}
+
+describe("computeRemaining — declared depends_on edges", () => {
+	it("builds one edge per depends_on entry, keyed fileId::id", () => {
+		const actions: Action[] = [
+			makeCreateMoc("I01", "inbox/note.md", "moc/MyMOC.md"),
+			makeDeleteSource("I05", "inbox/origin.md", ["I01"]),
+		];
+		const { dependencies } = computeRemaining([
+			makeResolvedSource("file.json", "inbox/file.json", actions),
+		]);
+
+		const declared = dependencies.filter((d) => d.dependent === "file.json::I05");
+		expect(declared).toHaveLength(1);
+		expect(declared[0]?.dependsOn).toBe("file.json::I01");
+	});
+
+	it("builds an edge for EVERY id — AND semantics need all of them present", () => {
+		const actions: Action[] = [
+			makeCreateMoc("I01", "inbox/a.md", "moc/A.md"),
+			makeCreateMoc("I02", "inbox/b.md", "moc/B.md"),
+			makeDeleteSource("I05", "inbox/origin.md", ["I01", "I02"]),
+		];
+		const { dependencies } = computeRemaining([
+			makeResolvedSource("file.json", "inbox/file.json", actions),
+		]);
+
+		const deps = dependencies
+			.filter((d) => d.dependent === "file.json::I05")
+			.map((d) => d.dependsOn)
+			.sort();
+		expect(deps).toEqual(["file.json::I01", "file.json::I02"]);
+	});
+
+	it("an empty depends_on produces no edge and no dangling id (Q1 — [] means 'just do it')", () => {
+		const actions: Action[] = [makeDeleteSource("I05", "inbox/origin.md", [])];
+		const { dependencies, danglingIds } = computeRemaining([
+			makeResolvedSource("file.json", "inbox/file.json", actions),
+		]);
+
+		expect(dependencies).toHaveLength(0);
+		expect(danglingIds).toHaveLength(0);
+	});
+
+	it("UNIONS with derived edges — a declared edge never retires the F-43 one (Q4)", () => {
+		// add_relationship carries a derived edge to its create_moc. Naming a
+		// DIFFERENT action in depends_on must add to that, not replace it.
+		const actions: Action[] = [
+			makeCreateMoc("I01", "inbox/note.md", "moc/MyMOC.md"),
+			makeLinkToMoc("I02", "moc/MyMOC.md", "- [[note]]", "moc/MyMOC.md"),
+			{
+				...makeAddRelationship("I03", "moc/MyMOC.md", "up", "up:: [[Parent]]"),
+				depends_on: ["I02"],
+			} as Action,
+		];
+		const { dependencies } = computeRemaining([
+			makeResolvedSource("file.json", "inbox/file.json", actions),
+		]);
+
+		const i03 = dependencies
+			.filter((d) => d.dependent === "file.json::I03")
+			.map((d) => d.dependsOn)
+			.sort();
+		// derived (I01, the create_moc) AND declared (I02) — both survive.
+		expect(i03).toEqual(["file.json::I01", "file.json::I02"]);
+	});
+
+	it("reports a dangling id — one naming an action absent from the set (Q5)", () => {
+		const actions: Action[] = [
+			makeCreateMoc("I01", "inbox/note.md", "moc/MyMOC.md"),
+			makeDeleteSource("I05", "inbox/origin.md", ["I99"]),
+		];
+		const { danglingIds } = computeRemaining([
+			makeResolvedSource("file.json", "inbox/file.json", actions),
+		]);
+
+		expect(danglingIds).toEqual(["file.json::I99"]);
+	});
+
+	it("keeps ids separate per source — two sets both numbering from I01 do not share a graph", () => {
+		const setA: Action[] = [
+			makeCreateMoc("I01", "inbox/a.md", "moc/A.md"),
+			makeDeleteSource("I05", "inbox/origin-a.md", ["I01"]),
+		];
+		const setB: Action[] = [
+			makeCreateMoc("I01", "inbox/b.md", "moc/B.md"),
+			makeDeleteSource("I05", "inbox/origin-b.md", ["I01"]),
+		];
+		const { dependencies } = computeRemaining([
+			makeResolvedSource("a.json", "inbox/a.json", setA),
+			makeResolvedSource("b.json", "inbox/b.json", setB),
+		]);
+
+		expect(dependencies).toContainEqual({
+			dependent: "a.json::I05",
+			dependsOn: "a.json::I01",
+		});
+		expect(dependencies).toContainEqual({
+			dependent: "b.json::I05",
+			dependsOn: "b.json::I01",
+		});
+		// No edge crosses the file boundary.
+		expect(
+			dependencies.some((d) => d.dependent.startsWith("a.json") && d.dependsOn.startsWith("b.json")),
+		).toBe(false);
+		expect(
+			dependencies.some((d) => d.dependent.startsWith("b.json") && d.dependsOn.startsWith("a.json")),
+		).toBe(false);
 	});
 });

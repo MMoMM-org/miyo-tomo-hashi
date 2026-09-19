@@ -26,7 +26,7 @@ import type { InstructionSet, Action, CreateMocAction, MoveNoteAction } from "..
 
 function makeInstructionSet(actions: Action[]): InstructionSet {
 	return {
-		schema_version: "2",
+		schema_version: "3",
 		type: "tomo-instructions",
 		generated: "2026-04-28T10:00:00Z",
 		profile: null,
@@ -113,7 +113,7 @@ describe("markActionApplied — non-mutation of other actions", () => {
 
 		const updated = JSON.parse(await vault.read("inbox/test_instructions.json")) as InstructionSet;
 
-		expect(updated.schema_version).toBe("2");
+		expect(updated.schema_version).toBe("3");
 		expect(updated.type).toBe("tomo-instructions");
 		expect(updated.generated).toBe("2026-04-28T10:00:00Z");
 		expect(updated.profile).toBeNull();
@@ -236,7 +236,7 @@ describe("markActionsApplied — batch (H5)", () => {
 		expect(raw).toContain('\n  "schema_version"');
 
 		const updated = JSON.parse(raw) as InstructionSet;
-		expect(updated.schema_version).toBe("2");
+		expect(updated.schema_version).toBe("3");
 		expect(updated.type).toBe("tomo-instructions");
 	});
 });
@@ -345,7 +345,7 @@ describe("markActionFields — patches only the matching id", () => {
 			await vault.read("inbox/test_instructions.json"),
 		) as InstructionSet;
 
-		expect(updated.schema_version).toBe("2");
+		expect(updated.schema_version).toBe("3");
 		expect(updated.type).toBe("tomo-instructions");
 		expect(updated.generated).toBe("2026-04-28T10:00:00Z");
 		expect(updated.profile).toBeNull();

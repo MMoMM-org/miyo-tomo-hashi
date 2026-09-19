@@ -1,0 +1,120 @@
+{
+  "schema_version": "3",
+  "type": "tomo-instructions",
+  "source_suggestions": "parsed-suggestions.json",
+  "generated": "2026-09-18T11:30:18Z",
+  "profile": "miyo",
+  "tomo_version": "0.12.0",
+  "action_count": 8,
+  "md_peer": "2026-09-18_1130_instructions",
+  "actions": [
+    {
+      "id": "I01",
+      "action": "move_note",
+      "source": "100 Inbox/2026-09-18_1130_zettelkasten-nummerierung-kodiert-verzweigung-nicht-chronologie.md",
+      "destination": "Atlas/202 Notes/Zettelkasten-Nummerierung kodiert Verzweigung, nicht Chronologie.md",
+      "title": "Zettelkasten-Nummerierung kodiert Verzweigung, nicht Chronologie",
+      "rendered_file": "2026-09-18_1130_zettelkasten-nummerierung-kodiert-verzweigung-nicht-chronologie.md",
+      "source_inbox_item": "100 Inbox/Zettelkasten Verzweigung.md",
+      "parent_mocs": [],
+      "tags": [
+        "topic/knowledge/frameworks"
+      ],
+      "applied": false
+    },
+    {
+      "id": "I05",
+      "action": "delete_source",
+      "source_path": "100 Inbox/Zettelkasten Verzweigung.md",
+      "reason": "Origin consumed by 1 atomic.",
+      "depends_on": [
+        "I01"
+      ],
+      "applied": false
+    },
+    {
+      "id": "I06",
+      "action": "skip",
+      "source_path": "100 Inbox/Bautzen.md",
+      "reason": "Skipped by user (kept in inbox).",
+      "applied": false
+    },
+    {
+      "id": "I07",
+      "action": "skip",
+      "source_path": "100 Inbox/Dresden.md",
+      "reason": "Skipped by user (kept in inbox).",
+      "applied": false
+    },
+    {
+      "id": "I08",
+      "action": "skip",
+      "source_path": "100 Inbox/Meissen.md",
+      "reason": "Skipped by user (kept in inbox).",
+      "applied": false
+    },
+    {
+      "id": "I09",
+      "action": "skip",
+      "source_path": "100 Inbox/Reise/Tschechien/Prager Burg.md",
+      "reason": "Skipped by user (kept in inbox).",
+      "applied": false
+    },
+    {
+      "id": "I10",
+      "action": "skip",
+      "source_path": "100 Inbox/Images/Test.md",
+      "reason": "Skipped by user (kept in inbox).",
+      "applied": false
+    },
+    {
+      "id": "I11",
+      "action": "skip",
+      "source_path": "100 Inbox/assets/Test.md",
+      "reason": "Skipped by user (kept in inbox).",
+      "applied": false
+    }
+  ],
+  "tomo": {
+    "doc_type": "instructions",
+    "state": "pending-apply",
+    "run_id": "2026-09-18T11-30-00Z-f7d1b1",
+    "updated_at": "2026-09-18T11:30:18Z",
+    "sources": [
+      {
+        "path": "100 Inbox/2026-09-18_1124_suggestions.md",
+        "checksum": "sha256:0c9e1d2245ae99d6f54a016f78d61ff2b46d0c04dfbf06628ef5111af2647e1c"
+      }
+    ],
+    "skipped_daily": [
+      {
+        "action": "update_tracker",
+        "date": "2026-09-15",
+        "daily_note_path": "Calendar/301 Daily/2026-09-15.md"
+      },
+      {
+        "action": "update_log_entry",
+        "date": "2026-09-15",
+        "daily_note_path": "Calendar/301 Daily/2026-09-15.md"
+      }
+    ],
+    "delete_withdrawals": [
+      {
+        "id": "I04",
+        "action": "delete_source",
+        "source_path": "100 Inbox/Laufrunde Elbufer.md",
+        "reason": "Content fully captured in daily note.",
+        "causes": [
+          {
+            "missing_id": "I02",
+            "guard": "filter_missing_daily_notes"
+          },
+          {
+            "missing_id": "I03",
+            "guard": "filter_missing_daily_notes"
+          }
+        ]
+      }
+    ]
+  }
+}
