@@ -1,3 +1,9 @@
+## [0.26.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.26.0...0.26.1) (2026-09-21)
+
+### Bug Fixes
+
+* **executor:** after-<action> hooks no longer fire on failed actions ([7f0f079](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/7f0f0798fa27d64c772acbff46de3ed4eaa72ea0))
+
 ## [0.26.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.25.1...0.26.0) (2026-09-21)
 
 ### ⚠ BREAKING CHANGES
