@@ -1,3 +1,68 @@
+## [0.26.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.25.1...0.26.0) (2026-09-21)
+
+### ⚠ BREAKING CHANGES
+
+* **schema:** the instruction wire's schema_version const moves "2" -> "3".
+Tomo is already emitting "3" (their renderer reads the const from the schema at
+run time), so every set they produce was being refused with
+"Schema version mismatch — expected 2, got 3" until this lands.
+
+Vendors Tomo's contract mirror verbatim (bc3eff0). Their obligation table is
+independently confirmed: a recursive structural diff reports exactly three
+differences — the version const, depends_on as a property, depends_on in
+required. Nothing else moved.
+
+`depends_on` names the actions a delete must not outlive, AND semantics. The
+ids are NOT always moves: a daily-only origin names its update_tracker /
+update_log_entry / update_log_link, a tag-handler consolidation its
+insert_under_marker. Semantics are the ones we committed to Tomo on 2026-09-09
+and they accepted:
+  Q1  required; `[]` is a positive assertion, absent is rejected
+  Q3  an edge to an already-applied action passes (partial re-run)
+  Q4  UNION with derived edges, never override; honoured on any kind carrying it
+  Q5  an id absent from the set skips the delete rather than passing it
+
+Most of the machinery already existed (DependencyEdge, skipped-dependency,
+cascade). This reads the edges off the wire instead of only deriving them, and
+adds the plan-time dangling-id guard that handoff listed as not-yet-built.
+
+Two defects found while implementing, neither from Tomo's change:
+
+1. The cascade stopped one link in. Only outright failures entered the
+   unsatisfied set, so a dependency that ended `skipped-dependency` did not
+   propagate:
+     I01 create_moc -> failed
+     I02 link_to_moc (dep I01) -> skipped-dependency   [not recorded]
+     I05 delete_source depends_on [I02] -> EXECUTED
+   A delete outliving the action that justified it — the exact thing the field
+   exists to prevent. Tomo's rule is "unless every id is APPLIED", not "unless
+   failed". Cascaded skips and mid-run cancellations now propagate; `failedIds`
+   renamed `unsatisfiedIds` since "failed" stopped being accurate.
+
+2. Dependency edges and the unsatisfied set were keyed on the bare I## while
+   the action lookup used fileId::id. In a batch run, set A's failing I01 would
+   withhold set B's I05. Latent while edges were rare; depends_on puts one on
+   every delete. Now keyed fileId::id throughout.
+
+F5-AC5 and F5-AC6 are covered — Tomo cannot test them (they do not execute the
+set) and asked us to confirm against our own suite. Every new regression test
+was verified RED against the old behaviour, isolated per cause.
+
+Vendors the run as test/fixtures/instructions/v3-depends-on-run.json (strings
+audited: synthetic 034 test-vault corpus only). It also captures Tomo's
+producer-side guard firing — tomo.delete_withdrawals shows I04 withdrawn
+because filter_missing_daily_notes dropped the I02/I03 it depended on.
+
+Refs _inbox/from-tomo/2026-09-18_tomo-to-hashi_depends-on-the-row-we-said-was-not-in-the-last-release.md
+Refs _archive/outbox/2026-09/2026-09-09_hashi-to-tomo_depends-on-answers-q5-we-will-not-be-permissive.md
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DtC7bSGqVs5x78ia3jwVXR
+
+### Features
+
+* **schema:** vendor instruction wire v3 — delete_source.depends_on ([62c068a](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/62c068af80d1405c7907f4937d220c1ec9f81bd6))
+
 ## [0.25.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.25.0...0.25.1) (2026-09-15)
 
 ### Bug Fixes
