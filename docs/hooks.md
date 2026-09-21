@@ -28,7 +28,19 @@ The modal's **Disable** button is the auto-focused primary action so a reflexive
 Place `.cjs` files in the configured **Hooks directory** (default: `.tomo-hashi/hooks/`). The filename selects when the hook fires:
 
 - `before-<action>.cjs` — runs *before* the action's handler. A non-empty `errors` return short-circuits the handler and the action is recorded as `failed`.
-- `after-<action>.cjs` — runs *after* the action's handler succeeds. Errors here do not retroactively fail the action; they are recorded as a separate log entry.
+- `after-<action>.cjs` — runs *after* the action's handler succeeds, and **only** then. Errors here do not retroactively fail the action; they are recorded as a separate log entry.
+
+Which outcomes count as "succeeds" for `after-`:
+
+| Action outcome | `before-` runs | `after-` runs | Why |
+|---|---|---|---|
+| `applied` | yes | **yes** | the change was written |
+| `skipped-already` | yes | **yes** | the desired end-state was already present |
+| `failed` | yes | **no** | nothing was written — a hook named `after-move_note` must not fire when the move did not happen |
+| `skipped-dependency` | no | no | withheld before the handler dispatched ([`depends_on`](instruction-executor.md)) |
+| `skipped-cancelled` | no | no | the run was cancelled before this action |
+
+Your hook therefore does **not** need to guard on outcome — if it ran, the action's end-state is present. This is a deliberate contract: until 0.25.1 the executor invoked `after-` hooks on failed actions too, which let a hook write into a file the action had never touched (a failed `move_note` whose destination was occupied fired `after-move_note`, stamping an alias for the un-moved note onto the unrelated occupant).
 
 `<action>` is one of the [action kinds](action-reference.md): `create_moc`, `move_note`, `move_asset`, `link_to_moc`, `edit_frontmatter`, `insert_under_marker`, `replace_section`, `add_relationship`, `edit_note_text`, `remove_up_link`, `resolve_dead_link`, `update_tracker`, `update_log_entry`, `update_log_link`, `delete_source`, `skip`.
 
