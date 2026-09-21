@@ -1683,3 +1683,117 @@ describe("InstructionExecutor — depends_on delete gate", () => {
 		expect(await vault.exists(origin)).toBe(true);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// after-hook gating (Tomo report 2026-09-21)
+//
+// docs/hooks.md has always said `after-<action>` "runs after the action's
+// handler succeeds". The executor used to invoke it regardless, so a hook
+// written against our own published contract wrote into a note the action had
+// not touched: a failed `move_note` (destination occupied) fired
+// `after-move_note`, which stamped an alias for the un-moved note onto the
+// uninvolved occupant.
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — after-hook fires only when the handler did not fail", () => {
+	/** Phase+kind pairs the hook runner was invoked with. */
+	function hookCalls(run: Mock): string[] {
+		return run.mock.calls.map(
+			(c) => `${c[0] as string}-${(c[1] as Action).action}`,
+		);
+	}
+
+	it("does NOT run after-<action> when the handler FAILED", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/after_failed_instructions.json`;
+
+		// move_note whose source does not exist → handler returns failed.
+		const set = makeInstructionSet([
+			makeMoveNote("I01", "inbox/missing.md", "notes/dest.md"),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.createFolder("notes");
+
+		const hookRunner = makeHookRunner();
+		const { executor } = makeSingleFileExecutor(vault, set, { hookRunner });
+		const counts = await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(counts.failed).toBe(1);
+		// before- still fires (it runs ahead of the handler); after- must not.
+		expect(hookCalls(hookRunner.run)).toEqual(["before-move_note"]);
+	});
+
+	it("DOES run after-<action> when the handler applied", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/after_applied_instructions.json`;
+
+		const set = makeInstructionSet([
+			makeMoveNote("I01", "inbox/note.md", "notes/note.md"),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create("inbox/note.md", "# Note");
+		await vault.createFolder("notes");
+
+		const hookRunner = makeHookRunner();
+		const { executor } = makeSingleFileExecutor(vault, set, { hookRunner });
+		const counts = await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(counts.applied).toBe(1);
+		expect(hookCalls(hookRunner.run)).toEqual(["before-move_note", "after-move_note"]);
+	});
+
+	it("DOES run after-<action> for skipped-already — the end-state is present", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/after_skipped_instructions.json`;
+
+		// src absent + dst present → move_note reports skipped-already.
+		const set = makeInstructionSet([
+			makeMoveNote("I01", "inbox/gone.md", "notes/already-there.md"),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.createFolder("notes");
+		await vault.create("notes/already-there.md", "# Already filed");
+
+		const hookRunner = makeHookRunner();
+		const { executor } = makeSingleFileExecutor(vault, set, { hookRunner });
+		const counts = await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(counts["skipped-already"]).toBe(1);
+		expect(hookCalls(hookRunner.run)).toEqual(["before-move_note", "after-move_note"]);
+	});
+
+	it("does NOT run after-<action> for a delete withheld by depends_on", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/after_dep_instructions.json`;
+		const origin = "inbox/origin-hook.md";
+
+		// I01 fails → I05 is skipped-dependency, which `continue`s before the
+		// handler dispatches, so neither phase should fire for it.
+		const set = makeInstructionSet([
+			makeMoveNote("I01", "inbox/missing-hook.md", "notes/dest-hook.md"),
+			makeDeleteSource("I05", origin, undefined, ["I01"]),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.createFolder("notes");
+		await vault.create(origin, "# Must survive untouched");
+
+		const hookRunner = makeHookRunner();
+		const { executor } = makeSingleFileExecutor(vault, set, { hookRunner });
+		await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(hookCalls(hookRunner.run)).toEqual(["before-move_note"]);
+		expect(await vault.exists(origin)).toBe(true);
+	});
+});

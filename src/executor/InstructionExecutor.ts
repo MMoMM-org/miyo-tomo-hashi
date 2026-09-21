@@ -487,8 +487,32 @@ export class InstructionExecutor {
 					unsatisfiedIds.add(recordKey(record));
 				}
 
-				// Step 8e: after-hook (runs regardless of handler outcome)
-				const afterOutcome = await this.hookRunner.run("after", action);
+				// Step 8e: after-hook — ONLY when the handler did not fail.
+				//
+				// `docs/hooks.md` has always published this as the contract
+				// ("runs after the action's handler succeeds"), and the name
+				// carries the same implication: an author reading
+				// `after-move_note` assumes the move happened. The code used to
+				// invoke it regardless, which made a hook written against our own
+				// documentation write into a file the action never touched —
+				// Tomo's 2026-09-21 report: a failed `move_note` (destination
+				// occupied) fired `after-move_note`, which stamped an alias for
+				// the un-moved note onto the uninvolved occupant.
+				//
+				// It was also inconsistent with itself: a handler that THREW
+				// `continue`d above and never reached here, while one that
+				// RETURNED `{kind:"failed"}` fell through and fired the hook. Two
+				// ways to fail, two behaviours — control flow, not a decision.
+				//
+				// Gated on the same condition that graduates the action to
+				// `applied:true` below, so "the hook ran" and "the end-state is
+				// present" cannot disagree. `skipped-dependency` /
+				// `skipped-cancelled` never reach this line at all — they
+				// `continue` before the handler dispatches.
+				const afterOutcome: HookOutcome =
+					handlerOutcome.kind === "failed"
+						? { kind: "ok" }
+						: await this.hookRunner.run("after", action);
 
 				if (handlerOutcome.kind !== "failed") {
 					// Step 8f: queue applied:true write (flushed in one batch
