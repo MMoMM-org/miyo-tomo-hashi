@@ -316,7 +316,13 @@ describe("anchorSpotKindOf / spotSourcePath", () => {
 			}),
 		).toBe("005 Important Links.md");
 		expect(
-			spotSourcePath({ id: "I13", action: "delete_source", source_path: "x.md", reason: "moved" }),
+			spotSourcePath({
+				id: "I13",
+				action: "delete_source",
+				source_path: "x.md",
+				reason: "moved",
+				depends_on: [],
+			}),
 		).toBeNull();
 	});
 });

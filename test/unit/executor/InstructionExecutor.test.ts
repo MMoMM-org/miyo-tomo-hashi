@@ -86,7 +86,7 @@ function makeHookRunner(
 
 function makeInstructionSet(actions: Action[]): InstructionSet {
 	return {
-		schema_version: "2",
+		schema_version: "3",
 		type: "tomo-instructions",
 		generated: "2026-04-29T10:00:00Z",
 		profile: null,
@@ -146,12 +146,18 @@ function makeAddRelationship(
 	};
 }
 
-function makeDeleteSource(id: string, sourcePath: string, applied?: boolean): Action {
+function makeDeleteSource(
+	id: string,
+	sourcePath: string,
+	applied?: boolean,
+	dependsOn: readonly string[] = [],
+): Action {
 	return {
 		action: "delete_source",
 		id,
 		source_path: sourcePath,
 		reason: "user approved deletion in Tomo review",
+		depends_on: dependsOn,
 		...(applied !== undefined ? { applied } : {}),
 	};
 }
@@ -543,7 +549,7 @@ describe("InstructionExecutor — settings as getter (M4)", () => {
 			validator: {
 				validate: (raw: unknown): ValidationOutcome => {
 					const s = raw as { schema_version?: string };
-					if (s?.schema_version === "2") {
+					if (s?.schema_version === "3") {
 						return { ok: true, data: raw as InstructionSet };
 					}
 					return { ok: false, message: "invalid" };
@@ -728,7 +734,7 @@ describe("InstructionExecutor — validation failure in batch", () => {
 		const selectiveValidator = {
 			validate: (raw: unknown): ValidationOutcome => {
 				const s = raw as { schema_version?: string };
-				if (s?.schema_version === "2") {
+				if (s?.schema_version === "3") {
 					return { ok: true, data: raw as InstructionSet };
 				}
 				return { ok: false, message: "invalid schema" };
@@ -1524,5 +1530,156 @@ describe("InstructionExecutor — permanent-delete warning wiring", () => {
 		});
 		expect(notify).not.toHaveBeenCalledWith(PERMANENT_DELETE_WARNING);
 		expect(markWarned).not.toHaveBeenCalled();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// depends_on — the delete gate (wire v3, Tomo spec 036 F5)
+//
+// Tomo's rule: "Hashi withholds the delete unless every id here is APPLIED
+// (AND semantics)". Note APPLIED, not "did not fail" — a dependency that was
+// itself skipped has no end-state either, and the delete must wait on it too.
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — depends_on delete gate", () => {
+	it("F5-AC5: a failing dependency skips the delete and the source note survives", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/ac5_instructions.json`;
+		const origin = "inbox/origin-ac5.md";
+
+		// I01 move_note fails (its source does not exist); I05 deletes the
+		// origin only if I01 applied.
+		const set = makeInstructionSet([
+			makeMoveNote("I01", "inbox/missing-ac5.md", "notes/filed-ac5.md"),
+			makeDeleteSource("I05", origin, undefined, ["I01"]),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.createFolder("notes");
+		await vault.create(origin, "# Origin that must not be deleted");
+
+		const { executor } = makeSingleFileExecutor(vault, set);
+		const counts = await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(counts.failed).toBe(1);
+		expect(counts["skipped-dependency"]).toBe(1);
+		expect(counts.applied).toBe(0);
+
+		// The whole point: the note is still there.
+		expect(await vault.exists(origin)).toBe(true);
+		const updated = await vault.readJSON<InstructionSet>(sourcePath);
+		expect(updated.actions.find((a) => a.id === "I05")?.applied).not.toBe(true);
+	});
+
+	it("an empty depends_on executes the delete — [] is an assertion, not a gap (Q1)", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/empty_dep_instructions.json`;
+		const origin = "inbox/origin-empty.md";
+
+		const set = makeInstructionSet([makeDeleteSource("I05", origin, undefined, [])]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create(origin, "# User asked for this to go");
+
+		const { executor } = makeSingleFileExecutor(vault, set);
+		const counts = await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(counts.applied).toBe(1);
+		expect(counts["skipped-dependency"]).toBe(0);
+		expect(await vault.exists(origin)).toBe(false);
+	});
+
+	it("a DANGLING depends_on id skips the delete rather than passing it (Q5)", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/dangling_instructions.json`;
+		const origin = "inbox/origin-dangling.md";
+
+		// I99 is not in the set. A malformed producer output — and we refuse to
+		// guess which way, because "unknown, therefore proceed" is exactly the
+		// failure this field exists to remove.
+		const set = makeInstructionSet([makeDeleteSource("I05", origin, undefined, ["I99"])]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create(origin, "# Must survive a malformed set");
+
+		const { executor } = makeSingleFileExecutor(vault, set);
+		const counts = await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(counts["skipped-dependency"]).toBe(1);
+		expect(counts.applied).toBe(0);
+		expect(await vault.exists(origin)).toBe(true);
+	});
+
+	it("cascades TRANSITIVELY — a delete waiting on a SKIPPED action is withheld too", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/transitive_instructions.json`;
+		const mocPath = `${INBOX}/moc-tr.md`;
+		const origin = "inbox/origin-tr.md";
+
+		// I01 create_moc fails (source missing)
+		//   → I02 link_to_moc is skipped-dependency (derived edge)
+		//     → I05 delete_source depends_on ["I02"]
+		//
+		// Pre-fix only outright FAILURES entered the unsatisfied set, so I02's
+		// skip did not propagate and this delete EXECUTED — destroying the
+		// origin of a note that was never filed. This test is the guard.
+		const set = makeInstructionSet([
+			makeCreateMoc("I01", mocPath),
+			makeLinkToMoc("I02", mocPath, mocPath),
+			makeDeleteSource("I05", origin, undefined, ["I02"]),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.create(origin, "# Origin whose filing never happened");
+
+		const { executor } = makeSingleFileExecutor(vault, set);
+		const counts = await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(counts.failed).toBe(1);               // I01
+		expect(counts["skipped-dependency"]).toBe(2); // I02 AND I05
+		expect(await vault.exists(origin)).toBe(true);
+	});
+
+	it("F5-AC6: a destination taken since the set was generated leaves the original intact", async () => {
+		const vault = new FakeVaultFS();
+		const sourcePath = `${INBOX}/ac6_instructions.json`;
+		const staged = "inbox/staged-ac6.md";
+		const destination = "notes/taken-ac6.md";
+		const origin = "inbox/origin-ac6.md";
+
+		// Tomo saw `destination` free at generation time; by apply time
+		// something else occupies it. move_note must fail rather than clobber,
+		// and the delete that depends on it must not run.
+		const set = makeInstructionSet([
+			makeMoveNote("I01", staged, destination),
+			makeDeleteSource("I05", origin, undefined, ["I01"]),
+		]);
+
+		await vault.createFolder(INBOX);
+		await vault.create(sourcePath, JSON.stringify(set, null, 2) + "\n");
+		await vault.createFolder("inbox");
+		await vault.createFolder("notes");
+		await vault.create(staged, "# Freshly rendered atomic");
+		await vault.create(destination, "# Somebody got here first");
+		await vault.create(origin, "# Origin of the atomic");
+
+		const { executor } = makeSingleFileExecutor(vault, set);
+		const counts = await executor.execute({ kind: "single-file", sourcePath });
+
+		expect(counts.failed).toBe(1);
+		expect(counts["skipped-dependency"]).toBe(1);
+
+		// Neither the squatter nor the staged file nor the origin was touched.
+		expect(await vault.read(destination)).toBe("# Somebody got here first");
+		expect(await vault.exists(staged)).toBe(true);
+		expect(await vault.exists(origin)).toBe(true);
 	});
 });

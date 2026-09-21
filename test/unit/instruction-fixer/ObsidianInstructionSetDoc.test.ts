@@ -168,7 +168,7 @@ describe("ObsidianInstructionSetDoc.load()", () => {
 		const adapter = new ObsidianInstructionSetDoc(vault);
 
 		await expect(adapter.load(DOC_PATH)).rejects.toThrow(
-			"Schema version mismatch — expected 2, got 99",
+			"Schema version mismatch — expected 3, got 99",
 		);
 	});
 
@@ -602,7 +602,7 @@ describe("ObsidianInstructionSetDoc.save() — failures report how much landed",
 		const model = await adapter.load(DOC_PATH);
 
 		const err = await saveError(adapter, {
-			doc: { ...model.doc, schema_version: "1" as unknown as "2" },
+			doc: { ...model.doc, schema_version: "1" as unknown as "3" },
 			dirty: true,
 		});
 

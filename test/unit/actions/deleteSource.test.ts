@@ -12,6 +12,7 @@ const makeAction = (overrides?: Partial<DeleteSourceAction>): DeleteSourceAction
 	id: "test-id-ds-001",
 	source_path: "Inbox/processed-note.md",
 	reason: "moved to permanent location",
+	depends_on: [],
 	...overrides,
 });
 

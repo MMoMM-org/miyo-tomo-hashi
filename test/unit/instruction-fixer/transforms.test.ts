@@ -29,7 +29,7 @@ import type { InstructionFixerModel } from "../../../src/vault/InstructionSetDoc
 function makeModel(actions: Action[], dirty = false): InstructionFixerModel {
 	return {
 		doc: {
-			schema_version: "2",
+			schema_version: "3",
 			type: "tomo-instructions",
 			generated: "2026-07-20T10:15:00Z",
 			profile: "default",

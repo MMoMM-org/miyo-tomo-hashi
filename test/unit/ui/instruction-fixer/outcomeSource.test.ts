@@ -44,7 +44,7 @@ const OTHER_SET_PATH = `${INBOX}/2026-07-19_0900_instructions.json`;
 
 function setWithIds(...ids: readonly string[]): InstructionSet {
 	return {
-		schema_version: "2",
+		schema_version: "3",
 		type: "tomo-instructions",
 		generated: "2026-07-20T10:15:00",
 		profile: null,

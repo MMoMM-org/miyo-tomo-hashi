@@ -256,7 +256,8 @@ export class InstructionExecutor {
 
 		// Step 4: compute remaining records + dependency graph
 		// Cast to mutable array — ActionRecord.outcome is intentionally mutable per state.ts
-		const { records: readonlyRecords, dependencies } = computeRemaining(resolvedSources);
+		const { records: readonlyRecords, dependencies, danglingIds } =
+			computeRemaining(resolvedSources);
 		const records = readonlyRecords as ActionRecord[];
 		// M6: index dependencies once (O(E)) so findDependencyFailure does
 		// O(d_record) lookup per record instead of O(E) scan. Pre-fix was
@@ -341,7 +342,22 @@ export class InstructionExecutor {
 		}
 
 		// Step 8: execute each record
-		const failedIds = new Set<string>();
+		//
+		// `unsatisfiedIds` holds `fileId::id` keys whose end-state is NOT present,
+		// which is a wider set than "failed" — hence the name. A dependent is
+		// withheld when a dependency is in here.
+		//
+		// It is seeded with the planner's DANGLING ids (a `depends_on` naming an
+		// action absent from its own set) so the dependent skips rather than
+		// executes — our 2026-09-09 commitment to Tomo, Q5. Because the key is
+		// already the shape `findDependencyFailure` looks up, a dangling id needs
+		// no special outcome kind: the run log reports it through the normal
+		// `skipped-dependency (needs I99)` path.
+		//
+		// Ids that were `applied: true` in the source file never become records,
+		// so they never enter this set and their dependents proceed — intended
+		// behaviour for a partial re-run (Q3).
+		const unsatisfiedIds = new Set<string>(danglingIds);
 		// H5: accumulate completed ids per source so we can flush all writes
 		// in one processJSON call after the loop, instead of N per source.
 		// "Completed" = applied OR skipped-already: both mean the action's
@@ -385,15 +401,31 @@ export class InstructionExecutor {
 					for (let j = i; j < records.length; j++) {
 						const remaining = records[j] as ActionRecord;
 						remaining.outcome = { kind: "skipped-cancelled" };
+						// Same reasoning as the skipped-dependency cascade: these
+						// did not run, so anything waiting on them is unsatisfied.
+						// KIND_ORDER puts delete_source second-to-last, so today a
+						// cancel reaches the deletes too — but that is ordering
+						// luck, not a guarantee, and this does not rely on it.
+						unsatisfiedIds.add(recordKey(remaining));
 						logWriter.appendRecord(remaining);
 					}
 					break;
 				}
 
 				// Step 8b: dependency check
-				const depFailure = findDependencyFailure(record, depMap, failedIds);
+				const depFailure = findDependencyFailure(record, depMap, unsatisfiedIds);
 				if (depFailure !== null) {
 					record.outcome = { kind: "skipped-dependency", dependsOn: depFailure };
+					// A skipped action's end-state is absent too, so it must
+					// propagate. Pre-fix only outright FAILURES entered the set,
+					// which broke the chain one link in:
+					//   I01 create_moc     → failed
+					//   I02 link_to_moc    → skipped-dependency (not recorded)
+					//   I05 delete_source depends_on ["I02"] → EXECUTED
+					// — a delete outliving the action that justified it, which is
+					// the exact thing `depends_on` exists to prevent. Tomo's rule
+					// is "withheld unless every id is APPLIED", not "unless failed".
+					unsatisfiedIds.add(recordKey(record));
 					logWriter.appendRecord(record);
 					this.debugOutcome(record);
 					continue;
@@ -403,7 +435,7 @@ export class InstructionExecutor {
 				const action = actionLookup.get(`${record.fileId}::${record.id}`);
 				if (action === undefined) {
 					record.outcome = { kind: "failed", reason: `Action ${record.id} not found in source` };
-					failedIds.add(record.id);
+					unsatisfiedIds.add(recordKey(record));
 					logWriter.appendRecord(record);
 					this.debugOutcome(record);
 					continue;
@@ -413,7 +445,7 @@ export class InstructionExecutor {
 				const beforeOutcome = await this.hookRunner.run("before", action);
 				if (beforeOutcome.kind === "failed") {
 					record.outcome = { kind: "failed", reason: beforeOutcome.reason };
-					failedIds.add(record.id);
+					unsatisfiedIds.add(recordKey(record));
 					logWriter.appendRecord(record);
 					this.debugOutcome(record);
 					continue;
@@ -444,7 +476,7 @@ export class InstructionExecutor {
 				} catch (err) {
 					const reason = err instanceof Error ? err.message : String(err);
 					record.outcome = { kind: "failed", reason: `handler threw: ${reason}` };
-					failedIds.add(record.id);
+					unsatisfiedIds.add(recordKey(record));
 					logWriter.appendRecord(record);
 					this.debugOutcome(record);
 					continue;
@@ -452,7 +484,7 @@ export class InstructionExecutor {
 				record.outcome = handlerOutcome;
 
 				if (handlerOutcome.kind === "failed") {
-					failedIds.add(record.id);
+					unsatisfiedIds.add(recordKey(record));
 				}
 
 				// Step 8e: after-hook (runs regardless of handler outcome)
@@ -685,15 +717,26 @@ function buildDepMap(
 	return map;
 }
 
+/** `fileId::id` — the key both the dependency graph and the action lookup use. */
+function recordKey(record: ActionRecord): string {
+	return `${record.fileId}::${record.id}`;
+}
+
+/** Strip the `fileId::` prefix for display — the run log reports bare `I##`. */
+function bareId(key: string): string {
+	const sep = key.indexOf("::");
+	return sep === -1 ? key : key.slice(sep + 2);
+}
+
 function findDependencyFailure(
 	record: ActionRecord,
 	depMap: ReadonlyMap<string, ReadonlyArray<string>>,
-	failedIds: ReadonlySet<string>,
+	unsatisfiedIds: ReadonlySet<string>,
 ): string | null {
-	const dependsOnIds = depMap.get(record.id);
+	const dependsOnIds = depMap.get(recordKey(record));
 	if (dependsOnIds === undefined) return null;
 	for (const dependsOn of dependsOnIds) {
-		if (failedIds.has(dependsOn)) return dependsOn;
+		if (unsatisfiedIds.has(dependsOn)) return bareId(dependsOn);
 	}
 	return null;
 }
