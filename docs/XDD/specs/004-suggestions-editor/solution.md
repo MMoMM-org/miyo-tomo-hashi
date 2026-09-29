@@ -182,7 +182,8 @@ along untouched.
 
 **Suggestions** — two card modes, chosen by `suppressed`:
 - **worthy** (`suppressed:false`, e.g. S05/S08): title · template · location ·
-  tags · `candidate_mocs` (select + spot) + `＋ Add MOC` · keep-source · approve/skip.
+  tags · `candidate_mocs` (select + spot) + `＋ Add MOC` · keep-source (disabled on
+  the skip legs) · the approve/skip/delete-source disposition segment.
 - **suppressed** (`suppressed:true`, worthiness < 0.5): worthiness badge + the
   **single** real control **Force Atomic** (`force_atomic`); no MOC UI (Tomo emits
   empty `candidate_mocs`). Explains the skip default.

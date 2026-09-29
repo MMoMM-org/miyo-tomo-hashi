@@ -27,7 +27,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ObsidianSuggestionsDoc } from "../../src/suggestions/ObsidianSuggestionsDoc.js";
-import { setDecision, setTitle } from "../../src/suggestions/transforms/suggestion.js";
+import { setDisposition, setTitle } from "../../src/suggestions/transforms/suggestion.js";
 import { validate } from "../../src/schema/suggestions-validator.js";
 import type { EditModel, SuggestionsWire } from "../../src/types/suggestions.js";
 import { FakeVaultFS } from "../../src/vault/FakeVaultFS.js";
@@ -44,13 +44,13 @@ async function seededVault(): Promise<FakeVaultFS> {
 }
 
 describe("round-trip fidelity — load -> edit one field -> save -> emit_digest verbatim", () => {
-	it("carries emit_digest through a real setDecision() edit byte-identical to the source fixture", async () => {
+	it("carries emit_digest through a real setDisposition() edit byte-identical to the source fixture", async () => {
 		const vault = await seededVault();
 		const adapter = new ObsidianSuggestionsDoc(vault);
 		const loaded = await adapter.load(DOC_PATH);
 
 		// S07 is "approve" in the fixture; flip it via the real Phase-1 transform.
-		const edited = setDecision(loaded, "S07", "skip");
+		const edited = setDisposition(loaded, "S07", "skip");
 		expect(edited.dirty).toBe(true); // sanity: the transform did register a change
 
 		await adapter.save(edited);

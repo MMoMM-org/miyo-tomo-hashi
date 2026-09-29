@@ -283,10 +283,18 @@ describe("SuggestionsTab", () => {
 
 			const approveBtn = card.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-approve");
 			const skipBtn = card.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-skip");
+			const deleteBtn = card.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-delete");
 			expect(approveBtn?.classList.contains("is-active")).toBe(true);
 			expect(skipBtn?.classList.contains("is-active")).toBe(false);
+			expect(deleteBtn?.classList.contains("is-active")).toBe(false);
 			expect(approveBtn?.getAttribute("aria-pressed")).toBe("true");
 			expect(skipBtn?.getAttribute("aria-pressed")).toBe("false");
+			expect(deleteBtn?.getAttribute("aria-pressed")).toBe("false");
+			expect(deleteBtn?.textContent).toBe("Delete source");
+
+			// Pin the leg COUNT — Tomo's markdown tri-state has exactly three, and
+			// a silently lost or added leg is the class of gap that produced #140.
+			expect(card.querySelectorAll(".hashi-se-decision button")).toHaveLength(3);
 
 			expect(card.querySelector(".hashi-se-mini-pick")?.textContent).toBe("t_note_tomo.md");
 			const miniPicks = card.querySelectorAll(".hashi-se-mini-pick");
@@ -327,7 +335,7 @@ describe("SuggestionsTab", () => {
 			expect(next.dirty).toBe(true);
 		});
 
-		it("clicking Skip on the decision segment dispatches setDecision, flipping aria-pressed on re-render", async () => {
+		it("clicking Skip dispatches the skip disposition, flipping aria-pressed on re-render", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
 			const container = renderTab(model, ctx);
@@ -336,12 +344,13 @@ describe("SuggestionsTab", () => {
 			card.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-skip")!.click();
 
 			const next = applyCalls[0]!(model);
-			expect(next.doc.suggestions.find((s) => s.id === WORTHY_ID)?.decision).toBe("skip");
+			const s = next.doc.suggestions.find((x) => x.id === WORTHY_ID);
+			expect(s?.decision).toBe("skip");
+			expect(s?.delete_source).toBe(false);
 
 			// Re-render with the post-transform model (ctx.apply is a spy here,
-			// it doesn't live-mutate the DOM) to prove aria-pressed tracks
-			// `suggestion.decision` in both directions, not just the initial
-			// approve-active case.
+			// it doesn't live-mutate the DOM) to prove aria-pressed tracks the
+			// current leg in every direction, not just the initial approve case.
 			const reCard = cardFor(renderTab(next, ctx), WORTHY_ID);
 			expect(
 				reCard.querySelector(".hashi-se-decision .hashi-se-approve")?.getAttribute("aria-pressed"),
@@ -349,9 +358,12 @@ describe("SuggestionsTab", () => {
 			expect(
 				reCard.querySelector(".hashi-se-decision .hashi-se-skip")?.getAttribute("aria-pressed"),
 			).toBe("true");
+			expect(
+				reCard.querySelector(".hashi-se-decision .hashi-se-delete")?.getAttribute("aria-pressed"),
+			).toBe("false");
 		});
 
-		it("clicking Approve on the decision segment dispatches setDecision (no-op when already approved)", async () => {
+		it("clicking Approve dispatches the approve disposition (no-op when already approved)", async () => {
 			const model = await loadModel();
 			const { ctx, applyCalls } = makeCtx();
 			const container = renderTab(model, ctx);
@@ -361,6 +373,54 @@ describe("SuggestionsTab", () => {
 
 			const next = applyCalls[0]!(model);
 			expect(next.doc.suggestions.find((s) => s.id === WORTHY_ID)?.decision).toBe("approve");
+			expect(next).toBe(model);
+		});
+
+		// #140 — the third leg of Tomo's markdown tri-state. It is NOT a third
+		// `decision` value and NOT a flag flip on an approved item: it writes
+		// (skip, delete_source true), per Tomo's measured Pass-2 table.
+		it("clicking Delete source writes (skip, delete_source true) and highlights that leg", async () => {
+			const model = await loadModel();
+			const { ctx, applyCalls } = makeCtx();
+			const container = renderTab(model, ctx);
+			const card = cardFor(container, WORTHY_ID);
+
+			card.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-delete")!.click();
+
+			const next = applyCalls[0]!(model);
+			const s = next.doc.suggestions.find((x) => x.id === WORTHY_ID);
+			expect(s?.decision).toBe("skip");
+			expect(s?.delete_source).toBe(true);
+			expect(next.dirty).toBe(true);
+
+			const reCard = cardFor(renderTab(next, ctx), WORTHY_ID);
+			expect(
+				reCard.querySelector(".hashi-se-decision .hashi-se-delete")?.classList.contains("is-active"),
+			).toBe(true);
+			expect(
+				reCard.querySelector(".hashi-se-decision .hashi-se-skip")?.getAttribute("aria-pressed"),
+			).toBe("false");
+		});
+
+		// The delete leg is reached from Skip as well as from Approve, and must
+		// disarm cleanly when the owner changes their mind.
+		it("moving Delete source back to Skip disarms delete_source", async () => {
+			const model = await loadModel();
+			const { ctx, applyCalls } = makeCtx();
+			cardFor(renderTab(model, ctx), WORTHY_ID)
+				.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-delete")!
+				.click();
+			const deleting = applyCalls[0]!(model);
+			expect(deleting.doc.suggestions.find((s) => s.id === WORTHY_ID)?.delete_source).toBe(true);
+
+			cardFor(renderTab(deleting, ctx), WORTHY_ID)
+				.querySelector<HTMLButtonElement>(".hashi-se-decision .hashi-se-skip")!
+				.click();
+			const skipped = applyCalls[1]!(deleting);
+
+			const s = skipped.doc.suggestions.find((x) => x.id === WORTHY_ID);
+			expect(s?.decision).toBe("skip");
+			expect(s?.delete_source).toBe(false);
 		});
 
 		it("choosing a template opens TemplatePicker and dispatches setTemplate", async () => {
@@ -412,6 +472,41 @@ describe("SuggestionsTab", () => {
 
 			const next = applyCalls[0]!(model);
 			expect(next.doc.suggestions.find((s) => s.id === WORTHY_ID)?.keep_source).toBe(true);
+		});
+
+		// Pass 2 builds a skipped entry without ever reading keep_source, so a
+		// live checkbox on either skip leg would offer a "keep" that does not
+		// keep — Tomo measured (skip, keep_source true, delete_source true) as a
+		// DELETE. Disabled, not hidden: the setting stays visible with a reason.
+		it("keep-source is enabled under Approve and disabled under both skip legs", async () => {
+			const model = await loadModel();
+			const { ctx, applyCalls } = makeCtx();
+
+			const approveCard = cardFor(renderTab(model, ctx), WORTHY_ID);
+			const approveBox = approveCard.querySelector<HTMLInputElement>(
+				".hashi-se-cbx input[type='checkbox']",
+			)!;
+			expect(approveBox.disabled).toBe(false);
+			expect(approveCard.querySelector(".hashi-se-cbx")?.classList.contains("is-disabled")).toBe(
+				false,
+			);
+
+			for (const leg of ["hashi-se-skip", "hashi-se-delete"]) {
+				const { ctx: legCtx, applyCalls: legCalls } = makeCtx();
+				cardFor(renderTab(model, legCtx), WORTHY_ID)
+					.querySelector<HTMLButtonElement>(`.hashi-se-decision .${leg}`)!
+					.click();
+				const next = legCalls[0]!(model);
+
+				const card = cardFor(renderTab(next, legCtx), WORTHY_ID);
+				const label = card.querySelector(".hashi-se-cbx");
+				const box = card.querySelector<HTMLInputElement>(".hashi-se-cbx input[type='checkbox']");
+				expect(box?.disabled, leg).toBe(true);
+				expect(label?.classList.contains("is-disabled"), leg).toBe(true);
+				expect(label?.getAttribute("title"), leg).toContain("Only applies when the note is created");
+			}
+
+			expect(applyCalls).toHaveLength(0);
 		});
 
 		it("adding a tag opens TagPicker and dispatches an append-only tags update", async () => {

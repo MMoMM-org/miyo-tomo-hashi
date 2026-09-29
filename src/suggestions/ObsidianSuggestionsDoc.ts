@@ -51,9 +51,14 @@ export class ObsidianSuggestionsDoc implements SuggestionsDoc {
 		const raw = await this.readAndParse(docPath);
 		const result = validate(raw);
 		if (!result.ok) {
-			// Fail loud (ADR-025 discipline) — the caller falls back to the
-			// markdown path; this adapter's job is only to refuse to hand
-			// back a doc that doesn't match the pinned wire schema.
+			// Fail loud (ADR-025 discipline): this adapter's job is only to
+			// refuse to hand back a doc that doesn't match the pinned wire
+			// schema. `SuggestionsEditorView.loadAndRender` catches and renders
+			// an error screen for that document — it does NOT fall back to the
+			// markdown, so an unknown-property or version-const failure makes
+			// the doc uneditable here until the schema is re-vendored. That is
+			// why a wire-version move has to ship as a coordinated release
+			// (confirmed with Tomo, 2026-09-29).
 			throw new Error(`ObsidianSuggestionsDoc.load(${docPath}): ${result.message}`);
 		}
 		this.docPath = docPath;

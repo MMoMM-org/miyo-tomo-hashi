@@ -6,10 +6,10 @@
  *
  * Seeded through `FakeSuggestionsDoc` (a real Tomo emission, T1.2) rather
  * than a hand-rolled fixture — same real-data precedent as the transform
- * tests. `setDecision` (T1.3) is used as the representative real-change /
+ * tests. `setDisposition` (T1.3) is used as the representative real-change /
  * no-op transform pair: every suggestion in the seed starts at
- * `decision: "skip"`, so `setDecision(model, id, "skip")` is a no-op
- * (returns the SAME model reference) and `setDecision(model, id, "approve")`
+ * `decision: "skip"`, so `setDisposition(model, id, "skip")` is a no-op
+ * (returns the SAME model reference) and `setDisposition(model, id, "approve")`
  * is a real change (returns a NEW reference, `dirty: true`).
  *
  * Follows the `Store<T>` idiom (src/util/store.ts, exercised in
@@ -21,7 +21,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { SuggestionsStore } from "../../../src/suggestions/store.js";
-import { setDecision } from "../../../src/suggestions/transforms/suggestion.js";
+import { setDisposition } from "../../../src/suggestions/transforms/suggestion.js";
 import { FakeSuggestionsDoc } from "../../__mocks__/FakeSuggestionsDoc.js";
 
 const SUGGESTION_ID = "S01"; // seed decision: "skip"
@@ -44,7 +44,7 @@ describe("SuggestionsStore", () => {
 
 		store.subscribe(listener); // immediate fire with the initial model
 
-		store.apply((m) => setDecision(m, SUGGESTION_ID, "approve"));
+		store.apply((m) => setDisposition(m, SUGGESTION_ID, "approve"));
 
 		// 1 (initial) + 1 (real change) = 2 calls.
 		expect(listener).toHaveBeenCalledTimes(2);
@@ -55,7 +55,7 @@ describe("SuggestionsStore", () => {
 		const model = await new FakeSuggestionsDoc().load("x");
 		const store = new SuggestionsStore(model);
 
-		store.apply((m) => setDecision(m, SUGGESTION_ID, "approve"));
+		store.apply((m) => setDisposition(m, SUGGESTION_ID, "approve"));
 
 		expect(store.getModel().dirty).toBe(true);
 	});
@@ -67,9 +67,9 @@ describe("SuggestionsStore", () => {
 
 		store.subscribe(listener); // immediate fire — call count 1
 
-		// S01 already decided "skip" in the seed — setDecision returns the
+		// S01 already decided "skip" in the seed — setDisposition returns the
 		// SAME model reference (transforms/suggestion.ts no-op guard).
-		store.apply((m) => setDecision(m, SUGGESTION_ID, "skip"));
+		store.apply((m) => setDisposition(m, SUGGESTION_ID, "skip"));
 
 		expect(listener).toHaveBeenCalledTimes(1); // no additional notify
 		expect(store.getModel()).toBe(model); // reference unchanged — no adoption
@@ -84,7 +84,7 @@ describe("SuggestionsStore", () => {
 		const unsubscribe = store.subscribe(listener); // immediate fire — call count 1
 		unsubscribe();
 
-		store.apply((m) => setDecision(m, SUGGESTION_ID, "approve"));
+		store.apply((m) => setDisposition(m, SUGGESTION_ID, "approve"));
 
 		expect(listener).toHaveBeenCalledTimes(1); // no further calls after dispose
 	});
@@ -98,7 +98,7 @@ describe("SuggestionsStore", () => {
 		store.subscribe(listenerA); // immediate — count 1
 		store.subscribe(listenerB); // immediate — count 1
 
-		store.apply((m) => setDecision(m, SUGGESTION_ID, "approve"));
+		store.apply((m) => setDisposition(m, SUGGESTION_ID, "approve"));
 
 		expect(listenerA).toHaveBeenCalledTimes(2);
 		expect(listenerB).toHaveBeenCalledTimes(2);

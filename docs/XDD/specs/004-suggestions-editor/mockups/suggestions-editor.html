@@ -226,6 +226,8 @@
   .decision button { font-family: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border: 0; background: var(--bg-input); color: var(--text-muted); cursor: pointer; }
   .decision button.approve[aria-pressed="true"] { background: var(--green); color: #fff; }
   .decision button.skip[aria-pressed="true"] { background: var(--bg-hover); color: var(--text); }
+  .decision button.delete[aria-pressed="true"] { background: var(--red); color: #fff; }
+  .cbx.is-disabled { opacity: .5; cursor: not-allowed; }
   .pmoc-row2 { display: flex; align-items: center; gap: 8px; margin-top: 11px; flex-wrap: wrap; }
   .members { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .members .lbl { font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; }
@@ -473,7 +475,7 @@
   <div class="foot-explain">
     <h4>What the mockup encodes — real 0949 run, four tabs</h4>
     <ul>
-      <li><b>Suggestions</b> has two card modes: <b>worthy</b> (S05/S08 — rename, template &amp; location pickers, tags, MOC link, keep-source, approve/skip) and <b>suppressed</b> (S01–04/S06/S07 — worthiness badge + a single <b>Force Atomic</b> control; that's the only real decision Tomo offers).</li>
+      <li><b>Suggestions</b> has two card modes: <b>worthy</b> (S05/S08 — rename, template &amp; location pickers, tags, MOC link, keep-source, approve/skip/delete-source) and <b>suppressed</b> (S01–04/S06/S07 — worthiness badge + a single <b>Force Atomic</b> control; that's the only real decision Tomo offers).</li>
       <li>✅ <b>candidate_mocs</b> (was a wire bug): worthy notes now carry their MOC options — Tomo emits every candidate with <code>selected</code> mirrored and <code>anchor:null</code> until a spot is set. This is now <b>real</b>, not mocked. Plus manual <b>＋ Add MOC</b>.</li>
       <li><b>Daily</b> tab: per-date <b>click-to-open</b> with a live "doesn't exist" pill (Hashi checks the vault — the JSON carries no exists flag); per log entry editable text, position/time, <b>Accept</b> + <b>Force Atomic</b>. Hashi never creates the daily note. Deleting a daily-only source is <b>automatic</b> via <code>accepted</code> — no separate control.</li>
       <li>✅ <b>Tag-Handler</b> tab: approve / keep-source, now with real display context (<code>handler · target_path · marker · source_paths · preview</code>) carried read-only in the wire.</li>
@@ -545,22 +547,22 @@
   const T = "t_note_tomo.md", L = "Atlas/202 Notes/";
   const suggestions = [
     { id:"S01", title:"Anruf Mueller — Angebot bis Freitag, Referenzen nachschicken", stem:"call-mueller",
-      template:T, location:L, tags:["topic/communication","topic/people"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.3, cands:[] },
+      template:T, location:L, tags:["topic/communication","topic/people"], decision:"skip", keep_source:false, delete_source:false, force_atomic:false, suppressed:true, worthiness:0.3, cands:[] },
     { id:"S02", title:"Deliberate Practice — Focused Effort at the Edge of Ability Builds Expertise", stem:"deliberate-practice",
-      template:T, location:L, tags:["topic/growth/aol/development","topic/mind/concepts"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
+      template:T, location:L, tags:["topic/growth/aol/development","topic/mind/concepts"], decision:"skip", keep_source:false, delete_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
     { id:"S03", title:"Krafttraining 2026-07-06 — Kniebeugen, Bankdruecken, Rudern", stem:"gym-log",
-      template:T, location:L, tags:["topic/health"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.3, cands:[] },
+      template:T, location:L, tags:["topic/health"], decision:"skip", keep_source:false, delete_source:false, force_atomic:false, suppressed:true, worthiness:0.3, cands:[] },
     { id:"S04", title:"PKM-Systeme scheitern an fehlender Wiedervorlage, nicht an fehlender Struktur", stem:"idea-capture",
-      template:T, location:L, tags:["topic/knowledge/lyt"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
+      template:T, location:L, tags:["topic/knowledge/lyt"], decision:"skip", keep_source:false, delete_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
     { id:"S05", title:"Interleaving — Why Mixed Practice Produces Better Retention", stem:"interleaving",
-      template:T, location:L, tags:["topic/mind/concepts","topic/learning"], decision:"approve", keep_source:false, force_atomic:false, suppressed:false, worthiness:0.6, proposedRef:"M01",
+      template:T, location:L, tags:["topic/mind/concepts","topic/learning"], decision:"approve", keep_source:false, delete_source:false, force_atomic:false, suppressed:false, worthiness:0.6, proposedRef:"M01",
       cands:[ { path:"Atlas/200 Maps/Concepts (MOC).md", src:"tomo", on:false, anchor:null, conf:null } ] },
     { id:"S06", title:"Glühbirne im Flur wechseln", stem:"quick-thought",
-      template:T, location:L, tags:["topic/other"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.2, cands:[] },
+      template:T, location:L, tags:["topic/other"], decision:"skip", keep_source:false, delete_source:false, force_atomic:false, suppressed:true, worthiness:0.2, cands:[] },
     { id:"S07", title:"Spaced Repetition — Effortful Retrieval is Where Learning Happens", stem:"spaced-repetition",
-      template:T, location:L, tags:["topic/mind/concepts"], decision:"skip", keep_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
+      template:T, location:L, tags:["topic/mind/concepts"], decision:"skip", keep_source:false, delete_source:false, force_atomic:false, suppressed:true, worthiness:0.4, cands:[] },
     { id:"S08", title:"The Zettelkasten Method — Atomic Notes and Emergent Connections", stem:"zettelkasten-method",
-      template:T, location:L, tags:["topic/knowledge/frameworks"], decision:"approve", keep_source:false, force_atomic:false, suppressed:false, worthiness:0.6,
+      template:T, location:L, tags:["topic/knowledge/frameworks"], decision:"approve", keep_source:false, delete_source:false, force_atomic:false, suppressed:false, worthiness:0.6,
       cands:[ { path:"Atlas/200 Maps/Frameworks (MOC).md", src:"tomo", on:false, anchor:null, conf:null },
               { path:"Atlas/200 Maps/Type of Notes (MOC).md", src:"tomo", on:false, anchor:null, conf:null },
               { path:"Atlas/200 Maps/Linking Your Thinking (MOC).md", src:"tomo", on:false, anchor:null, conf:null } ] },
@@ -576,7 +578,7 @@
       { time:null, position:"after_last_line", content:"Krafttraining, 45 Minuten. Kniebeugen, Bankdruecken, Rudern. Danach 10 Minuten Stretching. Energielevel danach deutlich hoeher.", reason:"Short gym log (131 chars), no atomic-worthy thread → inline log entry", source:"gym-log", accepted:false, forceAtomic:false } ] },
   ];
   const tagGroups = [
-    { id:"th-tsukai-efforts-tomo-dev-log-md", approved:true, keep_source:false,
+    { id:"th-tsukai-efforts-tomo-dev-log-md", approved:true, keep_source:false, delete_source:false,
       target:"Efforts/Tomo Dev Log", marker:"## Captures", handler:"tsukai",
       sources:["100 Inbox/202606291658_companion-p1-followon-ux-and-dataview-skill"],
       preview:"| 2026-06-29 | feature | UX hardening + Dataview skill — 6 fixes shipped |" },
@@ -625,17 +627,18 @@
       <div class="card-top">
         <div class="pmoc-row1">
           <div class="field" style="flex:1"><label>Note (${s.id})</label><input class="inp name" value="${s.title}" aria-label="Atomic note title" /></div>
-          <div class="field"><label>Create?</label>
+          <div class="field"><label>Source note</label>
             <div class="decision">
               <button class="approve" aria-pressed="${s.decision==='approve'}">Approve</button>
-              <button class="skip" aria-pressed="${s.decision==='skip'}">Skip</button>
+              <button class="skip" aria-pressed="${s.decision==='skip' && !s.delete_source}">Skip</button>
+              <button class="delete" aria-pressed="${s.decision==='skip' && !!s.delete_source}">Delete source</button>
             </div>
           </div>
         </div>
         <div class="pmoc-row2 meta">
           <div class="field"><label>Template</label><button class="mini-pick" data-picktpl>${s.template}</button></div>
           <div class="field"><label>Location</label><button class="mini-pick" data-pickloc>${s.location}</button></div>
-          <label class="cbx keep"><input type="checkbox" ${s.keep_source?'checked':''} data-dirty/> Keep source file</label>
+          <label class="cbx keep${s.decision==='approve'?'':' is-disabled'}" ${s.decision==='approve'?'':'title="Only applies when the note is created — the disposition above decides the source note\'s fate."'}><input type="checkbox" ${s.keep_source?'checked':''} ${s.decision==='approve'?'':'disabled'} data-dirty/> Keep source file</label>
         </div>
         ${tagRow(s.tags)}
       </div>
