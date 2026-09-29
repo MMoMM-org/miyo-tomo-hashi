@@ -71,6 +71,23 @@ export async function moveAsset(
 	]);
 
 	if (srcExists && dstExists) {
+		// EXTERNAL CONTRACT — this exact string is quoted downstream.
+		//
+		// Tomo's `docs/troubleshooting.md` presents it as the symptom a user
+		// searches for after an asset-destination collision, and their spec-037
+		// close-out cites it as evidence that their ADR-5 dependency on this
+		// check is measured rather than assumed (their 2026-09-29 handoff, §1).
+		// Their `ignore` remedy deliberately emits a move against a destination
+		// they know is occupied, precisely so this check is what stops it.
+		//
+		// Rewording it is allowed — it is our string — but it goes stale in one
+		// of their docs and one close-out, so send them a ping first. Two tests
+		// assert it with exact equality (`moveAsset.test.ts`, `moveNote.test.ts`),
+		// so a reword cannot land silently; those tests are the tripwire, this
+		// comment is the reason.
+		//
+		// NOTE: move_note emits the identical text, so the string does NOT
+		// identify the asset case on its own.
 		return { kind: "failed", reason: "Inconsistent state — both source and destination present" };
 	}
 
