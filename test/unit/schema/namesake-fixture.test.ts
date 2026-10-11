@@ -5,9 +5,10 @@
  * It is the first fixture carrying the ambiguity `item_key` exists to remove:
  * two suggestions sharing one `stem` in different folders. Content is
  * synthetic; structure, cardinalities and the collision are the real run's.
- * The only edit on vendoring was `schema_version` 1 → 2 (the const moved in
- * Tomo's spec-035 release; the file's daily buckets are empty, so the F9
- * widening does not touch it).
+ * The only edits since vendoring are the version moves: `schema_version` 1 → 2
+ * (Tomo's spec-035 release; the file's daily buckets are empty, so the F9
+ * widening does not touch it) and 2 → 3 with an empty `attachment_conflicts`
+ * (spec 038).
  *
  * What it CANNOT do, and why there is no daily test here: no run Tomo still
  * has exercises `log_links[]`, because their markdown parser dropped every
@@ -20,7 +21,7 @@ import { validate } from "../../../src/schema/suggestions-validator.js";
 import fixture from "../../fixtures/suggestions/namesake-run.json";
 
 describe("namesake fixture (real anonymised Tomo run)", () => {
-	it("validates against the vendored v2 wire", () => {
+	it("validates against the vendored v3 wire", () => {
 		const result = validate(fixture);
 		expect(result.ok, result.ok ? "" : result.message).toBe(true);
 	});

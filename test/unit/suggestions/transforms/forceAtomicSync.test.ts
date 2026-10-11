@@ -31,6 +31,7 @@ const getMockSuggestion = (overrides?: Partial<SuggestionWire>): SuggestionWire 
 	id: "S01",
 	stem: "shared-stem",
 	item_key: SHARED_KEY,
+	attachments: [],
 	title: "Some Note",
 	template: "[[Templates/Atomic]]",
 	location: "202 Notes",
@@ -65,7 +66,8 @@ const getMockDailyUpdate = (overrides?: Partial<DailyUpdateWire>): DailyUpdateWi
 });
 
 const getMockWire = (overrides?: Partial<SuggestionsWire>): SuggestionsWire => ({
-	schema_version: "2",
+	schema_version: "3",
+	attachment_conflicts: [],
 	generated: "2026-07-06T11:15:00Z",
 	run_id: "test-run",
 	profile: "test-profile",

@@ -70,9 +70,12 @@ export interface SuggestionWire {
 	/**
 	 * Read-only passthrough — vault-relative paths of files the source note
 	 * embeds (Tomo spec 031). The editor never edits these; they only have
-	 * to survive the save round-trip.
+	 * to survive the save round-trip. Required since wire v3 (Tomo spec 038):
+	 * it is the join that names the owning notes of an
+	 * `attachment_conflicts[]` entry, so "absent" no longer has to be read as
+	 * "none".
 	 */
-	readonly attachments?: readonly string[];
+	readonly attachments: readonly string[];
 	/** Editable — the note name; the filename derives from it. */
 	readonly title: string;
 	/**
@@ -217,11 +220,41 @@ export interface DailyUpdateWire {
 }
 
 // ---------------------------------------------------------------------------
+// AttachmentConflictWire — an occupied asset destination (Tomo spec 037/038).
+// ---------------------------------------------------------------------------
+
+export type AttachmentConflictRemedy = "rename" | "keep_in_inbox" | "ignore";
+
+/**
+ * One entry per colliding attachment, however many notes embed it — keyed by
+ * `source`, not `item_key`. The owning notes are not carried here; they are
+ * the suggestions whose `attachments` list contains `source`.
+ */
+export interface AttachmentConflictWire {
+	/** Read-only — the colliding attachment's source path; the join key. */
+	readonly source: string;
+	/** Read-only — the vault destination already occupied. */
+	readonly destination: string;
+	/**
+	 * Read-only — whether source and destination are byte-identical. Null
+	 * when Tomo could not compare: not evidence either way.
+	 */
+	readonly same_file: boolean | null;
+	/** Editable — how to resolve the conflict. */
+	readonly remedy: AttachmentConflictRemedy;
+	/**
+	 * Editable — the rename target's basename. Null when Pass 1 found no
+	 * free name.
+	 */
+	readonly proposed_name: string | null;
+}
+
+// ---------------------------------------------------------------------------
 // SuggestionsWire — top-level schema shape (flat; see file header re: `meta`).
 // ---------------------------------------------------------------------------
 
 export interface SuggestionsWire {
-	readonly schema_version: "2";
+	readonly schema_version: "3";
 	readonly generated: string;
 	readonly run_id: string;
 	readonly profile: string;
@@ -232,6 +265,11 @@ export interface SuggestionsWire {
 	readonly proposed_mocs: readonly ProposedMocWire[];
 	readonly daily_updates: readonly DailyUpdateWire[];
 	readonly tag_handler_groups: readonly TagGroupWire[];
+	/**
+	 * Preserved verbatim on save; not editable in the editor yet (#141), so
+	 * Tomo reads its emitted remedy defaults back unchanged.
+	 */
+	readonly attachment_conflicts: readonly AttachmentConflictWire[];
 }
 
 // ---------------------------------------------------------------------------
