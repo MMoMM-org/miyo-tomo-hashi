@@ -125,9 +125,12 @@ The minimum for the editor to replace hand-editing for Pass-1 review: the four d
 
 #### Feature 5: Per-note and per-MOC decision (op 4)
 
-- **User Story:** As the vault owner, I want to approve or skip each note and each proposed MOC so that only what I want is created.
+- **User Story:** As the vault owner, I want to approve or skip each note and each proposed MOC so that only what I want is created — and for an inbox item I am finished with, to discard it without creating a note.
 - **Acceptance Criteria (Gherkin Format):**
-  - [ ] Given a suggestion, When I view its decision control, Then it defaults from worthiness and I can flip it between approve and skip.
+  - [ ] Given a suggestion, When I view its decision control, Then it defaults from worthiness and I can set it to any of **approve**, **skip** or **delete-source**, exclusively.
+  - [ ] Given the delete-source leg, When I select it, Then the editor writes `decision: "skip"` **and** `delete_source: true` — the wire has no third `decision` value, and the flag is the skip leg (Tomo's measured Pass-2 table, handoff 2026-09-29).
+  - [ ] Given a suggestion carrying an armed `delete_source`, When I move it to plain **skip**, Then the flag is cleared — a skip must never delete the source note.
+  - [ ] Given the delete-source leg, When I select it, Then `keep_source` is cleared and its control is disabled on both skip legs — Tomo's Pass 2 does not read `keep_source` for a skipped item, so a live control there would offer a keep that does not keep.
   - [ ] Given a proposed MOC, When I view its decision control, Then it defaults to skip and I must set it to approve for the MOC to be created.
   - [ ] Given only valid choices should be offered, When I set a decision, Then the editor never presents a transition the downstream rebuild would reject.
 

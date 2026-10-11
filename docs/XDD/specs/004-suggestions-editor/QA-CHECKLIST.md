@@ -42,8 +42,9 @@ Worthy note (e.g. **S07**, not suppressed):
 - [ ] Candidate MOCs list shows the 3 candidates; selecting one **clears the others** (re-point).
 - [ ] **+ Add MOC** opens a fuzzy picker over any vault note; the added MOC appears (source = user).
 - [ ] **Set spot…** on a selected candidate opens the SpotPicker (see below).
-- [ ] Keep-source toggle works.
-- [ ] **Decision** is an Approve/Skip **segmented control** with the *current* state highlighted (green = Approve) — confirm S07 reads as **approved** on open (matches its markdown), and toggling flips it.
+- [ ] Keep-source toggle works when the card is **approved**, and greys out (disabled, with a tooltip) on both **Skip** and **Delete source**.
+- [ ] **Decision** is an Approve/Skip/**Delete source** **segmented control** with the *current* state highlighted (green = Approve, red = Delete source) — confirm S07 reads as **approved** on open (matches its markdown), and that each leg activates exclusively.
+- [ ] **Delete source** round-trips: select it, Save, and the saved `.json` reads `decision: "skip"`, `delete_source: true`, `keep_source: false`. Move it back to **Skip** and `delete_source` returns to `false`.
 
 Suppressed note (e.g. **S01 / S05**, worthiness < 0.5):
 - [ ] Card leads with the **origin note name** as a **clickable link** (e.g. `call-vendor · not promoted`) — clicking it opens that source note, so you can tell *which* note it is and jump to it.

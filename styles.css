@@ -974,6 +974,13 @@
 .hashi-se-cbx input {
 	accent-color: var(--se-accent);
 }
+/* Keep-source only applies when the note is created — on either skip leg the
+   disposition decides the source note's fate and Pass 2 never reads the flag,
+   so the control is disabled rather than silently inert. */
+.hashi-se-cbx.is-disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
 
 /* ---- decision segmented control ------------------------------------------ */
 .hashi-se-decision {
@@ -1002,6 +1009,14 @@
 .hashi-se-decision button.hashi-se-skip.is-active {
 	background: var(--se-bg-hover);
 	color: var(--se-text);
+}
+/* Third leg of the suggestion disposition (Approve / Skip / Delete source).
+   Leaf rule only: `.hashi-se-decision` and its base `button` rule are shared
+   with ProposedMocsTab and GardenAuditTab (which dual-classes onto them), so
+   the container and the base must not be touched to add a leg. */
+.hashi-se-decision button.hashi-se-delete.is-active {
+	background: var(--se-red);
+	color: #fff;
 }
 
 /* ---- section label ------------------------------------------------------- */

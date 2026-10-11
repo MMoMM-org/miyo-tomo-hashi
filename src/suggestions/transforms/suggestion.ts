@@ -1,8 +1,16 @@
 /**
  * Suggestion field transforms (T1.3) — pure `EditModel → EditModel` edits for
- * op 1 (candidate-MOC re-point / ＋Add MOC), op 4 (approve/skip decision),
- * and the plain note-editable fields (SDD §5-§6). No Obsidian import, no I/O
- * — the store (T1.9) and view call these directly against in-memory state.
+ * op 1 (candidate-MOC re-point / ＋Add MOC), op 4 (the approve / skip /
+ * delete-source disposition), and the plain note-editable fields (SDD §5-§6).
+ * No Obsidian import, no I/O — the store (T1.9) and view call these directly
+ * against in-memory state.
+ *
+ * One writer per decision (2026-09-29): op 4 is exposed ONLY as
+ * `setDisposition`, never as independent `decision` / `delete_source` setters.
+ * Those two fields are not independent — Tomo's Pass 2 reads `delete_source`
+ * solely under `skip`, so a separate boolean setter can produce a Skip that
+ * deletes or a keep that does not keep. Encoding the measured mapping once,
+ * here, is what makes those states unreachable from the UI.
  *
  * Immutability contract: `SuggestionsWire` is deeply `readonly`, so every
  * transform here spreads/maps into NEW objects/arrays rather than mutating
@@ -96,18 +104,79 @@ export function addMoc(model: EditModel, suggestionId: string, path: string): Ed
 }
 
 // ---------------------------------------------------------------------------
-// op 4 — approve/skip decision
+// op 4 — the disposition tri-state (approve / skip / delete-source)
 // ---------------------------------------------------------------------------
 
-/** Sets the suggestion's approve/skip decision (op 4). No-op if unchanged. */
-export function setDecision(
+/**
+ * The three legs Tomo's suggestions markdown offers per note. NOT a wire
+ * value — `decision` on the wire is only `approve | skip`, and the third leg
+ * is `(skip, delete_source: true)`. See `setDisposition`.
+ */
+export type SuggestionDisposition = "approve" | "skip" | "delete-source";
+
+/**
+ * Reads the leg a suggestion is currently in — the render-side inverse of
+ * `setDisposition`.
+ *
+ * `approve` wins outright: Tomo's builder never reads `delete_source` under
+ * an approved item, so `(approve, delete_source: true)` is an inert state and
+ * reads as plain `approve`. We do NOT normalise that away on load — writing
+ * to the model would set `dirty` on an untouched document and break the
+ * byte-stability that keeps Tomo on the markdown path.
+ */
+export function dispositionOf(suggestion: SuggestionWire): SuggestionDisposition {
+	if (suggestion.decision === "approve") return "approve";
+	return suggestion.delete_source ? "delete-source" : "skip";
+}
+
+/**
+ * Sets the suggestion's disposition (op 4) — the SINGLE writer for the
+ * `decision` / `delete_source` / `keep_source` triple. No-op if unchanged.
+ *
+ * The mapping is Tomo's MEASURED Pass-2 behaviour, not our choice
+ * (`tests/test_delete_source_flag_triple.py`, handoff 2026-09-29):
+ *
+ * | leg             | `decision` | `delete_source` | origin inbox note        |
+ * |-----------------|------------|-----------------|--------------------------|
+ * | `approve`       | approve    | false           | per `keep_source`        |
+ * | `skip`          | skip       | false           | kept, no action emitted  |
+ * | `delete-source` | skip       | true            | deleted                  |
+ *
+ * Three things this function exists to make unreachable:
+ *
+ *  1. **A Skip that deletes.** `delete_source` is the skip leg, so moving to
+ *     plain `skip` MUST clear it — leaving an armed flag would delete the
+ *     origin the user just chose to keep.
+ *  2. **A meaningless flag under approve.** Tomo accepts
+ *     `(approve, delete_source: true)` and ignores it, but told us to write
+ *     `false` there rather than rely on the inertness.
+ *  3. **A "keep" that does not keep.** `build_from_wire` builds a skipped
+ *     entry from `id`/`source_path`/`item_key`/`disposition` — `keep_source`
+ *     never reaches it, so under `skip` the origin is deleted regardless. The
+ *     delete leg therefore clears `keep_source` too, so the saved document
+ *     never carries a contradiction the owner cannot see.
+ */
+export function setDisposition(
 	model: EditModel,
 	suggestionId: string,
-	decision: "approve" | "skip",
+	disposition: SuggestionDisposition,
 ): EditModel {
+	const decision = disposition === "approve" ? "approve" : "skip";
+	const deleteSource = disposition === "delete-source";
+
 	return updateSuggestion(model, suggestionId, (suggestion) => {
-		if (suggestion.decision === decision) return null;
-		return { ...suggestion, decision };
+		const keepSource = deleteSource ? false : suggestion.keep_source;
+		const unchanged =
+			suggestion.decision === decision &&
+			suggestion.delete_source === deleteSource &&
+			suggestion.keep_source === keepSource;
+		if (unchanged) return null;
+		return {
+			...suggestion,
+			decision,
+			delete_source: deleteSource,
+			keep_source: keepSource,
+		};
 	});
 }
 
@@ -154,7 +223,13 @@ export function setTags(
 	});
 }
 
-/** Sets the suggestion's keep-source flag. No-op if unchanged. */
+/**
+ * Sets the suggestion's keep-source flag. No-op if unchanged.
+ *
+ * Only meaningful under the `approve` disposition — Tomo's Pass 2 never reads
+ * this field for a skipped item. The card disables the checkbox on the two
+ * skip legs for that reason; see `setDisposition`.
+ */
 export function setKeepSource(
 	model: EditModel,
 	suggestionId: string,
@@ -163,17 +238,5 @@ export function setKeepSource(
 	return updateSuggestion(model, suggestionId, (suggestion) => {
 		if (suggestion.keep_source === keepSource) return null;
 		return { ...suggestion, keep_source: keepSource };
-	});
-}
-
-/** Sets the suggestion's delete-source flag. No-op if unchanged. */
-export function setDeleteSource(
-	model: EditModel,
-	suggestionId: string,
-	deleteSource: boolean,
-): EditModel {
-	return updateSuggestion(model, suggestionId, (suggestion) => {
-		if (suggestion.delete_source === deleteSource) return null;
-		return { ...suggestion, delete_source: deleteSource };
 	});
 }

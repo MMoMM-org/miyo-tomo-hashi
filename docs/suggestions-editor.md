@@ -9,7 +9,7 @@ the whole run for Pass 2.
 
 > Screenshot — Suggestions tab: the leaf header (run id · profile · item count · Revert / Save), the four-tab strip, one worthy card and one suppressed card.
 <p align="center">
-  <img src="../assets/suggestions-editor-suggestions.png" alt="Suggestions Editor — Suggestions tab. Header shows the run id, profile miyo, 34 items, and Revert/Save buttons. Tab strip: Daily 9, Suggestions 30 (active), Proposed MOCs 1, Tag-Handler 1. A worthy card with title, Approve/Skip, Template, Location, Keep source file, tags, and a Link to a MOC list with a selected candidate and its callout anchor chip. Below it a suppressed card for Furano with a grey summary line, 20% worthiness, the daily-log hint, and a checked Force Atomic Note box." width="720" />
+  <img src="../assets/suggestions-editor-suggestions.png" alt="Suggestions Editor — Suggestions tab. Header shows the run id, profile miyo, 34 items, and Revert/Save buttons. Tab strip: Daily 9, Suggestions 30 (active), Proposed MOCs 1, Tag-Handler 1. A worthy card with title, Approve/Skip/Delete source, Template, Location, Keep source file, tags, and a Link to a MOC list with a selected candidate and its callout anchor chip. Below it a suppressed card for Furano with a grey summary line, 20% worthiness, the daily-log hint, and a checked Force Atomic Note box." width="720" />
 </p>
 
 ## Opening it
@@ -37,8 +37,9 @@ count) so nothing is hidden.
 One card per proposed atomic note, in two modes decided by Tomo's worthiness scoring:
 
 - **Worthy** cards carry the full editable surface: the note **title** (the filename
-  derives from it), an **Approve / Skip** decision, **Template** and **Location** pickers,
-  a **Keep source file** toggle, editable **tags**, and a **Link to a MOC** section. Each
+  derives from it), an **Approve / Skip / Delete source** decision, **Template** and
+  **Location** pickers, a **Keep source file** toggle, editable **tags**, and a
+  **Link to a MOC** section. Each
   candidate MOC is an independent checkbox; a selected one exposes an anchor chip
   (`type · value · placement`, e.g. `callout · [!anchor] Overview · after`) that opens the
   spot picker to choose exactly where the link lands. **+ Add MOC…** fuzzy-adds any vault
@@ -50,6 +51,29 @@ One card per proposed atomic note, in two modes decided by Tomo's worthiness sco
 
 A grey one-sentence **summary** leads each card — an analyst-authored gist of what the
 note is about, so you can decide without opening the source.
+
+#### The three-way decision, and what happens to the source note
+
+The decision segment mirrors the tri-state Tomo's `_suggestions.md` offers, and the three
+legs are mutually exclusive:
+
+| Leg | The atomic note | The source note in the inbox |
+|---|---|---|
+| **Approve** | created | consumed, unless **Keep source file** is ticked |
+| **Skip** | not created | left in the inbox |
+| **Delete source** | not created | **deleted** |
+
+**Delete source** is for an inbox item you have finished with but do not want as a note —
+a captured scrap you have read, or a duplicate. It is the only leg that removes a file
+without producing anything, so it is styled red.
+
+**Keep source file** greys out on both skip legs. That is not a UI quirk: Tomo's Pass 2
+does not read the flag for a note it is not creating, so on those legs the decision above
+is the only thing that governs the source note's fate. A live checkbox there would offer
+a "keep" that does not keep.
+
+Deletion honours your Obsidian **Files & Links → Deleted files** preference; if that is set
+to *Permanently delete*, Hashi warns you once, the first time a run contains a deletion.
 
 #### Force Atomic and the daily-log indicator
 

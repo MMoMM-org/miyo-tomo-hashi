@@ -7,10 +7,11 @@
  * `styles.css` rules apply unmodified.
  *
  * - **worthy** (`suppressed:false`) — the full note-editable surface: title
- *   (free text), a two-button Approve/Skip decision segment, template
- *   (`TemplatePicker`), location (`LocationPicker`), keep-source, tags (list
- *   + `TagPicker` add), candidate MOCs (independent per-candidate toggle +
- *   per-candidate `SpotPicker` + `＋ Add MOC` via `MocPicker`).
+ *   (free text), a three-button Approve / Skip / Delete-source disposition
+ *   segment, template (`TemplatePicker`), location (`LocationPicker`),
+ *   keep-source (disabled on both skip legs), tags (list + `TagPicker` add),
+ *   candidate MOCs (independent per-candidate toggle + per-candidate
+ *   `SpotPicker` + `＋ Add MOC` via `MocPicker`).
  * - **suppressed** (`suppressed:true`) — a clickable link to the origin note
  *   (its `stem`, via `renderNoteLink`) so the user can tell WHICH note the
  *   card is about and open it; the editable atomic-title input; a worthiness
@@ -30,10 +31,15 @@
  *      `setTitle`) below it. The skip hint is now conditional on whether a
  *      daily-log entry was proposed for the stem.
  *   2. The prior single-button decision toggle didn't show which state was
- *      current. Fixed: `hashi-se-decision` is now a two-button segmented
- *      control (Approve / Skip), and whichever button matches
- *      `suggestion.decision` gets an `is-active` class — the current state
- *      is visibly highlighted (green for approve, via CSS).
+ *      current. Fixed: `hashi-se-decision` is a segmented control, and
+ *      whichever button matches the suggestion's current leg gets an
+ *      `is-active` class — the state is visibly highlighted (green for
+ *      approve, red for delete-source, via CSS).
+ *   3. `delete_source` had no control at all, so the third leg of Tomo's
+ *      markdown tri-state was unreachable here — and because our save
+ *      regenerates the markdown body from the JSON, a tick made upstream was
+ *      destroyed rather than merely ignored (Tomo handoff 2026-09-29, #140).
+ *      Fixed: the segment has three legs and `setDisposition` owns the triple.
  *
  * Plain render function, not an Obsidian `Component` — the view rebuilds
  * this tab's whole DOM subtree on every re-render (`ctx.apply` triggers a
@@ -57,12 +63,14 @@ import { type App, setIcon, TFile } from "obsidian";
 import { setForceAtomicFromSuggestion } from "../../../suggestions/transforms/forceAtomicSync.js";
 import {
 	addMoc,
-	setDecision,
+	dispositionOf,
+	setDisposition,
 	setKeepSource,
 	setLocation,
 	setTags,
 	setTemplate,
 	setTitle,
+	type SuggestionDisposition,
 	toggleCandidateMoc,
 } from "../../../suggestions/transforms/suggestion.js";
 import type {
@@ -321,16 +329,25 @@ export class SuggestionsTab implements EditorTab {
 		});
 
 		const decisionField = row.createDiv({ cls: "hashi-se-field" });
-		decisionField.createEl("label", { text: "Create?" });
+		decisionField.createEl("label", { text: "Source note" });
 		this.renderDecisionControl(decisionField, suggestion, ctx);
 	}
 
 	/**
-	 * Bug fix 2 — segmented Approve/Skip control, `is-active` (visual) AND
-	 * `aria-pressed` (assistive-tech state) on the current decision. Matches
+	 * The disposition segment — Approve / Skip / Delete source, mirroring the
+	 * tri-state Tomo's suggestions markdown offers. `is-active` (visual) AND
+	 * `aria-pressed` (assistive-tech state) on the current leg, matching
 	 * TagHandlerTab's `setDecisionState` convention (`aria-pressed` mirrors
-	 * `is-active` on both buttons, not just the active one) rather than
-	 * inventing a second pattern for the same toggle-pair shape.
+	 * `is-active` on every button, not just the active one) rather than
+	 * inventing a second pattern for the same shape.
+	 *
+	 * The three legs are EXCLUSIVE by construction, which is the point: each
+	 * writes the whole `(decision, delete_source, keep_source)` triple through
+	 * the single `setDisposition` writer. "Delete source" is not a third
+	 * `decision` value (the wire has only `approve`/`skip`) and not a flag flip
+	 * on an approved item (Tomo never reads it there) — it is
+	 * `(skip, delete_source: true)`. See `setDisposition` for the measured
+	 * table behind that.
 	 */
 	private renderDecisionControl(
 		container: HTMLElement,
@@ -338,26 +355,23 @@ export class SuggestionsTab implements EditorTab {
 		ctx: TabContext,
 	): void {
 		const control = container.createDiv({ cls: "hashi-se-decision" });
+		const current = dispositionOf(suggestion);
 
-		const approveActive = suggestion.decision === "approve";
-		const approve = control.createEl("button", {
-			cls: approveActive ? ["hashi-se-approve", "is-active"] : ["hashi-se-approve"],
-			text: "Approve",
-			attr: { type: "button", "aria-pressed": String(approveActive) },
-		});
-		approve.addEventListener("click", () => {
-			ctx.apply((model) => setDecision(model, suggestion.id, "approve"));
-		});
+		const leg = (cls: string, text: string, disposition: SuggestionDisposition): void => {
+			const active = current === disposition;
+			const button = control.createEl("button", {
+				cls: active ? [cls, "is-active"] : [cls],
+				text,
+				attr: { type: "button", "aria-pressed": String(active) },
+			});
+			button.addEventListener("click", () => {
+				ctx.apply((model) => setDisposition(model, suggestion.id, disposition));
+			});
+		};
 
-		const skipActive = suggestion.decision === "skip";
-		const skip = control.createEl("button", {
-			cls: skipActive ? ["hashi-se-skip", "is-active"] : ["hashi-se-skip"],
-			text: "Skip",
-			attr: { type: "button", "aria-pressed": String(skipActive) },
-		});
-		skip.addEventListener("click", () => {
-			ctx.apply((model) => setDecision(model, suggestion.id, "skip"));
-		});
+		leg("hashi-se-approve", "Approve", "approve");
+		leg("hashi-se-skip", "Skip", "skip");
+		leg("hashi-se-delete", "Delete source", "delete-source");
 	}
 
 	private renderMetaRow(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {
@@ -405,15 +419,32 @@ export class SuggestionsTab implements EditorTab {
 		});
 	}
 
+	/**
+	 * Keep-source is only meaningful when the note is created. Tomo's Pass 2
+	 * builds a skipped entry without ever reading `keep_source`, so under
+	 * either skip leg the origin's fate is decided by the disposition alone —
+	 * a live checkbox there would offer the owner a "keep" that does not keep.
+	 * Disabled rather than hidden: the setting stays visible, with the reason
+	 * in its tooltip, instead of the row silently changing shape.
+	 */
 	private renderKeepSourceField(
 		row: HTMLElement,
 		suggestion: SuggestionWire,
 		ctx: TabContext,
 	): void {
+		const applies = dispositionOf(suggestion) === "approve";
 		const label = row.createEl("label", { cls: "hashi-se-cbx" });
 		const checkbox = label.createEl("input", { attr: { type: "checkbox" } });
 		checkbox.checked = suggestion.keep_source;
+		checkbox.disabled = !applies;
 		label.createSpan({ text: "Keep source file" });
+		if (!applies) {
+			label.addClass("is-disabled");
+			label.setAttribute(
+				"title",
+				"Only applies when the note is created — the disposition above decides the source note's fate.",
+			);
+		}
 		checkbox.addEventListener("change", () => {
 			const checked = checkbox.checked;
 			ctx.apply((model) => setKeepSource(model, suggestion.id, checked));

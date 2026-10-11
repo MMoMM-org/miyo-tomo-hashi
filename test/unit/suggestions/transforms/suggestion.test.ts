@@ -13,8 +13,8 @@
 import { describe, expect, it } from "vitest";
 import {
 	addMoc,
-	setDecision,
-	setDeleteSource,
+	dispositionOf,
+	setDisposition,
 	setKeepSource,
 	setLocation,
 	setTags,
@@ -282,47 +282,185 @@ describe("addMoc (op 1 ＋Add MOC)", () => {
 	});
 });
 
-describe("setDecision (op 4 approve/skip)", () => {
-	it("flips skip to approve and sets dirty", () => {
+describe("setDisposition (op 4 — the approve/skip/delete-source tri-state)", () => {
+	it("writes the approve triple and sets dirty", () => {
 		const model = getMockModel({
 			doc: getMockDoc({ suggestions: [getMockSuggestion({ id: "S01", decision: "skip" })] }),
 		});
 
-		const result = setDecision(model, "S01", "approve");
+		const result = setDisposition(model, "S01", "approve");
 
-		expect(findSuggestion(result, "S01")?.decision).toBe("approve");
+		const s = findSuggestion(result, "S01");
+		expect(s?.decision).toBe("approve");
+		expect(s?.delete_source).toBe(false);
 		expect(result.dirty).toBe(true);
 	});
 
-	it("flips approve to skip and sets dirty", () => {
+	it("writes the skip triple and sets dirty", () => {
 		const model = getMockModel({
 			doc: getMockDoc({ suggestions: [getMockSuggestion({ id: "S01", decision: "approve" })] }),
 		});
 
-		const result = setDecision(model, "S01", "skip");
+		const result = setDisposition(model, "S01", "skip");
 
-		expect(findSuggestion(result, "S01")?.decision).toBe("skip");
+		const s = findSuggestion(result, "S01");
+		expect(s?.decision).toBe("skip");
+		expect(s?.delete_source).toBe(false);
 		expect(result.dirty).toBe(true);
 	});
 
-	it("is a no-op (unchanged, dirty false) when setting the same decision", () => {
+	it("writes the delete-source triple as (skip, delete_source true) — NOT a third decision value", () => {
 		const model = getMockModel({
 			doc: getMockDoc({ suggestions: [getMockSuggestion({ id: "S01", decision: "approve" })] }),
 		});
 
-		const result = setDecision(model, "S01", "approve");
+		const result = setDisposition(model, "S01", "delete-source");
 
-		expect(result).toBe(model);
-		expect(result.dirty).toBe(false);
+		const s = findSuggestion(result, "S01");
+		expect(s?.decision).toBe("skip");
+		expect(s?.delete_source).toBe(true);
+		expect(result.dirty).toBe(true);
+	});
+
+	// Tomo's measured table: delete_source is the skip leg, so moving to plain
+	// Skip MUST disarm it. Leaving it set would delete the origin the owner just
+	// chose to keep — the whole reason a single writer owns the triple.
+	it("moving to Skip disarms an armed delete_source", () => {
+		const model = getMockModel({
+			doc: getMockDoc({
+				suggestions: [getMockSuggestion({ id: "S01", decision: "skip", delete_source: true })],
+			}),
+		});
+
+		const result = setDisposition(model, "S01", "skip");
+
+		expect(findSuggestion(result, "S01")?.delete_source).toBe(false);
+		expect(result.dirty).toBe(true);
+	});
+
+	// build_from_wire builds a skipped entry without reading keep_source, so a
+	// surviving `keep_source: true` here would be a keep that does not keep.
+	it("the delete-source leg clears keep_source so the saved doc carries no contradiction", () => {
+		const model = getMockModel({
+			doc: getMockDoc({
+				suggestions: [getMockSuggestion({ id: "S01", decision: "skip", keep_source: true })],
+			}),
+		});
+
+		const result = setDisposition(model, "S01", "delete-source");
+
+		const s = findSuggestion(result, "S01");
+		expect(s?.keep_source).toBe(false);
+		expect(s?.delete_source).toBe(true);
+	});
+
+	// Tomo accepts (approve, delete_source true) and ignores it, but asked us to
+	// write false rather than rely on the inertness.
+	it("the approve leg clears an inert delete_source rather than relying on Pass 2 ignoring it", () => {
+		const model = getMockModel({
+			doc: getMockDoc({
+				suggestions: [getMockSuggestion({ id: "S01", decision: "approve", delete_source: true })],
+			}),
+		});
+
+		const result = setDisposition(model, "S01", "approve");
+
+		expect(findSuggestion(result, "S01")?.delete_source).toBe(false);
+		expect(result.dirty).toBe(true);
+	});
+
+	it("preserves keep_source on the approve and skip legs", () => {
+		const model = getMockModel({
+			doc: getMockDoc({
+				suggestions: [getMockSuggestion({ id: "S01", decision: "skip", keep_source: true })],
+			}),
+		});
+
+		expect(findSuggestion(setDisposition(model, "S01", "approve"), "S01")?.keep_source).toBe(true);
+		expect(setDisposition(model, "S01", "skip")).toBe(model);
+	});
+
+	it("is a no-op (same reference, dirty false) for each leg already in effect", () => {
+		const approved = getMockModel({
+			doc: getMockDoc({
+				suggestions: [getMockSuggestion({ id: "S01", decision: "approve", delete_source: false })],
+			}),
+		});
+		expect(setDisposition(approved, "S01", "approve")).toBe(approved);
+
+		const skipped = getMockModel({
+			doc: getMockDoc({
+				suggestions: [getMockSuggestion({ id: "S01", decision: "skip", delete_source: false })],
+			}),
+		});
+		expect(setDisposition(skipped, "S01", "skip")).toBe(skipped);
+
+		const deleting = getMockModel({
+			doc: getMockDoc({
+				suggestions: [
+					getMockSuggestion({
+						id: "S01",
+						decision: "skip",
+						delete_source: true,
+						keep_source: false,
+					}),
+				],
+			}),
+		});
+		expect(setDisposition(deleting, "S01", "delete-source")).toBe(deleting);
 	});
 
 	it("rejects (returns the model unchanged) for an unknown suggestionId", () => {
 		const model = getMockModel();
 
-		const result = setDecision(model, "S99", "approve");
+		expect(setDisposition(model, "S99", "approve")).toBe(model);
+		expect(setDisposition(model, "S99", "delete-source")).toBe(model);
+		expect(model.dirty).toBe(false);
+	});
+});
 
-		expect(result).toBe(model);
-		expect(result.dirty).toBe(false);
+describe("dispositionOf (the render-side inverse)", () => {
+	it("reads each leg back from the triple it was written as", () => {
+		expect(dispositionOf(getMockSuggestion({ decision: "approve", delete_source: false }))).toBe(
+			"approve",
+		);
+		expect(dispositionOf(getMockSuggestion({ decision: "skip", delete_source: false }))).toBe(
+			"skip",
+		);
+		expect(dispositionOf(getMockSuggestion({ decision: "skip", delete_source: true }))).toBe(
+			"delete-source",
+		);
+	});
+
+	// Pass 2 never reads delete_source under an approved item, so this state is
+	// inert rather than contradictory. It must read as plain approve — and it is
+	// deliberately NOT normalised away, which would dirty an untouched document.
+	it("reads an inert (approve, delete_source true) as approve", () => {
+		expect(dispositionOf(getMockSuggestion({ decision: "approve", delete_source: true }))).toBe(
+			"approve",
+		);
+	});
+
+	it("is unaffected by keep_source on every leg", () => {
+		expect(
+			dispositionOf(getMockSuggestion({ decision: "skip", delete_source: true, keep_source: true })),
+		).toBe("delete-source");
+		expect(
+			dispositionOf(
+				getMockSuggestion({ decision: "approve", delete_source: false, keep_source: true }),
+			),
+		).toBe("approve");
+	});
+
+	it("round-trips every leg through setDisposition", () => {
+		const legs = ["approve", "skip", "delete-source"] as const;
+		for (const leg of legs) {
+			const model = getMockModel({
+				doc: getMockDoc({ suggestions: [getMockSuggestion({ id: "S01", decision: "approve" })] }),
+			});
+			const next = setDisposition(model, "S01", leg);
+			expect(dispositionOf(findSuggestion(next, "S01")!)).toBe(leg);
+		}
 	});
 });
 
@@ -403,20 +541,6 @@ describe("note-field transforms", () => {
 		expect(unchanged.dirty).toBe(false);
 	});
 
-	it("setDeleteSource flips delete_source and sets dirty; same value is a no-op", () => {
-		const model = getMockModel({
-			doc: getMockDoc({ suggestions: [getMockSuggestion({ id: "S01", delete_source: false })] }),
-		});
-
-		const changed = setDeleteSource(model, "S01", true);
-		expect(findSuggestion(changed, "S01")?.delete_source).toBe(true);
-		expect(changed.dirty).toBe(true);
-
-		const unchanged = setDeleteSource(model, "S01", false);
-		expect(unchanged).toBe(model);
-		expect(unchanged.dirty).toBe(false);
-	});
-
 	it("rejects (returns the model unchanged) for an unknown suggestionId across all note-field setters", () => {
 		const model = getMockModel();
 
@@ -425,7 +549,6 @@ describe("note-field transforms", () => {
 		expect(setLocation(model, "S99", "x")).toBe(model);
 		expect(setTags(model, "S99", ["x"])).toBe(model);
 		expect(setKeepSource(model, "S99", true)).toBe(model);
-		expect(setDeleteSource(model, "S99", true)).toBe(model);
 	});
 });
 
@@ -445,7 +568,7 @@ describe("immutability across all transforms", () => {
 		const originalSuggestions = model.doc.suggestions;
 
 		setTitle(model, "S01", "Changed");
-		setDecision(model, "S01", "approve");
+		setDisposition(model, "S01", "approve");
 		toggleCandidateMoc(model, "S01", "Atlas/A.md");
 		addMoc(model, "S01", "Atlas/New.md");
 
