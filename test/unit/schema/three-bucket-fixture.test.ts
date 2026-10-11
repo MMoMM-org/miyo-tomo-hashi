@@ -9,7 +9,8 @@
  * three notes driving the daily buckets were script-generated for this purpose
  * and the rest of the corpus is the 034 test vault, so — unlike
  * `namesake-run.json` — there is no redaction that could have failed. Vendored
- * verbatim: it arrives at `schema_version: 2` and needed no edit at all.
+ * verbatim at `schema_version: 2`; the wire-v3 move (Tomo spec 038) added only
+ * `schema_version: 3` and an empty `attachment_conflicts`.
  *
  * What it exists to hold:
  *   1. All three daily buckets non-empty (trackers 09-08, log entries
@@ -40,7 +41,7 @@ function stemOf(itemKey: string): string {
 }
 
 describe("three-bucket fixture (Tomo run 2026-09-14T12-34-09Z-e048aa)", () => {
-	it("validates against the vendored v2 wire", () => {
+	it("validates against the vendored v3 wire", () => {
 		const result = validate(fixture);
 		expect(result.ok, result.ok ? "" : result.message).toBe(true);
 	});

@@ -19,6 +19,7 @@ const VALID_SUGGESTION: SuggestionWire = {
 	id: "S01",
 	stem: "2026-07-01_some-note",
 	item_key: "100 Inbox/2026-07-01_some-note.md",
+	attachments: [],
 	title: "Some Note",
 	template: "[[Templates/Atomic]]",
 	location: "202 Notes",
@@ -65,7 +66,8 @@ const VALID_TAG_GROUP: TagGroupWire = {
 };
 
 const VALID_FIXTURE: SuggestionsWire = {
-	schema_version: "2",
+	schema_version: "3",
+	attachment_conflicts: [],
 	generated: "2026-07-06T10:00:00Z",
 	run_id: "2026-07-06_1000",
 	profile: "default",
@@ -82,11 +84,11 @@ const VALID_FIXTURE: SuggestionsWire = {
 // ---------------------------------------------------------------------------
 
 describe("validate (suggestions wire)", () => {
-	it("accepts a schema_version '2' doc and returns a typed SuggestionsWire", () => {
+	it("accepts a schema_version '3' doc and returns a typed SuggestionsWire", () => {
 		const result = validate(VALID_FIXTURE);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
-			expect(result.data.schema_version).toBe("2");
+			expect(result.data.schema_version).toBe("3");
 			expect(result.data.suggestions).toHaveLength(1);
 			expect(result.data.daily_updates[0]?.log_entries[0]?.content).toBe(
 				"Did the thing.",
@@ -94,16 +96,16 @@ describe("validate (suggestions wire)", () => {
 		}
 	});
 
-	it("rejects schema_version '3' with the fail-loud version-mismatch message", () => {
+	it("rejects schema_version '2' (a pre-038 Tomo) with the fail-loud version-mismatch message", () => {
 		// Mirrors the executor precedent (src/schema/validator.ts M14): the
 		// literal "Schema version mismatch — expected X, got Y" form is
 		// parsed downstream to drive an "upgrade" prompt — never a silent
 		// pass-through of an unknown version.
-		const result = validate({ ...VALID_FIXTURE, schema_version: "3" });
+		const result = validate({ ...VALID_FIXTURE, schema_version: "2" });
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.message).toBe(
-				"Schema version mismatch — expected 2, got 3",
+				"Schema version mismatch — expected 3, got 2",
 			);
 		}
 	});
@@ -138,7 +140,8 @@ describe("validate (suggestions wire)", () => {
 	// spec 034 added `item_key` to suggestions[] without moving
 	// schema_version, so every current run was rejected by
 	// additionalProperties:false. Both are vendored EXACTLY as Tomo declares
-	// them — item_key required, attachments optional. The two sides pin ONE
+	// them — item_key required, and attachments required since wire v3 (Tomo
+	// spec 038), where it became the join for attachment_conflicts[]. The two sides pin ONE
 	// schema; updating one without the other is meant to fail loud rather
 	// than degrade quietly.
 	// -----------------------------------------------------------------------
@@ -170,8 +173,11 @@ describe("validate (suggestions wire)", () => {
 		if (!result.ok) expect(result.message).toContain("item_key");
 	});
 
-	it("accepts a suggestion without attachments (still optional — Tomo does not require it)", () => {
-		expect(validate(VALID_FIXTURE).ok).toBe(true);
+	it("rejects a suggestion without attachments (required since wire v3)", () => {
+		const { attachments: _dropped, ...withoutAttachments } = VALID_SUGGESTION;
+		const result = validate({ ...VALID_FIXTURE, suggestions: [withoutAttachments] });
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.message).toContain("attachments");
 	});
 
 	it("preserves item_key and attachments on the validated doc (save round-trip)", () => {

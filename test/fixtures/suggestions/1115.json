@@ -1,5 +1,5 @@
 {
-  "schema_version": "2",
+  "schema_version": "3",
   "generated": "2026-07-06T11:15:02Z",
   "run_id": "2026-07-06T11-07-59Z-948750",
   "profile": "miyo",
@@ -22,7 +22,8 @@
       "suppressed": true,
       "worthiness": 0.2,
       "candidate_mocs": [],
-      "item_key": "100 Inbox/call-vendor.md"
+      "item_key": "100 Inbox/call-vendor.md",
+      "attachments": []
     },
     {
       "id": "S02",
@@ -42,7 +43,8 @@
       "suppressed": true,
       "worthiness": 0.4,
       "candidate_mocs": [],
-      "item_key": "100 Inbox/deliberate-practice.md"
+      "item_key": "100 Inbox/deliberate-practice.md",
+      "attachments": []
     },
     {
       "id": "S03",
@@ -61,7 +63,8 @@
       "suppressed": true,
       "worthiness": 0.4,
       "candidate_mocs": [],
-      "item_key": "100 Inbox/idea-capture.md"
+      "item_key": "100 Inbox/idea-capture.md",
+      "attachments": []
     },
     {
       "id": "S04",
@@ -80,7 +83,8 @@
       "suppressed": true,
       "worthiness": 0.4,
       "candidate_mocs": [],
-      "item_key": "100 Inbox/interleaving.md"
+      "item_key": "100 Inbox/interleaving.md",
+      "attachments": []
     },
     {
       "id": "S05",
@@ -99,7 +103,8 @@
       "suppressed": true,
       "worthiness": 0.2,
       "candidate_mocs": [],
-      "item_key": "100 Inbox/quick-thought.md"
+      "item_key": "100 Inbox/quick-thought.md",
+      "attachments": []
     },
     {
       "id": "S06",
@@ -118,7 +123,8 @@
       "suppressed": true,
       "worthiness": 0.4,
       "candidate_mocs": [],
-      "item_key": "100 Inbox/spaced-repetition.md"
+      "item_key": "100 Inbox/spaced-repetition.md",
+      "attachments": []
     },
     {
       "id": "S07",
@@ -156,7 +162,8 @@
           "source": "tomo"
         }
       ],
-      "item_key": "100 Inbox/zettelkasten-method.md"
+      "item_key": "100 Inbox/zettelkasten-method.md",
+      "attachments": []
     }
   ],
   "proposed_mocs": [],
@@ -210,5 +217,6 @@
       "preview": "| 2026-06-29 | feature | Sample capture entry for the project log |"
     }
   ],
-  "emit_digest": "sha256:3d529ddda3f54df9b785c1e04e360c1d444fb73213543291bbbc5a75eda8017b"
+  "emit_digest": "sha256:3d529ddda3f54df9b785c1e04e360c1d444fb73213543291bbbc5a75eda8017b",
+  "attachment_conflicts": []
 }
