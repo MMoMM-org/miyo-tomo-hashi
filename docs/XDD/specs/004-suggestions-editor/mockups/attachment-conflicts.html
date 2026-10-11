@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Attachment Conflicts Mockup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  /* ============================================================
+     Suggestions Editor — attachments + attachment-conflict control
+     (issue #141, wire v3). Extends suggestions-editor.html: same
+     tokens, same card anatomy; only the Attachments section is new.
+     Data is Tomo's spec-038 Run A plus two labelled hypotheticals.
+     ============================================================ */
+  :root {
+    --bg:#ffffff; --bg-alt:#f5f4f8; --bg-elev:#ffffff; --bg-input:#fbfbfd; --bg-hover:#f0eef6;
+    --border:#e4e1ec; --border-strong:#cecad9; --text:#2b2a33; --text-muted:#6b6979; --text-faint:#9c99ab;
+    --accent:#7c5cf0; --accent-soft:#ede7ff; --green:#2f9e6a; --green-soft:#e2f4ec; --amber:#b7791f; --amber-soft:#fbf1df; --red:#c0504e;
+    --shadow:0 1px 2px rgba(30,25,60,.06),0 8px 24px rgba(30,25,60,.08);
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --r:8px; --r-sm:6px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#1e1d21; --bg-alt:#191818; --bg-elev:#252429; --bg-input:#1a191d; --bg-hover:#2b2a31;
+      --border:#34323c; --border-strong:#46434f; --text:#dcdce1; --text-muted:#9a98a6; --text-faint:#6b6976;
+      --accent:#a78bfa; --accent-soft:#2c2542; --green:#56b98a; --green-soft:#1e3830; --amber:#d9a441; --amber-soft:#3a3020; --red:#d97a7a;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#1e1d21; --bg-alt:#191818; --bg-elev:#252429; --bg-input:#1a191d; --bg-hover:#2b2a31;
+    --border:#34323c; --border-strong:#46434f; --text:#dcdce1; --text-muted:#9a98a6; --text-faint:#6b6976;
+    --accent:#a78bfa; --accent-soft:#2c2542; --green:#56b98a; --green-soft:#1e3830; --amber:#d9a441; --amber-soft:#3a3020; --red:#d97a7a;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:var(--ui); background:var(--bg-alt); color:var(--text); line-height:1.5; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 16px 80px; }
+  .masthead { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:18px; }
+  .eyebrow { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); font-weight:650; margin-bottom:6px; }
+  h1 { font-size:22px; font-weight:650; margin:0; }
+  .sub { color:var(--text-muted); font-size:14px; margin-top:4px; max-width:62ch; }
+  .ghost-btn { font-family:inherit; font-size:12.5px; font-weight:550; color:var(--text-muted); background:var(--bg); border:1px solid var(--border); padding:7px 12px; border-radius:var(--r-sm); cursor:pointer; }
+  .scenario { margin: 26px 2px 8px; font-size: 13px; color: var(--text-muted); }
+  .scenario b { color: var(--text); }
+  .hypo { font-size:10px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; color:var(--amber); border:1px solid color-mix(in srgb, var(--amber) 45%, var(--border)); border-radius:4px; padding:1px 6px; margin-left:6px; }
+
+  /* ---- card anatomy (as in suggestions-editor.html) ---- */
+  .card { background:var(--bg-elev); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow); margin-bottom:12px; overflow:hidden; }
+  .card.suppressed { border-left:3px solid var(--text-faint); }
+  .card-top { padding:12px 13px; }
+  .row1 { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
+  .field { display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .field > label { font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-faint); font-weight:600; }
+  .inp { font-family:inherit; font-size:13px; color:var(--text); background:var(--bg-input); border:1px solid var(--border); border-radius:var(--r-sm); padding:5px 9px; min-width:0; }
+  .inp:focus { outline:2px solid var(--accent); outline-offset:-1px; border-color:var(--accent); }
+  .inp.name { font-weight:600; }
+  .inp.mono { font-family:var(--mono); font-size:12.5px; }
+  .inp.invalid { border-color:var(--red); }
+  .seg { display:inline-flex; border:1px solid var(--border); border-radius:var(--r-sm); overflow:hidden; flex:none; }
+  .seg button { font-family:inherit; font-size:12px; font-weight:600; padding:5px 12px; border:0; background:var(--bg-input); color:var(--text-muted); cursor:pointer; }
+  .seg button + button { border-left:1px solid var(--border); }
+  .seg button.approve[aria-pressed="true"] { background:var(--green); color:#fff; }
+  .seg button.skip[aria-pressed="true"] { background:var(--bg-hover); color:var(--text); }
+  .seg button.delete[aria-pressed="true"] { background:var(--red); color:#fff; }
+  .seg button.pick[aria-pressed="true"] { background:var(--accent); color:#fff; }
+  .seg button:disabled { opacity:.45; cursor:not-allowed; }
+  .muted { color:var(--text-faint); font-weight:400; }
+  .worthiness { display:flex; flex-direction:column; align-items:flex-end; flex:none; margin-left:auto; }
+  .worthiness .wv { font-size:15px; font-weight:700; color:var(--red); font-variant-numeric:tabular-nums; }
+  .worthiness .wl { font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-faint); }
+  .suppressed-note { font-size:12px; color:var(--text-muted); margin:9px 0 10px; }
+  .force-atomic { display:flex; align-items:center; gap:8px; font-size:12.5px; cursor:pointer; }
+  .force-atomic input, .cbx input { accent-color:var(--accent); }
+  .elided { font-size:11.5px; color:var(--text-faint); font-style:italic; margin-top:10px; }
+  .sec-label { font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--text-muted); font-weight:600; padding:10px 13px 4px; border-top:1px solid var(--border); }
+
+  /* ---- NEW: attachments section ---- */
+  .att { padding:7px 13px 9px; }
+  .att + .att { border-top:1px dashed var(--border); }
+  .att-line { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-family:var(--mono); font-size:12px; }
+  .att-line .dir { color:var(--text-faint); }
+  .att-line .fate { font-family:var(--ui); font-size:11px; color:var(--text-faint); margin-left:auto; }
+  .badge { font-family:var(--ui); font-size:9.5px; letter-spacing:.05em; text-transform:uppercase; font-weight:700; border-radius:3px; padding:1px 6px; }
+  .badge.conflict { color:var(--amber); background:var(--amber-soft); }
+  .badge.shared { color:var(--accent); background:var(--accent-soft); }
+  .conflict-box { margin-top:8px; border:1px solid color-mix(in srgb, var(--amber) 40%, var(--border)); background:color-mix(in srgb, var(--amber-soft) 55%, var(--bg-elev)); border-radius:var(--r-sm); padding:9px 11px; }
+  .occupied { font-size:12px; color:var(--text-muted); }
+  .occupied code { font-family:var(--mono); font-size:11.5px; color:var(--text); }
+  .same { font-size:11.5px; color:var(--text-muted); margin-top:2px; }
+  .remedy-row { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-top:9px; }
+  .rename { flex:1; min-width:200px; }
+  .feedback { font-size:11.5px; margin-top:4px; min-height:1.2em; }
+  .feedback.info { color:var(--text-muted); }
+  .feedback.info b { font-family:var(--mono); font-weight:600; color:var(--text); }
+  .feedback.warn { color:var(--amber); }
+  .feedback.err { color:var(--red); }
+  .remedy-hint { font-size:11.5px; color:var(--text-muted); margin-top:6px; }
+  .inert { font-size:11.5px; color:var(--text-faint); font-style:italic; margin-top:6px; }
+
+  .explain { margin-top:26px; padding:16px 18px; border:1px solid var(--border); border-radius:var(--r); background:var(--bg); font-size:13px; color:var(--text-muted); }
+  .explain h4 { margin:0 0 8px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--text); }
+  .explain ul { margin:0; padding-left:18px; } .explain li { margin:5px 0; }
+  .explain code { font-family:var(--mono); font-size:12px; background:var(--bg-alt); border:1px solid var(--border); border-radius:4px; padding:0 4px; color:var(--text); }
+  .explain .q { color:var(--amber); font-weight:600; }
+  @media (max-width: 560px) { .att-line .fate { margin-left:0; width:100%; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="masthead">
+    <div>
+      <div class="eyebrow">Hashi · Suggestions Editor · #141</div>
+      <h1>Attachments &amp; conflict remedy</h1>
+      <p class="sub">Each card gains an <b>Attachments</b> section built from <code>suggestions[].attachments</code>. An attachment whose destination is taken carries Tomo's <code>attachment_conflicts</code> entry inline, with its remedy and rename target. Try typing in the rename field: <code>karte#1938.png</code>, <code>  a:b.png </code>, <code>karte.png</code>, or clear it.</p>
+    </div>
+    <button class="ghost-btn" id="theme">Toggle theme</button>
+  </div>
+  <div id="app"></div>
+
+  <div class="explain">
+    <h4>Rules shown</h4>
+    <ul>
+      <li><b>Every card lists its attachments</b>, worthy and suppressed alike, read-only. This is useful even with no conflict, because it shows what moves with the note.</li>
+      <li><b>A conflict is keyed by <code>source</code>.</b> Every card that embeds the file shows the same conflict box, and an edit on one card updates all of them (scenario 3).</li>
+      <li><b>Remedy</b>: <code>rename</code> (move under a new name), <code>keep_in_inbox</code> (leave the attachment in the inbox), <code>ignore</code> (no asset move; the embed resolves to the existing file). The default is whatever Tomo emitted.</li>
+      <li><b>The rename field sanitises visibly.</b> The saved name is shown under the field and never changed silently. Removed: Tomo's 10 forbidden characters <code>\ / : * ? " &lt; &gt; |</code> + NUL, plus the link-breakers <code># ^ [ ]</code>, plus leading and trailing whitespace. A blank name is refused inline. A name that is also taken in the destination folder gets a warning but is not blocked, because Tomo's Pass 2 surfaces it independently.</li>
+      <li><b>The name field only shows when the remedy is Rename.</b> Switching away keeps the typed name on the wire, so switching back restores it.</li>
+      <li><span class="q">Open question:</span> when no owning note is filed (all owners skipped or suppressed without Force Atomic), the remedy has no effect. The mockup still shows the box but marks it <i>inert</i> (scenario 2b). Alternatives: hide it, or disable the controls.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  const FORBIDDEN = /[\\/:*?"<>|\u0000#^\[\]]/g;
+  // Files already in the destination folder (Run A: the occupier + a hypothetical second rename).
+  const TAKEN = new Set(["karte.png", "karte (3).png"]);
+  const DEST_DIR = "Atlas/290 Assets/295 Attachments/";
+
+  // attachment_conflicts[] — ONE entry per source, shared by every owning card.
+  const conflicts = {
+    "100 Inbox/Scans/karte.png": { destination: DEST_DIR + "karte.png", same_file: false, remedy: "rename", proposed_name: "karte (2).png" },
+    "100 Inbox/Images/bautzen-turm.jpg": { destination: DEST_DIR + "bautzen-turm.jpg", same_file: true, remedy: "ignore", proposed_name: null },
+  };
+
+  const scenarios = [
+    { caption: "<b>1 · Run A as emitted.</b> Dresden (worthy, approved) owns <code>karte.png</code>; the destination is occupied by a different file.",
+      cards: [{ id:"S02", title:"Historische Stadtkarte Dresden vor 1945", worthy:true, decision:"approve", attachments:["100 Inbox/Scans/karte.png"] }] },
+    { caption: "<b>2a · Run A, suppressed card, no conflict.</b> Bautzen's attachment is listed read-only.",
+      cards: [{ id:"S01", title:"Bautzen", worthy:false, worthiness:0.1, force:false, attachments:["100 Inbox/Images/bautzen-turm.jpg"], noConflict:true }] },
+    { caption: "<b>2b · Same card, with a conflict</b> <span class=\"hypo\">hypothetical</span>: identical file already at the destination (<code>same_file: true</code>). Nothing is filed, so the remedy is inert until Force Atomic is ticked.",
+      cards: [{ id:"S01", title:"Bautzen", worthy:false, worthiness:0.1, force:false, attachments:["100 Inbox/Images/bautzen-turm.jpg"] }] },
+    { caption: "<b>3 · Two owners, one conflict</b> <span class=\"hypo\">hypothetical</span>: a second note embeds the same map. Edit the remedy or name on either card; the other follows.",
+      cards: [
+        { id:"S02", title:"Historische Stadtkarte Dresden vor 1945", worthy:true, decision:"approve", attachments:["100 Inbox/Scans/karte.png"] },
+        { id:"S06", title:"Dresdner Altstadt 1938", worthy:true, decision:"approve", attachments:["100 Inbox/Scans/karte.png"] },
+      ] },
+  ];
+
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+  const split = p => { const i = p.lastIndexOf("/"); return [p.slice(0, i + 1), p.slice(i + 1)]; };
+  const owners = src => scenarios.flatMap(s => s.cards).filter(c => c.attachments.includes(src));
+
+  function sanitise(raw) {
+    const cleaned = raw.replace(FORBIDDEN, "").trim();
+    return { cleaned, changed: cleaned !== raw };
+  }
+
+  function nameFeedback(raw) {
+    const { cleaned, changed } = sanitise(raw);
+    if (cleaned === "") return { cls:"err", html:"A name is required for Rename." };
+    if (TAKEN.has(cleaned)) return { cls:"warn", html:`<b>${esc(cleaned)}</b> is also taken in <code>${esc(DEST_DIR)}</code>. Tomo will report it at Pass 2.` };
+    if (changed) return { cls:"info", html:`Will be saved as <b>${esc(cleaned)}</b>. Removed characters that can't be in a filename or break the embed.` };
+    return { cls:"info", html:"" };
+  }
+
+  function isFiled(card) { return card.worthy ? card.decision === "approve" : card.force; }
+
+  function conflictBox(src, card, anyFiled) {
+    const c = conflicts[src];
+    const [ddir, dname] = split(c.destination);
+    const same = c.same_file === true ? "Identical file, same bytes." : c.same_file === false ? "A different file with the same name." : "Not compared.";
+    const fb = nameFeedback(c.proposed_name ?? "");
+    const shared = owners(src).length > 1;
+    return `<div class="conflict-box">
+      <div class="occupied">Destination taken: <code>${esc(ddir)}<b>${esc(dname)}</b></code> ${shared ? '<span class="badge shared">shared by ' + owners(src).length + ' notes</span>' : ''}</div>
+      <div class="same">${same}</div>
+      <div class="remedy-row">
+        <div class="field"><label>Remedy</label>
+          <div class="seg" data-src="${esc(src)}">
+            ${["rename","keep_in_inbox","ignore"].map(r => `<button class="pick" data-remedy="${r}" aria-pressed="${c.remedy === r}">${{rename:"Rename", keep_in_inbox:"Keep in inbox", ignore:"Ignore"}[r]}</button>`).join("")}
+          </div>
+        </div>
+        ${c.remedy === "rename" ? `<div class="field rename"><label>New name</label>
+          <input class="inp mono${fb.cls === "err" ? " invalid" : ""}" data-name="${esc(src)}" value="${esc(c.proposed_name ?? "")}" aria-label="New attachment filename" />
+          <div class="feedback ${fb.cls}">${fb.html}</div></div>` : ""}
+      </div>
+      <div class="remedy-hint">${{
+        rename: "The attachment moves under the new name; the note's embed is rewritten to it.",
+        keep_in_inbox: "The attachment stays in the inbox; the filed note embeds it there.",
+        ignore: "No move. The embed resolves to the file already at the destination.",
+      }[c.remedy]}</div>
+      ${anyFiled ? "" : '<div class="inert">Inert: no note embedding this file is being filed, so the remedy has no effect.</div>'}
+    </div>`;
+  }
+
+  function attachmentsSection(card) {
+    if (card.attachments.length === 0) return `<div class="sec-label">Attachments <span class="muted">— none</span></div>`;
+    const rows = card.attachments.map(src => {
+      const [d, f] = split(src);
+      const conflict = !card.noConflict && conflicts[src];
+      const anyFiled = owners(src).some(isFiled);
+      const fate = !isFiled(card) ? "stays in inbox with the note" : conflict ? "" : "moves with the note";
+      return `<div class="att">
+        <div class="att-line"><span><span class="dir">${esc(d)}</span>${esc(f)}</span>${conflict ? '<span class="badge conflict">destination taken</span>' : ""}<span class="fate">${fate}</span></div>
+        ${conflict ? conflictBox(src, card, anyFiled) : ""}
+      </div>`;
+    }).join("");
+    return `<div class="sec-label">Attachments · ${card.attachments.length}</div>${rows}`;
+  }
+
+  function worthyCard(card) {
+    return `<div class="card"><div class="card-top">
+      <div class="row1">
+        <div class="field" style="flex:1"><label>Note (${card.id})</label><input class="inp name" value="${esc(card.title)}" /></div>
+        <div class="field"><label>Source note</label><div class="seg">
+          <button class="approve" aria-pressed="${card.decision === "approve"}">Approve</button>
+          <button class="skip" aria-pressed="false">Skip</button>
+          <button class="delete" aria-pressed="false">Delete source</button>
+        </div></div>
+      </div>
+      <div class="elided">… template, location, keep source, tags, Link to a MOC: unchanged …</div>
+    </div>${attachmentsSection(card)}</div>`;
+  }
+
+  function suppressedCard(card) {
+    return `<div class="card suppressed"><div class="card-top">
+      <div class="row1">
+        <div class="field" style="flex:1"><label>Note (${card.id}) · not promoted</label><input class="inp name" value="${esc(card.title)}" /></div>
+        <div class="worthiness"><span class="wv">${Math.round(card.worthiness * 100)}%</span><span class="wl">worthiness</span></div>
+      </div>
+      <div class="suppressed-note">Below the 0.5 threshold, so it stays in the inbox and is not made an atomic note.</div>
+      <label class="force-atomic"><input type="checkbox" data-force="${card.id}" ${card.force ? "checked" : ""}/> <b>Force Atomic Note</b> <span class="muted">— create a standalone note anyway</span></label>
+    </div>${attachmentsSection(card)}</div>`;
+  }
+
+  function render(focus) {
+    document.getElementById("app").innerHTML = scenarios.map((s, i) =>
+      `<p class="scenario">${s.caption}</p>` + s.cards.map(c => (c.worthy ? worthyCard(c) : suppressedCard(c))).join("")
+    ).join("");
+    if (focus) {
+      const el = document.querySelectorAll(`[data-name="${CSS.escape(focus.src)}"]`)[focus.idx];
+      if (el) { el.focus(); el.setSelectionRange(focus.pos, focus.pos); }
+    }
+  }
+
+  document.addEventListener("click", e => {
+    const r = e.target.closest("[data-remedy]");
+    if (r) { conflicts[r.parentElement.dataset.src].remedy = r.dataset.remedy; render(); }
+  });
+  document.addEventListener("change", e => {
+    const f = e.target.closest("[data-force]");
+    if (f) { scenarios.flatMap(s => s.cards).filter(c => c.id === f.dataset.force).forEach(c => c.force = f.checked); render(); }
+  });
+  document.addEventListener("input", e => {
+    const n = e.target.closest("[data-name]");
+    if (!n) return;
+    const src = n.dataset.name;
+    const idx = [...document.querySelectorAll(`[data-name="${CSS.escape(src)}"]`)].indexOf(n);
+    // The wire carries exactly what the owner sees: the SANITISED name.
+    // Typed raw text stays in the field until blur so the cursor doesn't jump.
+    conflicts[src].proposed_name = n.value;
+    render({ src, idx, pos: n.selectionStart });
+  });
+  document.addEventListener("focusout", e => {
+    const n = e.target.closest("[data-name]");
+    if (!n) return;
+    const { cleaned } = sanitise(n.value);
+    conflicts[n.dataset.name].proposed_name = cleaned === "" ? n.value : cleaned;
+    render();
+  });
+  document.getElementById("theme").addEventListener("click", () => {
+    const root = document.documentElement;
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+  });
+  render();
+</script>
+</body>
+</html>
