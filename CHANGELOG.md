@@ -1,3 +1,9 @@
+## [0.28.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.27.0...0.28.0) (2026-10-11)
+
+### Features
+
+* **suggestions-editor:** give delete_source a control — three-way disposition segment ([c683103](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/c683103e1fc2e036b0925de6cbb1e4dbf6a5a5ae)), closes [#140](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/140)
+
 ## [0.27.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.26.1...0.27.0) (2026-10-11)
 
 ### ⚠ BREAKING CHANGES
