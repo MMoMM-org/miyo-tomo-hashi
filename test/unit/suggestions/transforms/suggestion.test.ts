@@ -48,6 +48,7 @@ function getMockSuggestion(overrides?: Partial<SuggestionWire>): SuggestionWire 
 		id: "S01",
 		stem: "test-stem",
 		item_key: "100 Inbox/test-stem.md",
+		attachments: [],
 		title: "Original Title",
 		template: "t_note_tomo.md",
 		location: "Atlas/202 Notes/",
@@ -66,7 +67,8 @@ function getMockSuggestion(overrides?: Partial<SuggestionWire>): SuggestionWire 
 
 function getMockDoc(overrides?: Partial<SuggestionsWire>): SuggestionsWire {
 	return {
-		schema_version: "2",
+		schema_version: "3",
+		attachment_conflicts: [],
 		generated: "2026-01-01T00:00:00Z",
 		run_id: "test-run",
 		profile: "test",

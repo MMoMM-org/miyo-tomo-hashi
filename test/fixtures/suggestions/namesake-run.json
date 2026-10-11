@@ -1,5 +1,5 @@
 {
-  "schema_version": "2",
+  "schema_version": "3",
   "generated": "2026-01-01T00:00:00Z",
   "run_id": "fixture-run",
   "profile": "miyo",
@@ -137,5 +137,6 @@
   "proposed_mocs": [],
   "daily_updates": [],
   "tag_handler_groups": [],
-  "emit_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  "emit_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "attachment_conflicts": []
 }

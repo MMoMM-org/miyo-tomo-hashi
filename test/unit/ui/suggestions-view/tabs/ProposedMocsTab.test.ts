@@ -80,6 +80,7 @@ function makeSuggestion(overrides: Partial<SuggestionWire> & { id: string; title
 	return {
 		stem: overrides.id,
 		item_key: `100 Inbox/${overrides.id}.md`,
+		attachments: [],
 		template: "[[Templates/Atomic]]",
 		location: "Atomics",
 		tags: [],
@@ -106,7 +107,8 @@ function makeProposedMoc(overrides: Partial<ProposedMocWire> & { id: string }): 
 
 function makeDoc(overrides: Partial<SuggestionsWire> = {}): SuggestionsWire {
 	return {
-		schema_version: "2",
+		schema_version: "3",
+		attachment_conflicts: [],
 		generated: "2026-07-06T11:15:00Z",
 		run_id: "run-1",
 		profile: "default",

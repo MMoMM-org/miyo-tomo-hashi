@@ -1,5 +1,5 @@
 {
-  "schema_version": "2",
+  "schema_version": "3",
   "generated": "2026-09-14T12:41:53Z",
   "run_id": "2026-09-14T12-34-09Z-e048aa",
   "profile": "miyo",
@@ -361,5 +361,6 @@
       "preview": "**2026-09-10 — architecture:** Wire renderers now read `schema_version` from the schema's own declared const instead of a hardcoded literal, closing a drift risk between schema and emitted output."
     }
   ],
-  "emit_digest": "sha256:c73f8304c0f30a957d365f447e637c08273b6fce9e735e4be289c43b0be7797e"
+  "emit_digest": "sha256:c73f8304c0f30a957d365f447e637c08273b6fce9e735e4be289c43b0be7797e",
+  "attachment_conflicts": []
 }
