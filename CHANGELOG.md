@@ -1,3 +1,15 @@
+## [0.27.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.26.1...0.27.0) (2026-10-11)
+
+### ⚠ BREAKING CHANGES
+
+* **schema:** a pre-038 Tomo run (schema_version "2") now fails with
+"Schema version mismatch — expected 3, got 2". The instruction wire and the
+executor are untouched.
+
+### Features
+
+* **schema:** vendor Tomo's spec-038 release — suggestions wire to schema_version 3 ([fe5d70c](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/fe5d70c17a893149117dcfaad7c73234714d7225)), closes [#141](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/141) [#141](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/141) [#141](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/141)
+
 ## [0.26.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.26.0...0.26.1) (2026-09-21)
 
 ### Bug Fixes
