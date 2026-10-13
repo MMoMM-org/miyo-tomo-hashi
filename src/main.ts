@@ -633,6 +633,7 @@ export default class TomoHashiPlugin extends Plugin {
 						templateFolder: this.settings.suggestionsTemplateFolder,
 						locationFolders: this.settings.suggestionsLocationFolders,
 						tagFilters: this.settings.suggestionsTagFilters,
+						inboxFolder: this.settings.tomoInboxFolder,
 					}),
 				}),
 		);

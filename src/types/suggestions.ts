@@ -273,8 +273,8 @@ export interface SuggestionsWire {
 	readonly daily_updates: readonly DailyUpdateWire[];
 	readonly tag_handler_groups: readonly TagGroupWire[];
 	/**
-	 * Preserved verbatim on save; not editable in the editor yet (#141), so
-	 * Tomo reads its emitted remedy defaults back unchanged.
+	 * Edited on the suggestion cards' Attachments section (#141) through
+	 * `transforms/attachmentConflict.ts`; read-only fields ride through verbatim.
 	 */
 	readonly attachment_conflicts: readonly AttachmentConflictWire[];
 }

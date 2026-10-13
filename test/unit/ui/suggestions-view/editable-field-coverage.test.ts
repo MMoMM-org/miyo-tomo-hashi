@@ -55,6 +55,13 @@ const CONTROLLED_BY: Record<string, readonly string[]> = {
 	candidate_mocs: ["toggleCandidateMoc", "addMoc"],
 };
 
+/** The writer each editable `attachment_conflicts[]` field reaches through (#141). */
+const CONFLICT_CONTROLLED_BY: Record<string, string> = {
+	remedy: "setConflictRemedy",
+	proposed_name: "setConflictName",
+	proposed_dir: "setConflictDir",
+};
+
 describe("editable-field coverage (the #140 class guard)", () => {
 	const schema = JSON.parse(readSource("src/schema/suggestions-wire.schema.json")) as {
 		properties: {
@@ -91,6 +98,26 @@ describe("editable-field coverage (the #140 class guard)", () => {
 	it("names a writer for every editable field, so a new one cannot pass unnoticed", () => {
 		const unmapped = editableFields.filter((field) => !(field in CONTROLLED_BY));
 		expect(unmapped).toEqual([]);
+	});
+
+	it("gives every editable attachment_conflicts field a control in the Attachments section (#141)", () => {
+		const conflictSchema = JSON.parse(readSource("src/schema/suggestions-wire.schema.json")) as {
+			properties: {
+				attachment_conflicts: { items: { properties: Record<string, { description?: string }> } };
+			};
+		};
+		const editableConflictFields = Object.entries(conflictSchema.properties.attachment_conflicts.items.properties)
+			.filter(([, spec]) => spec.description?.startsWith("Editable") === true)
+			.map(([field]) => field);
+		const sectionSource = readSource("src/ui/suggestions-view/tabs/attachmentsSection.ts");
+
+		// Floor + known member, for the same reword reason as the suggestions[] scan.
+		expect(editableConflictFields).toContain("proposed_dir");
+		const uncovered = editableConflictFields.filter((field) => {
+			const writer = CONFLICT_CONTROLLED_BY[field];
+			return writer === undefined || !sectionSource.includes(`${writer}(model`);
+		});
+		expect(uncovered).toEqual([]);
 	});
 
 	it("keeps the absence list honest — no stale entries for fields that do have controls", () => {
