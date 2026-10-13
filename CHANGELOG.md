@@ -1,3 +1,19 @@
+## [0.29.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.28.0...0.29.0) (2026-10-13)
+
+### ⚠ BREAKING CHANGES
+
+* **schema:** v3 suggestions documents are refused with
+"Schema version mismatch — expected 4, got 3".
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01H1nMT6c5KBxCfJVwb1QsWJ
+
+### Features
+
+* **schema:** vendor Tomo's spec-039 release — suggestions wire v4 ([#141](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/141)) ([c217f66](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/c217f66a1096c2b12e8f449c2bcce0615ab5418c)), closes [#186](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/186)
+* **suggestions-editor:** attachments section and conflict control on cards ([#141](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/141)) ([e6ed9d0](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/e6ed9d06393b0c891c62481b0d22c02fb1d0f8c5))
+* **suggestions:** attachment-conflict transforms and name sanitiser ([#141](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/141)) ([d7b0221](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/d7b022160e81b48bd222391874a34011a20d1b12))
+
 ## [0.28.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.27.0...0.28.0) (2026-10-11)
 
 ### Features
