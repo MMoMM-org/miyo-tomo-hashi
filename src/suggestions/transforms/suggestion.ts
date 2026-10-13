@@ -130,6 +130,16 @@ export function dispositionOf(suggestion: SuggestionWire): SuggestionDisposition
 }
 
 /**
+ * Whether Pass 2 files this suggestion as an atomic note: a suppressed item
+ * only with Force Atomic, a worthy one only when approved (skip and
+ * delete-source both leave it unfiled). An attachment conflict none of whose
+ * owners is filed has no effect — the editor greys it out (#141).
+ */
+export function isFiled(suggestion: SuggestionWire): boolean {
+	return suggestion.suppressed ? suggestion.force_atomic : suggestion.decision === "approve";
+}
+
+/**
  * Sets the suggestion's disposition (op 4) — the SINGLE writer for the
  * `decision` / `delete_source` / `keep_source` triple. No-op if unchanged.
  *
