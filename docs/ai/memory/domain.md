@@ -5,3 +5,7 @@
 
 <!-- 2026-05-02 — SUPERSEDED by the reject decision above; kept for context -->
 - ~~**Vault filename sanitization**~~ — earlier plan was to sanitize incoming filenames by replacing `:` with `-` before any vault write. This was **not** adopted: see the reject-and-report decision above.
+
+<!-- 2026-10-13 -->
+- **Emptied inbox subfolders stay** — `move_asset` (and any other move) never deletes a source folder it has emptied (e.g. `100 Inbox/Bilder/` after its last image moves). Owner ruling 2026-10-13, shared with Tomo: inbox folders are kept, by Tomo and by Hashi. Do not "clean up" empty folders in an action handler.
+- **Editor attachment rename targets** — `#141`: the Suggestions Editor's conflict folder is picker-only (existing folders, no vault root, no inbox subtree); names are stored sanitised (Tomo's refusal set → `-`); picking the default folder back writes `proposed_dir: null`. `skipped-already` satisfies a `depends_on` (contract wording "applied or already in place").
