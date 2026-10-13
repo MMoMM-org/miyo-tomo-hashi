@@ -107,7 +107,7 @@ describe("FakeSuggestionsDoc", () => {
 
 	it("accepts a custom seed doc via the constructor, for downstream tasks to script scenarios", async () => {
 		const custom: SuggestionsWire = {
-			schema_version: "3",
+			schema_version: "4",
 			attachment_conflicts: [],
 			generated: "2026-01-01T00:00:00Z",
 			run_id: "custom-run",

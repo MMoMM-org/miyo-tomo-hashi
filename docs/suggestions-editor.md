@@ -147,7 +147,7 @@ discards in-memory edits. After saving, run `/inbox` in Tomo for Pass 2 to apply
 
 > **Attachment conflicts are not editable here yet** ([#141](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/141)).
 > When an attachment's destination is already taken, Tomo offers a remedy (rename / keep in
-> inbox / ignore) and a rename target in the `.md`. The editor carries Tomo's emitted values
+> inbox / ignore) and a rename target (name and folder) in the `.md`. The editor carries Tomo's emitted values
 > back unchanged on save — but because Pass 2 then reads the JSON alone, a remedy or name you
 > changed **in the markdown** is replaced by Tomo's default as soon as you save any edit here.
 > On a run with attachment conflicts, set the remedy in the markdown and don't save from the

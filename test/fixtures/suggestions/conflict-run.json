@@ -1,5 +1,5 @@
 {
-  "schema_version": "3",
+  "schema_version": "4",
   "generated": "2026-10-11T08:03:39Z",
   "run_id": "2026-10-11T08-02-42Z-f71c1a",
   "profile": "miyo",
@@ -177,7 +177,8 @@
       "destination": "Atlas/290 Assets/295 Attachments/karte.png",
       "same_file": false,
       "remedy": "rename",
-      "proposed_name": "karte (2).png"
+      "proposed_name": "karte (2).png",
+      "proposed_dir": null
     }
   ],
   "emit_digest": "sha256:8cd0fc0f63cdc4c0f6210083b7cc426f52c687197366edc8d637b24906be0e61"

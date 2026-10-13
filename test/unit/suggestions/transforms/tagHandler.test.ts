@@ -24,7 +24,7 @@ function getMockTwoGroupModel(): EditModel {
 	return {
 		dirty: false,
 		doc: {
-			schema_version: '3',
+			schema_version: '4',
 			attachment_conflicts: [],
 			generated: '2026-07-06T11:15:00Z',
 			run_id: 'test-run',
