@@ -93,7 +93,7 @@ describe("ObsidianSuggestionsDoc.load()", () => {
 		const adapter = new ObsidianSuggestionsDoc(vault);
 
 		await expect(adapter.load(DOC_PATH)).rejects.toThrow(
-			"Schema version mismatch — expected 3, got 99",
+			"Schema version mismatch — expected 4, got 99",
 		);
 	});
 });

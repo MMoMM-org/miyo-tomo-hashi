@@ -66,7 +66,7 @@ const VALID_TAG_GROUP: TagGroupWire = {
 };
 
 const VALID_FIXTURE: SuggestionsWire = {
-	schema_version: "3",
+	schema_version: "4",
 	attachment_conflicts: [],
 	generated: "2026-07-06T10:00:00Z",
 	run_id: "2026-07-06_1000",
@@ -88,7 +88,7 @@ describe("validate (suggestions wire)", () => {
 		const result = validate(VALID_FIXTURE);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
-			expect(result.data.schema_version).toBe("3");
+			expect(result.data.schema_version).toBe("4");
 			expect(result.data.suggestions).toHaveLength(1);
 			expect(result.data.daily_updates[0]?.log_entries[0]?.content).toBe(
 				"Did the thing.",
@@ -101,11 +101,11 @@ describe("validate (suggestions wire)", () => {
 		// literal "Schema version mismatch — expected X, got Y" form is
 		// parsed downstream to drive an "upgrade" prompt — never a silent
 		// pass-through of an unknown version.
-		const result = validate({ ...VALID_FIXTURE, schema_version: "2" });
+		const result = validate({ ...VALID_FIXTURE, schema_version: "3" });
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.message).toBe(
-				"Schema version mismatch — expected 3, got 2",
+				"Schema version mismatch — expected 4, got 3",
 			);
 		}
 	});

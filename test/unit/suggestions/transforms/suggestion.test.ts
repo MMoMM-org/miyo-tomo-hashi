@@ -67,7 +67,7 @@ function getMockSuggestion(overrides?: Partial<SuggestionWire>): SuggestionWire 
 
 function getMockDoc(overrides?: Partial<SuggestionsWire>): SuggestionsWire {
 	return {
-		schema_version: "3",
+		schema_version: "4",
 		attachment_conflicts: [],
 		generated: "2026-01-01T00:00:00Z",
 		run_id: "test-run",

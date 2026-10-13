@@ -49,6 +49,27 @@ One card per proposed atomic note, in two modes decided by Tomo's worthiness sco
   title, the worthiness badge, and a single real decision — **Force Atomic Note**, which
   promotes the note anyway.
 
+Every card ends with an **Attachments** section listing the files the note embeds and
+what happens to each: filed with the note, or kept in the inbox when the note isn't filed.
+
+When an attachment's destination is already taken, its row opens a **conflict box**
+(Tomo's `attachment_conflicts`, one per file, shared by every card that embeds it; a
+*shared by N notes* badge names them on hover):
+
+- **Rename** moves the attachment to a **Folder** and **Name** of your choice. The folder
+  comes from a picker of folders that already exist; the inbox is not offered. Need a new
+  folder? Create it in Obsidian first. Characters that can't be in a filename or would
+  break the embed become `-`, shown under the field. The line also warns when the target
+  is taken (Tomo then holds the attachment at Pass 2) and when the name exists elsewhere
+  in the vault (Tomo then writes the embed with its full path).
+- **Keep in inbox** leaves the attachment where it is; the filed note embeds it there.
+- **Ignore** sends the move unchanged. If the destination is still taken, the move fails
+  and the source note stays in the inbox.
+
+A name or folder you set stays saved when you switch to another remedy. When no note
+that embeds the file is being filed, the whole box is greyed out: the remedy would have
+no effect. Approve the note, or tick **Force Atomic Note**, to bring it back.
+
 A grey one-sentence **summary** leads each card — an analyst-authored gist of what the
 note is about, so you can decide without opening the source.
 
@@ -144,14 +165,6 @@ count, and a preview of the composed block that will be inserted.
 
 An **Edited** badge appears once the model is dirty; **Revert** reloads from disk and
 discards in-memory edits. After saving, run `/inbox` in Tomo for Pass 2 to apply everything.
-
-> **Attachment conflicts are not editable here yet** ([#141](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/141)).
-> When an attachment's destination is already taken, Tomo offers a remedy (rename / keep in
-> inbox / ignore) and a rename target in the `.md`. The editor carries Tomo's emitted values
-> back unchanged on save — but because Pass 2 then reads the JSON alone, a remedy or name you
-> changed **in the markdown** is replaced by Tomo's default as soon as you save any edit here.
-> On a run with attachment conflicts, set the remedy in the markdown and don't save from the
-> editor, or save from the editor and accept Tomo's default.
 
 ## Settings
 

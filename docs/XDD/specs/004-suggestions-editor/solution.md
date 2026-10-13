@@ -187,6 +187,15 @@ along untouched.
 - **suppressed** (`suppressed:true`, worthiness < 0.5): worthiness badge + the
   **single** real control **Force Atomic** (`force_atomic`); no MOC UI (Tomo emits
   empty `candidate_mocs`). Explains the skip default.
+- **both modes** end with an **Attachments** section (#141, wire v4,
+  `tabs/attachmentsSection.ts`): `attachments[]` read-only with their fate; a row
+  whose source keys an `attachment_conflicts[]` entry gets the conflict box —
+  remedy segment, and under Rename a folder (`AttachmentFolderPicker`: existing
+  folders, no root, no inbox subtree) and a name (committed sanitised on change,
+  feedback-only on input). Writers: `transforms/attachmentConflict.ts`
+  (`setConflictRemedy` / `setConflictName` / `setConflictDir`; default folder →
+  `null`, null name pre-filled on folder pick). Inert (all controls disabled) when
+  no owner `isFiled` — `suppressed ? force_atomic : decision === "approve"`.
 
 **Proposed MOCs:** name (inline) · parent (**fuzzy picker**) · decision approve/skip
 · member chips **render the note titles** (`member_ids` → `suggestions[].title`,
@@ -327,7 +336,7 @@ note" (decouple from `accepted`) — `accepted` stays apply-and-delete. Logged i
 
 ## 12. PRD traceability
 
-Every PRD feature (`requirements.md` → Must-Have F1–F10) maps to a design element
+Every PRD feature (`requirements.md` → Must-Have F1–F11) maps to a design element
 here — coverage check for the SDD promotion:
 
 | PRD feature | Design element |
@@ -341,6 +350,7 @@ here — coverage check for the SDD promotion:
 | F7 Force-Atomic consistent per source | §6 "Force-Atomic is one decision per source" (stem sync) |
 | F8 Edit daily updates | §6 Daily tab (content/position/time/accept/force-atomic; click-to-open; auto-delete via `accepted`) |
 | F9 Approve tag-handler groups | §6 Tag-Handler tab (approve/keep-source toggles + read-only context) |
+| F11 Resolve attachment conflicts | §6 Suggestions — Attachments section, conflict writers, `AttachmentFolderPicker` |
 | F10 Safe save — own the whole document | §1 + §4 ADR-S4 (full-document round-trip, `emit_digest` passthrough, dirty gate, version fail-loud); §9 ADR-S5 round-trip tests |
 
 PRD Won't-Have items (Tomo-reasoning round-trips, editing existing-MOC structure,

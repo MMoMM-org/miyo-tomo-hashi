@@ -178,6 +178,17 @@ The minimum for the editor to replace hand-editing for Pass-1 review: the four d
   - [ ] Given a save, When the JSON is written, Then the courtesy markdown read-view is re-rendered; and When the write fails, Then the editor shows a notice, keeps the unsaved state, and does not corrupt the in-memory model.
   - [ ] Given a document whose declared version is not the supported one, When the editor loads it, Then it fails loud and falls back to the markdown path rather than editing an unknown shape.
 
+#### Feature 11: Resolve attachment conflicts (#141, suggestions wire v4)
+
+- **User Story:** As the vault owner, I want to see each note's attachments and decide what happens when an attachment's destination is already taken, so that no file is overwritten and the filed note embeds the file I meant.
+- **Acceptance Criteria (Gherkin Format):**
+  - [ ] Given a suggestion with attachments, When I view its card, Then every attachment is listed with its fate (filed with the note, or kept in the inbox when the note is not filed).
+  - [ ] Given an attachment with an `attachment_conflicts` entry, When I view any card that embeds it, Then the conflict shows the occupied destination, whether the files are identical, and a Rename / Keep in inbox / Ignore remedy; a conflict shared by several notes names them on hover, and an edit on one card is the edit on all.
+  - [ ] Given Rename, When I pick a folder, Then only existing folders outside the inbox (and not the vault root) are offered, and picking the destination's own folder writes `proposed_dir: null`; When the conflict had no free name, Then the original basename is pre-filled.
+  - [ ] Given Rename, When I type a name, Then forbidden and link-breaking characters become `-` visibly, blank is refused inline, an occupied target is warned about, and a basename that exists elsewhere is flagged as a full-path embed.
+  - [ ] Given I switch away from Rename, When I switch back, Then the name and folder I set are still there.
+  - [ ] Given no note that embeds the attachment is being filed, When I view the conflict, Then all its controls are disabled; When an owner is approved or Force-Atomic'd, Then they come alive.
+
 ### Should Have Features
 
 - **Click-to-open missing targets** — a missing MOC or daily note is a click-to-open link; creation happens outside the editor (Obsidian creates on open). No wire dependency.

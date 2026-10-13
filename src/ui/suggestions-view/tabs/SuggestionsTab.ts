@@ -86,6 +86,7 @@ import { SpotPicker } from "../pickers/SpotPicker.js";
 import { TagPicker } from "../pickers/TagPicker.js";
 import { TemplatePicker } from "../pickers/TemplatePicker.js";
 import type { EditorTab, TabContext } from "../tabContract.js";
+import { type AttachmentIndex, buildAttachmentIndex, renderAttachmentsSection } from "./attachmentsSection.js";
 
 // ---------------------------------------------------------------------------
 // Local anchor-set helper — see file header re: no Phase-1 transform for this
@@ -246,8 +247,9 @@ export class SuggestionsTab implements EditorTab {
 	render(container: HTMLElement, model: EditModel, ctx: TabContext): void {
 		const dailyLogSources = collectDailyLogSources(model);
 		const proposedByMember = collectProposedMocMembership(model);
+		const attachments = buildAttachmentIndex(model.doc);
 		for (const suggestion of model.doc.suggestions) {
-			this.renderCard(container, suggestion, dailyLogSources, proposedByMember, ctx);
+			this.renderCard(container, suggestion, dailyLogSources, proposedByMember, attachments, ctx);
 		}
 	}
 
@@ -256,6 +258,7 @@ export class SuggestionsTab implements EditorTab {
 		suggestion: SuggestionWire,
 		dailyLogSources: ReadonlyMap<string, boolean>,
 		proposedByMember: ReadonlyMap<string, readonly string[]>,
+		attachments: AttachmentIndex,
 		ctx: TabContext,
 	): void {
 		const card = container.createDiv({
@@ -278,6 +281,7 @@ export class SuggestionsTab implements EditorTab {
 		// live from proposed_mocs so a merge (which moves the member to the
 		// target proposal) is reflected here on the next render.
 		this.renderProposedXref(top, proposedByMember.get(suggestion.id));
+		renderAttachmentsSection(card, suggestion, attachments, ctx);
 	}
 
 	/**

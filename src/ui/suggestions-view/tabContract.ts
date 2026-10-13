@@ -28,6 +28,12 @@ export interface PickerScopes {
 	readonly locationFolders: readonly string[];
 	/** Tag prefixes the tag picker is limited to ([] = no limit). */
 	readonly tagFilters: readonly string[];
+	/**
+	 * Tomo's inbox folder, excluded from the attachment-folder picker (a
+	 * rename target inside the inbox would be read as inbox material). ""
+	 * or absent = not configured, nothing excluded.
+	 */
+	readonly inboxFolder?: string;
 }
 
 /** Per-render context handed to a tab's `render()`. */

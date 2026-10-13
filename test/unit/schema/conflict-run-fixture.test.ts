@@ -30,6 +30,7 @@ const CONFLICT = {
 	same_file: false,
 	remedy: "rename",
 	proposed_name: "karte (2).png",
+	proposed_dir: null,
 } as const;
 
 const withConflicts = (conflicts: readonly unknown[]): unknown => ({

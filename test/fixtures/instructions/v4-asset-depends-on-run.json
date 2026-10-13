@@ -1,0 +1,85 @@
+{
+  "schema_version": "3",
+  "type": "tomo-instructions",
+  "source_suggestions": "parsed-suggestions.json",
+  "generated": "2026-10-13T09:05:00Z",
+  "profile": "miyo",
+  "tomo_version": null,
+  "action_count": 6,
+  "md_peer": "2026-10-13_0905_instructions",
+  "actions": [
+    {
+      "id": "I01",
+      "action": "move_note",
+      "source": "100 Inbox/2026-10-13_0905_dresden.md",
+      "destination": "Atlas/202 Notes/Dresden.md",
+      "title": "Dresden",
+      "rendered_file": "2026-10-13_0905_dresden.md",
+      "source_inbox_item": "100 Inbox/Dresden.md",
+      "parent_mocs": [],
+      "tags": [],
+      "applied": false
+    },
+    {
+      "id": "I02",
+      "action": "move_note",
+      "source": "100 Inbox/2026-10-13_0905_leipzig.md",
+      "destination": "Atlas/202 Notes/Leipzig.md",
+      "title": "Leipzig",
+      "rendered_file": "2026-10-13_0905_leipzig.md",
+      "source_inbox_item": "100 Inbox/Leipzig.md",
+      "parent_mocs": [],
+      "tags": [],
+      "applied": false
+    },
+    {
+      "id": "I03",
+      "action": "move_asset",
+      "source": "100 Inbox/Scans/karte.png",
+      "destination": "Atlas/290 Assets/296 Maps/karte.png",
+      "applied": false
+    },
+    {
+      "id": "I04",
+      "action": "move_asset",
+      "source": "100 Inbox/Scans/plan.png",
+      "destination": "Atlas/290 Assets/295 Attachments/plan (2).png",
+      "applied": false
+    },
+    {
+      "id": "I05",
+      "action": "delete_source",
+      "source_path": "100 Inbox/Dresden.md",
+      "reason": "Origin consumed by 1 atomic.",
+      "depends_on": [
+        "I01",
+        "I03"
+      ],
+      "applied": false
+    },
+    {
+      "id": "I06",
+      "action": "delete_source",
+      "source_path": "100 Inbox/Leipzig.md",
+      "reason": "Origin consumed by 1 atomic.",
+      "depends_on": [
+        "I02",
+        "I03",
+        "I04"
+      ],
+      "applied": false
+    }
+  ],
+  "tomo": {
+    "doc_type": "instructions",
+    "state": "pending-apply",
+    "run_id": "2026-10-13T09-00-00Z-t62v4",
+    "updated_at": "2026-10-13T06:03:32Z",
+    "sources": [
+      {
+        "path": "100 Inbox/2026-10-13_0900_suggestions.md",
+        "checksum": "sha256:79ea5b19c8b65a98eb316cf4ead1ed9e5e66ac588e1352aa59ea623da83657a7"
+      }
+    ]
+  }
+}

@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Attachment Conflicts Mockup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  /* ============================================================
+     Suggestions Editor — attachments + attachment-conflict control
+     (issue #141, wire v3). Extends suggestions-editor.html: same
+     tokens, same card anatomy; only the Attachments section is new.
+     Data is Tomo's spec-038 Run A plus two labelled hypotheticals.
+     ============================================================ */
+  :root {
+    --bg:#ffffff; --bg-alt:#f5f4f8; --bg-elev:#ffffff; --bg-input:#fbfbfd; --bg-hover:#f0eef6;
+    --border:#e4e1ec; --border-strong:#cecad9; --text:#2b2a33; --text-muted:#6b6979; --text-faint:#9c99ab;
+    --accent:#7c5cf0; --accent-soft:#ede7ff; --green:#2f9e6a; --green-soft:#e2f4ec; --amber:#b7791f; --amber-soft:#fbf1df; --red:#c0504e;
+    --shadow:0 1px 2px rgba(30,25,60,.06),0 8px 24px rgba(30,25,60,.08);
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --r:8px; --r-sm:6px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#1e1d21; --bg-alt:#191818; --bg-elev:#252429; --bg-input:#1a191d; --bg-hover:#2b2a31;
+      --border:#34323c; --border-strong:#46434f; --text:#dcdce1; --text-muted:#9a98a6; --text-faint:#6b6976;
+      --accent:#a78bfa; --accent-soft:#2c2542; --green:#56b98a; --green-soft:#1e3830; --amber:#d9a441; --amber-soft:#3a3020; --red:#d97a7a;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#1e1d21; --bg-alt:#191818; --bg-elev:#252429; --bg-input:#1a191d; --bg-hover:#2b2a31;
+    --border:#34323c; --border-strong:#46434f; --text:#dcdce1; --text-muted:#9a98a6; --text-faint:#6b6976;
+    --accent:#a78bfa; --accent-soft:#2c2542; --green:#56b98a; --green-soft:#1e3830; --amber:#d9a441; --amber-soft:#3a3020; --red:#d97a7a;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:var(--ui); background:var(--bg-alt); color:var(--text); line-height:1.5; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 16px 80px; }
+  .masthead { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:18px; }
+  .eyebrow { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); font-weight:650; margin-bottom:6px; }
+  h1 { font-size:22px; font-weight:650; margin:0; }
+  .sub { color:var(--text-muted); font-size:14px; margin-top:4px; max-width:62ch; }
+  .ghost-btn { font-family:inherit; font-size:12.5px; font-weight:550; color:var(--text-muted); background:var(--bg); border:1px solid var(--border); padding:7px 12px; border-radius:var(--r-sm); cursor:pointer; }
+  .scenario { margin: 26px 2px 8px; font-size: 13px; color: var(--text-muted); }
+  .scenario b { color: var(--text); }
+  .hypo { font-size:10px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; color:var(--amber); border:1px solid color-mix(in srgb, var(--amber) 45%, var(--border)); border-radius:4px; padding:1px 6px; margin-left:6px; }
+
+  /* ---- card anatomy (as in suggestions-editor.html) ---- */
+  .card { background:var(--bg-elev); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--shadow); margin-bottom:12px; overflow:hidden; }
+  .card.suppressed { border-left:3px solid var(--text-faint); }
+  .card-top { padding:12px 13px; }
+  .row1 { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
+  .field { display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .field > label { font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-faint); font-weight:600; }
+  .inp { font-family:inherit; font-size:13px; color:var(--text); background:var(--bg-input); border:1px solid var(--border); border-radius:var(--r-sm); padding:5px 9px; min-width:0; }
+  .inp:focus { outline:2px solid var(--accent); outline-offset:-1px; border-color:var(--accent); }
+  .inp.name { font-weight:600; }
+  .inp.mono { font-family:var(--mono); font-size:12.5px; }
+  .inp.invalid { border-color:var(--red); }
+  .seg { display:inline-flex; border:1px solid var(--border); border-radius:var(--r-sm); overflow:hidden; flex:none; }
+  .seg button { font-family:inherit; font-size:12px; font-weight:600; padding:5px 12px; border:0; background:var(--bg-input); color:var(--text-muted); cursor:pointer; }
+  .seg button + button { border-left:1px solid var(--border); }
+  .seg button.approve[aria-pressed="true"] { background:var(--green); color:#fff; }
+  .seg button.skip[aria-pressed="true"] { background:var(--bg-hover); color:var(--text); }
+  .seg button.delete[aria-pressed="true"] { background:var(--red); color:#fff; }
+  .seg button.pick[aria-pressed="true"] { background:var(--accent); color:#fff; }
+  .seg button:disabled { opacity:.45; cursor:not-allowed; }
+  .muted { color:var(--text-faint); font-weight:400; }
+  .worthiness { display:flex; flex-direction:column; align-items:flex-end; flex:none; margin-left:auto; }
+  .worthiness .wv { font-size:15px; font-weight:700; color:var(--red); font-variant-numeric:tabular-nums; }
+  .worthiness .wl { font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-faint); }
+  .suppressed-note { font-size:12px; color:var(--text-muted); margin:9px 0 10px; }
+  .force-atomic { display:flex; align-items:center; gap:8px; font-size:12.5px; cursor:pointer; }
+  .force-atomic input, .cbx input { accent-color:var(--accent); }
+  .elided { font-size:11.5px; color:var(--text-faint); font-style:italic; margin-top:10px; }
+  .sec-label { font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--text-muted); font-weight:600; padding:10px 13px 4px; border-top:1px solid var(--border); }
+
+  /* ---- NEW: attachments section ---- */
+  .att { padding:7px 13px 9px; }
+  .att + .att { border-top:1px dashed var(--border); }
+  .att-line { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-family:var(--mono); font-size:12px; }
+  .att-line .dir { color:var(--text-faint); }
+  .att-line .fate { font-family:var(--ui); font-size:11px; color:var(--text-faint); margin-left:auto; }
+  .badge { font-family:var(--ui); font-size:9.5px; letter-spacing:.05em; text-transform:uppercase; font-weight:700; border-radius:3px; padding:1px 6px; }
+  .badge.conflict { color:var(--amber); background:var(--amber-soft); }
+  .badge.shared { color:var(--accent); background:var(--accent-soft); }
+  .conflict-box { margin-top:8px; border:1px solid color-mix(in srgb, var(--amber) 40%, var(--border)); background:color-mix(in srgb, var(--amber-soft) 55%, var(--bg-elev)); border-radius:var(--r-sm); padding:9px 11px; }
+  .occupied { font-size:12px; color:var(--text-muted); }
+  .occupied code { font-family:var(--mono); font-size:11.5px; color:var(--text); }
+  .same { font-size:11.5px; color:var(--text-muted); margin-top:2px; }
+  .remedy-row { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-top:9px; }
+  .rename { flex:1; min-width:200px; }
+  .feedback { font-size:11.5px; margin-top:4px; min-height:1.2em; }
+  .feedback.info { color:var(--text-muted); }
+  .feedback.info b { font-family:var(--mono); font-weight:600; color:var(--text); }
+  .feedback.warn { color:var(--amber); }
+  .feedback.err { color:var(--red); }
+  .remedy-hint { font-size:11.5px; color:var(--text-muted); margin-top:6px; }
+  .inert { font-size:11.5px; color:var(--text-faint); font-style:italic; margin-top:6px; }
+
+  .explain { margin-top:26px; padding:16px 18px; border:1px solid var(--border); border-radius:var(--r); background:var(--bg); font-size:13px; color:var(--text-muted); }
+  .explain h4 { margin:0 0 8px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--text); }
+  .explain ul { margin:0; padding-left:18px; } .explain li { margin:5px 0; }
+  .explain code { font-family:var(--mono); font-size:12px; background:var(--bg-alt); border:1px solid var(--border); border-radius:4px; padding:0 4px; color:var(--text); }
+  .explain .q { color:var(--amber); font-weight:600; }
+  @media (max-width: 560px) { .att-line .fate { margin-left:0; width:100%; } }
+  /* ---- revision 2 (owner review 2026-10-11) ---- */
+  .badge.shared { cursor: help; position: relative; }
+  .badge.shared .tip { display:none; position:absolute; left:0; top:calc(100% + 6px); z-index:5; min-width:220px; padding:7px 9px; border:1px solid var(--border-strong); border-radius:var(--r-sm); background:var(--bg-elev); box-shadow:var(--shadow); font-family:var(--ui); font-size:12px; letter-spacing:0; text-transform:none; font-weight:500; color:var(--text); }
+  .badge.shared:hover .tip, .badge.shared:focus .tip { display:block; }
+  .badge.shared .tip div { white-space:nowrap; }
+  .badge.wire { color:var(--amber); border:1px dashed color-mix(in srgb, var(--amber) 55%, var(--border)); background:transparent; }
+  .mini-pick { font-family:var(--mono); font-size:12px; color:var(--text); background:var(--bg-input); border:1px solid var(--border); border-radius:var(--r-sm); padding:5px 9px; cursor:pointer; text-align:left; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mini-pick:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+  .mini-pick:disabled, .inp:disabled { opacity:.45; cursor:not-allowed; }
+  .target-row { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; flex:1; min-width:240px; }
+  .target-row .field.folder { flex: 1 1 200px; }
+  .target-row .field.rename { flex: 1 1 160px; }
+  .pop { position:relative; }
+  .pop-list { position:absolute; left:0; top:calc(100% + 4px); z-index:6; min-width:260px; background:var(--bg-elev); border:1px solid var(--border-strong); border-radius:var(--r-sm); box-shadow:var(--shadow); padding:4px; }
+  .pop-list button { display:block; width:100%; text-align:left; font-family:var(--mono); font-size:12px; color:var(--text); background:transparent; border:0; border-radius:4px; padding:6px 8px; cursor:pointer; }
+  .pop-list button:hover { background:var(--accent-soft); }
+  .pop-list .hint { font-family:var(--ui); font-size:11px; color:var(--text-faint); padding:4px 8px 2px; }
+  .conflict-box.is-inert { opacity:.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="masthead">
+    <div>
+      <div class="eyebrow">Hashi · Suggestions Editor · #141 · rev 3</div>
+      <h1>Attachments &amp; conflict remedy</h1>
+      <p class="sub">Each card gains an <b>Attachments</b> section built from <code>suggestions[].attachments</code>. An attachment whose destination is taken shows Tomo's <code>attachment_conflicts</code> entry inline, with the remedy and the rename target (folder and name). To try the name field, type <code>karte#1938.png</code>, <code>  a:b.png </code> or <code>karte.png</code>, or clear it.</p>
+    </div>
+    <button class="ghost-btn" id="theme">Toggle theme</button>
+  </div>
+  <div id="app"></div>
+
+  <div class="explain">
+    <h4>Rules shown</h4>
+    <ul>
+      <li><b>Every card lists all of its attachments</b> (any number), worthy and suppressed alike. An attachment without a conflict is read-only and shows where it goes.</li>
+      <li><b>A conflict is keyed by <code>source</code>.</b> Every card that embeds the file shows the same box, and an edit on one card updates all of them. Hover <i>shared by N notes</i> to see which notes.</li>
+      <li><b>Remedy</b>: <code>rename</code> (move to a chosen folder under a chosen name), <code>keep_in_inbox</code>, or <code>ignore</code> (no move; the embed resolves to the existing file). The default is what Tomo emitted.</li>
+      <li><b>The target folder is picker-only</b>: existing vault folders, the inbox and everything below it excluded. There's no free-text folder. A user who needs a new folder creates it in Obsidian first. Moving to a free folder can resolve the conflict without changing the name. On the wire this is <code>proposed_dir</code> (Tomo spec 039, <b>wire v4</b>). Picking the default folder back writes <code>null</code>.</li>
+      <li><b>No free name + a picked folder</b> (scenario 2, <code>stadtplan.pdf</code>): the name field is pre-filled with the original basename, visibly, so it reaches the wire as <code>proposed_name</code>. Tomo never fills in a name itself.</li>
+      <li><b>The name sanitises visibly.</b> Tomo's 10 forbidden characters <code>\ / : * ? " &lt; &gt; |</code> + NUL and the link-breakers <code># ^ [ ]</code>, the template sequences <code>{{</code> / <code>&lt;%</code> and control characters become <code>-</code>, and leading/trailing whitespace is trimmed. The saved name is shown under the field. A blank name is refused inline. If folder + name is also taken, you get a warning but aren't blocked, because Tomo's Pass 2 reports that case independently. If the final name also exists <i>anywhere else</i> in the vault, an info line says the embed will carry the full path: Obsidian resolves an ambiguous bare embed to a copy in the note's own folder, or else to one vault-wide winner (measured 2026-10-12).</li>
+      <li><b>Switching away from Rename keeps the typed folder and name</b> on the wire, so switching back restores them. Tomo ignores both unless the remedy is rename.</li>
+      <li><b>If no owning note is filed</b> (all owners skipped, or suppressed without Force Atomic), the remedy has no effect. The whole box greys out, and only the owners' own controls (e.g. Force Atomic) stay live.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  const FORBIDDEN = /[\\/:*?"<>|#^\[\]\u0000-\u001f\u007f]/g;
+  const ATT_DIR = "Atlas/290 Assets/295 Attachments/";
+  const FOLDERS = [ATT_DIR, "Atlas/290 Assets/296 Maps/", "Atlas/290 Assets/297 Scans/", "Calendar/Attachments/"];
+  // Full paths that already exist (Run A's occupier, plus hypotheticals).
+  // Every file in the vault by full path, for the "exists elsewhere" check (inbox sources included).
+  const VAULT_FILES = () => [...TAKEN, ...Object.keys(conflicts)];
+  const TAKEN = new Set([ATT_DIR + "karte.png", ATT_DIR + "karte (3).png", ATT_DIR + "bautzen-turm.jpg", ATT_DIR + "stadtplan.pdf", "Atlas/290 Assets/296 Maps/karte.png"]);
+
+  // attachment_conflicts[] — ONE entry per source, shared by every owning card.
+  // proposed_dir is the field we'd ask Tomo for (null = the destination's own folder).
+  const conflicts = {
+    "100 Inbox/Scans/karte.png": { destination: ATT_DIR + "karte.png", same_file: false, remedy: "rename", proposed_dir: null, proposed_name: "karte (2).png" },
+    "100 Inbox/Images/bautzen-turm.jpg": { destination: ATT_DIR + "bautzen-turm.jpg", same_file: true, remedy: "ignore", proposed_dir: null, proposed_name: null },
+    "100 Inbox/Scans/altstadt-karte.png": { destination: ATT_DIR + "altstadt-karte.png", same_file: false, remedy: "rename", proposed_dir: null, proposed_name: "altstadt-karte (2).png" },
+    "100 Inbox/Scans/stadtplan.pdf": { destination: ATT_DIR + "stadtplan.pdf", same_file: null, remedy: "keep_in_inbox", proposed_dir: null, proposed_name: null },
+  };
+
+  const scenarios = [
+    { caption: "<b>1 · Run A as emitted.</b> Dresden (worthy, approved) owns <code>karte.png</code>; the destination is occupied by a different file.",
+      cards: [{ key:"a", id:"S02", title:"Historische Stadtkarte Dresden vor 1945", worthy:true, decision:"approve", attachments:["100 Inbox/Scans/karte.png"] }] },
+    { caption: "<b>2 · Several attachments on one card</b> <span class=\"hypo\">hypothetical</span>: one free, one with a conflict Tomo found no free name for (<code>keep_in_inbox</code>, not compared), one free. Switch the conflict to Rename and pick a folder: the original name is pre-filled.",
+      cards: [{ key:"b", id:"S07", title:"Dresden Stadtführung", worthy:true, decision:"approve", attachments:["100 Inbox/Scans/legende.jpg", "100 Inbox/Scans/stadtplan.pdf", "100 Inbox/Images/frauenkirche.jpg"] }] },
+    { caption: "<b>3a · Run A, suppressed card, no conflict.</b> Bautzen's attachment is listed read-only.",
+      cards: [{ key:"c", id:"S01", title:"Bautzen", worthy:false, worthiness:0.1, force:false, attachments:["100 Inbox/Images/bautzen-turm.jpg"], noConflict:true }] },
+    { caption: "<b>3b · The same card with a conflict</b> <span class=\"hypo\">hypothetical</span>: an identical file is already at the destination. Nothing is filed, so the box is greyed out. Tick Force Atomic and it comes alive.",
+      cards: [{ key:"d", id:"S01", title:"Bautzen", worthy:false, worthiness:0.1, force:false, attachments:["100 Inbox/Images/bautzen-turm.jpg"] }] },
+    { caption: "<b>4 · Two owners, one conflict</b> <span class=\"hypo\">hypothetical</span>: two notes embed the same map. Hover the badge, then edit on either card and watch the other follow.",
+      cards: [
+        { key:"e", id:"S02", title:"Historische Stadtkarte Dresden vor 1945", worthy:true, decision:"approve", attachments:["100 Inbox/Scans/altstadt-karte.png"] },
+        { key:"f", id:"S06", title:"Dresdner Altstadt 1938", worthy:true, decision:"approve", attachments:["100 Inbox/Scans/altstadt-karte.png"] },
+      ] },
+  ];
+
+  let openPicker = null; // { card, src }
+
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+  const split = p => { const i = p.lastIndexOf("/"); return [p.slice(0, i + 1), p.slice(i + 1)]; };
+  const allCards = () => scenarios.flatMap(s => s.cards);
+  // Owners within the same scenario — each scenario is its own little run.
+  const owners = (src, card) => scenarios.find(s => s.cards.includes(card)).cards.filter(c => c.attachments.includes(src));
+  const isFiled = card => card.worthy ? card.decision === "approve" : card.force;
+  const folderOf = c => c.proposed_dir ?? split(c.destination)[0];
+
+  function sanitise(raw) {
+    const cleaned = raw.replace(/\{\{/g, "-").replace(FORBIDDEN, "-").trim();
+    return { cleaned, changed: cleaned !== raw };
+  }
+
+  function nameFeedback(c) {
+    const raw = c.proposed_name ?? "";
+    const { cleaned, changed } = sanitise(raw);
+    if (cleaned === "") return { cls:"err", html:"Enter a name to rename the attachment." };
+    if (TAKEN.has(folderOf(c) + cleaned)) return { cls:"warn", html:`<b>${esc(cleaned)}</b> is also taken in this folder. Tomo will report it at Pass 2.` };
+    const lines = [];
+    if (changed) lines.push(`Will be saved as <b>${esc(cleaned)}</b>. Characters that can't be in a filename or would break the embed became <b>-</b>.`);
+    const target = folderOf(c) + cleaned;
+    // The source itself leaves the inbox under Rename, so it doesn't count as "elsewhere".
+    const source = Object.keys(conflicts).find(k => conflicts[k] === c);
+    const elsewhere = VAULT_FILES().filter(f => f !== target && f !== source && split(f)[1].toLowerCase() === cleaned.toLowerCase());
+    if (elsewhere.length) lines.push(`<b>${esc(cleaned)}</b> also exists elsewhere (<code>${esc(elsewhere[0])}</code>), so the embed will carry the full path.`);
+    return { cls:"info", html: lines.join("<br>") };
+  }
+
+  function sharedBadge(src, card) {
+    const os = owners(src, card);
+    if (os.length < 2) return "";
+    return `<span class="badge shared" tabindex="0">shared by ${os.length} notes<span class="tip">${os.map(o => `<div>${esc(o.id)} · ${esc(o.title)}</div>`).join("")}</span></span>`;
+  }
+
+  function folderPicker(src, card, c, disabled) {
+    const open = openPicker && openPicker.card === card && openPicker.src === src;
+    return `<div class="field folder"><label>Folder <span class="badge wire" title="proposed_dir — Tomo spec 039, suggestions wire v4">wire v4</span></label>
+      <div class="pop"><button class="mini-pick" data-folder="${esc(src)}" data-card="${card.key}" ${disabled ? "disabled" : ""}>${esc(folderOf(c))}</button>
+      ${open ? `<div class="pop-list"><div class="hint">Existing folders, inbox excluded. Need a new one? Create it in Obsidian first.</div>${FOLDERS.map(f => `<button data-setfolder="${esc(f)}" data-src="${esc(src)}">${esc(f)}</button>`).join("")}</div>` : ""}</div></div>`;
+  }
+
+  function conflictBox(src, card) {
+    const c = conflicts[src];
+    const live = owners(src, card).some(isFiled);
+    const dis = live ? "" : "disabled";
+    const [ddir, dname] = split(c.destination);
+    const same = c.same_file === true ? "Identical file, same bytes." : c.same_file === false ? "A different file with the same name." : "Not compared.";
+    const fb = nameFeedback(c);
+    return `<div class="conflict-box${live ? "" : " is-inert"}">
+      <div class="occupied">Destination taken: <code>${esc(ddir)}<b>${esc(dname)}</b></code> ${sharedBadge(src, card)}</div>
+      <div class="same">${same}</div>
+      <div class="remedy-row">
+        <div class="field"><label>Remedy</label>
+          <div class="seg" data-src="${esc(src)}">
+            ${["rename","keep_in_inbox","ignore"].map(r => `<button class="pick" data-remedy="${r}" aria-pressed="${c.remedy === r}" ${dis}>${{rename:"Rename", keep_in_inbox:"Keep in inbox", ignore:"Ignore"}[r]}</button>`).join("")}
+          </div>
+        </div>
+        ${c.remedy === "rename" ? `<div class="target-row">
+          ${folderPicker(src, card, c, !live)}
+          <div class="field rename"><label>Name</label>
+            <input class="inp mono${live && fb.cls === "err" ? " invalid" : ""}" data-name="${esc(src)}" data-card="${card.key}" value="${esc(c.proposed_name ?? "")}" aria-label="New attachment filename" ${dis} />
+          </div>
+        </div>` : ""}
+      </div>
+      ${c.remedy === "rename" && live ? `<div class="feedback ${fb.cls}">${fb.html}</div>` : ""}
+      <div class="remedy-hint">${live ? {
+        rename: `The attachment moves to <code>${esc(folderOf(c))}${esc(sanitise(c.proposed_name ?? "").cleaned)}</code>, and the note's embed is rewritten to it.`,
+        keep_in_inbox: "The attachment stays in the inbox, and the filed note embeds it there.",
+        ignore: "Nothing is moved. The embed resolves to the file already at the destination.",
+      }[c.remedy] : "No note embedding this file is being filed, so the remedy has no effect. Only the note's own controls apply."}</div>
+    </div>`;
+  }
+
+  function attachmentsSection(card) {
+    if (card.attachments.length === 0) return `<div class="sec-label">Attachments <span class="muted">— none</span></div>`;
+    const rows = card.attachments.map(src => {
+      const [d, f] = split(src);
+      const conflict = !card.noConflict && conflicts[src];
+      const fate = !isFiled(card) ? "stays in inbox with the note" : conflict ? "" : `→ ${ATT_DIR}`;
+      return `<div class="att">
+        <div class="att-line"><span><span class="dir">${esc(d)}</span>${esc(f)}</span>${conflict ? '<span class="badge conflict">destination taken</span>' : ""}<span class="fate">${esc(fate)}</span></div>
+        ${conflict ? conflictBox(src, card) : ""}
+      </div>`;
+    }).join("");
+    return `<div class="sec-label">Attachments · ${card.attachments.length}</div>${rows}`;
+  }
+
+  function worthyCard(card) {
+    return `<div class="card"><div class="card-top">
+      <div class="row1">
+        <div class="field" style="flex:1"><label>Note (${card.id})</label><input class="inp name" value="${esc(card.title)}" /></div>
+        <div class="field"><label>Source note</label><div class="seg">
+          <button class="approve" data-decide="approve" data-card="${card.key}" aria-pressed="${card.decision === "approve"}">Approve</button>
+          <button class="skip" data-decide="skip" data-card="${card.key}" aria-pressed="${card.decision === "skip"}">Skip</button>
+          <button class="delete" aria-pressed="false" disabled title="Not interactive in this mockup">Delete source</button>
+        </div></div>
+      </div>
+      <div class="elided">… template, location, keep source, tags, Link to a MOC: unchanged …</div>
+    </div>${attachmentsSection(card)}</div>`;
+  }
+
+  function suppressedCard(card) {
+    return `<div class="card suppressed"><div class="card-top">
+      <div class="row1">
+        <div class="field" style="flex:1"><label>Note (${card.id}) · not promoted</label><input class="inp name" value="${esc(card.title)}" /></div>
+        <div class="worthiness"><span class="wv">${Math.round(card.worthiness * 100)}%</span><span class="wl">worthiness</span></div>
+      </div>
+      <div class="suppressed-note">Below the 0.5 threshold, so it stays in the inbox and is not made an atomic note.</div>
+      <label class="force-atomic"><input type="checkbox" data-force="${card.key}" ${card.force ? "checked" : ""}/> <b>Force Atomic Note</b> <span class="muted">— create a standalone note anyway</span></label>
+    </div>${attachmentsSection(card)}</div>`;
+  }
+
+  function render(focus) {
+    document.getElementById("app").innerHTML = scenarios.map(s =>
+      `<p class="scenario">${s.caption}</p>` + s.cards.map(c => (c.worthy ? worthyCard(c) : suppressedCard(c))).join("")
+    ).join("");
+    if (focus) {
+      const el = document.querySelector(`[data-name="${CSS.escape(focus.src)}"][data-card="${focus.card}"]`);
+      if (el) { el.focus(); el.setSelectionRange(focus.pos, focus.pos); }
+    }
+  }
+
+  const cardByKey = k => allCards().find(c => c.key === k);
+
+  document.addEventListener("click", e => {
+    const r = e.target.closest("[data-remedy]");
+    if (r && !r.disabled) { conflicts[r.parentElement.dataset.src].remedy = r.dataset.remedy; openPicker = null; render(); return; }
+    const d = e.target.closest("[data-decide]");
+    if (d) { cardByKey(d.dataset.card).decision = d.dataset.decide; render(); return; }
+    const fp = e.target.closest("[data-folder]");
+    if (fp && !fp.disabled) {
+      const card = cardByKey(fp.dataset.card), src = fp.dataset.folder;
+      openPicker = openPicker && openPicker.card === card && openPicker.src === src ? null : { card, src };
+      render(); return;
+    }
+    const sf = e.target.closest("[data-setfolder]");
+    if (sf) {
+      const c = conflicts[sf.dataset.src];
+      c.proposed_dir = sf.dataset.setfolder === split(c.destination)[0] ? null : sf.dataset.setfolder;
+      // No free name from Pass 1: offer the original basename, visibly — Tomo never fills one in.
+      if (!c.proposed_name) c.proposed_name = split(sf.dataset.src)[1];
+      openPicker = null; render(); return;
+    }
+    if (openPicker && !e.target.closest(".pop")) { openPicker = null; render(); }
+  });
+  document.addEventListener("change", e => {
+    const f = e.target.closest("[data-force]");
+    if (f) { cardByKey(f.dataset.force).force = f.checked; render(); }
+  });
+  document.addEventListener("input", e => {
+    const n = e.target.closest("[data-name]");
+    if (!n) return;
+    conflicts[n.dataset.name].proposed_name = n.value;
+    render({ src: n.dataset.name, card: n.dataset.card, pos: n.selectionStart });
+  });
+  document.addEventListener("focusout", e => {
+    const n = e.target.closest("[data-name]");
+    if (!n) return;
+    // The wire carries exactly what the owner saw: commit the sanitised name on blur.
+    const { cleaned } = sanitise(n.value);
+    if (cleaned !== "") conflicts[n.dataset.name].proposed_name = cleaned;
+    render();
+  });
+  document.getElementById("theme").addEventListener("click", () => {
+    const root = document.documentElement;
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+  });
+  render();
+</script>
+</body>
+</html>

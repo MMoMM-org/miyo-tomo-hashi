@@ -247,6 +247,13 @@ export interface AttachmentConflictWire {
 	 * free name.
 	 */
 	readonly proposed_name: string | null;
+	/**
+	 * Editable — the vault-relative folder the renamed attachment moves to, no
+	 * leading or trailing slash. Null means Tomo's configured asset folder (and
+	 * is what we write when the owner picks that folder back). Read only when
+	 * `remedy` is `rename`; kept when the owner switches away from it.
+	 */
+	readonly proposed_dir: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +261,7 @@ export interface AttachmentConflictWire {
 // ---------------------------------------------------------------------------
 
 export interface SuggestionsWire {
-	readonly schema_version: "3";
+	readonly schema_version: "4";
 	readonly generated: string;
 	readonly run_id: string;
 	readonly profile: string;
@@ -266,8 +273,8 @@ export interface SuggestionsWire {
 	readonly daily_updates: readonly DailyUpdateWire[];
 	readonly tag_handler_groups: readonly TagGroupWire[];
 	/**
-	 * Preserved verbatim on save; not editable in the editor yet (#141), so
-	 * Tomo reads its emitted remedy defaults back unchanged.
+	 * Edited on the suggestion cards' Attachments section (#141) through
+	 * `transforms/attachmentConflict.ts`; read-only fields ride through verbatim.
 	 */
 	readonly attachment_conflicts: readonly AttachmentConflictWire[];
 }
