@@ -21,8 +21,9 @@
 
 export const PERMANENT_DELETE_WARNING =
 	"Hashi: your Obsidian “Files & Links → Deleted files” preference is set to " +
-	"“Permanently delete”. delete_source actions will permanently (non-recoverably) " +
-	"delete source files — they will NOT go to the trash. This warning is shown once.";
+	"“Permanently delete”. delete_source actions and “Clean up after full apply” will " +
+	"permanently (non-recoverably) delete files — they will NOT go to the trash. " +
+	"This warning is shown once.";
 
 export interface PermanentDeleteWarningDeps {
 	/** True iff the user's "Deleted files" preference is permanent deletion. */

@@ -200,6 +200,7 @@ function makeDefaultSettings(): PluginSettings {
 		hooksPolicy: "ask",
 		debugLogging: false,
 		permanentDeleteWarningShown: false,
+		cleanupAfterFullApply: false,
 		ideBridgeEnabled: true,
 		ideBridgePort: 0, // ephemeral — WsServer uses 0 for OS-assigned port
 		ideBridgeAuthToken: "",

@@ -84,6 +84,7 @@ export type HandlerMap = {
 	runLogRetention: (v: string) => Promise<void>;
 	hooksPolicy: (v: string) => Promise<void>;
 	debugLogging: (v: boolean) => Promise<void>;
+	cleanupAfterFullApply: (v: boolean) => Promise<void>;
 };
 
 export interface SettingsPersistence {
@@ -147,7 +148,7 @@ export function buildSettingsHandlers(
 		};
 
 	const booleanHandler =
-		(key: "debugLogging") => async (v: boolean): Promise<void> => {
+		(key: "debugLogging" | "cleanupAfterFullApply") => async (v: boolean): Promise<void> => {
 			persistence.settings[key] = v;
 			await persistence.saveSettings();
 		};
@@ -168,6 +169,7 @@ export function buildSettingsHandlers(
 		runLogRetention: dropdownHandler("runLogRetention"),
 		hooksPolicy: dropdownHandler("hooksPolicy"),
 		debugLogging: booleanHandler("debugLogging"),
+		cleanupAfterFullApply: booleanHandler("cleanupAfterFullApply"),
 	};
 }
 
@@ -522,6 +524,18 @@ export class SettingsTab extends PluginSettingTab {
 				["always", "Always keep"],
 				["only-after-failed", "Only after failed runs"],
 			], handlers.runLogRetention);
+
+		new Setting(containerEl)
+			.setName("Clean up after full apply")
+			.setDesc(
+				"Off by default. When on, an instruction set whose actions all applied is " +
+				"removed afterwards: its source docs (tomo.sources) and the instructions " +
+				"doc go to the trash, per Obsidian's \"Deleted files\" setting.",
+			)
+			.addToggle(toggle => {
+				toggle.setValue(this.plugin.settings.cleanupAfterFullApply);
+				toggle.onChange(handlers.cleanupAfterFullApply);
+			});
 
 		this.addPathSetting(containerEl, "Hooks directory",
 			"Vault-relative path to the directory scanned for hook scripts.",
