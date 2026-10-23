@@ -78,6 +78,7 @@ Cut down on the busywork — with the peace of mind that Hashi does only what yo
 - **Preview → progress → summary** modal, all stages in one Modal instance
 - **Idempotent re-runs** with a partial-resume banner ("N of M remaining (X already applied)")
 - **Per-run log** as a markdown file in your inbox folder, with retention policy
+- **Optional cleanup after a full apply** (off by default) — trashes a fully applied set's source docs and instructions doc, honouring Obsidian's *Deleted files* preference
 - **Status bar 橋** indicator (idle / running / error)
 - **Path safety** — `.obsidian/`, `.git/`, `.trash/`, hooks dir, and traversal-escape paths are denied
 - **Optional hooks** — `.cjs` files in your vault, full plugin privilege, with an ask-mode disclosure modal

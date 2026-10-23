@@ -55,6 +55,7 @@ import {
 	maybeWarnPermanentDelete,
 	type PermanentDeleteWarningDeps,
 } from "./permanentDeleteWarning.js";
+import { cleanupFullyAppliedSet } from "./fullApplyCleanup.js";
 import { HANDLERS, type Handler } from "../actions/index.js";
 
 // ---------------------------------------------------------------------------
@@ -310,9 +311,13 @@ export class InstructionExecutor {
 		// Kokoro decision 2026-06-12). Reached only when the run is committed to
 		// executing (a confirm-mode cancel returned above), so the warning maps
 		// to deletions about to actually happen. Fires at most once per install.
+		// Opt-in cleanup (#146) trashes files through the same trashFile path,
+		// so it triggers the same one-shot warning.
 		if (this.permanentDeleteWarning !== null) {
-			const hasDeleteSource = records.some((r) => r.kind === "delete_source");
-			await maybeWarnPermanentDelete(hasDeleteSource, this.permanentDeleteWarning);
+			const willTrash =
+				records.some((r) => r.kind === "delete_source") ||
+				this.settings.cleanupAfterFullApply;
+			await maybeWarnPermanentDelete(willTrash, this.permanentDeleteWarning);
 		}
 
 		// Step 6.5: pre-approve hooks — collect all ask-mode decisions before
@@ -588,6 +593,30 @@ export class InstructionExecutor {
 					await tickPeerCheckbox(vault, fileId, id);
 				}
 			}
+
+			// Step 8.6: opt-in cleanup after a full apply (#146, ADR-018 §4).
+			// Runs after the applied flush so "fully applied" is judged against
+			// the persisted truth, and before finalize so the log records it.
+			if (this.settings.cleanupAfterFullApply) {
+				for (const source of resolvedSources) {
+					if (!isFullyApplied(source.instructionSet, completedByFile.get(source.fileId))) {
+						continue;
+					}
+					const report = await cleanupFullyAppliedSet(
+						vault,
+						source.sourcePath,
+						this.clock,
+						this.settings.hooksDir,
+					);
+					this.debug(
+						`cleanup ${source.sourcePath} — trashed=${report.trashed.length}, warnings=${report.warnings.length}`,
+					);
+					for (const warning of report.warnings) {
+						console.warn(`[hashi:exec] cleanup ${source.sourcePath}: ${warning}`);
+					}
+					logWriter.appendCleanup(report);
+				}
+			}
 		} catch (err) {
 			// Surface the aborting error with a greppable prefix so it stands
 			// out from hook/Obsidian console noise (issue #52).
@@ -750,6 +779,20 @@ function recordKey(record: ActionRecord): string {
 function bareId(key: string): string {
 	const sep = key.indexOf("::");
 	return sep === -1 ? key : key.slice(sep + 2);
+}
+
+/**
+ * ADR-018 §4's "literal 100% success": every action of the set is applied —
+ * either already `applied: true` from an earlier run, or graduated in this
+ * one (applied / skipped-already). A failed, skipped-dependency or
+ * skipped-cancelled action never graduates, so it blocks cleanup.
+ */
+function isFullyApplied(
+	set: { actions: readonly Action[] },
+	completedThisRun: readonly string[] | undefined,
+): boolean {
+	const completed = new Set(completedThisRun ?? []);
+	return set.actions.every((a) => a.applied === true || completed.has(a.id));
 }
 
 function findDependencyFailure(

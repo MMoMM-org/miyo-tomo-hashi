@@ -678,6 +678,63 @@ describe("RunLogWriter — Instruction Fixer pointer line", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Cleanup section (#146)
+// ---------------------------------------------------------------------------
+
+describe("RunLogWriter — cleanup section (#146)", () => {
+	const SRC = "2026-04-29_1432_instructions.json";
+
+	it("renders a ## Cleanup section after the file sections, paths only", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({ sources: [SRC] }));
+		writer.appendRecord(makeRecord(SRC, "I01", "create_moc", "a → b", { kind: "applied" }));
+		writer.appendCleanup({
+			fileId: SRC,
+			trashed: ["tomo-inbox/s.md", "tomo-inbox/2026-04-29_1432_instructions.md", SRC],
+			warnings: ["source already gone: tomo-inbox/p.md"],
+		});
+		await writer.finalize(FIXED_END, "always");
+		const content = await vault.read(path);
+
+		const sectionIndex = content.indexOf(`## ${SRC}`);
+		const cleanupIndex = content.indexOf("## Cleanup");
+		expect(cleanupIndex).toBeGreaterThan(sectionIndex);
+		expect(content.slice(cleanupIndex)).toBe(
+			[
+				"## Cleanup",
+				"",
+				`### ${SRC}`,
+				"",
+				"- trashed: tomo-inbox/s.md",
+				"- trashed: tomo-inbox/2026-04-29_1432_instructions.md",
+				`- trashed: ${SRC}`,
+				"- warning: source already gone: tomo-inbox/p.md",
+				"",
+			].join("\n"),
+		);
+	});
+
+	it("omits the section when no cleanup ran, and never counts cleanup warnings as failures", async () => {
+		const vault = new FakeVaultFS();
+		const writer = new RunLogWriter(vault);
+		const path = await writer.start(makeStartMeta({ sources: [SRC] }));
+		writer.appendRecord(makeRecord(SRC, "I01", "create_moc", "a → b", { kind: "applied" }));
+		await writer.finalize(FIXED_END, "always");
+		expect(await vault.read(path)).not.toContain("## Cleanup");
+
+		// only-after-failed + clean run + cleanup warning → still no log
+		const vault2 = new FakeVaultFS();
+		const writer2 = new RunLogWriter(vault2);
+		const path2 = await writer2.start(makeStartMeta({ sources: [SRC] }));
+		writer2.appendRecord(makeRecord(SRC, "I01", "create_moc", "a → b", { kind: "applied" }));
+		writer2.appendCleanup({ fileId: SRC, trashed: [], warnings: ["trash failed: x"] });
+		await writer2.finalize(FIXED_END, "only-after-failed");
+		expect(await vault2.exists(path2)).toBe(false);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // No crypto imports guard
 // ---------------------------------------------------------------------------
 

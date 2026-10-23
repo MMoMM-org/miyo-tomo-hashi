@@ -112,6 +112,23 @@ If a file fails schema validation, no actions run. The log records:
 
 Other valid files in a batch run normally; their actions appear in the **Actions** section as usual.
 
+## Cleanup
+
+When [Clean up after full apply](instruction-executor.md#cleanup-after-full-apply) is on and at least one set qualified, the log ends with a section listing what was trashed, per set — paths and warnings only:
+
+```markdown
+## Cleanup
+
+### 100 Inbox/2026-10-23_0915_instructions.json
+
+- trashed: 100 Inbox/2026-10-23_0901_suggestions.md
+- trashed: 100 Inbox/2026-10-23_0915_instructions.md
+- trashed: 100 Inbox/2026-10-23_0915_instructions.json
+- warning: source already gone: 100 Inbox/2026-10-23_0858_moc-proposal.md
+```
+
+Cleanup warnings never count as failures, so **Only after failed runs** retention is unaffected.
+
 ## What's NOT in the log
 
 By [constitution rule L2](../README.md#part-of-miyo) (audit logs record metadata only, never content):
