@@ -38,7 +38,7 @@
 		"conventional-changelog-conventionalcommits": "^9.3.1",
 		"esbuild": "0.28.2",
 		"eslint-plugin-obsidianmd": "0.4.2",
-		"globals": "14.0.0",
+		"globals": "17.11.0",
 		"jiti": "2.7.0",
 		"jsdom": "^26.1.0",
 		"semantic-release": "^25.0.9",
