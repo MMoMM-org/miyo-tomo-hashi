@@ -1,3 +1,9 @@
+## [0.29.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.29.0...0.29.1) (2026-11-06)
+
+### Bug Fixes
+
+* **settings:** let the IDE bridge port be edited digit by digit ([1505eea](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/1505eeaa235c15cb9b2edf34deea22cb39229e8c))
+
 ## [0.29.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.28.0...0.29.0) (2026-10-13)
 
 ### ⚠ BREAKING CHANGES
