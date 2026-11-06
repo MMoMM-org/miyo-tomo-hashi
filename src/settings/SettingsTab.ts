@@ -247,6 +247,32 @@ export function buildIdeBridgeHandlers(
 	};
 }
 
+/**
+ * Wires the IDE bridge port text input.
+ *
+ * onChange fires per keystroke, so intermediate values (`230` while typing
+ * `23030`) are routinely out of range. They are simply not persisted; the
+ * field is only reset to the persisted port on blur. Resetting on every
+ * rejected keystroke made every digit but the last uneditable.
+ */
+export interface PortInput {
+	inputEl: HTMLInputElement;
+	setValue(value: string): unknown;
+	onChange(cb: (value: string) => Promise<void>): unknown;
+}
+
+export function bindPortInput(
+	text: PortInput,
+	getPort: () => number,
+	persistPort: (v: string) => Promise<void>,
+): void {
+	text.setValue(String(getPort()));
+	text.onChange(persistPort);
+	text.inputEl.addEventListener("blur", () => {
+		text.setValue(String(getPort()));
+	});
+}
+
 export class SettingsTab extends PluginSettingTab {
 	plugin: TomoHashiPlugin;
 	private unsubscribe: (() => void) | null = null;
@@ -423,15 +449,7 @@ export class SettingsTab extends PluginSettingTab {
 			portSetting.setDesc(`${this.plugin.settings.ideBridgePort} (locked while running)`);
 		} else {
 			portSetting.addText(text => {
-				text.setValue(String(this.plugin.settings.ideBridgePort));
-				text.onChange(async (v) => {
-					const prev = this.plugin.settings.ideBridgePort;
-					await handlers.port(v);
-					// Revert if the value was rejected (no-persist guard).
-					if (this.plugin.settings.ideBridgePort === prev && Number(v) !== prev) {
-						text.setValue(String(prev));
-					}
-				});
+				bindPortInput(text, () => this.plugin.settings.ideBridgePort, handlers.port);
 			});
 		}
 
