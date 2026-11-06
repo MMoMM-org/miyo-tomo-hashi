@@ -26,7 +26,7 @@ import type { TomoConnection } from "../../../../src/connection/TomoConnection";
 import type { TomoInstance } from "../../../../src/connection/types";
 import type TomoHashiPlugin from "../../../../src/main";
 import { InstancePickerModal } from "../../../../src/settings/InstancePickerModal";
-import { buildIdeBridgeHandlers, SettingsTab } from "../../../../src/settings/SettingsTab";
+import { bindPortInput, buildIdeBridgeHandlers, SettingsTab } from "../../../../src/settings/SettingsTab";
 import type { IdeBridgeController } from "../../../../src/settings/SettingsTab";
 import { ideBridgeStore } from "../../../../src/ide-bridge/ideBridgeStore";
 import { DEFAULT_SETTINGS } from "../../../../src/types/index";
@@ -685,6 +685,50 @@ function makePersistence(plugin: PluginStub): { settings: PluginSettings; saveSe
 		},
 	};
 }
+
+describe("bindPortInput — typing a new port", () => {
+	function makeText() {
+		const inputEl = document.createElement("input");
+		let changeCb: (v: string) => Promise<void> = async () => { /* unset */ };
+		const text = {
+			inputEl,
+			setValue: vi.fn((v: string) => { inputEl.value = v; return text; }),
+			onChange: vi.fn((cb: (v: string) => Promise<void>) => { changeCb = cb; return text; }),
+		};
+		// Simulates one keystroke: the browser updates the value, then onChange fires.
+		const type = async (v: string): Promise<void> => {
+			inputEl.value = v;
+			await changeCb(v);
+		};
+		return { text, inputEl, type };
+	}
+
+	it("keeps out-of-range intermediate values while typing and persists the final port", async () => {
+		const plugin = makePlugin({ ideBridgePort: 23027 });
+		const handlers = buildIdeBridgeHandlers(makeFakeController(), makePersistence(plugin));
+		const { text, inputEl, type } = makeText();
+		bindPortInput(text, () => plugin.settings.ideBridgePort, handlers.port);
+
+		for (const v of ["2302", "230", "23", "2", "", "3", "30", "300", "3000", "30000"]) {
+			await type(v);
+			expect(inputEl.value).toBe(v);
+		}
+		expect(plugin.settings.ideBridgePort).toBe(30000);
+	});
+
+	it("resets the field to the persisted port on blur when the typed value is invalid", async () => {
+		const plugin = makePlugin({ ideBridgePort: 23027 });
+		const handlers = buildIdeBridgeHandlers(makeFakeController(), makePersistence(plugin));
+		const { text, inputEl, type } = makeText();
+		bindPortInput(text, () => plugin.settings.ideBridgePort, handlers.port);
+
+		await type("230");
+		inputEl.dispatchEvent(new Event("blur"));
+
+		expect(inputEl.value).toBe("23027");
+		expect(plugin.settings.ideBridgePort).toBe(23027);
+	});
+});
 
 describe("buildIdeBridgeHandlers — port validation", () => {
 	const validPorts = [1024, 65535, 23027, 9000];
