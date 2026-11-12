@@ -48,11 +48,12 @@ Resolved in the 2026-06-03 docs pass and pruned from the table below: **M26** (#
 Docker Engine API floor + host-runtime compatibility table), **M27** (#27 — no per-OS
 runtime gating, document-not-gate decision), and **M24** (#25 — Test seam strategy
 sections added to all three plan READMEs).
+**M23** (#24 — leaked destination folder on a failed rename) was resolved 2026-11-12:
+handler tests pin the behaviour and PRD F4 Edge Cases documents it.
 
 The remaining open items are tracked as GitHub issues — label
 [`deferred-review`](https://github.com/MMoMM-org/miyo-tomo-hashi/labels/deferred-review):
 
 | Item | Issue |
 |------|-------|
-| M23 — partial-failure tests (leaked folder, no cleanup in v0.1) | [#24](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/24) |
 | H25 — prefers-reduced-motion test plan | [#28](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/28) |

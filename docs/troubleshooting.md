@@ -167,6 +167,19 @@ frontmatter API is markdown-only, so this is rejected before the vault is
 touched rather than failing partway. There is no workaround — those formats have
 no frontmatter block to edit.
 
+### An empty folder appeared after a failed move
+
+**Cause.** `create_moc`, `move_note` and `move_asset` create the destination
+folder first and move the file second. If the move itself fails (disk full,
+missing permission, a name Obsidian refuses), the run log shows
+`handler threw: <reason>` for that action — and the folder it just created stays
+behind, empty. Hashi does not roll back partial writes.
+
+**Fix.** Nothing is lost: the source file is still where it was and the action
+is not marked applied. Fix the cause named in the run log and run the
+instruction set again — the move lands in that same folder. If you no longer
+want the move, delete the empty folder by hand.
+
 ## Where to look for logs
 
 - **Run log** — `tomo-hashi-run-log_YYYY-MM-DDTHHMM.md`, written to your configured

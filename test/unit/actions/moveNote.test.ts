@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import { moveNote } from "../../../src/actions/moveNote.js";
 import type { MoveNoteAction } from "../../../src/schema/types.js";
@@ -246,5 +246,48 @@ describe("moveNote handler", () => {
 		});
 
 		expect((await moveNote(action, makeCtx(vault))).kind).toBe("applied");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Partial vault-write failure (#24, review M23)
+//
+// The destination folder is created BEFORE the rename. If the rename then
+// throws, the folder stays behind: v0.1 has no cleanup or rollback. That is
+// pinned here as the intended behaviour — the leftover folder is empty, the
+// source is untouched, and the next run retries cleanly (createFolder is
+// idempotent), so the leak is harmless.
+// ---------------------------------------------------------------------------
+
+describe("moveNote — rename fails after the destination folder was created", () => {
+	const SRC = "Inbox/raw-note.md";
+	const DST = "Notes/Projects/raw-note.md";
+	const DST_FOLDER = "Notes/Projects";
+
+	it("throws, leaves the new folder behind, and keeps the source in place", async () => {
+		const vault = new FakeVaultFS();
+		await seedFile(vault, SRC);
+		vi.spyOn(vault, "rename").mockRejectedValueOnce(new Error("disk full"));
+
+		await expect(moveNote(makeAction({ source: SRC, destination: DST }), makeCtx(vault))).rejects.toThrow("disk full");
+
+		expect(await vault.exists(DST_FOLDER)).toBe(true);
+		expect(await vault.list(DST_FOLDER)).toEqual([]);
+		expect(await vault.exists(SRC)).toBe(true);
+		expect(await vault.exists(DST)).toBe(false);
+	});
+
+	it("applies on the next run, reusing the leftover folder", async () => {
+		const vault = new FakeVaultFS();
+		await seedFile(vault, SRC);
+		vi.spyOn(vault, "rename").mockRejectedValueOnce(new Error("disk full"));
+		const action = makeAction({ source: SRC, destination: DST });
+		await expect(moveNote(action, makeCtx(vault))).rejects.toThrow();
+
+		const outcome = await moveNote(action, makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "applied" });
+		expect(await vault.exists(DST)).toBe(true);
+		expect(await vault.exists(SRC)).toBe(false);
 	});
 });
