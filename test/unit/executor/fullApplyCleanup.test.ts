@@ -124,19 +124,33 @@ describe("cleanupFullyAppliedSet", () => {
 		expect(report.warnings).toEqual([`no cleanup: instructions doc missing: ${MD_PATH}`]);
 	});
 
-	it("trashes nothing when the .md peer has no tomo.sources", async () => {
+	it("trashes nothing and leaves the frontmatter untouched when the .md peer has no tomo.sources", async () => {
 		const vault = new FakeVaultFS();
 		await vault.create(JSON_PATH, "{}");
 		await vault.create(MD_PATH, "# Instructions");
 		vault.seedFrontMatter(MD_PATH, { tomo: { doc_type: "instructions" } });
 		const trash = vi.spyOn(vault, "trash");
-		const processFm = vi.spyOn(vault, "processFrontMatter");
 
 		const report = await cleanupFullyAppliedSet(vault, JSON_PATH, clock, HOOKS_DIR);
 
 		expect(trash).not.toHaveBeenCalled();
-		expect(processFm).not.toHaveBeenCalled();
+		expect(await vault.readFrontMatter(MD_PATH)).toEqual({ tomo: { doc_type: "instructions" } });
 		expect(report.warnings).toEqual([`no cleanup: no tomo.sources on ${MD_PATH}`]);
+	});
+
+	// Real-vault regression (#146 QA): the peer-checkbox ticks rewrite the .md
+	// right before cleanup, so Obsidian's metadataCache is mid-rebuild and
+	// readFrontMatter returns undefined. Sources must come from the file itself.
+	it("reads tomo.sources from the file, not the (possibly stale) metadata cache", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(SUGGESTIONS, "s");
+		await seedSet(vault, [{ path: SUGGESTIONS }]);
+		vi.spyOn(vault, "readFrontMatter").mockResolvedValue(undefined);
+
+		const report = await cleanupFullyAppliedSet(vault, JSON_PATH, clock, HOOKS_DIR);
+
+		expect(report.trashed).toEqual([SUGGESTIONS, MD_PATH, JSON_PATH]);
+		expect(report.warnings).toEqual([]);
 	});
 
 	it("keeps the instructions doc when trashing a source throws", async () => {

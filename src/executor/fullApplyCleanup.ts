@@ -7,8 +7,9 @@
  * once per instruction set that reached literal 100% success. The 100% gate
  * lives in the executor; this module only performs the ordered cleanup:
  *
- *   1. flip `tomo.state=applied` on the `.md` peer by frontmatter MERGE;
- *   2. read `tomo.sources[]` from that frontmatter (ADR-018's source of truth);
+ *   1. read `tomo.sources[]` from the `.md` peer's frontmatter (ADR-018's
+ *      source of truth) and, in the same write, flip `tomo.state=applied`
+ *      by frontmatter MERGE;
  *   3. trash every `sources[].path`, then the `.md` peer, then the `.json`.
  *
  * The order is load-bearing: the instructions doc's `sources[]` is Tomo's only
@@ -27,6 +28,9 @@ import type { VaultFS } from "../vault/VaultFS.js";
 import type { Clock } from "./state.js";
 import { derivePeerPath } from "./peerCheckboxSync.js";
 import { denyListMatch, normalizeAndContain } from "../util/paths.js";
+
+/** Sentinel thrown inside processFrontMatter to abort the write. */
+const NO_SOURCES = new Error("no tomo.sources");
 
 export interface CleanupReport {
 	readonly fileId: string;
@@ -52,16 +56,26 @@ export async function cleanupFullyAppliedSet(
 			return report();
 		}
 
-		const sources = readSourcePaths(await vault.readFrontMatter(mdPath));
+		// Sources are read inside processFrontMatter, which parses the file
+		// itself, NOT via readFrontMatter: the peer-checkbox ticks rewrite this
+		// .md just before cleanup, so the metadataCache is often mid-rebuild and
+		// reads as "no frontmatter". Throwing NO_SOURCES aborts without a write.
+		const read: { sources: string[] | null } = { sources: null };
+		try {
+			await vault.processFrontMatter(mdPath, (fm) => {
+				read.sources = readSourcePaths(fm);
+				if (read.sources === null) throw NO_SOURCES;
+				const tomo = fm["tomo"] as Record<string, unknown>;
+				fm["tomo"] = { ...tomo, state: "applied", updated_at: clock.now().toISOString() };
+			});
+		} catch (err) {
+			if (err !== NO_SOURCES) throw err;
+		}
+		const sources = read.sources;
 		if (sources === null) {
 			warnings.push(`no cleanup: no tomo.sources on ${mdPath}`);
 			return report();
 		}
-
-		await vault.processFrontMatter(mdPath, (fm) => {
-			const tomo = isRecord(fm["tomo"]) ? fm["tomo"] : {};
-			fm["tomo"] = { ...tomo, state: "applied", updated_at: clock.now().toISOString() };
-		});
 
 		const seen = new Set<string>([mdPath, jsonPath]);
 		for (const raw of sources) {
