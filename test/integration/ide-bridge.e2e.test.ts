@@ -89,7 +89,9 @@ function connectClient(
 ): RawClient {
 	const socket = createConnection({ host: "127.0.0.1", port });
 	let received = Buffer.alloc(0);
-	let frameBuf = Buffer.alloc(0);
+	// Typed as the general Buffer: decodeFrames returns Buffer<ArrayBufferLike>,
+	// while Buffer.alloc infers the narrower Buffer<ArrayBuffer>.
+	let frameBuf: Buffer = Buffer.alloc(0);
 	const decoded: DecodedFrame[] = [];
 	let headerDone = false;
 
