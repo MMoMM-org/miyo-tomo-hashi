@@ -201,3 +201,46 @@ describe("moveAsset handler", () => {
 		}
 	});
 });
+
+// ---------------------------------------------------------------------------
+// Partial vault-write failure (#24, review M23)
+//
+// The destination folder is created BEFORE the rename. If the rename then
+// throws, the folder stays behind: v0.1 has no cleanup or rollback. That is
+// pinned here as the intended behaviour — the leftover folder is empty, the
+// source is untouched, and the next run retries cleanly (createFolder is
+// idempotent), so the leak is harmless.
+// ---------------------------------------------------------------------------
+
+describe("moveAsset — rename fails after the destination folder was created", () => {
+	const SRC = "100 Inbox/foto.png";
+	const DST = "Atlas/900 Assets/foto.png";
+	const DST_FOLDER = "Atlas/900 Assets";
+
+	it("throws, leaves the new folder behind, and keeps the source in place", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(SRC, "png-bytes");
+		vi.spyOn(vault, "rename").mockRejectedValueOnce(new Error("disk full"));
+
+		await expect(moveAsset(makeAction({ source: SRC, destination: DST }), makeCtx(vault))).rejects.toThrow("disk full");
+
+		expect(await vault.exists(DST_FOLDER)).toBe(true);
+		expect(await vault.list(DST_FOLDER)).toEqual([]);
+		expect(await vault.exists(SRC)).toBe(true);
+		expect(await vault.exists(DST)).toBe(false);
+	});
+
+	it("applies on the next run, reusing the leftover folder", async () => {
+		const vault = new FakeVaultFS();
+		await vault.create(SRC, "png-bytes");
+		vi.spyOn(vault, "rename").mockRejectedValueOnce(new Error("disk full"));
+		const action = makeAction({ source: SRC, destination: DST });
+		await expect(moveAsset(action, makeCtx(vault))).rejects.toThrow();
+
+		const outcome = await moveAsset(action, makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "applied" });
+		expect(await vault.exists(DST)).toBe(true);
+		expect(await vault.exists(SRC)).toBe(false);
+	});
+});
