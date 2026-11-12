@@ -578,7 +578,7 @@ export class SuggestionsTab implements EditorTab {
 		const main = row.createDiv({ cls: "hashi-se-cand-main" });
 		this.renderCandidatePath(main, candidate, ctx);
 		if (candidate.source === "user") {
-			main.createSpan({ cls: "hashi-se-src-badge", text: "added" });
+			main.createSpan({ cls: "hashi-se-src-badge", text: "Added" });
 		}
 		if (candidate.selected) {
 			this.renderAnchorRow(main, suggestion, candidate, ctx);
@@ -723,7 +723,7 @@ export class SuggestionsTab implements EditorTab {
 			cls: ["hashi-se-worthiness", isLow ? "hashi-se-low" : "hashi-se-mid"],
 		});
 		worthinessEl.createSpan({ cls: "hashi-se-wv", text: `${worthiness}%` });
-		worthinessEl.createSpan({ cls: "hashi-se-wl", text: "worthiness" });
+		worthinessEl.createSpan({ cls: "hashi-se-wl", text: "Worthiness" });
 	}
 
 	private renderForceAtomic(top: HTMLElement, suggestion: SuggestionWire, ctx: TabContext): void {

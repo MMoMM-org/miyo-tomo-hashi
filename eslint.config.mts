@@ -37,12 +37,13 @@ export default tseslint.config(
 			"@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
 			"@typescript-eslint/require-await": "off",
 			// Domain/proper-noun terms the sentence-case rule must leave alone:
-			// "MOC" (Map of Content) is MiYo terminology; "Bridge" is part of the
+			// "MOC" (Map of Content) is MiYo terminology; "Tomo" is the MiYo
+			// component's name; "Bridge" is part of the
 			// "IDE Bridge" feature name whose Notice strings PRD F13 mandates
 			// verbatim (see registerCommands.ts). ignoreWords keeps the plugin's
 			// built-in acronym list (IDE, URL, …) intact, unlike overriding
 			// `acronyms`.
-			"obsidianmd/ui/sentence-case": ["error", { ignoreWords: ["MOC", "Bridge"] }],
+			"obsidianmd/ui/sentence-case": ["error", { ignoreWords: ["MOC", "Bridge", "Tomo"] }],
 			// Pushed back: the declarative settings API this rule promotes only
 			// takes effect on Obsidian 1.13+, which is not officially released
 			// yet. Re-enable once 1.13 ships and adopting getSettingDefinitions()

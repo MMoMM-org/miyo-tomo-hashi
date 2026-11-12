@@ -85,7 +85,7 @@ describe("renderNavigableNoteLink — missing target", () => {
 
 		expect(el?.classList.contains("hashi-se-wlink")).toBe(false);
 		expect(el?.getAttribute("role")).not.toBe("link");
-		expect(el?.textContent).toBe("Ghost (note not found)");
+		expect(el?.textContent).toBe("Ghost (Note not found)");
 	});
 
 	it("clicking the missing-target element does nothing (no navigation call, no throw)", () => {
@@ -118,7 +118,7 @@ describe("renderNavigableNoteLink — missing target", () => {
 
 		const el = renderNavigableNoteLink(parent, app, "Ghost");
 
-		expect(el.textContent).toBe("Ghost (note not found)");
+		expect(el.textContent).toBe("Ghost (Note not found)");
 	});
 });
 

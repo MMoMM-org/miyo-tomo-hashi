@@ -807,7 +807,7 @@ describe("GardenAuditTab.render — target note title is an openable link", () =
 		expect(() => tab.render(container, model, ctx)).not.toThrow();
 		expect(container.querySelector(".hashi-se-wlink")).toBeNull();
 		const missing = container.querySelector(".hashi-ga-note-missing");
-		expect(missing?.textContent).toBe("Child (note not found)");
+		expect(missing?.textContent).toBe("Child (Note not found)");
 
 		missing?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 		expect(ctx.app.workspace.openLinkText).not.toHaveBeenCalled();
@@ -1664,7 +1664,7 @@ describe("GardenAuditTab.render — advisory read-only cards (T5.5)", () => {
 
 		expect(container.querySelector(".hashi-ga-card--advisory")).not.toBeNull();
 		expect(container.querySelector(".hashi-ga-card-readonly-tag")?.textContent).toBe(
-			"(read-only)",
+			"(Read-only)",
 		);
 	});
 
@@ -1712,7 +1712,7 @@ describe("GardenAuditTab.render — advisory read-only cards (T5.5)", () => {
 		const container = document.createElement("div");
 
 		expect(() => tab.render(container, model, makeCtx())).not.toThrow();
-		expect(container.textContent).toContain("(no colliding paths reported)");
+		expect(container.textContent).toContain("(No colliding paths reported)");
 	});
 
 	it("duplicate_stem skips non-string entries within a malformed dupes array — no crash", () => {
