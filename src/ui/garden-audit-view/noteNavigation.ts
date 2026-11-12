@@ -56,7 +56,7 @@ export function renderNavigableNoteLink(
 
 	if (!resolvesToFile(app, linktext, sourcePath)) {
 		const missing = parent.createSpan({ cls: "hashi-ga-note-missing", text });
-		missing.createSpan({ cls: "hashi-ga-note-missing-tag", text: " (note not found)" });
+		missing.createSpan({ cls: "hashi-ga-note-missing-tag", text: " (Note not found)" });
 		return missing;
 	}
 

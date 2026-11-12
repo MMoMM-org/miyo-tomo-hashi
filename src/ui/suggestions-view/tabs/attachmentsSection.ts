@@ -86,7 +86,7 @@ export function renderAttachmentsSection(
 		const dir = dirnameOf(source);
 		if (dir !== "") path.createSpan({ cls: "hashi-se-muted", text: `${dir}/` });
 		path.createSpan({ text: basenameOf(source) });
-		if (conflict !== undefined) line.createSpan({ cls: ["hashi-se-badge", "hashi-se-badge-conflict"], text: "destination taken" });
+		if (conflict !== undefined) line.createSpan({ cls: ["hashi-se-badge", "hashi-se-badge-conflict"], text: "Destination taken" });
 		const fate = !filed ? "stays in inbox with the note" : conflict === undefined ? "filed with the note" : "";
 		if (fate !== "") line.createSpan({ cls: "hashi-se-att-fate", text: fate });
 

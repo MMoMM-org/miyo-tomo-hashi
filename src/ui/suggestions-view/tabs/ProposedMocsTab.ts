@@ -280,7 +280,7 @@ export class ProposedMocsTab implements EditorTab {
 		if (!hasSameNameSibling(model, moc)) return;
 		card.createDiv({
 			cls: "hashi-se-merge-hint",
-			text: "◆ shares a name with another proposal → Tomo will merge them and union members",
+			text: "◆ Shares a name with another proposal → Tomo will merge them and union members",
 		});
 	}
 }

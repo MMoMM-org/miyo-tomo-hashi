@@ -805,7 +805,7 @@ describe("note link (PRD F6)", () => {
 		);
 	});
 
-	it("degrades to inert '(note not found)' text when the target no longer resolves", () => {
+	it("degrades to inert '(Note not found)' text when the target no longer resolves", () => {
 		const body = document.createElement("div");
 		const app = new App();
 		vi.mocked(app.metadataCache.getFirstLinkpathDest).mockReturnValue(null);
@@ -818,7 +818,7 @@ describe("note link (PRD F6)", () => {
 		});
 
 		const note = body.querySelector(".hashi-if-note");
-		expect(note?.textContent).toContain("(note not found)");
+		expect(note?.textContent).toContain("(Note not found)");
 		expect(note?.querySelector(".hashi-se-wlink")).toBeNull();
 		note?.querySelector(".hashi-ga-note-missing")?.dispatchEvent(
 			new MouseEvent("click", { bubbles: true }),

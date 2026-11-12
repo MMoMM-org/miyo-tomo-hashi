@@ -705,7 +705,7 @@ describe("SuggestionsTab", () => {
 			const row = reCard.querySelector(
 				`.hashi-se-cand[data-moc-path="Atlas/200 Maps/New MOC.md"]`,
 			)!;
-			expect(row.querySelector(".hashi-se-src-badge")?.textContent).toBe("added");
+			expect(row.querySelector(".hashi-se-src-badge")?.textContent).toBe("Added");
 		});
 
 		it("adding a MOC opens MocPicker and dispatches addMoc", async () => {
@@ -960,7 +960,7 @@ describe("SuggestionsTab", () => {
 			const worthiness = card.querySelector(".hashi-se-worthiness");
 			expect(worthiness?.classList.contains("hashi-se-low")).toBe(true);
 			expect(worthiness?.querySelector(".hashi-se-wv")?.textContent).toBe("20%");
-			expect(worthiness?.querySelector(".hashi-se-wl")?.textContent).toBe("worthiness");
+			expect(worthiness?.querySelector(".hashi-se-wl")?.textContent).toBe("Worthiness");
 
 			expect(card.querySelector(".hashi-se-suppressed-note")).not.toBeNull();
 			expect(card.querySelector(".hashi-se-force-atomic input[type='checkbox']")).not.toBeNull();

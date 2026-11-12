@@ -354,7 +354,7 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 		}
 		renderNavigableNoteLink(header, ctx.app, targetTitle(finding));
 		if (readOnly) {
-			header.createSpan({ cls: "hashi-ga-card-readonly-tag", text: "(read-only)" });
+			header.createSpan({ cls: "hashi-ga-card-readonly-tag", text: "(Read-only)" });
 		}
 		return card;
 	}
@@ -656,7 +656,7 @@ export class GardenAuditTab implements GardenAuditTabSpec {
 
 		const list = card.createDiv({ cls: "hashi-ga-advisory-dupes" });
 		if (dupes.length === 0) {
-			list.createDiv({ cls: "hashi-ga-advisory-dupe", text: "(no colliding paths reported)" });
+			list.createDiv({ cls: "hashi-ga-advisory-dupe", text: "(No colliding paths reported)" });
 			return;
 		}
 		for (const path of dupes) {
