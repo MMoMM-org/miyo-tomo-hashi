@@ -450,6 +450,7 @@ describe("SettingsTab — instruction executor controls", () => {
 		expect(text).toContain("Hooks directory");
 		expect(text).toContain("Hooks");
 		expect(text).toContain("Debug logging");
+		expect(text).toContain("Clean up after full apply");
 	});
 
 	it("changing tomoInboxFolder to a valid path calls saveSettings once", async () => {
@@ -503,6 +504,19 @@ describe("SettingsTab — instruction executor controls", () => {
 
 		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
 		expect(plugin.settings.debugLogging).toBe(true);
+	});
+
+	it("changing cleanupAfterFullApply toggle calls saveSettings once (#146)", async () => {
+		const conn = makeConnection();
+		const app = new App();
+		const plugin = makePlugin();
+		const tab = new SettingsTab(app, asPlugin(plugin), asConnection(conn));
+
+		tab.display();
+		await tab._getHandlersForTest().cleanupAfterFullApply?.(true);
+
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
+		expect(plugin.settings.cleanupAfterFullApply).toBe(true);
 	});
 
 	it("changing executionMode dropdown calls saveSettings once", async () => {
@@ -625,6 +639,8 @@ describe("SettingsTab — instruction executor controls", () => {
 			"debugLogging",
 			// 002 F4 amendment (2026-06-12) — one-shot permanent-delete warning
 			"permanentDeleteWarningShown",
+			// #146 — opt-in cleanup after a full apply (ADR-018 §4)
+			"cleanupAfterFullApply",
 			// 003 fields (ide-bridge)
 			"ideBridgeEnabled",
 			"ideBridgePort",
@@ -655,6 +671,7 @@ describe("SettingsTab — instruction executor controls", () => {
 		expect(DEFAULT_SETTINGS.hooksDir).toBe(".tomo-hashi/hooks");
 		expect(DEFAULT_SETTINGS.hooksPolicy).toBe("ask");
 		expect(DEFAULT_SETTINGS.debugLogging).toBe(false);
+		expect(DEFAULT_SETTINGS.cleanupAfterFullApply).toBe(false);
 	});
 });
 

@@ -126,6 +126,22 @@ Clicking Cancel during preview tears the run down without any side effect (nothi
 
 Esc on Confirm / Auto-run preview is equivalent to Cancel; Esc on Summary closes the modal.
 
+## Cleanup after full apply
+
+Off by default: applied instruction sets stay in your inbox until you delete them. Turn on **Settings → Clean up after full apply** to have Hashi tidy up a set once it is completely done (Kokoro ADR-018 §4, [#146](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/146)).
+
+A set qualifies only at **literal 100% success**: every action is `applied: true` — applied in this run, already correct (`skipped-already`), or applied in an earlier run. One `failed`, `skipped-dependency` or `skipped-cancelled` action keeps the whole set, and so does a cancel at preview or a run that aborts. For each qualifying set, after the `applied` flags are written:
+
+1. `tomo.state` on the instructions `.md` is set to `applied` (frontmatter merge — your other keys are kept).
+2. Every path in its `tomo.sources` (e.g. the suggestions doc) goes to the trash.
+3. The instructions `.md` goes to the trash, then the `_instructions.json`.
+
+The order is deliberate: the instructions doc is Tomo's record that the work is done, so it goes **last**. If any trash fails, Hashi stops for that set and keeps the instructions doc — otherwise Tomo would rebuild the set from the still-approved suggestions doc. A source that is already gone is a warning, not a stop. Paths outside the vault, in `.obsidian/`, `.git/`, `.trash/` or the hooks dir are never trashed. Every trashed path and warning is recorded in the run log's [Cleanup section](run-log.md#cleanup).
+
+Trashing follows Obsidian's **Files & Links → Deleted files** preference, exactly like `delete_source`. If that is set to *Permanently delete*, Hashi shows its one-time warning before the first run with cleanup enabled.
+
+Batch runs are judged per set: in a batch, the fully applied sets are cleaned up and the others stay. Turning the setting on also cleans up sets that were fully applied in earlier runs, the next time a run includes them.
+
 ## Halt-on-dependency
 
 A `link_to_moc` action references a MOC by path. If the referenced MOC was supposed to be created earlier in the same run by `create_moc`, and that creation failed:

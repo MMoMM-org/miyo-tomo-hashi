@@ -47,6 +47,7 @@ const settings: PluginSettings = {
 	hooksPolicy: "enabled",
 	debugLogging: false,
 	permanentDeleteWarningShown: false,
+	cleanupAfterFullApply: false,
 	ideBridgeEnabled: false,
 	ideBridgePort: 23027,
 	ideBridgeAuthToken: "",

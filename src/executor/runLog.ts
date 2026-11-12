@@ -5,6 +5,7 @@
  *   start(meta)                 → reserve a non-colliding path; return it (NO file write)
  *   appendRecord(record)        → buffer one ActionRecord
  *   appendValidationFailure(f)  → buffer a validation-only failure for a file
+ *   appendCleanup(report)       → buffer an opt-in cleanup report (#146)
  *   finalize(endedAt, retention) → create the file once with full content (or nothing, per retention)
  *
  * Write-once lifecycle: the run log is created in a single vault.create() call
@@ -24,6 +25,7 @@
 
 import type { VaultFS } from "../vault/VaultFS.js";
 import type { ActionRecord, ExecutionMode } from "./state.js";
+import type { CleanupReport } from "./fullApplyCleanup.js";
 import { buildRunLogFilename, resolveCollisionFreePath } from "../util/filenames.js";
 
 export type RunLogRetention = "always" | "only-after-failed";
@@ -86,6 +88,9 @@ export class RunLogWriter {
 	private logPath: string | null = null;
 	private meta: RunLogStartMeta | null = null;
 	private readonly entries: BufferedEntry[] = [];
+	// Kept apart from `entries`: cleanup is not an action outcome, so it must
+	// never feed the totals or the only-after-failed retention gate.
+	private readonly cleanups: CleanupReport[] = [];
 
 	constructor(vault: VaultFS) {
 		this.vault = vault;
@@ -125,6 +130,10 @@ export class RunLogWriter {
 		this.entries.push({ kind: "validation", failure });
 	}
 
+	appendCleanup(report: CleanupReport): void {
+		this.cleanups.push(report);
+	}
+
 	async finalize(endedAt: Date, retention: RunLogRetention): Promise<void> {
 		if (this.logPath === null || this.meta === null) {
 			throw new Error("RunLogWriter.finalize called before start");
@@ -141,7 +150,7 @@ export class RunLogWriter {
 			return;
 		}
 
-		const content = renderLog(this.meta, endedAt, this.entries);
+		const content = renderLog(this.meta, endedAt, this.entries, this.cleanups);
 		await this.vault.create(this.logPath, content);
 	}
 }
@@ -154,11 +163,27 @@ function renderLog(
 	meta: RunLogStartMeta,
 	endedAt: Date,
 	entries: readonly BufferedEntry[],
+	cleanups: readonly CleanupReport[],
 ): string {
 	const totals = computeTotals(entries);
 	const front = renderFrontmatter(meta, endedAt, totals);
 	const body = renderBody(meta.sources, entries);
-	return `${front}\n# Hashi run log\n\n${FIXER_POINTER_LINE}\n\n${body}`;
+	const cleanup = cleanups.length > 0 ? `\n${renderCleanup(cleanups)}` : "";
+	return `${front}\n# Hashi run log\n\n${FIXER_POINTER_LINE}\n\n${body}${cleanup}`;
+}
+
+// Bulleted, not tabled: outcomeSource reads `|` rows under `## <source>` and
+// stops at the next `## ` — this section must never look like action rows.
+// Paths and warnings only (Constitution L2: metadata, never note content).
+function renderCleanup(cleanups: readonly CleanupReport[]): string {
+	const lines = ["## Cleanup", ""];
+	for (const c of cleanups) {
+		lines.push(`### ${c.fileId}`, "");
+		for (const path of c.trashed) lines.push(`- trashed: ${path}`);
+		for (const warning of c.warnings) lines.push(`- warning: ${warning}`);
+		lines.push("");
+	}
+	return lines.join("\n");
 }
 
 function renderFrontmatter(

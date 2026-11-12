@@ -108,6 +108,14 @@ export interface PluginSettings {
 	 * amendment (Kokoro decision 2026-06-12).
 	 */
 	permanentDeleteWarningShown: boolean;
+	/**
+	 * Opt-in cleanup after a fully successful apply (default off). When on,
+	 * every instruction set whose actions all ended applied has `tomo.state`
+	 * flipped to `applied`, then its `tomo.sources[]` and the instructions doc
+	 * (`.md` + `.json`) trashed. Spec: Kokoro ADR-018 §4 (amended 2026-10-11),
+	 * miyo-tomo-hashi#146.
+	 */
+	cleanupAfterFullApply: boolean;
 
 	// --- 003 fields (NEW — ide-bridge) ---
 
@@ -163,6 +171,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	hooksPolicy: "ask",
 	debugLogging: false,
 	permanentDeleteWarningShown: false,
+	cleanupAfterFullApply: false,
 	// 003 defaults
 	ideBridgeEnabled: false,
 	ideBridgePort: 23027,

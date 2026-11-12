@@ -87,7 +87,7 @@ export async function tickPeerCheckbox(
  * Derive the .md peer path from a _instructions.json path.
  * Strips `.json` and appends `.md`.
  */
-function derivePeerPath(jsonSourcePath: string): string {
+export function derivePeerPath(jsonSourcePath: string): string {
 	return jsonSourcePath.slice(0, -".json".length) + ".md";
 }
 

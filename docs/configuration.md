@@ -49,9 +49,9 @@ The bridge binds `127.0.0.1` only and never `0.0.0.0`; it is not reachable from 
 
 ## C — Instruction executor
 
-> Screenshot — executor section showing all 6 controls.
+> Screenshot — executor section showing all 7 controls.
 <p align="center">
-  <img src="../assets/settings-tab-instruction-executor.png" alt="Instruction executor section in Settings — 6 controls: inbox folder, execution mode, run log retention, hooks dir, hooks policy, debug logging" width="720" />
+  <img src="../assets/settings-tab-instruction-executor.png" alt="Instruction executor section in Settings — 7 controls: inbox folder, execution mode, run log retention, clean up after full apply, hooks dir, hooks policy, debug logging" width="720" />
 </p>
 
 | Setting | What it does | Default |
@@ -59,6 +59,7 @@ The bridge binds `127.0.0.1` only and never `0.0.0.0`; it is not reachable from 
 | **Tomo inbox folder** | Vault-relative path to the folder Hashi watches for `*_instructions.json` files. Path is validated against traversal (`..`), absolute paths, and Windows drive letters. Invalid input is rejected with a Notice and the previous safe value is kept. | *empty* — set this before first run |
 | **Execution mode** | How the executor presents a run before applying it. See [modes](instruction-executor.md#execution-modes). | **Confirm before run** |
 | **Run log retention** | `Always keep` writes a log every run; `Only after failed runs` deletes the log when zero actions failed. | **Always keep** |
+| **Clean up after full apply** | When on, an instruction set whose actions *all* applied is removed after the run: its source docs (`tomo.sources`, e.g. the suggestions doc) and the instructions doc (`.md` + `.json`) go to the trash. Any failed or skipped action keeps the whole set. See [cleanup](instruction-executor.md#cleanup-after-full-apply). | **Off** |
 | **Hooks directory** | Vault-relative path scanned for `before-*.cjs` / `after-*.cjs` hook scripts. Same path safety as inbox. | `.tomo-hashi/hooks` |
 | **Hooks policy** | Master switch for hook execution. See [hooks](hooks.md#policy). | **Disabled** *(safe default — kill switch)* |
 | **Debug logging** | Verbose executor + hook output to the developer console (`Cmd/Ctrl+Shift+I`). Off in production. | **Off** |

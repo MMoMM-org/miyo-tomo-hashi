@@ -28,7 +28,7 @@ import { executionStore, selectKind, selectProgress } from "../../../src/executo
 import { Store } from "../../../src/util/store.js";
 import type { RunState, Clock, ValidationOutcome } from "../../../src/executor/state.js";
 import type { InstructionSet, Action } from "../../../src/schema/types.js";
-import type { PluginSettings } from "../../../src/types/index.js";
+import { DEFAULT_SETTINGS, type PluginSettings } from "../../../src/types/index.js";
 import type { HookOutcome } from "../../../src/hooks/HookRunner.js";
 import {
 	PERMANENT_DELETE_WARNING,
@@ -55,6 +55,7 @@ const defaultSettings: PluginSettings = {
 	hooksPolicy: "enabled",
 	debugLogging: false,
 	permanentDeleteWarningShown: false,
+	cleanupAfterFullApply: false,
 	ideBridgeEnabled: false,
 	ideBridgePort: 23027,
 	ideBridgeAuthToken: "",
@@ -1530,6 +1531,156 @@ describe("InstructionExecutor — permanent-delete warning wiring", () => {
 		});
 		expect(notify).not.toHaveBeenCalledWith(PERMANENT_DELETE_WARNING);
 		expect(markWarned).not.toHaveBeenCalled();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Opt-in cleanup after a full apply (#146, ADR-018 §4)
+// ---------------------------------------------------------------------------
+
+describe("InstructionExecutor — cleanup after full apply (#146)", () => {
+	const passThroughValidator = {
+		validate: (raw: unknown): ValidationOutcome => ({ ok: true, data: raw as InstructionSet }),
+	};
+
+	/** Seed one set: `.json` + `.md` peer whose tomo.sources names one suggestions doc. */
+	async function seedSet(vault: FakeVaultFS, stem: string, actions: Action[]): Promise<{
+		json: string;
+		md: string;
+		suggestions: string;
+	}> {
+		const json = `${INBOX}/${stem}_instructions.json`;
+		const md = `${INBOX}/${stem}_instructions.md`;
+		const suggestions = `${INBOX}/${stem}_suggestions.md`;
+		await vault.create(json, JSON.stringify(makeInstructionSet(actions), null, 2) + "\n");
+		await vault.create(md, "# Instructions");
+		vault.seedFrontMatter(md, {
+			tomo: { doc_type: "instructions", state: "pending-apply", sources: [{ path: suggestions }] },
+		});
+		await vault.create(suggestions, "# Suggestions");
+		return { json, md, suggestions };
+	}
+
+	function makeExecutor(
+		vault: FakeVaultFS,
+		settings: Partial<PluginSettings>,
+		permanentDeleteWarning?: PermanentDeleteWarningDeps,
+	): InstructionExecutor {
+		return new InstructionExecutor({
+			vault,
+			validator: passThroughValidator,
+			hookRunner: makeHookRunner(),
+			settings: makeSettings({ executionMode: "silent", ...settings }),
+			clock: fixedClock,
+			store: new Store<RunState>({ kind: "idle" }),
+			...(permanentDeleteWarning !== undefined ? { permanentDeleteWarning } : {}),
+		});
+	}
+
+	async function freshVault(): Promise<FakeVaultFS> {
+		const vault = new FakeVaultFS();
+		await vault.createFolder(INBOX);
+		await vault.createFolder("inbox");
+		await vault.createFolder("notes");
+		return vault;
+	}
+
+	it("leaves everything in place when the setting is off (default)", async () => {
+		const vault = await freshVault();
+		await vault.create("inbox/a.md", "a");
+		const set = await seedSet(vault, "2026-10-23_a", [makeMoveNote("I01", "inbox/a.md", "notes/a.md")]);
+
+		await makeExecutor(vault, {}).execute({ kind: "single-file", sourcePath: set.json });
+
+		expect(await vault.exists("notes/a.md")).toBe(true);
+		for (const p of [set.json, set.md, set.suggestions]) expect(await vault.exists(p)).toBe(true);
+		expect(DEFAULT_SETTINGS.cleanupAfterFullApply).toBe(false);
+	});
+
+	it("trashes sources and the instructions doc after a 100%-successful set, and logs it", async () => {
+		const vault = await freshVault();
+		await vault.create("inbox/a.md", "a");
+		const set = await seedSet(vault, "2026-10-23_a", [
+			makeMoveNote("I01", "inbox/a.md", "notes/a.md"),
+			makeMoveNote("I02", "inbox/gone.md", "notes/gone.md", true),
+		]);
+
+		await makeExecutor(vault, { cleanupAfterFullApply: true }).execute({
+			kind: "single-file",
+			sourcePath: set.json,
+		});
+
+		for (const p of [set.json, set.md, set.suggestions]) expect(await vault.exists(p)).toBe(false);
+		const logs = (await vault.list(INBOX)).filter((p) => p.includes("tomo-hashi-run-log"));
+		expect(logs).toHaveLength(1);
+		const log = await vault.read(logs[0] as string);
+		expect(log).toContain("## Cleanup");
+		expect(log).toContain(`- trashed: ${set.suggestions}`);
+	});
+
+	it("does not clean up a set with a failed or skipped-dependency action", async () => {
+		const vault = await freshVault();
+		await vault.create("inbox/a.md", "a");
+		await vault.create("inbox/del.md", "x");
+		const set = await seedSet(vault, "2026-10-23_a", [
+			makeMoveNote("I01", "inbox/a.md", "notes/a.md"),
+			makeMoveNote("I02", "inbox/missing.md", "notes/missing.md"),
+			makeDeleteSource("D01", "inbox/del.md", undefined, ["I02"]),
+		]);
+
+		await makeExecutor(vault, { cleanupAfterFullApply: true }).execute({
+			kind: "single-file",
+			sourcePath: set.json,
+		});
+
+		for (const p of [set.json, set.md, set.suggestions]) expect(await vault.exists(p)).toBe(true);
+		expect(await vault.exists("inbox/del.md")).toBe(true);
+	});
+
+	it("in a batch, cleans up only the fully applied set", async () => {
+		const vault = await freshVault();
+		await vault.create("inbox/a.md", "a");
+		const good = await seedSet(vault, "2026-10-23_a", [makeMoveNote("I01", "inbox/a.md", "notes/a.md")]);
+		const bad = await seedSet(vault, "2026-10-23_b", [
+			makeMoveNote("I01", "inbox/missing.md", "notes/missing.md"),
+		]);
+
+		await makeExecutor(vault, { cleanupAfterFullApply: true }).execute({ kind: "batch" });
+
+		for (const p of [good.json, good.md, good.suggestions]) expect(await vault.exists(p)).toBe(false);
+		for (const p of [bad.json, bad.md, bad.suggestions]) expect(await vault.exists(p)).toBe(true);
+	});
+
+	it("does not clean up when the user cancels at the confirm preview", async () => {
+		const vault = await freshVault();
+		await vault.create("inbox/a.md", "a");
+		const set = await seedSet(vault, "2026-10-23_a", [makeMoveNote("I01", "inbox/a.md", "notes/a.md")]);
+		const executor = makeExecutor(vault, { cleanupAfterFullApply: true, executionMode: "confirm" });
+
+		const run = executor.execute({ kind: "single-file", sourcePath: set.json });
+		await vi.waitFor(() => expect(selectKind(executor.state.get())).toBe("previewing"));
+		executor.cancel();
+		await run;
+
+		for (const p of [set.json, set.md, set.suggestions]) expect(await vault.exists(p)).toBe(true);
+	});
+
+	it("shows the one-time permanent-delete warning when cleanup is on, even without delete_source", async () => {
+		const vault = await freshVault();
+		await vault.create("inbox/a.md", "a");
+		const set = await seedSet(vault, "2026-10-23_a", [makeMoveNote("I01", "inbox/a.md", "notes/a.md")]);
+		const notify = vi.fn();
+		const markWarned = vi.fn<() => Promise<void>>(async () => {});
+
+		await makeExecutor(vault, { cleanupAfterFullApply: true }, {
+			isPermanent: () => true,
+			hasWarned: () => false,
+			markWarned,
+			notify: (msg) => notify(msg),
+		}).execute({ kind: "single-file", sourcePath: set.json });
+
+		expect(notify).toHaveBeenCalledWith(PERMANENT_DELETE_WARNING);
+		expect(markWarned).toHaveBeenCalledOnce();
 	});
 });
 
