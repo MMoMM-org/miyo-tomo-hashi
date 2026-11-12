@@ -6,8 +6,8 @@ name: Live Docker tests
 # throwaway containers on the ephemeral runner — nothing touches a dev host.
 #
 # Scoped to PRs into main (so dependency/connection changes self-verify) plus
-# manual dispatch. The lint.yml "CI" workflow still covers unit build/test/lint
-# on every push.
+# manual dispatch. The lint.yml "CI" workflow covers unit build/test/lint on
+# every PR and on pushes to main.
 
 on:
     pull_request:

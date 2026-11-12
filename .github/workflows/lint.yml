@@ -1,8 +1,10 @@
 name: CI
 
+# Runs on pull requests (every target branch) and on pushes to main, i.e. merges.
+# Plain pushes to feature branches do not trigger CI; open a PR to get checks.
 on:
     push:
-        branches: ["**"]
+        branches: [main]
     pull_request:
         branches: ["**"]
 
@@ -12,7 +14,9 @@ jobs:
 
         strategy:
             matrix:
-                node-version: [20.x, 22.x]
+                # Node 22 only: Node 20 is end-of-life (April 2026),
+                # and the plugin itself runs in Obsidian's Electron, not in this Node.
+                node-version: [22.x]
 
         steps:
             - uses: actions/checkout@v7
