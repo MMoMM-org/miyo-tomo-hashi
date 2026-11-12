@@ -1,3 +1,13 @@
+## [0.30.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.29.1...0.30.0) (2026-11-12)
+
+### Features
+
+* **executor:** opt-in cleanup after a fully successful apply ([2bced9b](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/2bced9bdb79b7a422a402077c492f003ef34a6d2)), closes [#146](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/146)
+
+### Bug Fixes
+
+* **executor:** read cleanup sources from the file, not the metadata cache ([6d72ffa](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/6d72ffa21105185264b101b8508c1acdfdfb8f8c)), closes [#68](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/68) [#146](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/146)
+
 ## [0.29.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.29.0...0.29.1) (2026-11-06)
 
 ### Bug Fixes
