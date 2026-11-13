@@ -24,7 +24,10 @@
  *   - `toolsList?`      : `tools/list` payload entries; defaults to [].
  *   - `serverInfo?`     : MCP serverInfo; defaults to the plugin identity.
  *   - `protocolVersion?`: MCP protocol version string.
- *   - `onClientCountChange(n)` / `onListenError(reason)` : the ONLY state surface.
+ *   - `onClientCountChange(n)` / `onListenError(reason)` / `onServerDown?(reason)`
+ *                       : the ONLY state surface. `onServerDown` fires at most
+ *                         once per listen, when the server dies after a
+ *                         successful listen without `stop()` (PRD F15, #47).
  *   - `log`             : `{ debug, warn, error }`.
  *   - `pingIntervalMs?` : keepalive interval (default 30000).
  *   - `readdressRetryMs?`: EADDRINUSE single re-listen delay (default 500).
@@ -91,6 +94,8 @@ export type WsServerOptions = {
 	protocolVersion?: string;
 	onClientCountChange: (count: number) => void;
 	onListenError: (reason: string) => void;
+	/** The server went down after a successful listen, not through stop(). */
+	onServerDown?: (reason: string) => void;
 	log: WsLog;
 	pingIntervalMs?: number;
 	readdressRetryMs?: number;
@@ -190,6 +195,7 @@ export class WsServer {
 				// lifecycle is unambiguous (a later error must not reject a settled
 				// promise). Behaviourally a no-op, but it removes the dangling listener.
 				server.removeListener("error", onError);
+				this.watchForCrash(server);
 				this.opts.log.debug(`[hashi/ide] listening on ${this.host}:${port}`);
 				this.startKeepalive();
 				resolve(port);
@@ -211,6 +217,22 @@ export class WsServer {
 		this.server = null;
 		if (server === null) return;
 		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+
+	/**
+	 * Report a post-listen death of `server` once. stop() clears `this.server`
+	 * before closing, so an intentional stop never reaches the callback; an
+	 * 'error' also closes the server so its clients and keepalive go with it.
+	 */
+	private watchForCrash(server: Server): void {
+		let reported = false;
+		const down = (reason: string): void => {
+			if (reported || this.server !== server) return;
+			reported = true;
+			void this.stop().then(() => this.opts.onServerDown?.(reason));
+		};
+		server.on("error", (err: Error) => down(err.message));
+		server.on("close", () => down("server closed"));
 	}
 
 	/** Frame `obj` as an UNMASKED TEXT JSON-RPC notification to every client. */

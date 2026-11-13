@@ -87,6 +87,12 @@ If socat connects but Claude Code still can't attach, the token doesn't match. H
 
 > Quick discriminator: **Connection refused** = nothing listening (port/enable problem). **401 / handshake failure** = listening but token rejected.
 
+### Status shows `Error: server stopped unexpectedly`
+
+The server went down after it had started. Hashi restarts it **once**, two seconds later, so a status that reads `… restarting in 2 s` normally turns back into `Running` by itself. Clients have to reconnect.
+
+Hashi gives up if that restart fails, or if the restarted server goes down again within a minute. The status then reads `… restart failed: {reason}`, a notice appears, and Hashi stops retrying. Fix the reason it names (most often another process holding the port), then turn **Enable** off and on again.
+
 ### Where Tomo's IDE logs live
 
 Claude Code writes its IDE-integration (MCP) logs **inside the Tomo container**, under the Tomo home:

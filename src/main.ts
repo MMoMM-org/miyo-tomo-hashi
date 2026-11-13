@@ -267,6 +267,8 @@ export default class TomoHashiPlugin extends Plugin {
 				warn: console.warn.bind(console),
 				error: console.error.bind(console),
 			},
+			// PRD F15: the one notice when crash recovery gives up.
+			notify: (message) => new Notice(message),
 		});
 		this.addSettingTab(new SettingsTab(this.app, this, conn, this.ideBridge));
 

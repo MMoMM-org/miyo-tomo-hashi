@@ -419,6 +419,50 @@ describe("WsServer", () => {
 		);
 	});
 
+	// #47 / PRD F15 — a server that goes down after a successful listen must be
+	// reported, or IdeBridge keeps showing `listening` for a dead port. The
+	// http.Server is private; reaching it through a cast is the only way to
+	// simulate a crash without a real OS-level failure.
+	function httpServerOf(ws: WsServer): import("node:http").Server {
+		return (ws as unknown as { server: import("node:http").Server }).server;
+	}
+
+	it("fires onServerDown once when the server errors after a successful listen", async () => {
+		const onServerDown = vi.fn();
+		const server = build({ onServerDown });
+		await server.listen();
+
+		httpServerOf(server).emit("error", new Error("boom"));
+
+		await vi.waitFor(() => expect(onServerDown).toHaveBeenCalledTimes(1), { timeout: 1000 });
+		expect(onServerDown).toHaveBeenCalledWith("boom");
+		// The follow-up 'close' of the same server must not report it again.
+		await new Promise((r) => setTimeout(r, 50));
+		expect(onServerDown).toHaveBeenCalledTimes(1);
+	});
+
+	it("fires onServerDown when the server closes without stop()", async () => {
+		const onServerDown = vi.fn();
+		const server = build({ onServerDown });
+		await server.listen();
+
+		httpServerOf(server).close();
+
+		await vi.waitFor(() => expect(onServerDown).toHaveBeenCalledTimes(1), { timeout: 1000 });
+		expect(onServerDown).toHaveBeenCalledWith("server closed");
+	});
+
+	it("does not fire onServerDown for an intentional stop()", async () => {
+		const onServerDown = vi.fn();
+		const server = build({ onServerDown });
+		await server.listen();
+
+		await server.stop();
+		await new Promise((r) => setTimeout(r, 50));
+
+		expect(onServerDown).not.toHaveBeenCalled();
+	});
+
 	it("maps malformed JSON over the socket to a JSON-RPC error and never throws out of the loop", async () => {
 		const log = makeLog();
 		const server = build({ log });

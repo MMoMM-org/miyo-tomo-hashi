@@ -221,9 +221,9 @@ The F2 number is retained (not reused) so existing F-references stay stable.
 
 - **User Story:** As the PKM Author, I want the IDE Bridge to recover automatically from a crash so that I do not have to manually re-enable it.
 - **Acceptance Criteria:**
-  - [ ] Given the WebSocket server crashes unexpectedly, When the crash is detected, Then the server restarts automatically after a 2-second delay
-  - [ ] Given the auto-restart also fails, When the second failure is detected, Then the bridge transitions to an error state with a user-visible notice and no further auto-retry
-- **Scope note:** Deferred to a post-v0.1 iteration. It is distinct from the **in-scope** single 500ms `EADDRINUSE` re-listen (one retry for the Kado hot-reload race, then `error` state — see plan T3.1); F15 is the broader crash auto-restart loop.
+  - [x] Given the WebSocket server crashes unexpectedly, When the crash is detected, Then the server restarts automatically after a 2-second delay
+  - [x] Given the auto-restart also fails, When the second failure is detected, Then the bridge transitions to an error state with a user-visible notice and no further auto-retry
+- **Scope note:** Implemented 2026-11-13 (#47). A crash is a server `error`/`close` after a successful listen that `stop()` did not cause. A crash within 60 s of an auto-restart counts as "the auto-restart also fails", so a flapping server cannot loop. This is separate from the single 500ms `EADDRINUSE` re-listen at startup (plan T3.1).
 
 #### Feature F16: Failed Auth Attempt Logging
 
