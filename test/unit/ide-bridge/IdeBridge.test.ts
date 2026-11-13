@@ -31,6 +31,7 @@ type ServerOpts = {
 	getToken: () => string;
 	onClientCountChange: (count: number) => void;
 	onListenError: (reason: string) => void;
+	onServerDown?: (reason: string) => void;
 	serverInfo?: { name: string; version: string };
 };
 
@@ -87,6 +88,12 @@ class FakeWsServer implements WsServerLike {
 		return this.clients;
 	}
 
+	/** Test helper — simulate a post-listen crash as the real server reports it. */
+	crash(reason = "boom"): void {
+		this.listening = false;
+		this.opts.onServerDown?.(reason);
+	}
+
 	/** Test helper — simulate a client count change as the real server would. */
 	fireClientCount(n: number): void {
 		this.clients = n;
@@ -102,6 +109,8 @@ interface Harness {
 	getSettings: () => PluginSettings;
 	tracker: { onEditorActivity: ReturnType<typeof vi.fn>; getLatest: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> };
 	setSettings: (next: PluginSettings & { ideBridgePort: number; ideBridgeAuthToken: string }) => void;
+	/** Make the NEXT server built by start() fail its listen with `reason`. */
+	failNextListen: (reason: string) => void;
 }
 
 function makeSettings(
@@ -124,8 +133,9 @@ function makeSettings(
 	} as PluginSettings & { ideBridgePort: number; ideBridgeAuthToken: string };
 }
 
-function makeHarness(): Harness {
+function makeHarness(extra: Partial<IdeBridgeDeps> = {}): Harness {
 	const servers: FakeWsServer[] = [];
+	let nextListenError: string | null = null;
 	let settings = makeSettings();
 	const getSettings = (): PluginSettings => settings;
 	const setSettings = (next: PluginSettings & { ideBridgePort: number; ideBridgeAuthToken: string }): void => {
@@ -149,15 +159,21 @@ function makeHarness(): Harness {
 		log: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
 		makeServer: (opts) => {
 			const s = new FakeWsServer(opts as ServerOpts);
+			s.listenError = nextListenError;
+			nextListenError = null;
 			servers.push(s);
 			return s;
 		},
 		makeAdapter: () => adapter,
 		makeTracker: () => tracker as unknown as SelectionTracker,
+		...extra,
 	};
 
 	const bridge = new IdeBridge(deps);
-	return { bridge, servers, persist, settings, getSettings, tracker, setSettings };
+	const failNextListen = (reason: string): void => {
+		nextListenError = reason;
+	};
+	return { bridge, servers, persist, settings, getSettings, tracker, setSettings, failNextListen };
 }
 
 function currentState(): IdeBridgeState {
@@ -410,3 +426,144 @@ function makeArmedBridge(reason: string, mode: "callback" | "silent" = "callback
 	};
 	return { bridge: new IdeBridge(deps), tracker };
 }
+
+// ---------------------------------------------------------------------------
+// #47 / PRD F15 — auto-restart after an unexpected server crash
+// ---------------------------------------------------------------------------
+
+describe("IdeBridge — auto-restart after a crash", () => {
+	let now = 0;
+
+	function crashHarness(): Harness & { notify: ReturnType<typeof vi.fn> } {
+		const notify = vi.fn();
+		const h = makeHarness({ notify, now: () => now });
+		return { ...h, notify };
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		now = 0;
+		ideBridgeStore.set({ kind: "stopped" });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		ideBridgeStore.set({ kind: "stopped" });
+	});
+
+	it("reports the crash, then restarts on a fresh server after 2 s", async () => {
+		const h = crashHarness();
+		await h.bridge.start();
+
+		h.servers[0]!.crash("boom");
+
+		expect(currentState()).toEqual({
+			kind: "error",
+			reason: "server stopped unexpectedly (boom), restarting in 2 s",
+		});
+		expect(h.bridge.isRunning()).toBe(false);
+		expect(h.tracker.dispose).toHaveBeenCalledTimes(1);
+
+		await vi.advanceTimersByTimeAsync(1999);
+		expect(h.servers).toHaveLength(1);
+
+		await vi.advanceTimersByTimeAsync(1);
+		expect(h.servers).toHaveLength(2);
+		expect(currentState()).toEqual({ kind: "listening", port: 23027 });
+		expect(h.bridge.isRunning()).toBe(true);
+		expect(h.notify).not.toHaveBeenCalled();
+	});
+
+	it("gives up with one notice when the restart fails", async () => {
+		const h = crashHarness();
+		await h.bridge.start();
+		h.failNextListen("port 23027 in use");
+
+		h.servers[0]!.crash("boom");
+		await vi.advanceTimersByTimeAsync(2000);
+
+		expect(currentState()).toEqual({
+			kind: "error",
+			reason: "server stopped unexpectedly; restart failed: port 23027 in use",
+		});
+		expect(h.notify).toHaveBeenCalledTimes(1);
+		expect(h.notify).toHaveBeenCalledWith(
+			"IDE Bridge stopped unexpectedly and could not restart: port 23027 in use",
+		);
+
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(h.servers).toHaveLength(2);
+	});
+
+	it("treats a crash within 60 s of an auto-restart as the second failure", async () => {
+		const h = crashHarness();
+		await h.bridge.start();
+		h.servers[0]!.crash("boom");
+		await vi.advanceTimersByTimeAsync(2000);
+		now += 2000;
+
+		now += 30_000;
+		h.servers[1]!.crash("again");
+
+		expect(currentState()).toEqual({
+			kind: "error",
+			reason: "server stopped unexpectedly; restart failed: again",
+		});
+		expect(h.notify).toHaveBeenCalledTimes(1);
+		await vi.advanceTimersByTimeAsync(10_000);
+		expect(h.servers).toHaveLength(2);
+	});
+
+	it("restarts again when the restarted server stayed up for more than 60 s", async () => {
+		const h = crashHarness();
+		await h.bridge.start();
+		h.servers[0]!.crash("boom");
+		await vi.advanceTimersByTimeAsync(2000);
+		now += 2000;
+
+		now += 61_000;
+		h.servers[1]!.crash("later");
+		await vi.advanceTimersByTimeAsync(2000);
+
+		expect(h.servers).toHaveLength(3);
+		expect(currentState()).toEqual({ kind: "listening", port: 23027 });
+		expect(h.notify).not.toHaveBeenCalled();
+	});
+
+	it("stop() during the restart delay cancels the restart", async () => {
+		const h = crashHarness();
+		await h.bridge.start();
+		h.servers[0]!.crash("boom");
+
+		await h.bridge.stop();
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(h.servers).toHaveLength(1);
+		expect(currentState()).toEqual({ kind: "stopped" });
+	});
+
+	it("a manual start() during the restart delay replaces the pending restart", async () => {
+		const h = crashHarness();
+		await h.bridge.start();
+		h.servers[0]!.crash("boom");
+
+		await h.bridge.start();
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(h.servers).toHaveLength(2);
+		expect(currentState()).toEqual({ kind: "listening", port: 23027 });
+	});
+
+	it("ignores a late crash report from a server that was already stopped", async () => {
+		const h = crashHarness();
+		await h.bridge.start();
+		const old = h.servers[0]!;
+		await h.bridge.stop();
+
+		old.crash("late");
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(currentState()).toEqual({ kind: "stopped" });
+		expect(h.servers).toHaveLength(1);
+	});
+});

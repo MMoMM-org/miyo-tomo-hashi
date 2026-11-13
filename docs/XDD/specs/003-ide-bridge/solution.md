@@ -284,7 +284,7 @@ PRIVACY.md                      # MODIFY: document the IDE Bridge network surfac
 README.md                       # MODIFY: add IDE Bridge to feature list + setup pointer (Tomo Docker wiring handoff)
 ```
 
-> **F15 (Auto-restart on crash) is a Could-Have — deferred.** v0.1 ships the single 500ms EADDRINUSE re-listen only (Kado hot-reload race). Full crash auto-restart is out of the v0.1 build; revisit if real-world crashes are observed.
+> **F15 (Auto-restart on crash) — implemented 2026-11-13 (#47).** After a successful listen, `WsServer` reports an `error`/`close` that `stop()` did not cause through `onServerDown(reason)`, once per server. `IdeBridge` moves to `error` ("restarting in 2 s"), then restarts on a fresh server after 2 s. If that restart fails, or the restarted server dies within 60 s, it stays in `error`, calls `notify` once (an Obsidian `Notice`), and stops retrying. A manual `start()`/`stop()` cancels a pending restart. No new state kind; the 500ms EADDRINUSE re-listen at startup is unchanged.
 
 ### Interface Specifications
 

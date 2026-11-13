@@ -23,7 +23,7 @@ phase: 3
 **Key Decisions**:
 - ADR-1: server is `http.createServer` + `'upgrade'` handler; hand-rolled framing from Phase 1.
 - ADR-8 (superseded): **no lock file** — `start()` only listens; `outbound: []`.
-- Single 500ms EADDRINUSE re-listen only (Kado hot-reload race); full crash auto-restart (F15) deferred.
+- Single 500ms EADDRINUSE re-listen only (Kado hot-reload race); full crash auto-restart (F15) was deferred here and landed later in #47.
 - `IdeBridge` is the **single writer** of `ideBridgeStore` and the sole owner of the token + server + tracker.
 
 **Dependencies**:

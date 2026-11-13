@@ -233,7 +233,7 @@ Before this plan is ready for implementation, verify:
 | F12 IDE Bridge Status (友 kanji) | T4.4 |
 | F13 Toggle IDE Bridge command | T4.5 |
 | F14 PRIVACY.md | T5.2 |
-| F15 Auto-restart (Could — deferred) | T3.1 ships only the single 500ms EADDRINUSE re-listen; full crash auto-restart is out of v0.1 (SDD note) |
+| F15 Auto-restart (Could) | Implemented post-v0.1 (#47): `test/unit/ide-bridge/wsServer.test.ts` ("onServerDown" tests) + `IdeBridge.test.ts` ("auto-restart after a crash") |
 | F16 Failed Auth Logging | T1.3 / T3.1 (warn-log rejected token) |
 
 > F2 is intentionally absent (removed 2026-05-28 — Tomo owns the container lock file; ADR-8 superseded). No Hashi task writes a lock file.

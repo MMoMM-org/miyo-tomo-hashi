@@ -6,8 +6,9 @@
  * (token.ts), the selection tracker (T2.6), and the tool registry (Phase 2) are
  * each pure, Obsidian-free, and unaware of one another. Something has to own the
  * order of operations — ensure the token, build the adapter/tracker/registry,
- * start/stop the server, and translate the server's two state callbacks
- * (`onClientCountChange`, `onListenError`) into the `IdeBridgeState` machine.
+ * start/stop the server, and translate the server's state callbacks
+ * (`onClientCountChange`, `onListenError`, `onServerDown`) into the
+ * `IdeBridgeState` machine — including the one auto-restart after a crash.
  * That owner is this class. It is the ONLY place `ideBridgeStore.set()` is
  * called, so the store has exactly one writer and the rest of the system reads.
  *
@@ -19,8 +20,14 @@
  * Production defaults construct the real implementations from `app`; unit tests
  * inject fakes and drive the server callbacks directly.
  *
+ * Crash recovery (PRD F15, #47): a server that dies after a successful listen
+ * is reported as `error`, then restarted once after {@link RESTART_DELAY_MS}.
+ * If that restart fails, or the restarted server dies again within
+ * {@link FLAP_WINDOW_MS}, the bridge stays in `error`, shows one notice, and
+ * stops retrying — a flapping server never loops silently.
+ *
  * Spec: docs/XDD/specs/003-ide-bridge — SDD lines 294-298 (state machine),
- *       323-339 (orchestrator API), PRD F3 (token regen).
+ *       323-339 (orchestrator API), PRD F3 (token regen), PRD F15 (restart).
  */
 
 import type { App } from "obsidian";
@@ -43,6 +50,12 @@ import type { PluginSettings } from "../types";
 
 /** Default IDE Bridge port when settings do not (yet) carry the field. */
 const DEFAULT_PORT = 23027;
+
+/** Delay before the single auto-restart after a crash (PRD F15 AC1). */
+const RESTART_DELAY_MS = 2000;
+
+/** A crash this soon after an auto-restart counts as the restart failing. */
+const FLAP_WINDOW_MS = 60_000;
 
 /**
  * The subset of WsServer's public surface IdeBridge depends on. Declaring it
@@ -81,6 +94,10 @@ export interface IdeBridgeDeps {
 		warn: (...args: unknown[]) => void;
 		error: (...args: unknown[]) => void;
 	};
+	/** User-visible message when crash recovery gives up (PRD F15 AC2). */
+	notify?: (message: string) => void;
+	/** Clock for the flap window. Defaults to Date.now. */
+	now?: () => number;
 	/** Build the transport. Defaults to the real WsServer. */
 	makeServer?: (opts: WsServerOptions) => WsServerLike;
 	/** Build the editor adapter. Defaults to the real ObsidianEditorAdapter. */
@@ -100,6 +117,10 @@ export class IdeBridge {
 	private port = DEFAULT_PORT;
 	/** Guards against concurrent/overlapping start() calls (idempotency). */
 	private starting = false;
+	/** Pending auto-restart after a crash; null when none is scheduled. */
+	private restartTimer: number | null = null;
+	/** When the last auto-restart succeeded; null when none counts against the budget. */
+	private lastAutoRestartAt: number | null = null;
 
 	constructor(deps: IdeBridgeDeps) {
 		this.deps = deps;
@@ -112,6 +133,14 @@ export class IdeBridge {
 	 * A listen failure routes through `transitionError` → store `error`.
 	 */
 	async start(): Promise<void> {
+		if (this.server !== null || this.starting) return;
+		// A manual start replaces any pending auto-restart and resets its budget.
+		this.cancelRestart();
+		this.lastAutoRestartAt = null;
+		await this.startServer();
+	}
+
+	private async startServer(): Promise<void> {
 		if (this.server !== null || this.starting) return;
 		this.starting = true;
 		try {
@@ -135,6 +164,7 @@ export class IdeBridge {
 				serverInfo: { name: "miyo-tomo-hashi", version: this.deps.version },
 				onClientCountChange: (n) => this.transitionClientCount(n),
 				onListenError: (reason) => this.transitionError(reason),
+				onServerDown: (reason) => this.handleServerDown(server, reason),
 				log: this.deps.log,
 			});
 			this.server = server;
@@ -164,8 +194,12 @@ export class IdeBridge {
 	 * and sets the store to `stopped`.
 	 */
 	async stop(): Promise<void> {
+		const restartWasPending = this.cancelRestart();
 		const server = this.server;
-		if (server === null) return;
+		if (server === null) {
+			if (restartWasPending) ideBridgeStore.set({ kind: "stopped" });
+			return;
+		}
 		this.server = null;
 		await server.stop();
 		this.tracker?.dispose();
@@ -221,6 +255,56 @@ export class IdeBridge {
 	 */
 	onEditorActivity(): void {
 		this.tracker?.onEditorActivity();
+	}
+
+	// -----------------------------------------------------------------------
+	// Crash recovery (PRD F15)
+	// -----------------------------------------------------------------------
+
+	private handleServerDown(server: WsServerLike, reason: string): void {
+		if (this.server !== server) return; // a late report from a stopped server
+		this.server = null;
+		this.tracker?.dispose();
+		this.tracker = null;
+
+		const last = this.lastAutoRestartAt;
+		if (last !== null && this.now() - last <= FLAP_WINDOW_MS) {
+			this.giveUp(reason);
+			return;
+		}
+		this.transitionError(`server stopped unexpectedly (${reason}), restarting in 2 s`);
+		this.restartTimer = window.setTimeout(() => {
+			this.restartTimer = null;
+			void this.autoRestart();
+		}, RESTART_DELAY_MS);
+	}
+
+	private async autoRestart(): Promise<void> {
+		await this.startServer();
+		if (this.server !== null) {
+			this.lastAutoRestartAt = this.now();
+			return;
+		}
+		const state = ideBridgeStore.get();
+		this.giveUp(state.kind === "error" ? state.reason : "unknown error");
+	}
+
+	private giveUp(reason: string): void {
+		this.lastAutoRestartAt = null;
+		this.transitionError(`server stopped unexpectedly; restart failed: ${reason}`);
+		this.deps.notify?.(`IDE Bridge stopped unexpectedly and could not restart: ${reason}`);
+	}
+
+	/** Cancel a pending auto-restart. Returns whether one was pending. */
+	private cancelRestart(): boolean {
+		if (this.restartTimer === null) return false;
+		window.clearTimeout(this.restartTimer);
+		this.restartTimer = null;
+		return true;
+	}
+
+	private now(): number {
+		return (this.deps.now ?? Date.now)();
 	}
 
 	// -----------------------------------------------------------------------
