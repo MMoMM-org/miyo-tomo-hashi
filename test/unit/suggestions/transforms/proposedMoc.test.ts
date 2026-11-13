@@ -12,9 +12,16 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { EditModel, ProposedMocWire, SuggestionsWire } from "../../../../src/types/suggestions.js";
+import type {
+	EditModel,
+	ProposedMocWire,
+	SuggestionsWire,
+	SuggestionWire,
+} from "../../../../src/types/suggestions.js";
 import {
+	addMemberToProposedMoc,
 	mergeProposedMocs,
+	removeMemberFromProposedMoc,
 	reparentProposedMoc,
 	renameProposedMoc,
 	setProposedMocDecision,
@@ -347,5 +354,110 @@ describe("mergeProposedMocs — reason count retarget", () => {
 		expect(result.doc.proposed_mocs.find((m) => m.id === "M01")?.reason).toBe(
 			"Groups related captures.",
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// #84 — add / remove a single note on a proposed MOC (in-doc only)
+// ---------------------------------------------------------------------------
+
+const getMockSuggestion = (id: string): SuggestionWire => ({
+	id,
+	stem: id,
+	item_key: `100 Inbox/${id}.md`,
+	title: `Note ${id}`,
+	attachments: [],
+	template: "[[Templates/Atomic]]",
+	location: "Atomics",
+	tags: [],
+	decision: "approve",
+	keep_source: false,
+	delete_source: false,
+	force_atomic: false,
+	suppressed: false,
+	candidate_mocs: [],
+});
+
+/** One MOC (M01, members S01+S02) in a doc whose suggestions are S01..S03. */
+const memberModel = (moc: Partial<ProposedMocWire> = {}): EditModel => ({
+	doc: {
+		...getMockWire([getMockProposedMoc({ id: "M01", member_ids: ["S01", "S02"], ...moc })]),
+		suggestions: ["S01", "S02", "S03"].map(getMockSuggestion),
+	},
+	dirty: false,
+});
+
+describe("addMemberToProposedMoc", () => {
+	it("appends the note and marks the model dirty", () => {
+		const model = memberModel();
+
+		const result = addMemberToProposedMoc(model, "M01", "S03");
+
+		expect(result.doc.proposed_mocs[0]?.member_ids).toEqual(["S01", "S02", "S03"]);
+		expect(result.dirty).toBe(true);
+		expect(model.doc.proposed_mocs[0]?.member_ids).toEqual(["S01", "S02"]);
+	});
+
+	it("retargets the reason's leading note count", () => {
+		const model = memberModel({ reason: "2 notes share topic Japan and have no dedicated MOC." });
+
+		const result = addMemberToProposedMoc(model, "M01", "S03");
+
+		expect(result.doc.proposed_mocs[0]?.reason).toBe(
+			"3 notes share topic Japan and have no dedicated MOC.",
+		);
+	});
+
+	it("is a no-op (same reference) when the note is already a member", () => {
+		const model = memberModel();
+
+		expect(addMemberToProposedMoc(model, "M01", "S02")).toBe(model);
+	});
+
+	it("rejects an id that names no suggestion in this doc (same reference)", () => {
+		const model = memberModel();
+
+		expect(addMemberToProposedMoc(model, "M01", "S99")).toBe(model);
+	});
+
+	it("is a no-op (same reference) for an unknown proposed MOC", () => {
+		const model = memberModel();
+
+		expect(addMemberToProposedMoc(model, "M99", "S03")).toBe(model);
+	});
+});
+
+describe("removeMemberFromProposedMoc", () => {
+	it("removes the note, retargets the count and marks the model dirty", () => {
+		const model = memberModel({ reason: "2 notes share topic Japan and have no dedicated MOC." });
+
+		const result = removeMemberFromProposedMoc(model, "M01", "S01");
+
+		expect(result.doc.proposed_mocs[0]?.member_ids).toEqual(["S02"]);
+		expect(result.doc.proposed_mocs[0]?.reason).toBe(
+			"1 note share topic Japan and have no dedicated MOC.",
+		);
+		expect(result.dirty).toBe(true);
+		expect(model.doc.proposed_mocs[0]?.member_ids).toEqual(["S01", "S02"]);
+	});
+
+	it("removes a dangling id that matches no suggestion", () => {
+		const model = memberModel({ member_ids: ["S01", "S99"] });
+
+		const result = removeMemberFromProposedMoc(model, "M01", "S99");
+
+		expect(result.doc.proposed_mocs[0]?.member_ids).toEqual(["S01"]);
+	});
+
+	it("is a no-op (same reference) when the note is not a member", () => {
+		const model = memberModel();
+
+		expect(removeMemberFromProposedMoc(model, "M01", "S03")).toBe(model);
+	});
+
+	it("is a no-op (same reference) for an unknown proposed MOC", () => {
+		const model = memberModel();
+
+		expect(removeMemberFromProposedMoc(model, "M99", "S01")).toBe(model);
 	});
 });

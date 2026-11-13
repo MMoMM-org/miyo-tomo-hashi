@@ -1,6 +1,7 @@
 /**
  * Proposed-MOC graph-op transforms (T1.5, SDD §6 Proposed MOCs, ADR-026 §5
- * id-based refs, PRD F4): rename, reparent, decision-flip, and merge.
+ * id-based refs, PRD F4): rename, reparent, decision-flip, merge, and adding
+ * or removing a single member (#84 — in-doc only; cross-doc is #173).
  *
  * All transforms are pure `EditModel → EditModel`. `ProposedMocWire` fields
  * are deeply `readonly`, so every edit builds a NEW `EditModel`/doc/node
@@ -139,4 +140,42 @@ export function mergeProposedMocs(model: EditModel, sourceId: string, targetId: 
 		);
 
 	return { doc: { ...model.doc, proposed_mocs: proposedMocs }, dirty: true };
+}
+
+/**
+ * Add one suggestion to a proposed MOC's `member_ids` and retarget the reason
+ * count. Rejects (same model) an unknown MOC, an id that names no suggestion
+ * in this doc — Tomo's `build_from_wire` would drop it silently — and an id
+ * that is already a member.
+ */
+export function addMemberToProposedMoc(
+	model: EditModel,
+	mocId: string,
+	suggestionId: string,
+): EditModel {
+	if (!model.doc.suggestions.some((suggestion) => suggestion.id === suggestionId)) {
+		return model;
+	}
+	return updateProposedMoc(model, mocId, (moc) => {
+		if (moc.member_ids.includes(suggestionId)) return null;
+		const memberIds = [...moc.member_ids, suggestionId];
+		return { ...moc, member_ids: memberIds, reason: retargetReasonCount(moc.reason, memberIds.length) };
+	});
+}
+
+/**
+ * Remove one id from a proposed MOC's `member_ids` and retarget the reason
+ * count. Any member id is removable, including a dangling one no suggestion
+ * matches. No-op (same model) for an unknown MOC or a non-member.
+ */
+export function removeMemberFromProposedMoc(
+	model: EditModel,
+	mocId: string,
+	suggestionId: string,
+): EditModel {
+	return updateProposedMoc(model, mocId, (moc) => {
+		if (!moc.member_ids.includes(suggestionId)) return null;
+		const memberIds = moc.member_ids.filter((id) => id !== suggestionId);
+		return { ...moc, member_ids: memberIds, reason: retargetReasonCount(moc.reason, memberIds.length) };
+	});
 }

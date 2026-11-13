@@ -74,6 +74,24 @@ vi.mock("../../../../../src/ui/suggestions-view/pickers/MergeTargetPicker", () =
 	}),
 }));
 
+interface CapturedMemberPicker {
+	options: readonly { id: string; title: string }[];
+	onChoose: (suggestionId: string) => void;
+	open: Mock<() => void>;
+}
+const memberPickerInstances: CapturedMemberPicker[] = [];
+vi.mock("../../../../../src/ui/suggestions-view/pickers/MemberPicker", () => ({
+	MemberPicker: vi.fn(function MemberPicker(
+		_app: unknown,
+		options: readonly { id: string; title: string }[],
+		onChoose: (suggestionId: string) => void,
+	) {
+		const instance: CapturedMemberPicker = { options, onChoose, open: vi.fn() };
+		memberPickerInstances.push(instance);
+		return instance;
+	}),
+}));
+
 // --- factories ---------------------------------------------------------------
 
 function makeSuggestion(overrides: Partial<SuggestionWire> & { id: string; title: string }): SuggestionWire {
@@ -196,6 +214,7 @@ describe("ProposedMocsTab", () => {
 		parentPickerInstances.length = 0;
 		tagPickerInstances.length = 0;
 		mergeTargetPickerInstances.length = 0;
+		memberPickerInstances.length = 0;
 	});
 
 	describe("contract", () => {
@@ -269,7 +288,11 @@ describe("ProposedMocsTab", () => {
 			const chips = Array.from(
 				cardFor(container, "M1").querySelectorAll<HTMLElement>(".hashi-se-chip.hashi-se-member"),
 			);
-			expect(chips.map((c) => c.textContent)).toEqual(["Note A", "S99"]);
+			// The chip also holds its × remove control (#84), so read the text span.
+			expect(chips.map((c) => c.querySelector(".hashi-se-member-text")?.textContent)).toEqual([
+				"Note A",
+				"S99",
+			]);
 			expect(chips[0]?.getAttribute("title")).toBe("S1");
 			expect(chips[1]?.getAttribute("title")).toBe("S99");
 		});
@@ -533,6 +556,59 @@ describe("ProposedMocsTab", () => {
 			const result = firstAppliedTransform(ctx.apply)(model);
 			expect(result.doc.proposed_mocs.find((m) => m.id === "M1")?.tags).toEqual([]);
 			expect(result.dirty).toBe(true);
+		});
+	});
+	describe("members (#84)", () => {
+		it("＋ note offers only suggestions that are not yet members and adds the chosen one", () => {
+			const tab = new ProposedMocsTab();
+			const container = document.createElement("div");
+			const model = seededModel();
+			const ctx = makeCtx();
+			tab.render(container, model, ctx);
+
+			// M2's only member is S2, so S1 is the one candidate.
+			const addBtn = cardFor(container, "M2").querySelector<HTMLElement>(".hashi-se-add-member");
+			addBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+			const picker = memberPickerInstances.at(-1);
+			expect(picker?.open).toHaveBeenCalledTimes(1);
+			expect(picker?.options).toEqual([{ id: "S1", title: "Note A" }]);
+
+			picker?.onChoose("S1");
+			const result = firstAppliedTransform(ctx.apply)(model);
+			expect(result.doc.proposed_mocs.find((m) => m.id === "M2")?.member_ids).toEqual(["S2", "S1"]);
+			expect(result.dirty).toBe(true);
+		});
+
+		it("hides ＋ note when every suggestion is already a member", () => {
+			const tab = new ProposedMocsTab();
+			const container = document.createElement("div");
+			const model = makeModel(
+				makeDoc({
+					suggestions: [SUGGESTION_A, SUGGESTION_B],
+					proposed_mocs: [makeProposedMoc({ id: "M1", member_ids: ["S1", "S2"] })],
+				}),
+			);
+			tab.render(container, model, makeCtx());
+
+			expect(container.querySelector(".hashi-se-add-member")).toBeNull();
+		});
+
+		it("× on a member chip removes that member, dangling ids included", () => {
+			const tab = new ProposedMocsTab();
+			const container = document.createElement("div");
+			const model = seededModel();
+			const ctx = makeCtx();
+			tab.render(container, model, ctx);
+
+			// M1's members are S1 and the dangling S99; remove the second chip.
+			const removeButtons = cardFor(container, "M1").querySelectorAll<HTMLElement>(".hashi-se-member-x");
+			expect(removeButtons).toHaveLength(2);
+			expect(removeButtons[1]?.getAttribute("aria-label")).toBe("Remove S99");
+			removeButtons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+			const result = firstAppliedTransform(ctx.apply)(model);
+			expect(result.doc.proposed_mocs.find((m) => m.id === "M1")?.member_ids).toEqual(["S1"]);
 		});
 	});
 });
