@@ -1,3 +1,9 @@
+## [0.31.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.30.1...0.31.0) (2026-11-13)
+
+### Features
+
+* **ide-bridge:** auto-restart the server once after an unexpected crash ([e824604](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/e8246048f232148be053e4e3abf72841194caacf)), closes [#47](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/47)
+
 ## [0.30.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.30.0...0.30.1) (2026-11-13)
 
 ### Bug Fixes
