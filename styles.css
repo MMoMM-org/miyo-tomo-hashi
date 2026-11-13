@@ -131,6 +131,15 @@
 	opacity: 1;
 }
 
+/* PRD F3/AC8: state changes are instant under reduced motion (#28).
+ * test/unit/styles-reduced-motion.test.ts requires every transition or
+ * animation in this file to be reset here. */
+@media (prefers-reduced-motion: reduce) {
+	.hashi-status-bar-glyph {
+		transition: none;
+	}
+}
+
 /* --- Chat-view zoom controls (ADR-6 — theme-bound CSS vars only) --- */
 
 .hashi-chat-view-zoom-group {

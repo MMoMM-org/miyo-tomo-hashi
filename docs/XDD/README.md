@@ -50,10 +50,9 @@ runtime gating, document-not-gate decision), and **M24** (#25 — Test seam stra
 sections added to all three plan READMEs).
 **M23** (#24 — leaked destination folder on a failed rename) was resolved 2026-11-12:
 handler tests pin the behaviour and PRD F4 Edge Cases documents it.
+**H25** (#28 — prefers-reduced-motion test plan) was resolved 2026-11-13: `styles.css`
+resets its one transition under reduced motion, and a stylesheet test requires every
+future transition or animation to be reset too.
 
-The remaining open items are tracked as GitHub issues — label
-[`deferred-review`](https://github.com/MMoMM-org/miyo-tomo-hashi/labels/deferred-review):
-
-| Item | Issue |
-|------|-------|
-| H25 — prefers-reduced-motion test plan | [#28](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/28) |
+No deferred review items remain open. New ones are tracked as GitHub issues — label
+[`deferred-review`](https://github.com/MMoMM-org/miyo-tomo-hashi/labels/deferred-review).
