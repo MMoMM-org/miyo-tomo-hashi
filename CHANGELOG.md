@@ -1,3 +1,9 @@
+## [0.30.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.30.0...0.30.1) (2026-11-13)
+
+### Bug Fixes
+
+* **ui:** honour prefers-reduced-motion on the status-bar glyph ([23d45e0](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/23d45e0aa65bc9336e4c0939241ac603250a0c3e)), closes [#28](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/28)
+
 ## [0.30.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.29.1...0.30.0) (2026-11-12)
 
 ### Features
