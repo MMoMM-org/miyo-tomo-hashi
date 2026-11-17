@@ -72,6 +72,14 @@ export const SAMPLES = {
 		anchor: { type: "heading", value: "Summary" },
 		content: "Rewritten body",
 	},
+	replace_between_markers: {
+		id: "I17",
+		action: "replace_between_markers",
+		target_path: "Calendar/Weekly/2026-W13.md",
+		start_marker: "%% tomo:s1 2026-W13 %%",
+		end_marker: "%% /tomo:s1 2026-W13 %%",
+		content: "- Steuererklärung abgeschickt",
+	},
 	add_relationship: {
 		id: "I06",
 		action: "add_relationship",

@@ -22,7 +22,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 describe("ActionKind", () => {
-	it("is the exact 16-element string-literal union", () => {
+	it("is the exact 17-element string-literal union", () => {
 		expectTypeOf<ActionKind>().toEqualTypeOf<
 			| "create_moc"
 			| "move_note"
@@ -30,6 +30,7 @@ describe("ActionKind", () => {
 			| "link_to_moc"
 			| "insert_under_marker"
 			| "replace_section"
+			| "replace_between_markers"
 			| "add_relationship"
 			| "edit_note_text"
 			| "edit_frontmatter"
@@ -43,7 +44,7 @@ describe("ActionKind", () => {
 		>();
 	});
 
-	it("all 16 literals are assignable to ActionKind", () => {
+	it("all 17 literals are assignable to ActionKind", () => {
 		const allKinds: ActionKind[] = [
 			"create_moc",
 			"move_note",
@@ -51,6 +52,7 @@ describe("ActionKind", () => {
 			"link_to_moc",
 			"insert_under_marker",
 			"replace_section",
+			"replace_between_markers",
 			"add_relationship",
 			"edit_note_text",
 			"edit_frontmatter",
@@ -62,8 +64,8 @@ describe("ActionKind", () => {
 			"delete_source",
 			"skip",
 		];
-		// Runtime check: exactly 16
-		expect(allKinds).toHaveLength(16);
+		// Runtime check: exactly 17
+		expect(allKinds).toHaveLength(17);
 	});
 });
 
@@ -83,9 +85,9 @@ describe("InstructionSet", () => {
 		expect(is.schema_version).toBe("3");
 	});
 
-	it("schema_version is typed as string literal '2', not number 2", () => {
-		// Type-level: schema_version must be "3" (string), not 3 (number).
-		expectTypeOf<InstructionSet["schema_version"]>().toEqualTypeOf<"3">();
+	it("schema_version is typed as the accepted string literals, not numbers", () => {
+		// Type-level: "3" | "4" (strings) — v4 is additive, so v3 still validates (#179).
+		expectTypeOf<InstructionSet["schema_version"]>().toEqualTypeOf<"3" | "4">();
 	});
 
 	it("actions field is a readonly array of Action", () => {
@@ -296,6 +298,8 @@ describe("Action discriminated union", () => {
 					return `insert_under_marker:${a.target_path}`;
 				case "replace_section":
 					return `replace_section:${a.target_path}`;
+				case "replace_between_markers":
+					return `replace_between_markers:${a.target_path}`;
 				case "add_relationship":
 					return `add_relationship:${a.marker}`;
 				case "edit_note_text":

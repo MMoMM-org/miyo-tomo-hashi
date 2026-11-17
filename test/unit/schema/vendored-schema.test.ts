@@ -20,12 +20,12 @@ function loadSchema(): SchemaRoot {
 }
 
 describe("src/schema/instructions.schema.json — vendored Tomo schema (ADR-2)", () => {
-	it("schema_version const equals '3' (Tomo canonical value)", () => {
+	it("schema_version accepts exactly '3' and '4' (v4 is additive, #179)", () => {
 		const schema = loadSchema();
 		const versionDef = (schema.properties as Record<string, unknown>)["schema_version"] as {
-			const: string;
+			enum: string[];
 		};
-		expect(versionDef.const).toBe("3");
+		expect(versionDef.enum).toEqual(["3", "4"]);
 	});
 
 	it("$defs/applied_field is present (Tomo v0.7.0+ structural marker)", () => {

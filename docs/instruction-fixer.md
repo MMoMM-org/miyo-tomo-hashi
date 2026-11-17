@@ -92,7 +92,7 @@ target fields → note link.
 
 ### Editable target fields, by kind
 
-Only 8 of the 16 action kinds carry a repairable target field (the ones where a mechanical
+Only 9 of the 17 action kinds carry a repairable target field (the ones where a mechanical
 mismatch — "what this points at isn't there anymore" — is the realistic failure mode):
 
 | Kind | Editable target fields |
@@ -100,8 +100,10 @@ mismatch — "what this points at isn't there anymore" — is the realistic fail
 | `link_to_moc` | Target MOC (stem), Target MOC path, Anchor |
 | `insert_under_marker` | Target note (path), Anchor |
 | `replace_section` | Target note (path), Section heading |
+| `replace_between_markers` | Target note (path) — the markers are Tomo's ids; a deleted marker is restored in the note, not renamed in the action |
 | `add_relationship` | Target MOC path, Marker, Line |
 | `edit_note_text` | Note (path), Match, Replace |
+| `edit_frontmatter` | Note (path), Property, New value, Expected current value, Expect the property to be absent |
 | `remove_up_link` | Note (path), Link (stem) |
 | `resolve_dead_link` | Note (path), Dead link (stem), Replace |
 
@@ -225,5 +227,5 @@ cards and outcomes you see afterward always reflect what's actually on disk.
   reads outcomes from and re-runs through
 - [Run log](run-log.md) — the pointer line and the outcome table the Fixer parses when no
   in-session run summary is available
-- [Action reference](action-reference.md) — all 16 action kinds; the 8 with a repairable
+- [Action reference](action-reference.md) — all 17 action kinds; the 9 with a repairable
   target field are marked above

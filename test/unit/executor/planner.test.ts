@@ -318,6 +318,38 @@ describe("computeRemaining — canonical order", () => {
 		]);
 	});
 
+	it("plans replace_between_markers directly after replace_section, whatever the ids say (#179)", () => {
+		// Silent-drop guard + slot pin. Tomo plans around this order: section
+		// inserts, then section replaces, then marker-block replaces.
+		const actions: Action[] = [
+			{
+				id: "I01",
+				action: "replace_between_markers",
+				target_path: "Calendar/Weekly/2026-W13.md",
+				start_marker: "%% tomo:s1 2026-W13 %%",
+				end_marker: "%% /tomo:s1 2026-W13 %%",
+				content: "- private review line",
+			},
+			makeEditFrontmatter("I02", "Atlas/note.md", "up"),
+			makeReplaceSection("I03", "Efforts/Status.md"),
+			makeInsertUnderMarker("I04", "Efforts/Dev Log.md"),
+		];
+		const sources = [makeResolvedSource("file.json", "inbox/file.json", actions)];
+
+		const { records } = computeRemaining(sources);
+
+		expect(records.map((r) => r.kind)).toEqual([
+			"insert_under_marker",
+			"replace_section",
+			"replace_between_markers",
+			"edit_frontmatter",
+		]);
+		// Run-log summary: path + start marker, never the replaced lines (Privacy L2).
+		const rbm = records.find((r) => r.kind === "replace_between_markers");
+		expect(rbm?.summary).toBe("Calendar/Weekly/2026-W13.md :: %% tomo:s1 2026-W13 %%");
+		expect(rbm?.summary).not.toContain("private review line");
+	});
+
 	it("plans edit_frontmatter in its canonical slot after edit_note_text (silent-drop guard)", () => {
 		// Regression guard: a kind missing from planner KIND_ORDER is silently
 		// dropped from the execution list, invisible to handler/registry tests

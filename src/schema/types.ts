@@ -149,6 +149,27 @@ export interface ReplaceSectionAction extends ActionBase {
 	readonly content: string;
 }
 
+/**
+ * ReplaceBetweenMarkersAction — replace ONLY the lines strictly between a
+ * start-marker line and its end-marker line in an existing note. The marker
+ * lines and every line outside them stay byte-identical, which is what lets
+ * Tomo's `/review` re-run refresh its own block inside a section the user also
+ * writes in (`replace_section` would discard the user's text).
+ *
+ * Marker lines are whole, unfenced, column-0 lines (`trimEnd() === marker`).
+ * The optional `scope` only ever turns an apply into a failure. Markers are
+ * resolved inside `vault.process` on the current content. Modify-only.
+ * [ref: Tomo handoff 2026-11-14 replace-between-markers; #179]
+ */
+export interface ReplaceBetweenMarkersAction extends ActionBase {
+	readonly action: "replace_between_markers";
+	readonly target_path: string;
+	readonly start_marker: string;
+	readonly end_marker: string;
+	readonly scope?: { readonly heading: string; readonly level: number };
+	readonly content: string;
+}
+
 export interface AddRelationshipAction extends ActionBase {
 	readonly action: "add_relationship";
 	readonly target_moc_path: string;
@@ -337,6 +358,7 @@ export type Action =
 	| LinkToMocAction
 	| InsertUnderMarkerAction
 	| ReplaceSectionAction
+	| ReplaceBetweenMarkersAction
 	| AddRelationshipAction
 	| EditNoteTextAction
 	| EditFrontmatterAction
@@ -382,7 +404,7 @@ export interface TomoBlock {
 // ---------------------------------------------------------------------------
 
 export interface InstructionSet {
-	readonly schema_version: "3";
+	readonly schema_version: "3" | "4";
 	readonly type: "tomo-instructions";
 	readonly generated: string;
 	readonly profile: string | null;

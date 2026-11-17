@@ -50,6 +50,9 @@ export const TARGET_FIELD_WHITELIST = {
 	link_to_moc: ["target_moc", "target_moc_path", "anchor"],
 	insert_under_marker: ["target_path", "anchor"],
 	replace_section: ["target_path", "anchor"],
+	// Only the note is repairable. The markers are Tomo's opaque ids: a marker
+	// the user deleted is restored in the note, not renamed in the action.
+	replace_between_markers: ["target_path"],
 	add_relationship: ["target_moc_path", "marker", "line"],
 	edit_note_text: ["path", "match", "replace"],
 	// The optimistic-locking guard on edit_frontmatter only helps if a failed

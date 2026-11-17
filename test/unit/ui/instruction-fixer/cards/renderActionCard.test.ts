@@ -750,6 +750,8 @@ describe("note link (PRD F6)", () => {
 		link_to_moc: "Atlas/200 Maps/Systems (MOC).md",
 		insert_under_marker: "Atlas/202 Notes/Board.md",
 		replace_section: "Atlas/202 Notes/Board.md",
+		// replaceBetweenMarkers.ts processes `target_path`.
+		replace_between_markers: "Calendar/Weekly/2026-W13.md",
 		// addRelationship.ts:43 reads/writes target_moc_path.
 		add_relationship: "Atlas/200 Maps/Systems (MOC).md",
 		edit_note_text: "Atlas/202 Notes/Existing.md",
