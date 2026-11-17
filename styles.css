@@ -1306,7 +1306,8 @@
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
 }
-.hashi-se-tag {
+.hashi-se-tag,
+.hashi-se-add-member {
 	font-size: 11px;
 	color: var(--se-text-muted);
 	background: var(--se-bg-alt);
@@ -1317,7 +1318,8 @@
 	align-items: center;
 	gap: 4px;
 }
-.hashi-se-tag-x {
+.hashi-se-tag-x,
+.hashi-se-member-x {
 	font-family: inherit;
 	font-size: 13px;
 	line-height: 1;
@@ -1327,16 +1329,19 @@
 	padding: 0;
 	cursor: pointer;
 }
-.hashi-se-tag-x:hover {
+.hashi-se-tag-x:hover,
+.hashi-se-member-x:hover {
 	color: var(--se-red);
 }
-.hashi-se-tag.hashi-se-add {
+.hashi-se-tag.hashi-se-add,
+.hashi-se-add-member {
 	cursor: pointer;
 	color: var(--se-accent);
 	border-style: dashed;
 	border-color: color-mix(in srgb, var(--se-accent) 45%, var(--se-border));
 }
-.hashi-se-tag.hashi-se-add:hover {
+.hashi-se-tag.hashi-se-add:hover,
+.hashi-se-add-member:hover {
 	background: var(--se-accent-soft);
 }
 .hashi-se-chip {
@@ -1353,6 +1358,13 @@
 }
 .hashi-se-chip.hashi-se-member {
 	cursor: help;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.hashi-se-member-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* ---- suppressed card ----------------------------------------------------- */

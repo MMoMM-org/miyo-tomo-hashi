@@ -132,6 +132,12 @@ fuzzy), the **Members** (notes linked by their `S##` id), and **Tags**; plus an
 folding members and tags together and retargeting the reason count. Suggestion cards
 cross-reference the proposed MOC they belong to, so a rename or merge shows through.
 
+To change membership one note at a time, click **＋ note** on a card and pick a note from
+this run, or click **×** on a member to take it off. The reason's leading note count
+follows along. Membership stays within one suggestions doc: a note in the primary doc
+cannot yet join a MOC that is proposed only in the Force-Atomic fan doc (tracked in
+[#173](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/173)).
+
 > Screenshot — Proposed MOCs tab: a card with Name, Parent, Create? (Approve/Skip), Members, and Tags.
 <p align="center">
   <img src="../assets/suggestions-editor-proposed-moc.png" alt="Suggestions Editor — Proposed MOCs tab. One card (M01) named 'Cooking (MOC)', Parent '2700 – Art & Recreation', a Create? Approve/Skip control with Approve selected, a Members row listing a linked note, a topic/japan tag, and a grey reason line: '1 note share topic Cooking and have no dedicated MOC.'" width="600" />

@@ -5,7 +5,9 @@
  * `proposedCard()`): an inline-editable name, a parent mini-pick control
  * that opens `ParentPicker`, an approve/skip segmented decision control,
  * member chips (rendered by the referenced suggestion's TITLE — S## id
- * shown on hover, falling back to the raw id when no suggestion matches), a
+ * shown on hover, falling back to the raw id when no suggestion matches),
+ * each removable with `×`, plus a "＋ note" control that adds one of the run's
+ * other suggestions via `MemberPicker` (#84 — in-doc only; cross-doc is #173), a
  * "⇄ Merge into…" affordance that folds this proposal into any OTHER proposal
  * (via `MergeTargetPicker` → `mergeProposedMocs`), a tag list whose chips are
  * individually removable plus a `TagPicker` add affordance, the read-only
@@ -24,11 +26,14 @@ import type {
 	ProposedMocWire,
 } from "../../../types/suggestions.js";
 import {
+	addMemberToProposedMoc,
 	mergeProposedMocs,
+	removeMemberFromProposedMoc,
 	renameProposedMoc,
 	reparentProposedMoc,
 	setProposedMocDecision,
 } from "../../../suggestions/transforms/proposedMoc.js";
+import { MemberPicker } from "../pickers/MemberPicker.js";
 import { MergeTargetPicker } from "../pickers/MergeTargetPicker.js";
 import { ParentPicker } from "../pickers/ParentPicker.js";
 import { TagPicker } from "../pickers/TagPicker.js";
@@ -196,12 +201,9 @@ export class ProposedMocsTab implements EditorTab {
 		const members = row.createDiv({ cls: "hashi-se-members" });
 		members.createSpan({ cls: "hashi-se-lbl", text: "Members" });
 		for (const memberId of moc.member_ids) {
-			members.createSpan({
-				cls: ["hashi-se-chip", "hashi-se-member"],
-				text: memberTitle(model, memberId),
-				attr: { title: memberId },
-			});
+			this.renderMemberChip(members, model, moc, memberId, ctx);
 		}
+		this.renderAddMember(members, model, moc, ctx);
 
 		row.createDiv({ cls: "hashi-se-spacer" });
 
@@ -223,6 +225,54 @@ export class ProposedMocsTab implements EditorTab {
 					ctx.apply((m) => mergeProposedMocs(m, moc.id, targetId));
 				},
 			).open();
+		});
+	}
+
+	/** A member chip: the note's title (S## id on hover) plus an `×` remove control. */
+	private renderMemberChip(
+		members: HTMLElement,
+		model: EditModel,
+		moc: ProposedMocWire,
+		memberId: string,
+		ctx: TabContext,
+	): void {
+		const title = memberTitle(model, memberId);
+		const chip = members.createSpan({
+			cls: ["hashi-se-chip", "hashi-se-member"],
+			attr: { title: memberId },
+		});
+		chip.createSpan({ cls: "hashi-se-member-text", text: title });
+		const remove = chip.createEl("button", {
+			cls: "hashi-se-member-x",
+			text: "×",
+			attr: { type: "button", "aria-label": `Remove ${title}` },
+		});
+		remove.addEventListener("click", () => {
+			ctx.apply((m) => removeMemberFromProposedMoc(m, moc.id, memberId));
+		});
+	}
+
+	/** "＋ note" — add one of the doc's non-member suggestions. Hidden when none is left. */
+	private renderAddMember(
+		members: HTMLElement,
+		model: EditModel,
+		moc: ProposedMocWire,
+		ctx: TabContext,
+	): void {
+		const candidates = model.doc.suggestions
+			.filter((suggestion) => !moc.member_ids.includes(suggestion.id))
+			.map((suggestion) => ({ id: suggestion.id, title: suggestion.title }));
+		if (candidates.length === 0) return;
+
+		const addButton = members.createEl("button", {
+			cls: "hashi-se-add-member",
+			text: "＋ note",
+			attr: { type: "button" },
+		});
+		addButton.addEventListener("click", () => {
+			new MemberPicker(ctx.app, candidates, (suggestionId) => {
+				ctx.apply((m) => addMemberToProposedMoc(m, moc.id, suggestionId));
+			}).open();
 		});
 	}
 
