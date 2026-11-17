@@ -1,3 +1,9 @@
+## [0.32.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.31.0...0.32.0) (2026-11-17)
+
+### Features
+
+* **suggestions:** add or remove a single note on a proposed MOC ([f00ac5e](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/f00ac5eccbc9c92de08345576c118abbce50572d)), closes [#84](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/84)
+
 ## [0.31.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.30.1...0.31.0) (2026-11-13)
 
 ### Features
