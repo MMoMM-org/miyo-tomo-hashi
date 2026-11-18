@@ -1,3 +1,9 @@
+## [0.33.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.32.0...0.33.0) (2026-11-18)
+
+### Features
+
+* **actions:** add replace_between_markers and accept instructions wire v4 ([abd92d6](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/abd92d68eeb02d9351cc162b519116cd0ec422a2)), closes [#180](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/180) [#179](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/179)
+
 ## [0.32.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.31.0...0.32.0) (2026-11-17)
 
 ### Features
