@@ -124,6 +124,8 @@ Insert a multi-line markdown block beneath a marker in **any** vault note (the `
 - `skipped-already` — a byte-identical block is already present.
 - `failed` — target missing, anchor value null, marker not resolvable, or `inside` + `line`/`block`. File untouched.
 
+**Race-safe:** the marker is resolved on the note's content at the moment of writing, inside Obsidian's atomic `vault.process`. If the note changed since it was last read (editor open, sync, a plugin stamping it), the block still lands at the marker. If the marker no longer resolves, nothing is written. ([#180](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/180))
+
 ## `replace_section`
 
 **Overwrite** the body of a heading section in any note — the deliberate counterpart to `insert_under_marker`. It intentionally breaks the "append, never replace" invariant, which is why it is its own opt-in action kind rather than a mode on an insert. Heading-scoped for v1.
@@ -138,6 +140,8 @@ Insert a multi-line markdown block beneath a marker in **any** vault note (the `
 - `applied` — section body overwritten.
 - `skipped-already` — the section body already equals `content` byte-for-byte.
 - `failed` — target missing, anchor value null, non-heading anchor, or heading not found. File untouched (never a blind write).
+
+**Race-safe:** the section is resolved on the note's content at the moment of writing, inside Obsidian's atomic `vault.process`, so a change made since the last read never shifts which lines get overwritten. If the heading no longer resolves, nothing is written. ([#180](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/180))
 
 ## `replace_between_markers`
 

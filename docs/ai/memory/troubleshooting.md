@@ -156,3 +156,15 @@ first. Property already gone (for `remove`) or already at `value` (for `set`) me
 applied-flag persistence problem, not a bad `expected` — do not report it upstream to Tomo as a
 mis-emission. A genuine mismatch shows a *third* value, one that is neither `expected` nor
 `value`. Told to Tomo 2026-09-03 so their user-report triage starts from the same hypothesis.
+
+## A block lands at the wrong place, or user lines get overwritten, in a note open in the editor
+**Symptom:** an insert or a section replace hits the wrong lines when the note changed between
+the handler's read and its write (editor open, sync, a plugin stamping the note).
+**Cause:** the handler resolved its line indexes on `cachedRead`, then spliced them into the
+`current` content inside `vault.process`. Those indexes belong to the earlier read (#180).
+**Fix:** `insert_under_marker`, `replace_section` and `replace_between_markers` now resolve and edit inside
+the transform via `src/actions/processResolved.ts`. When nothing resolves, an outcome
+(`failed` / `skipped-already`) aborts the write. Test it with a spied `process` that hands the
+transform a modified `current`.
+**Still open:** `link_to_moc`, `add_relationship`, `remove_up_link`, `update_tracker` (field + line
+sites), `update_log_entry` and `update_log_link` use the same read-then-splice shape.
