@@ -100,12 +100,12 @@ function formatErrors(errors: ErrorObject[], raw: unknown): string {
 	// mode that has prescribed user-facing wording — it drives the
 	// "upgrade Hashi" prompt downstream, so callers parse the literal
 	// "Schema version mismatch — expected X, got Y" form. AJV's generic
-	// "must be equal to constant" doesn't carry the actual value.
-	if (first.keyword === "const" && first.instancePath === "/schema_version") {
-		const expected = stringifyScalar(
-			(first.params as { allowedValue?: unknown }).allowedValue,
-			"1",
-		);
+	// "must be equal to one of the allowed values" doesn't carry the actual value.
+	// Since v4 (#179) the field is an enum of the accepted versions, not a
+	// const: v4 is purely additive, so waiting v3 sets still validate.
+	if (first.keyword === "enum" && first.instancePath === "/schema_version") {
+		const allowed = (first.params as { allowedValues?: unknown[] }).allowedValues ?? [];
+		const expected = allowed.map((v) => stringifyScalar(v, "?")).join(" or ");
 		const actualRaw = (raw as { schema_version?: unknown } | null)
 			?.schema_version;
 		const actual = stringifyScalar(actualRaw, "undefined");

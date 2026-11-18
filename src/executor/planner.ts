@@ -43,6 +43,7 @@ const KIND_ORDER: readonly ActionKind[] = [
 	"link_to_moc",
 	"insert_under_marker",
 	"replace_section",
+	"replace_between_markers",
 	"edit_note_text",
 	"edit_frontmatter",
 	"remove_up_link",
@@ -342,6 +343,10 @@ function buildSummary(action: Action): string {
 			return `${action.target_path}#${action.anchor.value ?? "—"} (${action.placement})`;
 		case "replace_section":
 			return `${action.target_path}#${action.anchor.value ?? "—"}`;
+		case "replace_between_markers":
+			// Metadata only — Tomo's marker ids are opaque and never come from
+			// note text; the replaced lines are note content (Privacy L2).
+			return `${action.target_path} :: ${action.start_marker}`;
 		case "add_relationship":
 			return `${action.target_moc_path} :: ${action.marker}`;
 		case "edit_frontmatter":

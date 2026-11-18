@@ -42,7 +42,7 @@ Which outcomes count as "succeeds" for `after-`:
 
 Your hook therefore does **not** need to guard on outcome — if it ran, the action's end-state is present. This is a deliberate contract: until 0.25.1 the executor invoked `after-` hooks on failed actions too, which let a hook write into a file the action had never touched (a failed `move_note` whose destination was occupied fired `after-move_note`, stamping an alias for the un-moved note onto the unrelated occupant).
 
-`<action>` is one of the [action kinds](action-reference.md): `create_moc`, `move_note`, `move_asset`, `link_to_moc`, `edit_frontmatter`, `insert_under_marker`, `replace_section`, `add_relationship`, `edit_note_text`, `remove_up_link`, `resolve_dead_link`, `update_tracker`, `update_log_entry`, `update_log_link`, `delete_source`, `skip`.
+`<action>` is one of the [action kinds](action-reference.md): `create_moc`, `move_note`, `move_asset`, `link_to_moc`, `edit_frontmatter`, `insert_under_marker`, `replace_section`, `replace_between_markers`, `add_relationship`, `edit_note_text`, `remove_up_link`, `resolve_dead_link`, `update_tracker`, `update_log_entry`, `update_log_link`, `delete_source`, `skip`.
 
 Examples:
 

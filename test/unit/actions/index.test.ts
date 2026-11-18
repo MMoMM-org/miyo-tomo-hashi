@@ -2,7 +2,7 @@
  * HANDLERS dispatch registry tests.
  *
  * T3.6 — verifies:
- *   1. Key coverage: HANDLERS has exactly 16 keys matching all ActionKind values.
+ *   1. Key coverage: HANDLERS has exactly 17 keys matching all ActionKind values.
  *   2. Identity: each registry entry points to the canonical handler function.
  *   3. Dispatch smoke: HANDLERS[action.action](action, ctx) routes to the correct handler.
  *
@@ -26,6 +26,7 @@ import {
 	linkToMoc,
 	insertUnderMarker,
 	replaceSection,
+	replaceBetweenMarkers,
 	updateTracker,
 	updateLogEntry,
 	updateLogLink,
@@ -54,7 +55,7 @@ const makeCtx = (vault: FakeVaultFS) => ({
 // ---------------------------------------------------------------------------
 
 describe("HANDLERS — key coverage", () => {
-	it("has exactly the 16 ActionKind keys", () => {
+	it("has exactly the 17 ActionKind keys", () => {
 		const expectedKeys: ActionKind[] = [
 			"create_moc",
 			"move_note",
@@ -62,6 +63,7 @@ describe("HANDLERS — key coverage", () => {
 			"link_to_moc",
 			"insert_under_marker",
 			"replace_section",
+			"replace_between_markers",
 			"add_relationship",
 			"edit_note_text",
 			"edit_frontmatter",
@@ -108,6 +110,10 @@ describe("HANDLERS — identity", () => {
 
 	it("HANDLERS.replace_section === replaceSection", () => {
 		expect(HANDLERS.replace_section).toBe(replaceSection);
+	});
+
+	it("HANDLERS.replace_between_markers === replaceBetweenMarkers", () => {
+		expect(HANDLERS.replace_between_markers).toBe(replaceBetweenMarkers);
 	});
 
 	it("HANDLERS.update_tracker === updateTracker", () => {
@@ -228,6 +234,23 @@ describe("HANDLERS — dispatch smoke", () => {
 			id: "smoke-rs",
 			target_path: notePath,
 			anchor: { type: "heading" as const, value: "Status" },
+			content: "new",
+		};
+		const handler = HANDLERS[action.action];
+		const outcome = await handler(action, makeCtx(vault));
+		expect(outcome.kind).toBe("applied");
+	});
+
+	it("replace_between_markers: dispatches and returns applied", async () => {
+		const notePath = "Calendar/Weekly/2026-W13.md";
+		const vault = new FakeVaultFS();
+		await vault.create(notePath, "%% tomo:s1 %%\nold\n%% /tomo:s1 %%\n");
+		const action = {
+			action: "replace_between_markers" as const,
+			id: "smoke-rbm",
+			target_path: notePath,
+			start_marker: "%% tomo:s1 %%",
+			end_marker: "%% /tomo:s1 %%",
 			content: "new",
 		};
 		const handler = HANDLERS[action.action];

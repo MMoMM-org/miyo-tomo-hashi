@@ -168,7 +168,7 @@ describe("ObsidianInstructionSetDoc.load()", () => {
 		const adapter = new ObsidianInstructionSetDoc(vault);
 
 		await expect(adapter.load(DOC_PATH)).rejects.toThrow(
-			"Schema version mismatch — expected 3, got 99",
+			"Schema version mismatch — expected 3 or 4, got 99",
 		);
 	});
 

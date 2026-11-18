@@ -32,7 +32,7 @@ import { TARGET_FIELD_WHITELIST } from "../../../instruction-fixer/transforms.js
 import type { Action } from "../../../schema/types.js";
 import type { TargetPickMode } from "../../garden-audit-view/TargetControl.js";
 
-/** The 7 kinds carrying a repairable target field (ADR-5). */
+/** The kinds carrying a repairable target field (ADR-5). */
 export type RepairKind = keyof typeof TARGET_FIELD_WHITELIST;
 
 type FieldKeyOf<K extends RepairKind> = (typeof TARGET_FIELD_WHITELIST)[K][number];
@@ -139,6 +139,15 @@ export const TARGET_FIELDS: TargetFieldMap = {
 			placeholder: "Heading text…",
 			pick: "none",
 			docPick: "anchor-spot",
+		},
+	},
+	replace_between_markers: {
+		target_path: {
+			label: "Target note",
+			caption: "path",
+			captionTooltip: PATH_TOOLTIP,
+			placeholder: "Type or pick a note…",
+			pick: "path",
 		},
 	},
 	add_relationship: {

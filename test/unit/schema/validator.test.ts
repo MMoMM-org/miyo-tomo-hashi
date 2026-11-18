@@ -44,7 +44,7 @@ describe("validate", () => {
 		}
 	});
 
-	it("rejects schema_version '0' with PRD F2 'expected 3, got 0' message (M14)", () => {
+	it("rejects schema_version '0' with PRD F2 'expected 3 or 4, got 0' message (M14)", () => {
 		const result = validate({ ...VALID_FIXTURE, schema_version: "0" });
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
@@ -52,12 +52,12 @@ describe("validate", () => {
 			// with both expected and actual values, so it can drive the
 			// "upgrade Hashi" prompt without re-parsing AJV's generic msg.
 			expect(result.message).toBe(
-				"Schema version mismatch — expected 3, got 0",
+				"Schema version mismatch — expected 3 or 4, got 0",
 			);
 		}
 	});
 
-	it("rejects schema_version '1' with PRD F2 'expected 3, got 1' message (spec 027 ADR-3 lockstep)", () => {
+	it("rejects schema_version '1' with PRD F2 'expected 3 or 4, got 1' message (spec 027 ADR-3 lockstep)", () => {
 		// A v1 instruction set hitting v2-only Hashi must fail loud with the
 		// version mismatch — the lockstep fail-loud guarantee — not a confusing
 		// missing-field error from the origin_inbox_item → source_inbox_item rename.
@@ -65,8 +65,27 @@ describe("validate", () => {
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.message).toBe(
-				"Schema version mismatch — expected 3, got 1",
+				"Schema version mismatch — expected 3 or 4, got 1",
 			);
+		}
+	});
+
+	it("accepts a v4 InstructionSet (#179 — replace_between_markers bump)", () => {
+		const result = validate({ ...VALID_FIXTURE, schema_version: "4" });
+		expect(result.ok).toBe(true);
+	});
+
+	it("still accepts a waiting v3 set after the v4 bump — v4 is purely additive (#179)", () => {
+		// A v3 set cannot contain the v4-only kind, so it is a valid v4 set as is;
+		// refusing it would strand sets Tomo wrote before the release.
+		expect(validate({ ...VALID_FIXTURE, schema_version: "3" }).ok).toBe(true);
+	});
+
+	it("rejects a too-new schema_version with the PRD F2 message naming both accepted values", () => {
+		const result = validate({ ...VALID_FIXTURE, schema_version: "5" });
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.message).toBe("Schema version mismatch — expected 3 or 4, got 5");
 		}
 	});
 
@@ -817,3 +836,61 @@ describe("edit_frontmatter (Hashi-side wire shape)", () => {
 	});
 });
 
+
+// ---------------------------------------------------------------------------
+// replace_between_markers — wire-shape guard (#179, Tomo handoff 2026-11-14)
+// ---------------------------------------------------------------------------
+
+describe("replace_between_markers (wire shape)", () => {
+	const withActions = (actions: unknown[]) => ({
+		schema_version: "4",
+		type: "tomo-instructions",
+		generated: "2026-11-17T10:00:00Z",
+		profile: null,
+		actions,
+	});
+
+	const base = {
+		id: "I07",
+		action: "replace_between_markers",
+		target_path: "Calendar/Weekly/2026-W13.md",
+		start_marker: "%% tomo:s1 2026-W13 %%",
+		end_marker: "%% /tomo:s1 2026-W13 %%",
+		content: "- Steuererklärung abgeschickt ([[2026-03-24]])",
+	};
+
+	it("accepts the minimal action", () => {
+		expect(validate(withActions([base])).ok).toBe(true);
+	});
+
+	it("accepts a scope and an empty content (zero lines)", () => {
+		expect(
+			validate(
+				withActions([
+					{ ...base, content: "", scope: { heading: "What Went Well This Week?", level: 4 } },
+				]),
+			).ok,
+		).toBe(true);
+	});
+
+	it("rejects a marker with leading or trailing whitespace", () => {
+		expect(validate(withActions([{ ...base, start_marker: " %% tomo:s1 %%" }])).ok).toBe(false);
+		expect(validate(withActions([{ ...base, end_marker: "%% /tomo:s1 %% " }])).ok).toBe(false);
+	});
+
+	it("rejects a multi-line marker", () => {
+		expect(validate(withActions([{ ...base, start_marker: "%% a\nb %%" }])).ok).toBe(false);
+	});
+
+	it("rejects a scope level outside 1..6 and an unknown property", () => {
+		expect(
+			validate(withActions([{ ...base, scope: { heading: "Wins", level: 7 } }])).ok,
+		).toBe(false);
+		expect(validate(withActions([{ ...base, depends_on: ["I01"] }])).ok).toBe(false);
+	});
+
+	it("rejects a missing end_marker", () => {
+		const { end_marker: _dropped, ...withoutEnd } = base;
+		expect(validate(withActions([withoutEnd])).ok).toBe(false);
+	});
+});

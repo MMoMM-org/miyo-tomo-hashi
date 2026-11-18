@@ -124,6 +124,8 @@ export function actionIntent(action: Action): string {
 			return `Insert ${quote(action.content)} into ${action.target_path}, ${action.placement} ${action.anchor.type} ${anchorText(action.anchor.value)}`;
 		case "replace_section":
 			return `Replace section ${anchorText(action.anchor.value)} in ${action.target_path} with ${quote(action.content)}`;
+		case "replace_between_markers":
+			return `Replace the block between ${quote(action.start_marker)} and ${quote(action.end_marker)} in ${action.target_path} with ${quote(action.content)}`;
 		case "add_relationship":
 			return `Add ${quote(action.line)} under ${quote(action.marker)} in ${action.target_moc_path}`;
 		case "edit_note_text":
@@ -179,6 +181,7 @@ export function affectedNotePath(action: Action): string | null {
 			return action.target_moc_path ?? action.target_moc;
 		case "insert_under_marker":
 		case "replace_section":
+		case "replace_between_markers":
 			return action.target_path;
 		case "add_relationship":
 			return action.target_moc_path;

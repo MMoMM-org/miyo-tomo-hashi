@@ -1,6 +1,6 @@
 # Action Reference
 
-The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are sixteen kinds; each has its own outcome semantics, idempotency rule, and failure surface.
+The instruction executor dispatches each action in an `_instructions.json` to a handler keyed by the action's `action` discriminant. There are seventeen kinds; each has its own outcome semantics, idempotency rule, and failure surface.
 
 | Action | What it does | Idempotency probe | Halt-on-fail effect |
 |---|---|---|---|
@@ -10,6 +10,7 @@ The instruction executor dispatches each action in an `_instructions.json` to a 
 | [link_to_moc](#link_to_moc) | Append `- [[note]]` bullet to a MOC's named section | Bullet already present | None |
 | [insert_under_marker](#insert_under_marker) | Insert a multi-line block at a marker in any note | Identical block already present | None |
 | [replace_section](#replace_section) | Overwrite a heading section's body in any note | Body already equals content | None |
+| [replace_between_markers](#replace_between_markers) | Replace only the lines between two marker lines, keeping everything around them | Block already equals content | None |
 | [add_relationship](#add_relationship) | Rewrite a Dataview marker line (`up::`, `related::`) in a MOC's **body** — replaces, never creates | Line already equals the target | None |
 | [edit_note_text](#edit_note_text) | Literal find-and-replace in a note's **body only** — never frontmatter (repoint/remove dead links, strip broken inline `up::` lines) | Match not found anywhere | None |
 | [edit_frontmatter](#edit_frontmatter) | Set or remove a YAML property, guarded by an expected current value | Value already correct → `skipped-already` | None |
@@ -137,6 +138,37 @@ Insert a multi-line markdown block beneath a marker in **any** vault note (the `
 - `applied` — section body overwritten.
 - `skipped-already` — the section body already equals `content` byte-for-byte.
 - `failed` — target missing, anchor value null, non-heading anchor, or heading not found. File untouched (never a blind write).
+
+## `replace_between_markers`
+
+Replace **only the lines between a start-marker line and its end-marker line**. The marker lines and every other line of the note stay byte-identical. Tomo's `/review` uses it to refresh its own block inside a section of your weekly, monthly or quarterly note that you also write in. [`replace_section`](#replace_section) would discard your text there; this kind leaves it alone. Modify-only. Added with instructions wire `schema_version` 4.
+
+```markdown
+#### What Went Well This Week?
+Your own text stays here.
+%% tomo:s1 2026-W13 %%
+- Tomo's lines — only these are replaced on a re-run
+%% /tomo:s1 2026-W13 %%
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `target_path` | string | Vault-relative path of an existing note. |
+| `start_marker` | string | The start-marker line's text, e.g. `%% tomo:s1 2026-W13 %%`. One line, no leading or trailing whitespace. |
+| `end_marker` | string | The end-marker line's text. Must differ from `start_marker`. |
+| `scope` | object | Optional `{ heading, level }`. The first heading with exactly that text **and** level; its section runs to the next heading of the same or a higher level. It can only turn an apply into a failure, never widen or move anything. |
+| `content` | string | The lines that go between the markers, joined by `\n`, no trailing newline. `""` empties the block. |
+
+**What counts as a marker line:** a line that is not inside a fenced code block, starts at column 0 (an indented or `> ` line does not count) and equals the marker after trailing whitespace is trimmed. The start marker must occur exactly once in the whole note; the end is the first end-marker line after it, and there must be no other end-marker line.
+
+**Race-safe:** the markers are resolved on the note's content at the moment of writing, inside Obsidian's atomic `vault.process`. If the note changed since it was last read (editor open, sync, a plugin stamping it) and the markers no longer resolve, nothing is written. New lines take the start-marker line's line ending, so a CRLF note stays CRLF.
+
+**Outcome:**
+- `applied` — the lines between the markers were replaced.
+- `skipped-already` — those lines already equal `content`. Nothing is written.
+- `failed`, note untouched — `target note missing`, `markers equal`, `start marker not found`, `start marker duplicated`, `end marker missing`, `end marker duplicated or out of order`, `scope heading not found`, `markers outside scope`.
+
+The run log records `<target_path> :: <start_marker>` — the markers are Tomo's opaque ids, never the replaced lines.
 
 ## `add_relationship`
 

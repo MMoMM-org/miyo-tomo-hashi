@@ -5,7 +5,7 @@
  *   - Handler<A>       — generic handler type alias (SDD/Action Handler Contract)
  *   - HandlerContext   — re-exported from ./types
  *   - HANDLERS         — dispatch registry keyed by ActionKind
- *   - 14 handler functions — re-exported for direct import convenience
+ *   - one handler function per ActionKind — re-exported for direct import convenience
  *
  * Note: Action discriminant is `action`, not `kind` (see plan/README.md T1.2 deviation).
  * HANDLERS is therefore typed as { [K in ActionKind]: Handler<Extract<Action, { action: K }>> }.
@@ -23,6 +23,7 @@ import { moveAsset } from "./moveAsset.js";
 import { linkToMoc } from "./linkToMoc.js";
 import { insertUnderMarker } from "./insertUnderMarker.js";
 import { replaceSection } from "./replaceSection.js";
+import { replaceBetweenMarkers } from "./replaceBetweenMarkers.js";
 import { addRelationship } from "./addRelationship.js";
 import { editNoteText } from "./editNoteText.js";
 import { editFrontmatter } from "./editFrontmatter.js";
@@ -62,6 +63,7 @@ export const HANDLERS: {
 	link_to_moc: linkToMoc,
 	insert_under_marker: insertUnderMarker,
 	replace_section: replaceSection,
+	replace_between_markers: replaceBetweenMarkers,
 	add_relationship: addRelationship,
 	edit_note_text: editNoteText,
 	edit_frontmatter: editFrontmatter,
@@ -84,6 +86,7 @@ export { moveAsset } from "./moveAsset.js";
 export { linkToMoc } from "./linkToMoc.js";
 export { insertUnderMarker } from "./insertUnderMarker.js";
 export { replaceSection } from "./replaceSection.js";
+export { replaceBetweenMarkers } from "./replaceBetweenMarkers.js";
 export { addRelationship } from "./addRelationship.js";
 export { editNoteText } from "./editNoteText.js";
 export { editFrontmatter } from "./editFrontmatter.js";
