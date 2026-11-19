@@ -1,3 +1,9 @@
+## [0.33.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.33.1...0.33.2) (2026-11-19)
+
+### Bug Fixes
+
+* **actions:** resolve the remaining line-splicing handlers inside vault.process ([a7d6aaa](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/a7d6aaa9e50574bd776b62ba9df13fc8addb6d28)), closes [#183](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/183)
+
 ## [0.33.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.33.0...0.33.1) (2026-11-19)
 
 ### Bug Fixes
