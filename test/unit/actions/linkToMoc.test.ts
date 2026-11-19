@@ -18,6 +18,7 @@
 
 import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
+import { changedUnderneath } from "./changedUnderneath.js";
 import { linkToMoc } from "../../../src/actions/linkToMoc.js";
 import type { LinkToMocAction } from "../../../src/schema/types.js";
 
@@ -504,5 +505,61 @@ describe("linkToMoc — multi-line line_to_add", () => {
 
 		expect(outcome.kind).toBe("skipped-already");
 		expect(await vault.read(MOC_PATH)).toBe(content);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// race discipline — resolve on the content process() hands over (#183)
+// ---------------------------------------------------------------------------
+
+describe("linkToMoc — resolves on the content process() hands over", () => {
+	async function undisturbed(initial: string, action: LinkToMocAction): Promise<string> {
+		const vault = new FakeVaultFS();
+		await vault.create(MOC_PATH, initial);
+		await linkToMoc(action, makeCtx(vault));
+		return vault.read(MOC_PATH);
+	}
+
+	it("inserts into the callout when lines were added above it", async () => {
+		const vault = await changedUnderneath(MOC_PATH, calloutMocContent, (c) => `stamped\nby a plugin\n${c}`);
+
+		const outcome = await linkToMoc(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "applied" });
+		expect(await vault.read(MOC_PATH)).toBe(
+			`stamped\nby a plugin\n${await undisturbed(calloutMocContent, makeAction())}`,
+		);
+	});
+
+	it("inserts after the heading when lines were added above it", async () => {
+		const action = makeAction({ anchor: { type: "heading", value: "Projects" }, placement: "after" });
+		const vault = await changedUnderneath(MOC_PATH, headingMocContent, (c) => `stamped\n${c}`);
+
+		const outcome = await linkToMoc(action, makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "applied" });
+		expect(await vault.read(MOC_PATH)).toBe(`stamped\n${await undisturbed(headingMocContent, action)}`);
+	});
+
+	it("fails without writing when the anchor is gone from the current content", async () => {
+		const vault = await changedUnderneath(MOC_PATH, calloutMocContent, (c) =>
+			c.replace("> [!note] Projects", "> [!note] Renamed"),
+		);
+
+		const outcome = await linkToMoc(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "failed", reason: "anchor not found: [!note] Projects" });
+		expect(await vault.read(MOC_PATH)).toBe(calloutMocContent);
+	});
+
+	it("skips without writing when the block is already in the current content", async () => {
+		const vault = await changedUnderneath(MOC_PATH, calloutMocContent, (c) =>
+			c.replace("> Last body line", "> Last body line\n> - [[Notes/Projects/raw-note|Raw Note]]"),
+		);
+
+		const outcome = await linkToMoc(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "skipped-already" });
+		expect(await vault.read(MOC_PATH)).toBe(calloutMocContent);
 	});
 });

@@ -64,7 +64,7 @@ export class FakeVaultFS implements VaultFS {
       const current = this.content.get(path) ?? "";
       this.content.set(path, transform(current));
     });
-    this.queues.set(path, next);
+    this.queues.set(path, settled(next));
     await next;
   }
 
@@ -100,7 +100,7 @@ export class FakeVaultFS implements VaultFS {
       fn(fm);
       this.frontmatter.set(path, fm);
     });
-    this.queues.set(path, next);
+    this.queues.set(path, settled(next));
     await next;
   }
 
@@ -141,4 +141,13 @@ export class FakeVaultFS implements VaultFS {
     }
     this.content.set(path, content);
   }
+}
+
+/**
+ * The per-path queue keeps only the settled tail of a write: a transform that
+ * throws (how handlers abort a write, see processResolved) rejects its own
+ * caller and leaves the next write free to run, as Obsidian's process() does.
+ */
+function settled(write: Promise<void>): Promise<void> {
+  return write.catch(() => undefined);
 }

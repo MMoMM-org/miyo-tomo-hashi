@@ -16,8 +16,9 @@
  * [ref: PRD/F4 insert_under_marker; Tomo handoff 2026-06-23]
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
+import { changedUnderneath } from "./changedUnderneath.js";
 import { insertUnderMarker } from "../../../src/actions/insertUnderMarker.js";
 import type { InsertUnderMarkerAction } from "../../../src/schema/types.js";
 
@@ -362,19 +363,8 @@ describe("insertUnderMarker — idempotency", () => {
 // ---------------------------------------------------------------------------
 
 describe("insertUnderMarker — resolves on the content process() hands over", () => {
-	/** A vault whose process() sees `mutate(current)`, as if the note changed after any earlier read. */
-	async function changedUnderneath(initial: string, mutate: (current: string) => string) {
-		const vault = new FakeVaultFS();
-		await vault.create(PATH, initial);
-		const realProcess = vault.process.bind(vault);
-		vi.spyOn(vault, "process").mockImplementation(async (path, transform) => {
-			await realProcess(path, (current) => transform(mutate(current)));
-		});
-		return vault;
-	}
-
 	it("follows the heading section when lines were added above it", async () => {
-		const vault = await changedUnderneath(headingDoc, (c) => `stamped\nby a plugin\n${c}`);
+		const vault = await changedUnderneath(PATH, headingDoc, (c) => `stamped\nby a plugin\n${c}`);
 
 		const outcome = await insertUnderMarker(makeAction(), makeCtx(vault));
 
@@ -397,7 +387,7 @@ describe("insertUnderMarker — resolves on the content process() hands over", (
 	});
 
 	it("follows a before-anchor when lines were added above it", async () => {
-		const vault = await changedUnderneath(headingDoc, (c) => `stamped\n${c}`);
+		const vault = await changedUnderneath(PATH, headingDoc, (c) => `stamped\n${c}`);
 
 		const outcome = await insertUnderMarker(
 			makeAction({ placement: "before", content: "new" }),
@@ -413,7 +403,7 @@ describe("insertUnderMarker — resolves on the content process() hands over", (
 	});
 
 	it("fails and writes nothing when the anchor no longer resolves on the current content", async () => {
-		const vault = await changedUnderneath(headingDoc, (c) => c.replace("## Captures", "## Renamed"));
+		const vault = await changedUnderneath(PATH, headingDoc, (c) => c.replace("## Captures", "## Renamed"));
 
 		const outcome = await insertUnderMarker(makeAction(), makeCtx(vault));
 
@@ -422,7 +412,7 @@ describe("insertUnderMarker — resolves on the content process() hands over", (
 	});
 
 	it("is skipped-already, writing nothing, when the current content already holds the block", async () => {
-		const vault = await changedUnderneath(headingDoc, (c) =>
+		const vault = await changedUnderneath(PATH, headingDoc, (c) =>
 			c.replace("- old entry", "- old entry\n### 2026-06-23\n\n- Shipped X"),
 		);
 

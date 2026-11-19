@@ -12,8 +12,10 @@
  * transform throws a sentinel, so both Obsidian's process() and FakeVaultFS
  * write nothing.
  *
- * Shared by `insert_under_marker`, `replace_section` and
- * `replace_between_markers`.
+ * Shared by every handler that splices lines into a note: `insert_under_marker`,
+ * `replace_section`, `replace_between_markers`, `link_to_moc`,
+ * `add_relationship`, `remove_up_link`, `update_tracker`, `update_log_entry`
+ * and `update_log_link` (#183).
  */
 
 import type { ActionOutcome } from "../executor/state.js";

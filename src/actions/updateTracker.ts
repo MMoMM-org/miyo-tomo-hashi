@@ -23,20 +23,22 @@
  *   - Field not found → failed "Tracker field not found: <field>"
  *   - Daily note missing → failed "Daily note missing: <path>"
  *
- * [ref: PRD/F4]
+ * Every mode locates its field on the content vault.process hands over, so
+ * lines added to the note after an earlier read cannot shift the rewrite onto
+ * the wrong line (#183).
+ *
+ * [ref: PRD/F4; resolve-inside-process miyo-tomo-hashi#183]
  */
 
 import type { UpdateTrackerAction } from "../schema/types.js";
-import type { ActionOutcome } from "../executor/state.js";
 import { type HandlerContext } from "./types.js";
+import { processResolved, type EditOutcome, type ResolvedEdit } from "./processResolved.js";
 import { locateSection } from "./sectionLocator.js";
-
-type UpdateOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
 
 export async function updateTracker(
 	action: UpdateTrackerAction,
 	ctx: HandlerContext,
-): Promise<UpdateOutcome> {
+): Promise<EditOutcome> {
 	const { vault } = ctx;
 	const { daily_note_path } = action;
 
@@ -44,13 +46,18 @@ export async function updateTracker(
 		return { kind: "failed", reason: `Daily note missing: ${daily_note_path}` };
 	}
 
+	return processResolved(vault, daily_note_path, (current) => setField(current, action));
+}
+
+/** `content` with the tracker field set, or the outcome to report without writing. */
+function setField(content: string, action: UpdateTrackerAction): ResolvedEdit {
 	switch (action.syntax) {
 		case "inline_field":
-			return handleInlineField(action, ctx);
+			return setInlineField(content, action);
 		case "callout_body":
-			return handleCalloutBody(action, ctx);
+			return setCalloutBody(content, action);
 		case "checkbox":
-			return handleCheckbox(action, ctx);
+			return setCheckbox(content, action);
 	}
 }
 
@@ -68,14 +75,9 @@ interface InlineMatch {
 	rewrite(line: string, newValue: string): string;
 }
 
-async function handleInlineField(
-	action: UpdateTrackerAction,
-	ctx: HandlerContext,
-): Promise<UpdateOutcome> {
-	const { vault } = ctx;
-	const { daily_note_path, field, value } = action;
+function setInlineField(content: string, action: UpdateTrackerAction): ResolvedEdit {
+	const { field, value } = action;
 
-	const content = await vault.cachedRead(daily_note_path);
 	const lines = content.split("\n");
 	const match = findInlineMatch(lines, field);
 
@@ -89,13 +91,8 @@ async function handleInlineField(
 	}
 
 	// Overwrite — Tomo's intent wins (PRD F4 revised 2026-04-29).
-	await vault.process(daily_note_path, (current) => {
-		const currentLines = current.split("\n");
-		const replaced = match.rewrite(currentLines[match.lineIdx] ?? "", targetStr);
-		currentLines[match.lineIdx] = replaced;
-		return currentLines.join("\n");
-	});
-	return { kind: "applied" };
+	lines[match.lineIdx] = match.rewrite(lines[match.lineIdx] ?? "", targetStr);
+	return lines.join("\n");
 }
 
 // Per-field RegExp cache (review M7). Pre-fix the three patterns were
@@ -203,14 +200,8 @@ function escapeRegExp(s: string): string {
 // callout_body — `> <field>:: <value>` (double-colon only) inside named section
 // ---------------------------------------------------------------------------
 
-async function handleCalloutBody(
-	action: UpdateTrackerAction,
-	ctx: HandlerContext,
-): Promise<UpdateOutcome> {
-	const { vault } = ctx;
-	const { daily_note_path, field, value, section } = action;
-
-	const content = await vault.cachedRead(daily_note_path);
+function setCalloutBody(content: string, action: UpdateTrackerAction): ResolvedEdit {
+	const { field, value, section } = action;
 
 	const sectionName = section ?? field;
 	const range = locateSection(content, sectionName);
@@ -242,26 +233,17 @@ async function handleCalloutBody(
 	}
 
 	// Overwrite — Tomo's intent wins (PRD F4 revised 2026-04-29).
-	await vault.process(daily_note_path, (current) => {
-		const currentLines = current.split("\n");
-		currentLines[fieldLineIdx] = `${prefix} ${targetStr}`;
-		return currentLines.join("\n");
-	});
-	return { kind: "applied" };
+	lines[fieldLineIdx] = `${prefix} ${targetStr}`;
+	return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
 // checkbox — `- [x] field` / `- [ ] field`
 // ---------------------------------------------------------------------------
 
-async function handleCheckbox(
-	action: UpdateTrackerAction,
-	ctx: HandlerContext,
-): Promise<UpdateOutcome> {
-	const { vault } = ctx;
-	const { daily_note_path, field, value } = action;
+function setCheckbox(content: string, action: UpdateTrackerAction): ResolvedEdit {
+	const { field, value } = action;
 
-	const content = await vault.cachedRead(daily_note_path);
 	const lines = content.split("\n");
 
 	const checkedPattern = `- [x] ${field}`;
@@ -291,12 +273,8 @@ async function handleCheckbox(
 	}
 
 	// Toggle: replace checked ↔ unchecked
-	await vault.process(daily_note_path, (current) => {
-		if (targetChecked) {
-			return current.split(uncheckedPattern).join(checkedPattern);
-		}
-		return current.split(checkedPattern).join(uncheckedPattern);
-	});
-
-	return { kind: "applied" };
+	if (targetChecked) {
+		return content.split(uncheckedPattern).join(checkedPattern);
+	}
+	return content.split(checkedPattern).join(uncheckedPattern);
 }
