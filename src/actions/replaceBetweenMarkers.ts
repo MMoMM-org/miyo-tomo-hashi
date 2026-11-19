@@ -17,12 +17,11 @@
  * `scope` is a level-aware heading lookup (no callout fallback) that can only
  * turn an apply into a failure.
  *
- * Race discipline: unlike `insert_under_marker` / `replace_section` (#180),
- * the markers are resolved INSIDE the `vault.process` callback on the content
- * it hands over — line indexes from an earlier read are never spliced into a
- * note that may have changed since. When the markers do not resolve, or the
- * block already equals `content`, the callback throws a sentinel so process()
- * writes nothing.
+ * Race discipline: the markers are resolved INSIDE the `vault.process`
+ * callback on the content it hands over (processResolved) — line indexes from
+ * an earlier read are never spliced into a note that may have changed since.
+ * When the markers do not resolve, or the block already equals `content`,
+ * process() writes nothing.
  *
  * Line endings: new lines take the start-marker line's ending, so a CRLF note
  * stays CRLF.
@@ -31,23 +30,14 @@
  */
 
 import type { ReplaceBetweenMarkersAction } from "../schema/types.js";
-import type { ActionOutcome } from "../executor/state.js";
 import { type HandlerContext } from "./types.js";
 import { fencedLineMask, parseHeadings } from "./markdownStructure.js";
-
-type ReplaceOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
-
-/** Thrown inside the process() callback to abort the write with an outcome. */
-class Abort extends Error {
-	constructor(readonly outcome: ReplaceOutcome) {
-		super(outcome.kind);
-	}
-}
+import { processResolved, type EditOutcome, type ResolvedEdit } from "./processResolved.js";
 
 export async function replaceBetweenMarkers(
 	action: ReplaceBetweenMarkersAction,
 	ctx: HandlerContext,
-): Promise<ReplaceOutcome> {
+): Promise<EditOutcome> {
 	const { vault } = ctx;
 	const path = action.target_path;
 
@@ -58,24 +48,11 @@ export async function replaceBetweenMarkers(
 		return { kind: "failed", reason: "markers equal" };
 	}
 
-	try {
-		await vault.process(path, (current) => {
-			const result = replaceBlock(current, action);
-			if (typeof result !== "string") throw new Abort(result);
-			return result;
-		});
-	} catch (err) {
-		if (err instanceof Abort) return err.outcome;
-		throw err;
-	}
-	return { kind: "applied" };
+	return processResolved(vault, path, (current) => replaceBlock(current, action));
 }
 
 /** The rewritten content, or the outcome to report without writing. */
-function replaceBlock(
-	content: string,
-	action: ReplaceBetweenMarkersAction,
-): string | ReplaceOutcome {
+function replaceBlock(content: string, action: ReplaceBetweenMarkersAction): ResolvedEdit {
 	const lines = content.split("\n");
 	const fenced = fencedLineMask(lines);
 	const markerLines = (marker: string): number[] =>

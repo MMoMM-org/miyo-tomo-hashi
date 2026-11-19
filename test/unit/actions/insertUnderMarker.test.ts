@@ -10,11 +10,13 @@
  *   - multi-line `content` preserved
  *   - target missing / anchor-not-found / inside+line / null value → failed
  *   - identical block already present → skipped-already
+ *   - the anchor resolves on the content vault.process hands over, never on an
+ *     earlier read (#180)
  *
  * [ref: PRD/F4 insert_under_marker; Tomo handoff 2026-06-23]
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
 import { insertUnderMarker } from "../../../src/actions/insertUnderMarker.js";
 import type { InsertUnderMarkerAction } from "../../../src/schema/types.js";
@@ -351,6 +353,82 @@ describe("insertUnderMarker — idempotency", () => {
 		const outcome = await insertUnderMarker(action, makeCtx(vault));
 
 		expect(outcome.kind).toBe("skipped-already");
+		expect(await vault.read(PATH)).toBe(headingDoc);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// race discipline — resolve on the content process() hands over (#180)
+// ---------------------------------------------------------------------------
+
+describe("insertUnderMarker — resolves on the content process() hands over", () => {
+	/** A vault whose process() sees `mutate(current)`, as if the note changed after any earlier read. */
+	async function changedUnderneath(initial: string, mutate: (current: string) => string) {
+		const vault = new FakeVaultFS();
+		await vault.create(PATH, initial);
+		const realProcess = vault.process.bind(vault);
+		vi.spyOn(vault, "process").mockImplementation(async (path, transform) => {
+			await realProcess(path, (current) => transform(mutate(current)));
+		});
+		return vault;
+	}
+
+	it("follows the heading section when lines were added above it", async () => {
+		const vault = await changedUnderneath(headingDoc, (c) => `stamped\nby a plugin\n${c}`);
+
+		const outcome = await insertUnderMarker(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "applied" });
+		expect(await vault.read(PATH)).toBe(
+			[
+				"stamped",
+				"by a plugin",
+				"# Dev Log",
+				"## Captures",
+				"- old entry",
+				"",
+				"### 2026-06-23",
+				"",
+				"- Shipped X",
+				"## Other",
+				"- other",
+			].join("\n"),
+		);
+	});
+
+	it("follows a before-anchor when lines were added above it", async () => {
+		const vault = await changedUnderneath(headingDoc, (c) => `stamped\n${c}`);
+
+		const outcome = await insertUnderMarker(
+			makeAction({ placement: "before", content: "new" }),
+			makeCtx(vault),
+		);
+
+		expect(outcome).toEqual({ kind: "applied" });
+		expect(await vault.read(PATH)).toBe(
+			["stamped", "# Dev Log", "new", "## Captures", "- old entry", "", "## Other", "- other"].join(
+				"\n",
+			),
+		);
+	});
+
+	it("fails and writes nothing when the anchor no longer resolves on the current content", async () => {
+		const vault = await changedUnderneath(headingDoc, (c) => c.replace("## Captures", "## Renamed"));
+
+		const outcome = await insertUnderMarker(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "failed", reason: "anchor not found: Captures" });
+		expect(await vault.read(PATH)).toBe(headingDoc);
+	});
+
+	it("is skipped-already, writing nothing, when the current content already holds the block", async () => {
+		const vault = await changedUnderneath(headingDoc, (c) =>
+			c.replace("- old entry", "- old entry\n### 2026-06-23\n\n- Shipped X"),
+		);
+
+		const outcome = await insertUnderMarker(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "skipped-already" });
 		expect(await vault.read(PATH)).toBe(headingDoc);
 	});
 });

@@ -18,20 +18,24 @@
  *     never a blind write.
  *   - Body already byte-identical to `content` → skipped-already (no rewrite).
  *
- * Anchor resolution reads the freshly-read file content (`cachedRead`), NOT the
- * async metadataCache — same race discipline as link_to_moc. [miyo-tomo-hashi#68]
+ * Anchor resolution reads file content, NOT the async metadataCache — same
+ * race discipline as link_to_moc. [miyo-tomo-hashi#68] The section resolves
+ * INSIDE the `vault.process` callback on the content it hands over
+ * (processResolved), so a range from an earlier read never overwrites lines of
+ * a note that changed since; a heading that no longer resolves fails without a
+ * write. [#180]
  *
  * [ref: Tomo handoff 2026-06-25 block-anchor-and-replace-section; Tomo spec
  *  024-tag-handler-framework]
  */
 
 import type { ReplaceSectionAction } from "../schema/types.js";
-import type { ActionOutcome } from "../executor/state.js";
 import { type HandlerContext } from "./types.js";
+import { processResolved, type EditOutcome, type ResolvedEdit } from "./processResolved.js";
 import { locateSection } from "./sectionLocator.js";
 import { replaceLines } from "./blockInsert.js";
 
-type ReplaceOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
+type ReplaceOutcome = EditOutcome;
 
 export async function replaceSection(
 	action: ReplaceSectionAction,
@@ -44,7 +48,8 @@ export async function replaceSection(
 		return { kind: "failed", reason: "target note missing" };
 	}
 
-	if (action.anchor.value === null) {
+	const value = action.anchor.value;
+	if (value === null) {
 		return { kind: "failed", reason: "anchor not found (null value)" };
 	}
 
@@ -52,10 +57,18 @@ export async function replaceSection(
 		return { kind: "failed", reason: "replace_section v1 supports heading anchors only" };
 	}
 
-	const content = await vault.cachedRead(path);
-	const section = locateSection(content, action.anchor.value);
+	return processResolved(vault, path, (current) => replaceBody(current, action, value));
+}
+
+/** `content` with the section body replaced, or the outcome to report without writing. */
+function replaceBody(
+	content: string,
+	action: ReplaceSectionAction,
+	value: string,
+): ResolvedEdit {
+	const section = locateSection(content, value);
 	if (section === null || section.kind !== "heading") {
-		return { kind: "failed", reason: `anchor not found: ${action.anchor.value}` };
+		return { kind: "failed", reason: `anchor not found: ${value}` };
 	}
 
 	const hasTrailingNewline = content.endsWith("\n");
@@ -72,8 +85,5 @@ export async function replaceSection(
 		return { kind: "skipped-already" };
 	}
 
-	await vault.process(path, (current) =>
-		replaceLines(current, start, section.endLine, newLines),
-	);
-	return { kind: "applied" };
+	return replaceLines(content, start, section.endLine, newLines);
 }
