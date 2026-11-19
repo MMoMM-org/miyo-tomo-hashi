@@ -162,9 +162,17 @@ mis-emission. A genuine mismatch shows a *third* value, one that is neither `exp
 the handler's read and its write (editor open, sync, a plugin stamping the note).
 **Cause:** the handler resolved its line indexes on `cachedRead`, then spliced them into the
 `current` content inside `vault.process`. Those indexes belong to the earlier read (#180).
-**Fix:** `insert_under_marker`, `replace_section` and `replace_between_markers` now resolve and edit inside
-the transform via `src/actions/processResolved.ts`. When nothing resolves, an outcome
-(`failed` / `skipped-already`) aborts the write. Test it with a spied `process` that hands the
-transform a modified `current`.
-**Still open:** `link_to_moc`, `add_relationship`, `remove_up_link`, `update_tracker` (field + line
-sites), `update_log_entry` and `update_log_link` use the same read-then-splice shape.
+**Fix:** every line-splicing handler (`insert_under_marker`, `replace_section`,
+`replace_between_markers`, `link_to_moc`, `add_relationship`, `remove_up_link`, `update_tracker`,
+`update_log_entry`, `update_log_link`) resolves and edits inside the transform via
+`src/actions/processResolved.ts` (#180, #183). When nothing resolves, an outcome
+(`failed` / `skipped-already`) aborts the write. Test it with `test/unit/actions/changedUnderneath.ts`,
+a spied `process` that hands the transform a modified `current`. A new content-editing handler
+must use the same shape.
+**Trap (fakes):** FakeVaultFS and the ObsidianVaultFS test mock queued `process()` per path on the
+raw promise, so one aborted transform made every later write to that file re-reject with the old
+error. processResolved then returned the stale outcome (InstructionFixer re-run reported the
+pre-repair "anchor not found"). Queues now keep only the settled tail; the VaultFS contract
+suite covers it.
+**Partly open:** `edit_note_text` and `resolve_dead_link` already recompute their edit on `current`
+(no misplaced lines), but take their `skipped-already` decision on the earlier `cachedRead`.

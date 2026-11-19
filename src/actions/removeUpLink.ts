@@ -33,16 +33,18 @@
  * holds — including the idempotent re-run case — re-running the action
  * must not fail the batch. Only a missing target note is `failed`.
  *
+ * The up:: line is located on the content vault.process hands over, so lines
+ * added to the note after an earlier read cannot shift the rewrite onto the
+ * wrong line (#183).
+ *
  * [ref: tomo-to-hashi handoff 2026-07-23 remove_up_link;
  * src/actions/addRelationship.ts locator; src/actions/editNoteText.ts
- * skipped-already convention]
+ * skipped-already convention; resolve-inside-process miyo-tomo-hashi#183]
  */
 
 import type { RemoveUpLinkAction } from "../schema/types.js";
-import type { ActionOutcome } from "../executor/state.js";
 import type { HandlerContext } from "./types.js";
-
-type RemoveOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
+import { processResolved, type EditOutcome, type ResolvedEdit } from "./processResolved.js";
 
 const UP_MARKER = "up::";
 const CALLOUT_PREFIX_RE = /^>\s*/;
@@ -58,7 +60,7 @@ interface UpLineLocation {
 export async function removeUpLink(
 	action: RemoveUpLinkAction,
 	ctx: HandlerContext,
-): Promise<RemoveOutcome> {
+): Promise<EditOutcome> {
 	const { vault } = ctx;
 	const { path, link } = action;
 
@@ -66,7 +68,11 @@ export async function removeUpLink(
 		return { kind: "failed", reason: "target note missing" };
 	}
 
-	const content = await vault.cachedRead(path);
+	return processResolved(vault, path, (current) => dropLink(current, link));
+}
+
+/** `content` with `link` removed from its up:: line, or the outcome to report without writing. */
+function dropLink(content: string, link: string): ResolvedEdit {
 	const located = locateUpLine(content);
 	if (located === null) {
 		// No up:: line at all — nothing to do.
@@ -81,14 +87,9 @@ export async function removeUpLink(
 	}
 
 	links.splice(removeIdx, 1);
-	const newLine = `${located.prefix}${UP_MARKER} ${links.map((stem) => `[[${stem}]]`).join(", ")}`;
-
-	await vault.process(path, (current) => {
-		const currentLines = current.split("\n");
-		currentLines[located.matchIdx] = newLine;
-		return currentLines.join("\n");
-	});
-	return { kind: "applied" };
+	const lines = content.split("\n");
+	lines[located.matchIdx] = `${located.prefix}${UP_MARKER} ${links.map((stem) => `[[${stem}]]`).join(", ")}`;
+	return lines.join("\n");
 }
 
 /** Extract every `[[stem]]` occurrence on a line, in order. */

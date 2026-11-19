@@ -16,18 +16,21 @@
  * Idempotency: if the located line already equals the would-be result
  * (callout prefix included when relevant) → skipped-already.
  *
+ * The marker line is located on the content vault.process hands over, so
+ * lines added to the MOC after an earlier read cannot shift the rewrite onto
+ * the wrong line (#183).
+ *
  * Failure cases:
  *   - target MOC missing       → "Relationship target missing"
  *   - marker line not present  → "Marker not found: <marker>"
  *
- * [ref: PRD/F4 add_relationship; Tomo docs/instructions-json.md § add_relationship]
+ * [ref: PRD/F4 add_relationship; Tomo docs/instructions-json.md § add_relationship;
+ *  resolve-inside-process miyo-tomo-hashi#183]
  */
 
 import type { AddRelationshipAction } from "../schema/types.js";
-import type { ActionOutcome } from "../executor/state.js";
 import type { HandlerContext } from "./types.js";
-
-type RelOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
+import { processResolved, type EditOutcome, type ResolvedEdit } from "./processResolved.js";
 
 const CALLOUT_PREFIX_RE = /^>\s*/;
 // Optional Markdown list-item bullet: `-`, `*`, `+`, or an ordered `N.`,
@@ -38,15 +41,20 @@ const LIST_BULLET_RE = /^([-*+]|\d+\.)\s+/;
 export async function addRelationship(
 	action: AddRelationshipAction,
 	ctx: HandlerContext,
-): Promise<RelOutcome> {
+): Promise<EditOutcome> {
 	const { vault } = ctx;
-	const { target_moc_path, marker, line } = action;
+	const { target_moc_path } = action;
 
 	if (!(await vault.exists(target_moc_path))) {
 		return { kind: "failed", reason: "Relationship target missing" };
 	}
 
-	const content = await vault.cachedRead(target_moc_path);
+	return processResolved(vault, target_moc_path, (current) => rewriteMarkerLine(current, action));
+}
+
+/** `content` with the marker line rewritten, or the outcome to report without writing. */
+function rewriteMarkerLine(content: string, action: AddRelationshipAction): ResolvedEdit {
+	const { marker, line } = action;
 	const lines = content.split("\n");
 
 	let matchIdx = -1;
@@ -80,10 +88,6 @@ export async function addRelationship(
 		return { kind: "skipped-already" };
 	}
 
-	await vault.process(target_moc_path, (current) => {
-		const currentLines = current.split("\n");
-		currentLines[matchIdx] = newLine;
-		return currentLines.join("\n");
-	});
-	return { kind: "applied" };
+	lines[matchIdx] = newLine;
+	return lines.join("\n");
 }

@@ -17,6 +17,7 @@
 
 import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
+import { changedUnderneath } from "./changedUnderneath.js";
 import { removeUpLink } from "../../../src/actions/removeUpLink.js";
 import type { RemoveUpLinkAction } from "../../../src/schema/types.js";
 
@@ -248,5 +249,31 @@ describe("removeUpLink — failure paths", () => {
 
 		expect(outcome.kind).toBe("failed");
 		if (outcome.kind === "failed") expect(outcome.reason).toBe("target note missing");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// race discipline — resolve on the content process() hands over (#183)
+// ---------------------------------------------------------------------------
+
+describe("removeUpLink — resolves on the content process() hands over", () => {
+	const content = "# Note\nup:: [[021 Fleeting MOC]], [[999 Other MOC]]\nbody";
+
+	it("rewrites the up:: line when lines were added above it", async () => {
+		const vault = await changedUnderneath(PATH, content, (c) => `stamped\nby a plugin\n${c}`);
+
+		const outcome = await removeUpLink(makeAction({ link: "999 Other MOC" }), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "applied" });
+		expect(await vault.read(PATH)).toBe("stamped\nby a plugin\n# Note\nup:: [[021 Fleeting MOC]]\nbody");
+	});
+
+	it("skips without writing when the link is already gone from the current content", async () => {
+		const vault = await changedUnderneath(PATH, content, (c) => c.replace(", [[999 Other MOC]]", ""));
+
+		const outcome = await removeUpLink(makeAction({ link: "999 Other MOC" }), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "skipped-already" });
+		expect(await vault.read(PATH)).toBe(content);
 	});
 });

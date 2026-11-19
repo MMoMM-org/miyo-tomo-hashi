@@ -14,6 +14,7 @@
 
 import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
+import { changedUnderneath } from "./changedUnderneath.js";
 import { updateTracker } from "../../../src/actions/updateTracker.js";
 import type { UpdateTrackerAction } from "../../../src/schema/types.js";
 
@@ -411,5 +412,71 @@ describe("updateTracker — checkbox", () => {
 			expect(outcome.reason).toBe("Tracker field not found: done");
 		}
 		expect(await vault.read(DAILY_PATH)).toBe(content);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// race discipline — resolve on the content process() hands over (#183)
+// ---------------------------------------------------------------------------
+
+describe("updateTracker — resolves on the content process() hands over", () => {
+	const inline = "# Daily\nmood:: bad\nbody\n";
+	const callout = ["> [!tracker] Daily Tracker", "> mood:: bad", "> energy:: high", ">"].join("\n") + "\n";
+	const calloutAction = makeAction({ syntax: "callout_body", section: "Daily Tracker" });
+	const checkbox = "# Daily\n- [ ] mood\n";
+	const checkboxAction = makeAction({ syntax: "checkbox", value: true });
+
+	it("inline_field: rewrites the field line when lines were added above it", async () => {
+		const vault = await changedUnderneath(DAILY_PATH, inline, (c) => `stamped\nby a plugin\n${c}`);
+
+		const outcome = await updateTracker(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "applied" });
+		expect(await vault.read(DAILY_PATH)).toBe("stamped\nby a plugin\n# Daily\nmood:: good\nbody\n");
+	});
+
+	it("inline_field: fails without writing when the field is gone from the current content", async () => {
+		const vault = await changedUnderneath(DAILY_PATH, inline, (c) => c.replace("mood:: bad\n", ""));
+
+		const outcome = await updateTracker(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "failed", reason: "Tracker field not found: mood" });
+		expect(await vault.read(DAILY_PATH)).toBe(inline);
+	});
+
+	it("callout_body: rewrites the field line when lines were added above it", async () => {
+		const vault = await changedUnderneath(DAILY_PATH, callout, (c) => `stamped\n${c}`);
+
+		const outcome = await updateTracker(calloutAction, makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "applied" });
+		expect(await vault.read(DAILY_PATH)).toBe(`stamped\n${callout.replace("> mood:: bad", "> mood:: good")}`);
+	});
+
+	it("callout_body: skips without writing when the current content already has the value", async () => {
+		const vault = await changedUnderneath(DAILY_PATH, callout, (c) => c.replace("> mood:: bad", "> mood:: good"));
+
+		const outcome = await updateTracker(calloutAction, makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "skipped-already" });
+		expect(await vault.read(DAILY_PATH)).toBe(callout);
+	});
+
+	it("checkbox: skips without writing when the current content is already checked", async () => {
+		const vault = await changedUnderneath(DAILY_PATH, checkbox, (c) => c.replace("- [ ] mood", "- [x] mood"));
+
+		const outcome = await updateTracker(checkboxAction, makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "skipped-already" });
+		expect(await vault.read(DAILY_PATH)).toBe(checkbox);
+	});
+
+	it("checkbox: fails without writing when the checkbox is gone from the current content", async () => {
+		const vault = await changedUnderneath(DAILY_PATH, checkbox, (c) => c.replace("- [ ] mood\n", ""));
+
+		const outcome = await updateTracker(checkboxAction, makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "failed", reason: "Tracker field not found: mood" });
+		expect(await vault.read(DAILY_PATH)).toBe(checkbox);
 	});
 });

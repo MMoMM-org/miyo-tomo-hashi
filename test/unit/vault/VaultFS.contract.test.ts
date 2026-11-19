@@ -112,6 +112,25 @@ export function runContractTests(makeVaultFS: () => VaultFS): void {
       expect(seen).toEqual(["a-saw:", "b-saw:A"]);
       expect(await vault.read(path)).toBe("AB");
     });
+
+    it("a transform that throws writes nothing and does not poison the next process", async () => {
+      // A handler aborts a write by throwing from the transform (#183,
+      // processResolved). The next process() on the same file must run its
+      // own transform, not re-reject with the earlier error.
+      const vault = makeVaultFS();
+      const path = "notes/abort.md";
+      await vault.create(path, "old");
+
+      await expect(
+        vault.process(path, () => {
+          throw new Error("abort");
+        }),
+      ).rejects.toThrow("abort");
+      expect(await vault.read(path)).toBe("old");
+
+      await vault.process(path, (content) => `${content} + new`);
+      expect(await vault.read(path)).toBe("old + new");
+    });
   });
 
   describe("processJSON formatting (2-space + \\n)", () => {

@@ -15,6 +15,7 @@
 
 import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
+import { changedUnderneath } from "./changedUnderneath.js";
 import { addRelationship } from "../../../src/actions/addRelationship.js";
 import type { AddRelationshipAction } from "../../../src/schema/types.js";
 
@@ -292,5 +293,44 @@ describe("addRelationship — first match wins", () => {
 		expect(lines[1]).toBe("> up:: [[Replaced]]");
 		// Second occurrence untouched
 		expect(lines).toContain("up:: [[B]]");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// race discipline — resolve on the content process() hands over (#183)
+// ---------------------------------------------------------------------------
+
+describe("addRelationship — resolves on the content process() hands over", () => {
+	const content = ["> [!connect] Your way around", "> up:: ", "> related:: ", ""].join("\n");
+
+	it("rewrites the marker line when lines were added above it", async () => {
+		const vault = await changedUnderneath(MOC_PATH, content, (c) => `stamped\nby a plugin\n${c}`);
+
+		const outcome = await addRelationship(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "applied" });
+		expect(await vault.read(MOC_PATH)).toBe(
+			["stamped", "by a plugin", "> [!connect] Your way around", "> up:: [[Hobbies (MOC)]]", "> related:: ", ""].join("\n"),
+		);
+	});
+
+	it("fails without writing when the marker is gone from the current content", async () => {
+		const vault = await changedUnderneath(MOC_PATH, content, (c) => c.replace("> up:: ", "> parent:: "));
+
+		const outcome = await addRelationship(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "failed", reason: "Marker not found: up::" });
+		expect(await vault.read(MOC_PATH)).toBe(content);
+	});
+
+	it("skips without writing when the current content already carries the line", async () => {
+		const vault = await changedUnderneath(MOC_PATH, content, (c) =>
+			c.replace("> up:: ", "> up:: [[Hobbies (MOC)]]"),
+		);
+
+		const outcome = await addRelationship(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "skipped-already" });
+		expect(await vault.read(MOC_PATH)).toBe(content);
 	});
 });

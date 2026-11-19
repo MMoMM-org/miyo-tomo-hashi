@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
+import { changedUnderneath } from "./changedUnderneath.js";
 import { updateLogLink } from "../../../src/actions/updateLogLink.js";
 import type { UpdateLogLinkAction } from "../../../src/schema/types.js";
 
@@ -205,6 +206,53 @@ describe("updateLogLink — idempotency", () => {
 		const outcome = await updateLogLink(action, ctx);
 
 		expect(outcome.kind).toBe("skipped-already");
+		expect(await vault.read(DAILY_PATH)).toBe(content);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// race discipline — resolve on the content process() hands over (#183)
+// ---------------------------------------------------------------------------
+
+describe("updateLogLink — resolves on the content process() hands over", () => {
+	const content = ["# Daily Note", "## Links", "- 09:00: Morning standup", "## Other", "- keep", ""].join("\n");
+
+	async function undisturbed(action: UpdateLogLinkAction): Promise<string> {
+		const vault = new FakeVaultFS();
+		await vault.create(DAILY_PATH, content);
+		await updateLogLink(action, makeCtx(vault));
+		return vault.read(DAILY_PATH);
+	}
+
+	for (const position of ["after_last_line", "before_first_line", "at_time"] as const) {
+		it(`${position}: inserts into the section when lines were added above it`, async () => {
+			const action = makeAction({ position, time: position === "at_time" ? "10:00" : undefined });
+			const vault = await changedUnderneath(DAILY_PATH, content, (c) => `stamped\nby a plugin\n${c}`);
+
+			const outcome = await updateLogLink(action, makeCtx(vault));
+
+			expect(outcome).toEqual({ kind: "applied" });
+			expect(await vault.read(DAILY_PATH)).toBe(`stamped\nby a plugin\n${await undisturbed(action)}`);
+		});
+	}
+
+	it("fails without writing when the section is gone from the current content", async () => {
+		const vault = await changedUnderneath(DAILY_PATH, content, (c) => c.replace("## Links", "## Renamed"));
+
+		const outcome = await updateLogLink(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "failed", reason: "Section not found: Links" });
+		expect(await vault.read(DAILY_PATH)).toBe(content);
+	});
+
+	it("skips without writing when the current content already has the line", async () => {
+		const vault = await changedUnderneath(DAILY_PATH, content, (c) =>
+			c.replace("- 09:00: Morning standup", "- 09:00: Morning standup\n- [[Notes/my-project]]"),
+		);
+
+		const outcome = await updateLogLink(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "skipped-already" });
 		expect(await vault.read(DAILY_PATH)).toBe(content);
 	});
 });

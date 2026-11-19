@@ -16,8 +16,9 @@
  * [ref: Tomo handoff 2026-06-25 block-anchor-and-replace-section]
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
+import { changedUnderneath } from "./changedUnderneath.js";
 import { replaceSection } from "../../../src/actions/replaceSection.js";
 import type { ReplaceSectionAction } from "../../../src/schema/types.js";
 
@@ -172,19 +173,8 @@ describe("replaceSection — idempotency", () => {
 // ---------------------------------------------------------------------------
 
 describe("replaceSection — resolves on the content process() hands over", () => {
-	/** A vault whose process() sees `mutate(current)`, as if the note changed after any earlier read. */
-	async function changedUnderneath(initial: string, mutate: (current: string) => string) {
-		const vault = new FakeVaultFS();
-		await vault.create(PATH, initial);
-		const realProcess = vault.process.bind(vault);
-		vi.spyOn(vault, "process").mockImplementation(async (path, transform) => {
-			await realProcess(path, (current) => transform(mutate(current)));
-		});
-		return vault;
-	}
-
 	it("replaces the right section, keeping the user's lines, when lines were added above it", async () => {
-		const vault = await changedUnderneath(doc, (c) => `stamped\nby a plugin\n${c}`);
+		const vault = await changedUnderneath(PATH, doc, (c) => `stamped\nby a plugin\n${c}`);
 
 		const outcome = await replaceSection(makeAction(), makeCtx(vault));
 
@@ -195,7 +185,7 @@ describe("replaceSection — resolves on the content process() hands over", () =
 	});
 
 	it("fails and writes nothing when the heading no longer resolves on the current content", async () => {
-		const vault = await changedUnderneath(doc, (c) => c.replace("## Status", "## Renamed"));
+		const vault = await changedUnderneath(PATH, doc, (c) => c.replace("## Status", "## Renamed"));
 
 		const outcome = await replaceSection(makeAction(), makeCtx(vault));
 
@@ -204,7 +194,7 @@ describe("replaceSection — resolves on the content process() hands over", () =
 	});
 
 	it("is skipped-already, writing nothing, when the current body already equals content", async () => {
-		const vault = await changedUnderneath(doc, (c) => c.replace("old line 1\nold line 2", "new body"));
+		const vault = await changedUnderneath(PATH, doc, (c) => c.replace("old line 1\nold line 2", "new body"));
 
 		const outcome = await replaceSection(makeAction(), makeCtx(vault));
 

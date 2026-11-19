@@ -94,7 +94,8 @@ function makeRichApp(): App {
           const current = store.get(path) ?? "";
           store.set(path, transform(current));
         });
-        queues.set(path, next);
+        // Keep only the settled tail, so a throwing transform does not poison the queue.
+        queues.set(path, next.catch(() => undefined));
         await next;
       },
     );

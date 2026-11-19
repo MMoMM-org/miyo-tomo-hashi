@@ -24,8 +24,7 @@
  * Idempotency:
  *   Scans the target MOC for the would-be block as a consecutive run of lines
  *   (with `> ` prefixes applied when placement=inside). If already present →
- *   skipped-already (no mutation). TOCTOU window between read and process is
- *   acceptable for v0.1 (single-run lock + manual trigger).
+ *   skipped-already (no mutation).
  *
  * Failure cases:
  *   - MOC target file missing                    → "MOC target missing"
@@ -33,29 +32,29 @@
  *   - anchor cannot be resolved in the MOC       → "anchor not found: <value>"
  *   - placement=inside on non-callout anchor     → "placement: inside requires callout anchor"
  *
- * Anchor resolution reads the freshly-read file content (`cachedRead`), NOT the
- * async metadataCache — see anchorResolver. This keeps batches with ≥2 inserts
- * into the same MOC correct: Obsidian rebuilds the metadataCache asynchronously
- * after each write, so a cache-based read would race the rebuild and spuriously
- * miss a present anchor. [miyo-tomo-hashi#68]
+ * Anchor resolution and the duplicate check run on the content vault.process
+ * hands over, NOT the async metadataCache — see anchorResolver. This keeps
+ * batches with ≥2 inserts into the same MOC correct: Obsidian rebuilds the
+ * metadataCache asynchronously after each write, so a cache-based read would
+ * race the rebuild and spuriously miss a present anchor [miyo-tomo-hashi#68].
+ * Resolving inside process() also means lines added to the MOC after an
+ * earlier read cannot shift the insert [miyo-tomo-hashi#183].
  *
  * [ref: PRD/F4 link_to_moc; Tomo docs/instructions-json.md § Anchor Model;
  *  Tomo integration request 2026-06-13 (insert-primitive generalization);
- *  metadataCache-race fix miyo-tomo-hashi#68]
+ *  metadataCache-race fix miyo-tomo-hashi#68; resolve-inside-process #183]
  */
 
 import type { LinkToMocAction } from "../schema/types.js";
-import type { ActionOutcome } from "../executor/state.js";
 import { type HandlerContext } from "./types.js";
+import { processResolved, type EditOutcome, type ResolvedEdit } from "./processResolved.js";
 import { resolveAnchor } from "./anchorResolver.js";
 import { blockAlreadyPresent, spliceLines } from "./blockInsert.js";
-
-type LinkOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
 
 export async function linkToMoc(
 	action: LinkToMocAction,
 	ctx: HandlerContext,
-): Promise<LinkOutcome> {
+): Promise<EditOutcome> {
 	const { vault } = ctx;
 	const mocPath = action.target_moc_path ?? action.target_moc;
 
@@ -74,8 +73,11 @@ export async function linkToMoc(
 		};
 	}
 
-	const content = await vault.cachedRead(mocPath);
+	return processResolved(vault, mocPath, (current) => insertLine(current, action));
+}
 
+/** `content` with the block inserted, or the outcome to report without writing. */
+function insertLine(content: string, action: LinkToMocAction): ResolvedEdit {
 	const match = resolveAnchor(content, action.anchor);
 	if (match === null) {
 		return { kind: "failed", reason: `anchor not found: ${action.anchor.value}` };
@@ -98,6 +100,5 @@ export async function linkToMoc(
 				? match.anchorLine
 				: match.insertAfter;
 
-	await vault.process(mocPath, (current) => spliceLines(current, insertIndex, blockLines));
-	return { kind: "applied" };
+	return spliceLines(content, insertIndex, blockLines);
 }

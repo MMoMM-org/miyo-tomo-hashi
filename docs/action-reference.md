@@ -474,6 +474,10 @@ Several actions (`link_to_moc`, `insert_under_marker`, `replace_section`, `updat
 
 This is intentional. The instruction set is a precise contract from Tomo; if the vault has drifted from what Tomo expected, you should see the failure rather than have Hashi paper over it.
 
+## Race safety
+
+`link_to_moc`, `insert_under_marker`, `replace_section`, `replace_between_markers`, `add_relationship`, `remove_up_link`, `update_tracker`, `update_log_entry` and `update_log_link` find their anchor, marker, section or field on the note's content at the moment of writing, inside Obsidian's atomic `vault.process`. If the note changed since it was last read (editor open, sync, a plugin stamping it), the edit still lands on the right line. If the target no longer resolves, nothing is written and the action reports `failed`, or `skipped-already` when the content is already in place. ([#180](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/180), [#183](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/183))
+
 ## Path safety
 
 Every action's `destination` / `path` / `from` / `to` runs through the same deny-list before any write:
