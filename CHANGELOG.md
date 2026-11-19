@@ -1,3 +1,9 @@
+## [0.33.3](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.33.2...0.33.3) (2026-11-19)
+
+### Bug Fixes
+
+* **actions:** decide edit_note_text and resolve_dead_link outcomes inside vault.process ([4e374c1](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/4e374c18d55e430f8f2f8a69943cae6766aa6d45)), closes [#185](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/185)
+
 ## [0.33.2](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.33.1...0.33.2) (2026-11-19)
 
 ### Bug Fixes
