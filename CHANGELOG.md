@@ -1,3 +1,9 @@
+## [0.33.1](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.33.0...0.33.1) (2026-11-19)
+
+### Bug Fixes
+
+* **actions:** resolve insert_under_marker and replace_section inside vault.process ([80a125d](https://github.com/MMoMM-org/miyo-tomo-hashi/commit/80a125da55659925c00d3e5ca822be076eba2e8e)), closes [#180](https://github.com/MMoMM-org/miyo-tomo-hashi/issues/180)
+
 ## [0.33.0](https://github.com/MMoMM-org/miyo-tomo-hashi/compare/0.32.0...0.33.0) (2026-11-18)
 
 ### Features
