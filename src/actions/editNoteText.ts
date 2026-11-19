@@ -27,14 +27,18 @@
  * whole-line-collapse semantics; a hypothetical newline-spanning `match` simply
  * finds nothing and no-ops (skipped-already) rather than corrupting the note.
  *
- * [ref: Tomo handoff 2026-07-21 garden-audit-edit-note-text; spec 030 ADR-3]
+ * Every decision (hit, frontmatter-only, no-op) and the edit itself run on
+ * the content vault.process hands over, so a note that changed after an
+ * earlier read can neither skip a match that is there now nor report a write
+ * that did not happen (#185).
+ *
+ * [ref: Tomo handoff 2026-07-21 garden-audit-edit-note-text; spec 030 ADR-3;
+ *  decide-inside-process miyo-tomo-hashi#185]
  */
 
 import type { EditNoteTextAction } from "../schema/types.js";
-import type { ActionOutcome } from "../executor/state.js";
 import type { HandlerContext } from "./types.js";
-
-type EditOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
+import { processResolved, type EditOutcome, type ResolvedEdit } from "./processResolved.js";
 
 /**
  * Split a note into its frozen frontmatter head (including the closing `---`
@@ -73,8 +77,7 @@ function replaceInLine(
 
 /**
  * Apply the literal find-and-replace to the body only. Returns the rewritten
- * full content and whether anything changed. Pure — called both pre-flight
- * (idempotency gate) and inside `vault.process` (race-safe fresh transform).
+ * full content and whether anything changed. Pure.
  */
 function applyEdit(
 	content: string,
@@ -112,7 +115,7 @@ export async function editNoteText(
 	ctx: HandlerContext,
 ): Promise<EditOutcome> {
 	const { vault } = ctx;
-	const { path, match, replace } = action;
+	const { path, match } = action;
 	const occurrence = action.occurrence ?? "first";
 
 	if (!(await vault.exists(path))) {
@@ -124,8 +127,18 @@ export async function editNoteText(
 		return { kind: "skipped-already" };
 	}
 
-	const content = await vault.cachedRead(path);
-	if (!applyEdit(content, match, replace, occurrence).changed) {
+	return processResolved(vault, path, (current) => decideEdit(current, action, occurrence));
+}
+
+/** `content` with the edit applied, or the outcome to report without writing. */
+function decideEdit(
+	content: string,
+	action: EditNoteTextAction,
+	occurrence: "first" | "all",
+): ResolvedEdit {
+	const { path, match, replace } = action;
+	const edit = applyEdit(content, match, replace, occurrence);
+	if (!edit.changed) {
 		// No body hit. Two very different situations hide behind that, and
 		// conflating them is how a dead link silently marks itself done:
 		//
@@ -150,6 +163,5 @@ export async function editNoteText(
 		return { kind: "skipped-already" };
 	}
 
-	await vault.process(path, (current) => applyEdit(current, match, replace, occurrence).content);
-	return { kind: "applied" };
+	return edit.content;
 }

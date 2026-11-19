@@ -20,6 +20,7 @@
 
 import { describe, expect, it } from "vitest";
 import { FakeVaultFS } from "../../../src/vault/FakeVaultFS.js";
+import { changedUnderneath } from "./changedUnderneath.js";
 import { resolveDeadLink } from "../../../src/actions/resolveDeadLink.js";
 import type { ResolveDeadLinkAction } from "../../../src/schema/types.js";
 
@@ -292,5 +293,46 @@ describe("resolveDeadLink — failure paths", () => {
 		expect(outcome.kind).toBe("applied");
 		// Frontmatter occurrence untouched — the freeze still holds.
 		expect(await vault.read(PATH)).toContain('up: "[[023 Sparks MOC]]"');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// race discipline — decide on the content process() hands over (#185)
+// ---------------------------------------------------------------------------
+
+describe("resolveDeadLink — decides on the content process() hands over", () => {
+	const withLink = "# MOC\n- [[023 Sparks MOC]]\n";
+	const withoutLink = "# MOC\n- nothing yet\n";
+
+	it("applies when the link appeared after the earlier read", async () => {
+		const vault = await changedUnderneath(PATH, withoutLink, () => withLink);
+
+		const outcome = await resolveDeadLink(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "applied" });
+		expect(await vault.read(PATH)).toBe("# MOC\n- 023 Sparks MOC\n");
+	});
+
+	it("skips without writing when the link is gone at write time", async () => {
+		const vault = await changedUnderneath(PATH, withLink, () => withoutLink);
+
+		const outcome = await resolveDeadLink(makeAction(), makeCtx(vault));
+
+		expect(outcome).toEqual({ kind: "skipped-already" });
+		expect(await vault.read(PATH)).toBe(withLink);
+	});
+
+	it("fails without writing when the link survives only in the frontmatter at write time", async () => {
+		const vault = await changedUnderneath(
+			PATH,
+			withLink,
+			() => '---\nup: "[[023 Sparks MOC]]"\n---\n# MOC\n',
+		);
+
+		const outcome = await resolveDeadLink(makeAction(), makeCtx(vault));
+
+		expect(outcome.kind).toBe("failed");
+		if (outcome.kind === "failed") expect(outcome.reason).toContain("only in the YAML frontmatter");
+		expect(await vault.read(PATH)).toBe(withLink);
 	});
 });

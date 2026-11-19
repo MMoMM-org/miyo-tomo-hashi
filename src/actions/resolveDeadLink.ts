@@ -47,10 +47,8 @@
  */
 
 import type { ResolveDeadLinkAction } from "../schema/types.js";
-import type { ActionOutcome } from "../executor/state.js";
 import type { HandlerContext } from "./types.js";
-
-type ResolveOutcome = Extract<ActionOutcome, { kind: "applied" | "skipped-already" | "failed" }>;
+import { processResolved, type EditOutcome, type ResolvedEdit } from "./processResolved.js";
 
 /** Escape a literal string for safe embedding inside a RegExp source. */
 function escapeRegExp(value: string): string {
@@ -99,9 +97,8 @@ function buildLinkRegex(target: string): RegExp {
 
 /**
  * Apply the unlink/repoint transform to the body only. Returns the
- * rewritten full content and whether anything changed. Pure — called both
- * pre-flight (idempotency gate) and inside `vault.process` (race-safe
- * fresh transform), mirroring editNoteText's applyEdit.
+ * rewritten full content and whether anything changed. Pure, mirroring
+ * editNoteText's applyEdit.
  */
 function applyResolve(
 	content: string,
@@ -130,16 +127,27 @@ function applyResolve(
 export async function resolveDeadLink(
 	action: ResolveDeadLinkAction,
 	ctx: HandlerContext,
-): Promise<ResolveOutcome> {
+): Promise<EditOutcome> {
 	const { vault } = ctx;
-	const { path, target, replace } = action;
+	const { path } = action;
 
 	if (!(await vault.exists(path))) {
 		return { kind: "failed", reason: "target note missing" };
 	}
 
-	const content = await vault.cachedRead(path);
-	if (!applyResolve(content, target, replace).changed) {
+	return processResolved(vault, path, (current) => decideResolve(current, action));
+}
+
+/**
+ * `content` with the link resolved, or the outcome to report without writing.
+ * Decided on the content vault.process hands over, so a note that changed
+ * after an earlier read can neither skip a link that is there now nor report
+ * a write that did not happen (#185).
+ */
+function decideResolve(content: string, action: ResolveDeadLinkAction): ResolvedEdit {
+	const { path, target, replace } = action;
+	const resolved = applyResolve(content, target, replace);
+	if (!resolved.changed) {
 		// No body hit. Two different situations hide behind that, and
 		// conflating them is how a dead link marks itself done:
 		//
@@ -170,6 +178,5 @@ export async function resolveDeadLink(
 		return { kind: "skipped-already" };
 	}
 
-	await vault.process(path, (current) => applyResolve(current, target, replace).content);
-	return { kind: "applied" };
+	return resolved.content;
 }
