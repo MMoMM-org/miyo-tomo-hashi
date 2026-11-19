@@ -174,5 +174,6 @@ raw promise, so one aborted transform made every later write to that file re-rej
 error. processResolved then returned the stale outcome (InstructionFixer re-run reported the
 pre-repair "anchor not found"). Queues now keep only the settled tail; the VaultFS contract
 suite covers it.
-**Partly open:** `edit_note_text` and `resolve_dead_link` already recompute their edit on `current`
-(no misplaced lines), but take their `skipped-already` decision on the earlier `cachedRead`.
+`edit_note_text` and `resolve_dead_link` recomputed their edit on `current` but took their
+`skipped-already` / frontmatter-only decision on the earlier `cachedRead`; a match that appeared
+in between graduated to `applied: true` unwritten. They now decide inside the transform too (#185).
